@@ -18,6 +18,7 @@ struct TerminalHostView: UIViewRepresentable {
     func makeUIView(context: Context) -> SwiftTerm.TerminalView {
         let view = SwiftTerm.TerminalView()
         view.terminalDelegate = context.coordinator
+        view.inputAccessoryView = nil
         context.coordinator.start(consuming: feed, view: view)
         _ = view.becomeFirstResponder()
         return view

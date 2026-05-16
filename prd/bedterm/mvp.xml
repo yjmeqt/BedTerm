@@ -33,11 +33,15 @@ An iOS terminal app designed for coding on iPhone. Users SSH into a Mac mini or 
   <description>
     A slim toolbar pinned above the system keyboard (and above the direction pad — see R11) that exposes the keys most essential to terminal use that are absent from the iOS keyboard. The toolbar is deliberately minimal — only [ESC], [CTRL], and [TAB] — to keep the input area light and uncrowded.
   </description>
-  <rule id="keys_present" status="❌">The toolbar displays exactly three keys: [ESC], [CTRL], and [TAB]. No other keys (no arrows, no extras) appear on the toolbar.</rule>
-  <rule id="only_toolbar" status="❌" context="keyboard shown">Only the app's special-keys toolbar appears above the system keyboard. No additional input-accessory bar from the embedded terminal emulator (or any other source) is stacked above or below it.</rule>
+  <rule id="keys_present" status="✅">The toolbar displays exactly three keys: [ESC], [CTRL], and [TAB]. No other keys (no arrows, no extras) appear on the toolbar.</rule>
+  <rule id="only_toolbar" status="✅" context="keyboard shown">Only the app's special-keys toolbar appears above the system keyboard. No additional input-accessory bar from the embedded terminal emulator (or any other source) is stacked above or below it.</rule>
   <rule id="keys_fixed" status="✅">The toolbar stays visible when the system keyboard is shown and when it is hidden.</rule>
   <rule id="esc_key" status="✅">Tapping [ESC] sends the escape key (e.g., to exit insert mode in vim).</rule>
-  <rule id="liquid_glass_style" status="❌">The toolbar uses the iOS 26+ Liquid Glass material — translucent, depth-aware, responsive to the content scrolling beneath it — instead of an opaque bar.</rule>
+  <rule id="liquid_glass_style" status="✅">The toolbar uses the iOS 26+ Liquid Glass material — translucent, depth-aware, responsive to the content scrolling beneath it — instead of an opaque bar.</rule>
+  <rule id="rides_above_keyboard" status="✅" context="keyboard shown">When the system keyboard is visible, the toolbar rides directly above the top edge of the keyboard — moving up with the keyboard as it presents and back down as it dismisses — so the keys stay reachable without a gap between the keyboard and the toolbar.
+    <figma_node name="iOS 26 keyboard accessory" file="zoXfWVuz9LNBGVVNUkM25a" node="5522-14771" />
+  </rule>
+  <rule id="floats_when_keyboard_hidden" status="✅" context="keyboard hidden">When the system keyboard is not visible, the toolbar floats above the bottom safe-area inset, anchored above the direction pad (R11).</rule>
   <rule id="compact_layout" status="✅">The toolbar fits within the available safe area without overlapping the terminal view, the direction pad, or the system keyboard.</rule>
   <rule id="arrow_up" status="❌" context="superseded by R11">Tapping [↑] sends the up arrow key to the terminal (e.g., for shell history). Moved off the toolbar — now handled by the direction pad.</rule>
   <rule id="arrow_down" status="❌" context="superseded by R11">Tapping [↓] sends the down arrow key to the terminal. Moved off the toolbar — now handled by the direction pad.</rule>
