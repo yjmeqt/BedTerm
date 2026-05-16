@@ -2,10 +2,14 @@ import SwiftUI
 
 @main
 struct BedTermApp: App {
+    @State private var path = NavigationPath()
+
     var body: some Scene {
         WindowGroup {
-            Text("BedTerm — Plan 2 wires up the real UI.")
-                .padding()
+            NavigationStack(path: $path) {
+                ConnectionScreen(path: $path)
+            }
+            .preferredColorScheme(.dark)
         }
     }
 }
