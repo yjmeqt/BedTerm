@@ -35,6 +35,12 @@ jobs:
         run: brew install mint
       - name: Bootstrap tools
         run: mint bootstrap
+      - name: Install Metal toolchain
+        # SwiftTerm uses Metal shaders for its renderer and fails to build without
+        # the Metal toolchain installed.
+        run: sudo xcodebuild -downloadComponent MetalToolchain
+      - name: Resolve SwiftPM packages
+        run: xcodebuild -resolvePackageDependencies -project BedTerm.xcodeproj
       - name: Build & test
         # Strategy A: name-only destination (no OS=) so xcodebuild picks the latest
         # matching iOS Simulator runtime available on the runner image.

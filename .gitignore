@@ -22,7 +22,7 @@ xcuserdata/
 # SwiftPM
 .build/
 Packages/
-Package.resolved
+# Package.resolved is the lockfile for this app target — commit it for CI reproducibility.
 
 # CocoaPods
 Pods/
