@@ -1,0 +1,128 @@
+<prd name="Rust + Metal Terminal Engine">
+
+<overview>
+Replace SwiftTerm with a custom terminal engine: a Rust core (VT100/xterm emulator based on alacritty_terminal) renders through a Metal-backed UIView. The renderer targets 60 fps GPU-accelerated output with correct ANSI colour, clean scroll, and a Warp-style block-based input model with bottom-to-top expansion animation. The SSH transport, keyboard toolbar, direction pad, and app chrome are unchanged.
+</overview>
+
+<implementation platform="iOS" spec="bedterm/docs/specs/rust-metal-renderer.md" />
+
+<why>
+  SwiftTerm issues two bugs: monochrome output on the Metal path (ansi_colors_lost_with_metal) and scroll ghosting on the CoreGraphics path (scroll_drawing_ghosting). Choosing Metal over CoreGraphics trades colour for legibility - an unacceptable compromise for a terminal emulator. Beyond the bugs, the Warp-style block input model - where keystrokes are buffered locally and committed on Enter with an animated block rising from the input area into the terminal history - requires a level of renderer control that SwiftTerm does not expose.
+</why>
+
+<!-- ──────────────  Requirements  ────────────── -->
+
+<requirement id="R2M-R1" name="Rust Terminal Core">
+  <description>
+    A Rust static library (terminal_emu) wraps alacritty_terminal 0.24's parser and grid model and exposes it through a C FFI. Swift calls into it to feed bytes, read the terminal grid, and manage the Warp-style input block buffer.
+  </description>
+
+  <rule id="parse_vt100" status="❌">All VT100/xterm escape sequences parsed by alacritty_terminal - CSI, OSC, DCS, SGR (16/256/truecolor), DEC modes, mouse protocols, bracketed paste - are honoured.</rule>
+  <rule id="grid_model" status="❌">The grid stores per-cell codepoint, foreground colour, background colour, and attribute flags (bold/italic/underline/inverse/dim/strikethrough). The grid is readable from Swift through a zero-copy FFI pointer.</rule>
+  <rule id="scrollback" status="❌">Scrollback buffer is unbounded in memory, prunable to a configurable line count. Scroll position is exposed to the renderer.</rule>
+  <rule id="ffi_feed" status="❌">term_feed(term, *const u8, len) accepts byte slices from Swift callers and returns a list of dirty line ranges for incremental repaint.</rule>
+  <rule id="ffi_grid" status="❌">term_get_grid(term) returns a TerminalGrid struct with pointer to cell array, dimensions, cursor state, and dirty rect list, consumable from Swift without serialization.</rule>
+
+  <rule id="xcode_integration" status="❌">A build.sh script invokes cargo build --release for aarch64-apple-ios and aarch64-apple-ios-sim. The resulting .a files are linked into BedTermKit via OTHER_LINKER_FLAGS.</rule>
+  <rule id="cbindgen" status="❌">A cbindgen.toml generates a terminal_emu.h header consumed by Swift via a module map or bridging header.</rule>
+</requirement>
+
+<requirement id="R2M-R2" name="Metal Renderer">
+  <description>
+    A UIView backed by MTKView draws the terminal grid at 60 fps using Metal shaders. The renderer composites per-cell glyph textures over ANSI-coloured backgrounds with attribute-aware blending. It uses incremental dirty-rect updates from the Rust core to avoid redrawing static regions.
+  </description>
+
+  <rule id="glyph_atlas" status="❌">Glyphs are rasterised on the CPU via CoreText into a 2048×2048 RGBA8 MTLTexture atlas. The atlas is populated lazily: a glyph is rendered and uploaded only the first time its codepoint is encountered in the grid.</rule>
+  <rule id="cell_shader" status="❌">The fragment shader samples the glyph atlas and blends the result against the cell's ANSI foreground and background colours. Attribute flags (bold/italic/underline/inverse) are honoured in the blend.</rule>
+  <rule id="ansi_16" status="❌">ANSI 16-colour escapes map to the standard 4-bit palette, rendered with correct fg/bg colours in every frame.</rule>
+  <rule id="ansi_256" status="❌">ANSI 256-colour escapes render with the correct indexed colour.</rule>
+  <rule id="truecolor" status="❌">SGR 38/48 true-colour escapes (ESC[38;2;R;G;Bm, ESC[48;2;R;G;Bm) render with the exact specified RGB values.</rule>
+  <rule id="cursor" status="❌">The cursor is drawn as a block, underline, or vertical bar (DECSCUSR) with a configurable blink cycle rendered in the Metal draw loop.</rule>
+  <rule id="incremental_repaint" status="❌">Only rows marked dirty by the Rust core are repainted in a given frame. A clean viewport (no output, no cursor blink) produces zero GPU work.</rule>
+  <rule id="scroll_clean" status="❌">Scrolling the terminal history repaints the viewport cleanly on every frame: no doubled glyphs, no stale streaks, no scroll smearing.</rule>
+  <rule id="system_font_adaptive" status="❌">The renderer respects Dynamic Type and switches between SF Mono and the system monospace font, re-rasterising the atlas on size change.</rule>
+  <rule id="dark_light_palette" status="❌">The ANSI 16-colour palette adapts to the iOS system appearance (Light/Dark) and updates live when the system appearance changes while the app is open.</rule>
+</requirement>
+
+<requirement id="R2M-R3" name="Warp-Style Block Input">
+  <description>
+    Instead of forwarding every keystroke directly to the PTY, user input is buffered locally in a block. On Enter, the block is committed: the full command text is sent to the remote PTY via bracketed paste (ESC[200~ … ESC[201~), locally echoed into the terminal grid, and an animated transition moves the block from the input area up into the terminal history.
+  </description>
+
+  <rule id="block_buffer" status="❌">When the composer (R13) is presented, keystrokes are buffered in the Rust InputBuffer rather than sent to the PTY. The default passthrough mode is unchanged.</rule>
+  <rule id="block_commit" status="❌">On Send, the buffer contents are dispatched to the remote PTY inside bracketed paste markers, and simultaneously fed into the local terminal emulator as local echo with a block-start sentinel.</rule>
+  <rule id="block_animation_expand" status="❌">Committed blocks animate from the input area upward into the terminal grid with a GPU-driven animation that expands the block's background from the input origin to its final grid position over ~300 ms.</rule>
+  <rule id="block_animation_easing" status="❌">The expansion uses an ease-in-out curve. The block border glow fades from full intensity to transparent over the animation duration.</rule>
+  <rule id="block_output_appended" status="❌">Remote output arriving after the block commit is appended below the block in the grid, indistinguishable from normal command output.</rule>
+  <rule id="block_scroll" status="❌">When the block animation pushes content above the viewport, the terminal auto-scrolls to keep the block + new output visible.</rule>
+  <rule id="ctrl_keys_passthrough" status="❌">Ctrl+C, Ctrl+D, Ctrl+Z, and Esc are never buffered: they pass through to the PTY immediately, even when the composer is presented.</rule>
+</requirement>
+
+<requirement id="R2M-R4" name="No Regression on Existing Features">
+  <description>
+    The replacement must not regress any rule marked ✅ in mvp.xml. The SSH transport, keyboard toolbar, direction pad, host-key TOFU, local-network prewarm, onboarding, app icon, and Lookin debug inspector are unchanged.
+  </description>
+
+  <rule id="r1_ssh" status="❌">R1 (SSH Connection): all rules still pass.</rule>
+  <rule id="r2_display" status="❌">R2 (Terminal Display): all rules pass with ANSI colours now correct.</rule>
+  <rule id="r3_toolbar" status="❌">R3 (Special Keys Toolbar): all rules still pass.</rule>
+  <rule id="r4_ctrl" status="❌">R4 (Ctrl Combination Mode): all rules still pass.</rule>
+  <rule id="r5_ux" status="❌">R5 (Basic Terminal UX): copy/paste/scroll/prompt-anchor/font/dark-mode all pass.</rule>
+  <rule id="r6_tofu" status="❌">R6 (Host Key TOFU): unchanged.</rule>
+  <rule id="r7_lan_perm" status="❌">R7 (Local Network Permission): unchanged.</rule>
+  <rule id="r8_icon" status="❌">R8 (App Icon): unchanged.</rule>
+  <rule id="r9_appearance" status="❌">R9 (System Appearance): now passes with live palette switching.</rule>
+  <rule id="r10_onboarding" status="❌">R10 (Onboarding): unchanged.</rule>
+  <rule id="r11_dpad" status="❌">R11 (Direction Pad): unchanged.</rule>
+  <rule id="r12_lookin" status="❌">R12 (Lookin): unchanged. The MTKView is inspectable.</rule>
+  <rule id="r13_composer" status="❌">R13 (Composer): reimplemented as the Warp-style InputBuffer UI.</rule>
+  <rule id="r14_voice" status="❌">R14 (Voice Input): dictation inserts into the InputBuffer, not directly to PTY.</rule>
+</requirement>
+
+<requirement id="R2M-R5" name="Warp-Style Input Composer UI">
+  <description>
+    The composer UI replaces the R13 multiline input area with a Warp-style input block. Visually:
+    - A monospace editing area sits below the terminal view, styled with Liquid Glass
+    - The editing area is a single growing block, not a traditional text view
+    - Each committed block appears in the terminal with a subtle left-border accent (like Warp's command blocks) and a timestamp
+  </description>
+
+  <rule id="warp_editor" status="❌">The composer is a monospace text area using the same font and size as the terminal, with no autocorrect/autocapitalisation/smart punctuation.</rule>
+  <rule id="warp_block_accent" status="❌">Committed blocks in the terminal history have a 2px left-border accent (blue for commands, green for successful exit, red for non-zero exit) that persists across scrollback.</rule>
+  <rule id="warp_block_timestamp" status="❌">Each committed block shows a faint timestamp above the block's first line in the terminal.</rule>
+  <rule id="warp_block_collapse" status="❌">Blocks whose output exceeds one viewport height collapse to a summary line ("N lines hidden") with a tap-to-expand affordance.</rule>
+</requirement>
+
+<!-- ──────────────  Open Issues  ────────────── -->
+
+<issue id="progressive_delivery" status="Open">
+  <title>Three-phase delivery</title>
+  <description>
+    Phase 1: Rust core + basic Metal renderer achieving feature parity with SwiftTerm (but with colour and scroll fixed). Input remains PTY-passthrough.
+    Phase 2: Warp-style InputBuffer + composer UI + block commit flow.
+    Phase 3: Block animation, collapse, accent borders, timestamp polish.
+  </description>
+</issue>
+
+<issue id="alacritty_ios_compat" status="Open">
+  <title>alacritty_terminal iOS compatibility</title>
+  <description>
+    alacritty_terminal 0.24 has not been tested on iOS. Its macOS build may rely on POSIX APIs not available on iOS. A compatibility audit is needed before Phase 1 begins. Fallback: the pure-Rust vt100 crate which is known to build for iOS.
+  </description>
+</issue>
+
+<issue id="glyph_atlas_memory" status="Open">
+  <title>Glyph atlas memory budget</title>
+  <description>
+    A 2048×2048 RGBA8 atlas is 16 MB. CJK character sets have 20,000+ glyphs which exceeds one atlas. A multi-atlas or LRU eviction strategy may be needed. Profile with real CJK usage before committing to a size.
+  </description>
+</issue>
+
+<issue id="ssh_echo_timing" status="Open">
+  <title>Local echo vs remote echo race</title>
+  <description>
+    When a block is committed, the local echo inserts the command text into the terminal grid immediately. If the remote shell echoes the same text (common in canonical/cooked mode), the command text appears twice. Mitigation: set the PTY to raw mode (-echo) on connect, or suppress remote echo for the first N bytes after commit.
+  </description>
+</issue>
+
+</prd>
