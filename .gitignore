@@ -27,8 +27,9 @@ Packages/
 # CocoaPods
 Pods/
 
-# worktree-ios-dev
-worktree-ios-dev/
+# worktree-ios-dev — track project.toml (shared config); ignore derivedData and per-machine simulator.toml.
+worktree-ios-dev/*
+!worktree-ios-dev/project.toml
 
 # Worktrees
 .worktrees/

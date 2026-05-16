@@ -52,10 +52,12 @@ jobs:
           restore-keys: mint-${{ runner.os }}-
       - name: Bootstrap tools
         run: mint bootstrap
-      - name: Install Metal toolchain
-        # SwiftTerm uses Metal shaders for its renderer and fails to build without
-        # the Metal toolchain installed.
-        run: sudo xcodebuild -downloadComponent MetalToolchain
+      - name: Install Metal toolchain (best effort)
+        # Older Xcode required this; Xcode 26 usually has it preinstalled. Apple's
+        # asset CDN occasionally 500s on the catalog request — tolerate failure so a
+        # flaky download doesn't block CI. If Metal is genuinely missing, the build
+        # step below will fail loudly with the actual error.
+        run: sudo xcodebuild -downloadComponent MetalToolchain || true
       - name: Cache SwiftPM
         uses: actions/cache@v4
         with:
