@@ -101,8 +101,8 @@ An iOS terminal app designed for coding on iPhone. Users SSH into a Mac mini or 
   <description>
     The app ships with a final designed app icon — not the Xcode placeholder — so it has a recognisable identity on the Home Screen, in Spotlight, and in the App Switcher.
   </description>
-  <rule id="icon_designed" status="❌">A final app icon design exists and is shipped at all iOS-required sizes (Home Screen, Spotlight, Settings, Notifications, App Store marketing).</rule>
-  <rule id="icon_dark_tinted" status="❌">The icon ships variants for iOS 18+ Dark and Tinted Home Screen appearances in addition to the default Light variant.</rule>
+  <rule id="icon_designed" status="✅">A final app icon design exists and is shipped at all iOS-required sizes (Home Screen, Spotlight, Settings, Notifications, App Store marketing).</rule>
+  <rule id="icon_dark_tinted" status="✅">The icon ships variants for iOS 18+ Dark and Tinted Home Screen appearances in addition to the default Light variant.</rule>
 </requirement>
 
 <requirement id="R9" name="System Appearance">
@@ -208,7 +208,7 @@ An iOS terminal app designed for coding on iPhone. Users SSH into a Mac mini or 
   </steps>
 </bug>
 
-<bug id="app_icon_missing" status="Open" date="2026-05-16" rule="R8.icon_designed">
+<bug id="app_icon_missing" status="Fixed" date="2026-05-16" rule="R8.icon_designed">
   <current>
     The project has no AppIcon asset — the app launches with the default white/blank iOS placeholder icon on the Home Screen, in Spotlight, and in the App Switcher. No icon design has been produced yet.
   </current>
