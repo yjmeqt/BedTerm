@@ -58,7 +58,7 @@ An iOS terminal app designed for coding on iPhone. Users SSH into a Mac mini or 
   <rule id="ctrl_e" status="❌">In Ctrl-pending mode, tapping E sends Ctrl+E (end of line).</rule>
   <rule id="ctrl_timeout" status="❌">If no key is pressed within a short timeout, Ctrl-pending mode cancels and [CTRL] returns to its normal state.</rule>
   <rule id="ctrl_tap_again" status="❌">Tapping [CTRL] again while in pending mode cancels the pending state.</rule>
-  <rule id="ctrl_not_ctrl" status="❌">Tapping [CTRL] sends the literal Ctrl key code when tapped twice in quick succession, for programs that need a bare Ctrl press.</rule>
+  <rule id="ctrl_not_ctrl" status="🟡 deferred">Tapping [CTRL] sends the literal Ctrl key code when tapped twice in quick succession, for programs that need a bare Ctrl press. (Deferred — a Unix PTY has no byte for a bare Ctrl press; revisit if real usage demands it.)</rule>
 </requirement>
 
 <requirement id="R5" name="Basic Terminal UX">
@@ -73,5 +73,24 @@ An iOS terminal app designed for coding on iPhone. Users SSH into a Mac mini or 
   <rule id="font_mono" status="❌">Terminal text renders in a monospace font.</rule>
   <rule id="landscape" status="❌">The terminal view and special keys bar adapt correctly to landscape orientation.</rule>
 </requirement>
+
+<requirement id="R6" name="Host Key TOFU" added="2026-05-16">
+  <description>
+  Trust-on-first-use host key verification. The first successful connection to a host stores the host's public key fingerprint; subsequent connections compare and warn on mismatch. Added during MVP design as the security baseline for any terminal app.
+  </description>
+  <rule id="tofu_store" status="❌">On first successful connect, the SHA-256 fingerprint of the remote host key is stored in Keychain, keyed by host:port.</rule>
+  <rule id="tofu_match" status="❌">On subsequent connects, the stored fingerprint is compared to the remote host key; a match proceeds silently.</rule>
+  <rule id="tofu_mismatch" status="❌">A mismatch shows a full-screen warning with both fingerprints (SHA256:base64) and offers Reject or Trust-new-key (with explicit confirmation).</rule>
+</requirement>
+
+<todos>
+  <todo id="multi_host">Multi-host list with saved credentials per host. MVP stores only one host record; the data model is designed to extend to an array.</todo>
+  <todo id="auto_reconnect">Auto-reconnect / mosh-style session recovery on transient network loss.</todo>
+  <todo id="port_forward">Port forwarding, SFTP, scp.</todo>
+  <todo id="theme_settings">Theme and font-size settings UI.</todo>
+  <todo id="custom_keybar">User-customizable key bar (add/remove keys, reorder).</todo>
+  <todo id="ipad_layout">iPad-optimized layout.</todo>
+  <todo id="ctrl_not_ctrl_revisit">Revisit R4 ctrl_not_ctrl once real usage clarifies whether any program needs a literal Ctrl interaction.</todo>
+</todos>
 
 </prd>
