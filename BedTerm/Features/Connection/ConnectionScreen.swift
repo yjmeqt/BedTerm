@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct ConnectionScreen: View {
     @Binding var path: NavigationPath
@@ -48,6 +49,18 @@ struct ConnectionScreen: View {
                     Text(error)
                         .foregroundStyle(.red)
                         .accessibilityIdentifier("connection.error")
+                    if viewModel.permissionDenied {
+                        Button("Open Settings") {
+                            if let url = URL(string: UIApplication.openSettingsURLString) {
+                                UIApplication.shared.open(url)
+                            }
+                        }
+                        .accessibilityIdentifier("connection.openSettings")
+                        Button("Retry") {
+                            Task { await attemptConnect() }
+                        }
+                        .accessibilityIdentifier("connection.retry")
+                    }
                 }
             }
 
@@ -55,7 +68,13 @@ struct ConnectionScreen: View {
                 Button {
                     Task { await attemptConnect() }
                 } label: {
-                    if viewModel.isConnecting {
+                    if viewModel.isPrewarming {
+                        HStack {
+                            ProgressView()
+                            Text("Waiting for local network permission…")
+                        }
+                        .frame(maxWidth: .infinity)
+                    } else if viewModel.isConnecting {
                         ProgressView()
                             .frame(maxWidth: .infinity)
                     } else {

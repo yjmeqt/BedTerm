@@ -3,96 +3,207 @@
 <overview>
 An iOS terminal app designed for coding on iPhone. Users SSH into a Mac mini or Linux box and run Claude Code, Codex CLI, or any terminal tool — with a special keys bar that makes Ctrl combinations, arrows, and Escape comfortable on a touchscreen. The product differentiator is the mobile keyboard experience for terminal input, not the SSH feature count.
 </overview>
-
-<implementation platform="iOS" spec="TBD" />
+<implementation platform="iOS" spec="bedterm/docs/specs/mvp.md" />
 
 <requirement id="R1" name="SSH Connection">
   <description>
-  Connect to a remote Linux or macOS host over SSH with standard authentication methods.
+    Connect to a remote Linux or macOS host over SSH with standard authentication methods.
   </description>
-  <rule id="host_port" status="❌">User can enter a hostname and port to connect.</rule>
-  <rule id="username" status="❌">User can enter a username for authentication.</rule>
-  <rule id="password_auth" status="❌">User can authenticate with a password.</rule>
-  <rule id="key_auth" status="❌">User can authenticate with an SSH private key.</rule>
-  <rule id="connect_success" status="❌">A valid connection opens the terminal session and displays the remote shell prompt.</rule>
-  <rule id="connect_failure" status="❌">A failed connection shows a descriptive error message without crashing.</rule>
+  <rule id="host_port" status="✅">User can enter a hostname and port to connect.</rule>
+  <rule id="username" status="✅">User can enter a username for authentication.</rule>
+  <rule id="password_auth" status="✅">User can authenticate with a password.</rule>
+  <rule id="key_auth" status="✅">User can authenticate with an SSH private key.</rule>
+  <rule id="connect_success" status="✅">A valid connection opens the terminal session and displays the remote shell prompt.</rule>
+  <rule id="connect_failure" status="✅">A failed connection shows a descriptive error message without crashing.</rule>
 </requirement>
 
 <requirement id="R2" name="Terminal Display">
   <description>
-  Full terminal emulation rendering ANSI escape sequences, VT100 control codes, colors, and cursor positioning correctly.
+    Full terminal emulation rendering ANSI escape sequences, VT100 control codes, colors, and cursor positioning correctly.
   </description>
-  <rule id="ansi_colors" status="❌">ANSI color codes (16-color and 256-color) render with correct foreground and background colors.</rule>
-  <rule id="vt100_cursor" status="❌">VT100 cursor movement and positioning work correctly.</rule>
-  <rule id="clear_screen" status="❌">Clear screen sequences repaint the terminal viewport correctly.</rule>
-  <rule id="vim_display" status="❌">Running vim or nano displays the editor UI correctly, including status lines and cursor positioning.</rule>
-  <rule id="top_display" status="❌">Running top or htop displays the process list with live updates.</rule>
-  <rule id="text_wrap" status="❌">Long lines wrap correctly within the terminal width.</rule>
+  <rule id="ansi_colors" status="✅">ANSI color codes (16-color and 256-color) render with correct foreground and background colors.</rule>
+  <rule id="vt100_cursor" status="✅">VT100 cursor movement and positioning work correctly.</rule>
+  <rule id="clear_screen" status="✅">Clear screen sequences repaint the terminal viewport correctly.</rule>
+  <rule id="vim_display" status="✅">Running vim or nano displays the editor UI correctly, including status lines and cursor positioning.</rule>
+  <rule id="top_display" status="✅">Running top or htop displays the process list with live updates.</rule>
+  <rule id="text_wrap" status="✅">Long lines wrap correctly within the terminal width.</rule>
 </requirement>
 
-<requirement id="R3" name="Special Keys Keyboard">
+<requirement id="R3" name="Special Keys Toolbar">
   <description>
-  A fixed bottom bar of special keys always visible above the system keyboard, providing one-tap access to keys that are essential for terminal use but absent from the iOS keyboard.
+    A slim toolbar pinned above the system keyboard (and above the direction pad — see R11) that exposes the keys most essential to terminal use that are absent from the iOS keyboard. The toolbar is deliberately minimal — only [ESC], [CTRL], and [TAB] — to keep the input area light and uncrowded.
   </description>
-  <rule id="keys_present" status="❌">The keyboard bar displays these keys: [CTRL] [TAB] [ESC] [↑] [↓] [←] [→].</rule>
-  <rule id="keys_fixed" status="❌">The bar stays visible when the system keyboard is shown and when it is hidden.</rule>
-  <rule id="arrow_up" status="❌">Tapping [↑] sends the up arrow key to the terminal (e.g., for shell history).</rule>
-  <rule id="arrow_down" status="❌">Tapping [↓] sends the down arrow key to the terminal.</rule>
-  <rule id="arrow_left" status="❌">Tapping [←] sends the left arrow key to the terminal.</rule>
-  <rule id="arrow_right" status="❌">Tapping [→] sends the right arrow key to the terminal.</rule>
-  <rule id="tab_key" status="❌">Tapping [TAB] sends the tab character for autocompletion.</rule>
-  <rule id="esc_key" status="❌">Tapping [ESC] sends the escape key (e.g., to exit insert mode in vim).</rule>
-  <rule id="compact_layout" status="❌">The key bar fits within the available safe area without overlapping the terminal view or system keyboard.</rule>
+  <rule id="keys_present" status="❌">The toolbar displays exactly three keys: [ESC], [CTRL], and [TAB]. No other keys (no arrows, no extras) appear on the toolbar.</rule>
+  <rule id="keys_fixed" status="✅">The toolbar stays visible when the system keyboard is shown and when it is hidden.</rule>
+  <rule id="esc_key" status="✅">Tapping [ESC] sends the escape key (e.g., to exit insert mode in vim).</rule>
+  <rule id="liquid_glass_style" status="❌">The toolbar uses the iOS 26+ Liquid Glass material — translucent, depth-aware, responsive to the content scrolling beneath it — instead of an opaque bar.</rule>
+  <rule id="compact_layout" status="✅">The toolbar fits within the available safe area without overlapping the terminal view, the direction pad, or the system keyboard.</rule>
+  <rule id="arrow_up" status="❌" context="superseded by R11">Tapping [↑] sends the up arrow key to the terminal (e.g., for shell history). Moved off the toolbar — now handled by the direction pad.</rule>
+  <rule id="arrow_down" status="❌" context="superseded by R11">Tapping [↓] sends the down arrow key to the terminal. Moved off the toolbar — now handled by the direction pad.</rule>
+  <rule id="arrow_left" status="❌" context="superseded by R11">Tapping [←] sends the left arrow key to the terminal. Moved off the toolbar — now handled by the direction pad.</rule>
+  <rule id="arrow_right" status="❌" context="superseded by R11">Tapping [→] sends the right arrow key to the terminal. Moved off the toolbar — now handled by the direction pad.</rule>
+  <rule id="tab_key" status="✅">Tapping [TAB] sends the tab character for autocompletion.</rule>
 </requirement>
 
 <requirement id="R4" name="Ctrl Combination Mode">
   <description>
-  Tapping [CTRL] enters a combination mode where the next key press is sent as a Ctrl+key combination. This avoids the need for multi-touch chording on a touchscreen.
+    Tapping [CTRL] enters a combination mode where the next key press is sent as a Ctrl+key combination. This avoids the need for multi-touch chording on a touchscreen.
   </description>
-  <rule id="ctrl_enter" status="❌">Tapping [CTRL] highlights the key and enters Ctrl-pending mode.</rule>
-  <rule id="ctrl_c" status="❌">In Ctrl-pending mode, tapping C sends Ctrl+C (SIGINT).</rule>
-  <rule id="ctrl_d" status="❌">In Ctrl-pending mode, tapping D sends Ctrl+D (EOF).</rule>
-  <rule id="ctrl_z" status="❌">In Ctrl-pending mode, tapping Z sends Ctrl+Z (SIGTSTP).</rule>
-  <rule id="ctrl_l" status="❌">In Ctrl-pending mode, tapping L sends Ctrl+L (clear screen).</rule>
-  <rule id="ctrl_a" status="❌">In Ctrl-pending mode, tapping A sends Ctrl+A (beginning of line).</rule>
-  <rule id="ctrl_e" status="❌">In Ctrl-pending mode, tapping E sends Ctrl+E (end of line).</rule>
-  <rule id="ctrl_timeout" status="❌">If no key is pressed within a short timeout, Ctrl-pending mode cancels and [CTRL] returns to its normal state.</rule>
-  <rule id="ctrl_tap_again" status="❌">Tapping [CTRL] again while in pending mode cancels the pending state.</rule>
-  <rule id="ctrl_not_ctrl" status="🟡 deferred">Tapping [CTRL] sends the literal Ctrl key code when tapped twice in quick succession, for programs that need a bare Ctrl press. (Deferred — a Unix PTY has no byte for a bare Ctrl press; revisit if real usage demands it.)</rule>
+  <rule id="ctrl_enter" status="✅">Tapping [CTRL] highlights the key and enters Ctrl-pending mode.</rule>
+  <rule id="ctrl_c" status="✅">In Ctrl-pending mode, tapping C sends Ctrl+C (SIGINT).</rule>
+  <rule id="ctrl_d" status="✅">In Ctrl-pending mode, tapping D sends Ctrl+D (EOF).</rule>
+  <rule id="ctrl_z" status="✅">In Ctrl-pending mode, tapping Z sends Ctrl+Z (SIGTSTP).</rule>
+  <rule id="ctrl_l" status="✅">In Ctrl-pending mode, tapping L sends Ctrl+L (clear screen).</rule>
+  <rule id="ctrl_a" status="✅">In Ctrl-pending mode, tapping A sends Ctrl+A (beginning of line).</rule>
+  <rule id="ctrl_e" status="✅">In Ctrl-pending mode, tapping E sends Ctrl+E (end of line).</rule>
+  <rule id="ctrl_timeout" status="✅">If no key is pressed within a short timeout, Ctrl-pending mode cancels and [CTRL] returns to its normal state.</rule>
+  <rule id="ctrl_tap_again" status="✅">Tapping [CTRL] again while in pending mode cancels the pending state.</rule>
+  <rule id="ctrl_not_ctrl" status="❌" context="deferred">Tapping [CTRL] sends the literal Ctrl key code when tapped twice in quick succession, for programs that need a bare Ctrl press. Deferred — a Unix PTY has no byte for a bare Ctrl press; revisit if real usage demands it.</rule>
 </requirement>
 
 <requirement id="R5" name="Basic Terminal UX">
   <description>
-  Standard terminal app conventions for copy, paste, scrolling, text selection, and dark mode.
+    Standard terminal app conventions for copy, paste, scrolling, text selection, and dark mode.
   </description>
-  <rule id="copy" status="❌">User can select text in the terminal and copy it to the system clipboard.</rule>
-  <rule id="paste" status="❌">User can paste text from the system clipboard into the terminal.</rule>
-  <rule id="scroll" status="❌">User can scroll up and down through terminal history with touch gestures.</rule>
-  <rule id="scroll_sync" status="❌">Scrolling pauses auto-scroll; when scrolled to bottom, auto-scroll resumes and follows new output.</rule>
-  <rule id="dark_mode" status="❌">The terminal and app UI use a dark color scheme by default.</rule>
-  <rule id="font_mono" status="❌">Terminal text renders in a monospace font.</rule>
-  <rule id="landscape" status="🟡 deferred">Landscape orientation. Dropped from MVP — iPhone target locks to portrait. Revisit if real usage demands it.</rule>
+  <rule id="copy" status="✅">User can select text in the terminal and copy it to the system clipboard.</rule>
+  <rule id="paste" status="✅">User can paste text from the system clipboard into the terminal.</rule>
+  <rule id="scroll" status="✅">User can scroll up and down through terminal history with touch gestures.</rule>
+  <rule id="scroll_sync" status="✅">Scrolling pauses auto-scroll; when scrolled to bottom, auto-scroll resumes and follows new output.</rule>
+  <rule id="dark_mode" status="✅">The terminal and app UI use a dark color scheme by default.</rule>
+  <rule id="font_mono" status="✅">Terminal text renders in a monospace font.</rule>
+  <rule id="landscape" status="❌" context="deferred">Landscape orientation. Dropped from MVP — iPhone target locks to portrait. Revisit if real usage demands it.</rule>
 </requirement>
 
-<requirement id="R6" name="Host Key TOFU" added="2026-05-16">
+<requirement id="R6" name="Host Key TOFU">
   <description>
-  Trust-on-first-use host key verification. The first successful connection to a host stores the host's public key fingerprint; subsequent connections compare and warn on mismatch. Added during MVP design as the security baseline for any terminal app.
+    Trust-on-first-use host key verification. The first successful connection to a host stores the host's public key fingerprint; subsequent connections compare and warn on mismatch. Added during MVP design as the security baseline for any terminal app.
   </description>
-  <rule id="tofu_store" status="❌">On first successful connect, the SHA-256 fingerprint of the remote host key is stored in Keychain, keyed by host:port.</rule>
-  <rule id="tofu_match" status="❌">On subsequent connects, the stored fingerprint is compared to the remote host key; a match proceeds silently.</rule>
-  <rule id="tofu_mismatch" status="❌">A mismatch shows a full-screen warning with both fingerprints (SHA256:base64) and offers Reject or Trust-new-key (with explicit confirmation).</rule>
+  <rule id="tofu_store" status="✅">On first successful connect, the SHA-256 fingerprint of the remote host key is stored in Keychain, keyed by host:port.</rule>
+  <rule id="tofu_match" status="✅">On subsequent connects, the stored fingerprint is compared to the remote host key; a match proceeds silently.</rule>
+  <rule id="tofu_mismatch" status="✅">A mismatch shows a full-screen warning with both fingerprints (SHA256:base64) and offers Reject or Trust-new-key (with explicit confirmation).</rule>
 </requirement>
 
-<todos>
-  <todo id="multi_host">Multi-host list with saved credentials per host. MVP stores only one host record; the data model is designed to extend to an array.</todo>
-  <todo id="auto_reconnect">Auto-reconnect / mosh-style session recovery on transient network loss.</todo>
-  <todo id="port_forward">Port forwarding, SFTP, scp.</todo>
-  <todo id="theme_settings">Theme and font-size settings UI.</todo>
-  <todo id="custom_keybar">User-customizable key bar (add/remove keys, reorder).</todo>
-  <todo id="ipad_layout">iPad-optimized layout.</todo>
-  <todo id="ctrl_not_ctrl_revisit">Revisit R4 ctrl_not_ctrl once real usage clarifies whether any program needs a literal Ctrl interaction.</todo>
-  <todo id="ecdsa_keys">Support ECDSA (p256/p384/p521) OpenSSH private keys. Citadel 0.12.1 only parses ed25519 and RSA OpenSSH key files; users importing ECDSA keys currently get `.privateKeyParse`. Either wait for Citadel upstream or parse them ourselves and pass pre-built CryptoKit `P*.Signing.PrivateKey` into the `.p256` / `.p384` / `.p521` Citadel auth factories.</todo>
-  <todo id="key_passphrase_error">Distinguish wrong-passphrase from corrupt-key for encrypted OpenSSH private keys. Citadel's `InvalidOpenSSHKey` does not say why decryption failed; current code heuristically maps "no passphrase + bcrypt/cipher/decrypt/kdf in error text" to `.privateKeyPassphraseRequired` and everything else to `.privateKeyParse`, so a wrong-passphrase user sees a generic parse error.</todo>
-</todos>
+<requirement id="R7" name="Local Network Permission">
+  <description>
+    iOS shows a system permission prompt the first time the app sends traffic to a Local Area Network address (RFC1918 IPv4, IPv6 unique-local / link-local, or a `.local` mDNS host). The terminal must handle this prompt gracefully so the first connect to a LAN dev box does not fail before the user can tap Allow. Loopback (`127.0.0.1` / `::1`) and public addresses are unaffected and bypass this flow.
+  </description>
+  <rule id="prewarm_lan" status="✅">Before opening an SSH connection to a LAN host (RFC1918 / ULA / link-local / `.local`), the app first triggers the iOS local-network prompt and waits for the user's response.</rule>
+  <rule id="prewarm_skip" status="✅">Connections to loopback or to public (non-LAN) addresses skip the prewarm and proceed directly to SSH.</rule>
+  <rule id="connect_progress" status="✅">While the prewarm prompt is on screen, the Connect action shows a "Waiting for local network permission…" state instead of returning an immediate failure.</rule>
+  <rule id="auto_retry_after_grant" status="✅">If the user grants permission during prewarm, the app proceeds to the SSH connect automatically — no second tap on Connect required.</rule>
+  <rule id="denied_error_message" status="✅">If prewarm completes with permission denied (or a connect to a LAN host fails with a permission-shaped error), the app shows an actionable error: "Local network access is required to reach &lt;host&gt;. Open Settings to enable it."</rule>
+  <rule id="open_settings_action" status="✅">The denied-error surface includes an "Open Settings" button that deep-links to the app's Settings pane, plus a "Retry" button that re-runs the connect.</rule>
+  <rule id="remember_grant" status="✅">Once a connect has succeeded against a LAN host, subsequent connects skip the prewarm wait and proceed directly to SSH unless the user changes permission in Settings.</rule>
+</requirement>
+
+<requirement id="R8" name="App Icon">
+  <description>
+    The app ships with a final designed app icon — not the Xcode placeholder — so it has a recognisable identity on the Home Screen, in Spotlight, and in the App Switcher.
+  </description>
+  <rule id="icon_designed" status="❌">A final app icon design exists and is shipped at all iOS-required sizes (Home Screen, Spotlight, Settings, Notifications, App Store marketing).</rule>
+  <rule id="icon_dark_tinted" status="❌">The icon ships variants for iOS 18+ Dark and Tinted Home Screen appearances in addition to the default Light variant.</rule>
+</requirement>
+
+<requirement id="R9" name="System Appearance">
+  <description>
+    The app always follows the iOS system appearance — Light when the system is Light, Dark when the system is Dark — for both the SwiftUI chrome and the terminal palette. There is no in-app theme override.
+  </description>
+  <rule id="follow_system" status="❌">On launch, the app and terminal render in Light or Dark to match the current iOS system appearance, without any in-app theme picker.</rule>
+  <rule id="live_switch" status="❌">Changing the system appearance while the app is open updates both the app chrome and the terminal palette without restart.</rule>
+  <rule id="terminal_palette_light" status="❌">When the system is in Light mode, the terminal uses a light background with dark foreground text and legible ANSI colour mappings.</rule>
+  <rule id="terminal_palette_dark" status="❌">When the system is in Dark mode, the terminal uses a dark background with light foreground text and legible ANSI colour mappings.</rule>
+  <rule id="readable_contrast" status="❌">In both appearances, the special-keys bar, Connect form, error text, and disconnect banner meet contrast standards against their background.</rule>
+  <rule id="all_colors_adaptive" status="❌">Every UI surface, text, icon, border, and accent colour is system-adaptive — no colour in the app remains the same in Light and Dark. Switching system appearance changes the rendered colour of every coloured element.</rule>
+</requirement>
+
+<requirement id="R10" name="First Launch Onboarding">
+  <description>
+    On first launch, before the Connection form, the app guides the user through a short onboarding that captures (a) what kind of host they will connect to and (b) whether that host is on the same Wi-Fi or remote. The answers tailor the next screen — a setup tutorial for macOS, or an immediate local-network permission request for same-Wi-Fi targets. After completion, onboarding does not appear again unless the user resets it.
+  </description>
+  <rule id="shown_on_first_launch" status="✅">On the very first launch (no prior completion), the app shows the onboarding flow instead of the Connection form.</rule>
+  <rule id="skipped_after_completion" status="✅">Once the user has completed onboarding, subsequent launches go directly to the Connection form.</rule>
+  <rule id="host_kind_choice" status="✅">Step 1 asks the user to pick the host kind: "macOS" or "Other (Linux / dev box / VM)".</rule>
+  <rule id="location_choice" status="✅">Step 2 asks where the host lives: "Same Wi-Fi as my phone" or "Remote (over the internet)".</rule>
+  <rule id="macos_tutorial" status="⚠️" context="host_kind=macOS">When the user picks macOS, the next screen is a tutorial covering how to enable Remote Login on the Mac and how to find the Mac's IP address. Tutorial content is to be authored — placeholder copy is acceptable for the MVP shell.</rule>
+  <rule id="local_permission_request" status="✅" context="location=same_wifi">When the user picks "Same Wi-Fi", the onboarding immediately triggers the iOS Local Network permission prompt (rather than waiting until the first connect attempt).</rule>
+  <rule id="remote_skip_permission" status="✅" context="location=remote">When the user picks "Remote", the onboarding does not trigger the Local Network prompt — that permission is unnecessary for public hosts.</rule>
+  <rule id="continue_to_connection" status="✅">After the final onboarding step, the user lands on the Connection form, with the host kind / location choice persisted for future reference.</rule>
+  <rule id="back_navigation" status="✅">The user can go back to the previous onboarding step at any point before finishing, without losing the earlier choice.</rule>
+</requirement>
+
+<requirement id="R11" name="Direction Pad">
+  <description>
+    A dedicated, oversized 4-way direction pad — styled like a game controller's D-pad — sits above the special-keys toolbar (R3) whenever the terminal is in focus. Its job is to make arrow input fast and forgiving on a touchscreen: large targets, clear hit areas, and continuous-press repeat for moving the cursor or scrolling through shell history.
+  </description>
+  <rule id="position_above_toolbar" status="❌">The direction pad is rendered directly above the R3 toolbar — between the terminal output and the toolbar — so it remains reachable without scrolling either area.</rule>
+  <rule id="large_targets" status="❌">Each of the four direction buttons is visibly larger than the keys on the R3 toolbar — sized for confident thumb taps, comparable to a physical game controller's D-pad.</rule>
+  <rule id="dpad_layout" status="❌">The four directions are arranged in a plus / cross layout (Up on top, Down on bottom, Left on the left, Right on the right) with a clear inactive centre, so the user can navigate by muscle memory.</rule>
+  <rule id="press_up" status="❌">Tapping Up sends the up arrow key to the terminal (e.g., for shell history).</rule>
+  <rule id="press_down" status="❌">Tapping Down sends the down arrow key to the terminal.</rule>
+  <rule id="press_left" status="❌">Tapping Left sends the left arrow key to the terminal.</rule>
+  <rule id="press_right" status="❌">Tapping Right sends the right arrow key to the terminal.</rule>
+  <rule id="hold_repeat" status="❌">Holding a direction continuously repeats the arrow input at a steady rate (with a brief initial delay), so the user can hold to scroll history or move the cursor across a long line.</rule>
+  <rule id="visual_feedback" status="❌">Each direction button shows a clear pressed state (visual depression / highlight) and emits a light haptic on tap.</rule>
+  <rule id="liquid_glass_style" status="❌">The direction pad uses the iOS 26+ Liquid Glass material, visually consistent with the R3 toolbar.</rule>
+  <rule id="compact_layout" status="❌">The direction pad fits within the available safe area without overlapping the terminal view, the toolbar, or the system keyboard.</rule>
+</requirement>
+
+<requirement id="R12" name="Lookin Debug Inspector">
+  <description>
+    Debug builds of the app expose their live view hierarchy to the Lookin Mac client (lookin.work), so the iOS team can inspect SwiftUI / UIKit layout, layer geometry, and view attributes at runtime without rebuilding. Release builds must not include Lookin at all — neither the framework nor any of its symbols ship to the App Store. This is a developer-tooling requirement, not a user-facing feature.
+  </description>
+  <rule id="debug_only_present" status="❌" context="Debug build">Debug builds bundle the Lookin server framework, so a running debug instance is inspectable from the Lookin Mac client.</rule>
+  <rule id="release_excluded" status="❌" context="Release build">Release builds (TestFlight / App Store) do not link the Lookin server framework and do not expose any view-inspection endpoint.</rule>
+  <rule id="mac_can_connect" status="❌" context="Debug build, same Wi-Fi">With a Debug build running on a device or simulator on the same Wi-Fi network as the Mac, the Lookin Mac app discovers the running app and can attach to it.</rule>
+  <rule id="hierarchy_visible" status="❌" context="Lookin attached">After attaching, the Lookin client can browse the full SwiftUI/UIKit view hierarchy — the Connection screen, the Terminal screen, the toolbar, the direction pad, and the embedded terminal view — and read each view's frame, bounds, and key properties.</rule>
+  <rule id="no_user_visible_change" status="❌">Lookin's presence does not change any user-visible behaviour, layout, performance, or permission prompts in either Debug or Release builds beyond the standard local-network prompt already covered by R7.</rule>
+</requirement>
+
+<bug id="theme_forced_dark" status="Open" date="2026-05-16" rule="R9.follow_system">
+  <current>
+    The app forces Dark appearance at the root, so it renders dark even when the iOS system is in Light mode. The terminal also stays on a dark palette regardless of system setting.
+  </current>
+  <expected>
+    The app and terminal mirror the iOS system appearance — Light in Light, Dark in Dark — with no in-app override. Toggling system appearance while the app is open swaps both the SwiftUI chrome and the terminal palette live.
+  </expected>
+  <steps>
+    1. Set the iOS system appearance to Light (Settings → Display &amp; Brightness → Light).
+    2. Launch the app.
+    3. Observe: the app and terminal render in Dark instead of Light.
+    4. With the app open, switch the system appearance to Dark and back to Light.
+    5. Observe: the app does not react to the system change.
+  </steps>
+</bug>
+
+<bug id="app_icon_missing" status="Open" date="2026-05-16" rule="R8.icon_designed">
+  <current>
+    The project has no AppIcon asset — the app launches with the default white/blank iOS placeholder icon on the Home Screen, in Spotlight, and in the App Switcher. No icon design has been produced yet.
+  </current>
+  <expected>
+    A final app icon design is produced and added as an AppIcon asset catalog entry covering every iOS-required size, including Dark and Tinted variants for iOS 18+.
+  </expected>
+  <steps>
+    1. Build and install the app on a device or simulator.
+    2. Go to the Home Screen.
+    3. Observe: the app appears with the generic placeholder icon instead of a designed icon.
+  </steps>
+</bug>
+
+<bug id="first_connect_blocked_by_permission_prompt" status="Fix Pending" date="2026-05-16" rule="R7.prewarm_lan">
+  <current>
+    On the first launch, tapping Connect against a LAN host (e.g. `192.168.x.x` or a `.local` host) triggers the iOS local-network permission prompt — but the SSH connect attempt has already started in parallel and fails (timeout / no route) before the user can tap Allow. The user sees a confusing error and must tap Connect a second time after granting permission.
+  </current>
+  <expected>
+    The app should detect that the target is a LAN address, run a permission prewarm to surface the iOS prompt, wait for the user's response, and only then start the SSH handshake. If the user grants permission, the connect proceeds automatically; if denied, an actionable error with "Open Settings" and "Retry" is shown.
+  </expected>
+  <steps>
+    1. Fresh-install the app (or reset its local-network permission in Settings).
+    2. Open the Connection screen and enter a LAN host (e.g. `192.168.1.10`), port `22`, username, password.
+    3. Tap Connect.
+    4. Observe: iOS shows the local-network prompt, and a connection error appears behind it before the user can tap Allow.
+    5. Tap Allow on the prompt.
+    6. Observe: the connect does not retry automatically; the user must tap Connect again.
+  </steps>
+</bug>
 
 </prd>

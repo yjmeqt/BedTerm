@@ -7,6 +7,7 @@ final class ConnectionSmokeUITests: XCTestCase {
 
     func test_launch_showsConnectionScreen() throws {
         let app = XCUIApplication()
+        app.launchArguments.append("-uitest-skipOnboarding")
         app.launch()
         XCTAssertTrue(app.textFields["connection.host"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.textFields["connection.port"].exists)

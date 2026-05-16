@@ -23,6 +23,8 @@ final class ConnectionViewModel {
 
     var errorMessage: String?
     var isConnecting = false
+    var isPrewarming = false
+    var permissionDenied = false
     private(set) var pendingMismatch: PendingMismatch?
 
     private let credentialsStore: CredentialsStore
@@ -78,8 +80,28 @@ final class ConnectionViewModel {
         guard let credential = buildCredential() else { return nil }
         errorMessage = nil
         pendingMismatch = nil
+        permissionDenied = false
         isConnecting = true
         defer { isConnecting = false }
+
+        // R7: trigger iOS local-network permission prompt before SSH for LAN
+        // targets so the first connect does not race the prompt and fail.
+        let needsPrewarm =
+            LocalNetworkPrewarmer.isLAN(host: credential.host)
+            && !LocalNetworkPrewarmer.shared.hasGrantedBefore
+        if needsPrewarm {
+            isPrewarming = true
+            let outcome = await LocalNetworkPrewarmer.shared.ensurePermission(forHost: credential.host)
+            isPrewarming = false
+            if outcome == .denied {
+                permissionDenied = true
+                errorMessage =
+                    "Local network access is required to reach \(credential.host). Open Settings to enable it."
+                return nil
+            }
+            // .unknown (timed out without a clear signal) — fall through and let the
+            // SSH attempt happen; if it really is denied, the SSH error will reflect it.
+        }
 
         let session = TerminalSession(client: clientFactory())
         await session.connect(credential: credential, initialPTY: .init(cols: 80, rows: 24))
