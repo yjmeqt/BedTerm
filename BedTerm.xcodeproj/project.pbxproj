@@ -14,6 +14,7 @@
 		B1B1B1B100000000000000A1 /* KeyTap.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B1B1B100000000000000F1 /* KeyTap.swift */; };
 		B1B1B1B100000000000000A2 /* KeyBarState.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B1B1B100000000000000F2 /* KeyBarState.swift */; };
 		B1B1B1B100000000000000A3 /* KeyBarStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B1B1B100000000000000F3 /* KeyBarStateTests.swift */; };
+		B1B1B1B100000000000000A4 /* ByteSequenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B1B1B100000000000000F4 /* ByteSequenceTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -34,6 +35,7 @@
 		B1B1B1B100000000000000F1 /* KeyTap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyTap.swift; sourceTree = "<group>"; };
 		B1B1B1B100000000000000F2 /* KeyBarState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyBarState.swift; sourceTree = "<group>"; };
 		B1B1B1B100000000000000F3 /* KeyBarStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyBarStateTests.swift; sourceTree = "<group>"; };
+		B1B1B1B100000000000000F4 /* ByteSequenceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ByteSequenceTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -54,6 +56,7 @@
 			children = (
 				43021D79E9E48C17C8DE52A7 /* BedTermTests.swift */,
 				B1B1B1B100000000000000F3 /* KeyBarStateTests.swift */,
+				B1B1B1B100000000000000F4 /* ByteSequenceTests.swift */,
 			);
 			path = BedTermTests;
 			sourceTree = "<group>";
@@ -201,6 +204,7 @@
 			files = (
 				3BA0EC8B2788B75A6BCFD1FD /* BedTermTests.swift in Sources */,
 				B1B1B1B100000000000000A3 /* KeyBarStateTests.swift in Sources */,
+				B1B1B1B100000000000000A4 /* ByteSequenceTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
