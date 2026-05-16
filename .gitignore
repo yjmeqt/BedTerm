@@ -32,3 +32,6 @@ worktree-ios-dev/
 
 # Worktrees
 .worktrees/
+
+# Superpowers planning artifacts (kept local, not tracked)
+docs/superpowers/
