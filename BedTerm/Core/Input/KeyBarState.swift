@@ -10,6 +10,14 @@ public enum KeyBarState: Equatable {
         case (.idle, .ctrl):
             self = .ctrlPending(startedAt: now)
             return [.visualLatch]
+        case (.ctrlPending, .char(let c)):
+            self = .idle
+            let scalar = c.lowercased().unicodeScalars.first?.value ?? 0
+            if (UnicodeScalar("a").value...UnicodeScalar("z").value).contains(scalar) {
+                let byte = UInt8(scalar & 0x1F)
+                return [.bytes(Data([byte])), .visualUnlatch]
+            }
+            return [.visualUnlatch]
         default:
             return [.noop]
         }
