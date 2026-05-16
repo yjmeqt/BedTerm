@@ -36,7 +36,7 @@ mint bootstrap
 xcodebuild test \
   -project BedTerm.xcodeproj \
   -scheme BedTerm \
-  -destination 'platform=iOS Simulator,name=iPhone 16 Pro' \
+  -destination 'platform=iOS Simulator,name=iPhone 17' \
   | mint run xcbeautify
 ```
 
