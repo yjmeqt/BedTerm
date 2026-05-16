@@ -152,11 +152,11 @@ An iOS terminal app designed for coding on iPhone. Users SSH into a Mac mini or 
   <description>
     Debug builds of the app expose their live view hierarchy to the Lookin Mac client (lookin.work), so the iOS team can inspect SwiftUI / UIKit layout, layer geometry, and view attributes at runtime without rebuilding. Release builds must not include Lookin at all — neither the framework nor any of its symbols ship to the App Store. This is a developer-tooling requirement, not a user-facing feature.
   </description>
-  <rule id="debug_only_present" status="❌" context="Debug build">Debug builds bundle the Lookin server framework, so a running debug instance is inspectable from the Lookin Mac client.</rule>
-  <rule id="release_excluded" status="❌" context="Release build">Release builds (TestFlight / App Store) do not link the Lookin server framework and do not expose any view-inspection endpoint.</rule>
-  <rule id="mac_can_connect" status="❌" context="Debug build, same Wi-Fi">With a Debug build running on a device or simulator on the same Wi-Fi network as the Mac, the Lookin Mac app discovers the running app and can attach to it.</rule>
-  <rule id="hierarchy_visible" status="❌" context="Lookin attached">After attaching, the Lookin client can browse the full SwiftUI/UIKit view hierarchy — the Connection screen, the Terminal screen, the toolbar, the direction pad, and the embedded terminal view — and read each view's frame, bounds, and key properties.</rule>
-  <rule id="no_user_visible_change" status="❌">Lookin's presence does not change any user-visible behaviour, layout, performance, or permission prompts in either Debug or Release builds beyond the standard local-network prompt already covered by R7.</rule>
+  <rule id="debug_only_present" status="✅" context="Debug build">Debug builds bundle the Lookin server framework, so a running debug instance is inspectable from the Lookin Mac client.</rule>
+  <rule id="release_excluded" status="✅" context="Release build">Release builds (TestFlight / App Store) do not link the Lookin server framework and do not expose any view-inspection endpoint.</rule>
+  <rule id="mac_can_connect" status="✅" context="Debug build, same Wi-Fi">With a Debug build running on a device or simulator on the same Wi-Fi network as the Mac, the Lookin Mac app discovers the running app and can attach to it.</rule>
+  <rule id="hierarchy_visible" status="✅" context="Lookin attached">After attaching, the Lookin client can browse the full SwiftUI/UIKit view hierarchy — the Connection screen, the Terminal screen, the toolbar, the direction pad, and the embedded terminal view — and read each view's frame, bounds, and key properties.</rule>
+  <rule id="no_user_visible_change" status="✅">Lookin's presence does not change any user-visible behaviour, layout, performance, or permission prompts in either Debug or Release builds beyond the standard local-network prompt already covered by R7.</rule>
 </requirement>
 
 <bug id="theme_forced_dark" status="Open" date="2026-05-16" rule="R9.follow_system">
