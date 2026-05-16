@@ -77,4 +77,5 @@ jobs:
             -workspace BedTerm.xcworkspace \
             -scheme BedTerm \
             -destination 'platform=iOS Simulator,name=iPhone 17' \
+            -skipPackagePluginValidation \
             | mint run xcbeautify
