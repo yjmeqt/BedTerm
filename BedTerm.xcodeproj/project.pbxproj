@@ -20,6 +20,7 @@
 		C1C1C1C100000000000000A1 /* ConnectionSmokeUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1C1C1C100000000000000F1 /* ConnectionSmokeUITests.swift */; };
 		D1D1D1D100000000000000A1 /* BedTermKit in Frameworks */ = {isa = PBXBuildFile; productRef = D1D1D1D100000000000000B1 /* BedTermKit */; };
 		A55E70AC0000000000000B01 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A55E70AC0000000000000A01 /* Assets.xcassets */; };
+		D1D1D1D100000000000000A2 /* LookinServer in Frameworks */ = {isa = PBXBuildFile; productRef = D1D1D1D100000000000000B2 /* LookinServer */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -64,6 +65,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				D1D1D1D100000000000000A1 /* BedTermKit in Frameworks */,
+				D1D1D1D100000000000000A2 /* LookinServer in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -179,6 +181,7 @@
 			name = BedTerm;
 			packageProductDependencies = (
 				D1D1D1D100000000000000B1 /* BedTermKit */,
+				D1D1D1D100000000000000B2 /* LookinServer */,
 			);
 			productName = BedTerm;
 			productReference = 0FCBFA740B0BF25EF848DCE5 /* BedTerm.app */;
@@ -235,6 +238,7 @@
 			mainGroup = CCCC4AAEB9C7F71DB36017F5;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
+				D1D1D1D100000000000000C2 /* XCRemoteSwiftPackageReference "LookinServer" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 645FE47AA418C2AB27267181 /* Products */;
@@ -329,6 +333,10 @@
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
+				);
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-ObjC",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.applovin.yi.bedterm;
 				SDKROOT = iphoneos;
@@ -577,10 +585,26 @@
 		};
 /* End XCConfigurationList section */
 
+/* Begin XCRemoteSwiftPackageReference section */
+		D1D1D1D100000000000000C2 /* XCRemoteSwiftPackageReference "LookinServer" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/QMUI/LookinServer";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.2.7;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
 /* Begin XCSwiftPackageProductDependency section */
 		D1D1D1D100000000000000B1 /* BedTermKit */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = BedTermKit;
+		};
+		D1D1D1D100000000000000B2 /* LookinServer */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = D1D1D1D100000000000000C2 /* XCRemoteSwiftPackageReference "LookinServer" */;
+			productName = LookinServer;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
