@@ -15,6 +15,7 @@
 		B1B1B1B100000000000000A2 /* KeyBarState.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B1B1B100000000000000F2 /* KeyBarState.swift */; };
 		B1B1B1B100000000000000A3 /* KeyBarStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B1B1B100000000000000F3 /* KeyBarStateTests.swift */; };
 		B1B1B1B100000000000000A4 /* ByteSequenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B1B1B100000000000000F4 /* ByteSequenceTests.swift */; };
+		B1B1B1B100000000000000A5 /* Keychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B1B1B100000000000000F5 /* Keychain.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -36,6 +37,7 @@
 		B1B1B1B100000000000000F2 /* KeyBarState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyBarState.swift; sourceTree = "<group>"; };
 		B1B1B1B100000000000000F3 /* KeyBarStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyBarStateTests.swift; sourceTree = "<group>"; };
 		B1B1B1B100000000000000F4 /* ByteSequenceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ByteSequenceTests.swift; sourceTree = "<group>"; };
+		B1B1B1B100000000000000F5 /* Keychain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Keychain.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -74,8 +76,17 @@
 			isa = PBXGroup;
 			children = (
 				B1B1B1B1000000000000C001 /* Input */,
+				B1B1B1B1000000000000C003 /* Keychain */,
 			);
 			path = Core;
+			sourceTree = "<group>";
+		};
+		B1B1B1B1000000000000C003 /* Keychain */ = {
+			isa = PBXGroup;
+			children = (
+				B1B1B1B100000000000000F5 /* Keychain.swift */,
+			);
+			path = Keychain;
 			sourceTree = "<group>";
 		};
 		402702E3152E5ACED7511228 /* App */ = {
@@ -215,6 +226,7 @@
 				89E7D796F5E95867BF23555D /* BedTermApp.swift in Sources */,
 				B1B1B1B100000000000000A1 /* KeyTap.swift in Sources */,
 				B1B1B1B100000000000000A2 /* KeyBarState.swift in Sources */,
+				B1B1B1B100000000000000A5 /* Keychain.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
