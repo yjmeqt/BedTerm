@@ -34,6 +34,7 @@ An iOS terminal app designed for coding on iPhone. Users SSH into a Mac mini or 
     A slim toolbar pinned above the system keyboard (and above the direction pad — see R11) that exposes the keys most essential to terminal use that are absent from the iOS keyboard. The toolbar is deliberately minimal — only [ESC], [CTRL], and [TAB] — to keep the input area light and uncrowded.
   </description>
   <rule id="keys_present" status="❌">The toolbar displays exactly three keys: [ESC], [CTRL], and [TAB]. No other keys (no arrows, no extras) appear on the toolbar.</rule>
+  <rule id="only_toolbar" status="❌" context="keyboard shown">Only the app's special-keys toolbar appears above the system keyboard. No additional input-accessory bar from the embedded terminal emulator (or any other source) is stacked above or below it.</rule>
   <rule id="keys_fixed" status="✅">The toolbar stays visible when the system keyboard is shown and when it is hidden.</rule>
   <rule id="esc_key" status="✅">Tapping [ESC] sends the escape key (e.g., to exit insert mode in vim).</rule>
   <rule id="liquid_glass_style" status="❌">The toolbar uses the iOS 26+ Liquid Glass material — translucent, depth-aware, responsive to the content scrolling beneath it — instead of an opaque bar.</rule>
@@ -158,6 +159,21 @@ An iOS terminal app designed for coding on iPhone. Users SSH into a Mac mini or 
   <rule id="hierarchy_visible" status="✅" context="Lookin attached">After attaching, the Lookin client can browse the full SwiftUI/UIKit view hierarchy — the Connection screen, the Terminal screen, the toolbar, the direction pad, and the embedded terminal view — and read each view's frame, bounds, and key properties.</rule>
   <rule id="no_user_visible_change" status="✅">Lookin's presence does not change any user-visible behaviour, layout, performance, or permission prompts in either Debug or Release builds beyond the standard local-network prompt already covered by R7.</rule>
 </requirement>
+
+<bug id="duplicate_input_accessory" status="Open" date="2026-05-16" rule="R3.only_toolbar">
+  <current>
+    Two stacked toolbars appear above the system keyboard: the app's special-keys toolbar (with arrows and extras still present) on top, and a second grey accessory bar from the embedded terminal emulator below it (showing esc, ctrl, ~, |, /, -, arrows, a touch-mode toggle, and a keyboard-dismiss button).
+    <img src="screenshots/r3_duplicate_accessory.png" alt="Two stacked toolbars above the system keyboard"/>
+  </current>
+  <expected>
+    Only the app's special-keys toolbar is visible above the system keyboard. The terminal emulator's built-in input accessory bar does not appear.
+  </expected>
+  <steps>
+    1. Launch the app and connect to any host.
+    2. Tap the terminal area to bring up the system keyboard.
+    3. Observe: two distinct toolbars stack between the terminal and the keyboard.
+  </steps>
+</bug>
 
 <bug id="theme_forced_dark" status="Open" date="2026-05-16" rule="R9.follow_system">
   <current>
