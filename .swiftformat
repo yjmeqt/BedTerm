@@ -3,3 +3,4 @@
 --maxwidth 120
 --self insert
 --stripunusedargs closure-only
+--exclude .build,worktree-ios-dev,.worktrees,BedTermTests/Mocks
