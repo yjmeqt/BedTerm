@@ -15,9 +15,11 @@ Worktree-based branching model. Each feature gets its own git worktree.
 
 ### Workflow
 
+Worktrees live at `.worktrees/`.
+
 ```
-1. /worktree-ios-dev <feature-name>   # create worktree + branch
-2. Build & iterate
+1. git worktree add .worktrees/<feature-name> -b feature/<feature-name>
+2. Build & iterate with /worktree-ios-dev
 3. Commit & merge back to main
 ```
 

@@ -30,5 +30,5 @@ Pods/
 # worktree-ios-dev
 worktree-ios-dev/
 
-# Claude
-.claude/worktrees/
+# Worktrees
+.worktrees/
