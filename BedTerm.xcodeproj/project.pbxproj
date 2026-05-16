@@ -24,6 +24,7 @@
 		B1B1B1B100000000000000AB /* MockSSHClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B1B1B100000000000000FB /* MockSSHClient.swift */; };
 		B1B1B1B100000000000000AC /* MockSSHClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B1B1B100000000000000FC /* MockSSHClientTests.swift */; };
 		B1B1B1B100000000000000AD /* SSHErrorMapping.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B1B1B100000000000000FD /* SSHErrorMapping.swift */; };
+		B1B1B1B100000000000000AF /* CitadelSSHClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B1B1B100000000000000FF /* CitadelSSHClient.swift */; };
 		B1B1B1B100000000000000AE /* SSHErrorMappingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B1B1B100000000000000FE /* SSHErrorMappingTests.swift */; };
 /* End PBXBuildFile section */
 
@@ -55,6 +56,7 @@
 		B1B1B1B100000000000000FB /* MockSSHClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockSSHClient.swift; sourceTree = "<group>"; };
 		B1B1B1B100000000000000FC /* MockSSHClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockSSHClientTests.swift; sourceTree = "<group>"; };
 		B1B1B1B100000000000000FD /* SSHErrorMapping.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSHErrorMapping.swift; sourceTree = "<group>"; };
+		B1B1B1B100000000000000FF /* CitadelSSHClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CitadelSSHClient.swift; sourceTree = "<group>"; };
 		B1B1B1B100000000000000FE /* SSHErrorMappingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSHErrorMappingTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -120,6 +122,7 @@
 				B1B1B1B100000000000000FA /* SSHClient.swift */,
 				B1B1B1B100000000000000FB /* MockSSHClient.swift */,
 				B1B1B1B100000000000000FD /* SSHErrorMapping.swift */,
+				B1B1B1B100000000000000FF /* CitadelSSHClient.swift */,
 			);
 			path = SSH;
 			sourceTree = "<group>";
@@ -271,6 +274,7 @@
 				B1B1B1B100000000000000AA /* SSHClient.swift in Sources */,
 				B1B1B1B100000000000000AB /* MockSSHClient.swift in Sources */,
 				B1B1B1B100000000000000AD /* SSHErrorMapping.swift in Sources */,
+				B1B1B1B100000000000000AF /* CitadelSSHClient.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
