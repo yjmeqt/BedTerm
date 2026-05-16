@@ -28,6 +28,7 @@
 		B1B1B1B100000000000000AE /* SSHErrorMappingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B1B1B100000000000000FE /* SSHErrorMappingTests.swift */; };
 		B1B1B1B1000000000000A100 /* AppRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B1B1B1000000000000F100 /* AppRoute.swift */; };
 		B1B1B1B1000000000000A101 /* ConnectionScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B1B1B1000000000000F101 /* ConnectionScreen.swift */; };
+		B1B1B1B1000000000000A200 /* TerminalHostView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B1B1B1000000000000F200 /* TerminalHostView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -62,6 +63,7 @@
 		B1B1B1B100000000000000FE /* SSHErrorMappingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSHErrorMappingTests.swift; sourceTree = "<group>"; };
 		B1B1B1B1000000000000F100 /* AppRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRoute.swift; sourceTree = "<group>"; };
 		B1B1B1B1000000000000F101 /* ConnectionScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionScreen.swift; sourceTree = "<group>"; };
+		B1B1B1B1000000000000F200 /* TerminalHostView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalHostView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -144,6 +146,7 @@
 			isa = PBXGroup;
 			children = (
 				B1B1B1B1000000000000C006 /* Connection */,
+				B1B1B1B1000000000000C007 /* Terminal */,
 			);
 			path = Features;
 			sourceTree = "<group>";
@@ -154,6 +157,14 @@
 				B1B1B1B1000000000000F101 /* ConnectionScreen.swift */,
 			);
 			path = Connection;
+			sourceTree = "<group>";
+		};
+		B1B1B1B1000000000000C007 /* Terminal */ = {
+			isa = PBXGroup;
+			children = (
+				B1B1B1B1000000000000F200 /* TerminalHostView.swift */,
+			);
+			path = Terminal;
 			sourceTree = "<group>";
 		};
 		645FE47AA418C2AB27267181 /* Products */ = {
@@ -299,6 +310,7 @@
 				B1B1B1B100000000000000AF /* CitadelSSHClient.swift in Sources */,
 				B1B1B1B1000000000000A100 /* AppRoute.swift in Sources */,
 				B1B1B1B1000000000000A101 /* ConnectionScreen.swift in Sources */,
+				B1B1B1B1000000000000A200 /* TerminalHostView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
