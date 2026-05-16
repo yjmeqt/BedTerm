@@ -9,6 +9,8 @@
 /* Begin PBXBuildFile section */
 		3BA0EC8B2788B75A6BCFD1FD /* BedTermTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43021D79E9E48C17C8DE52A7 /* BedTermTests.swift */; };
 		89E7D796F5E95867BF23555D /* BedTermApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79DC149F8161013AB2412CF9 /* BedTermApp.swift */; };
+		A1B2C3D400000000000000A1 /* SwiftTerm in Frameworks */ = {isa = PBXBuildFile; productRef = A1B2C3D400000000000000B1 /* SwiftTerm */; };
+		A1B2C3D400000000000000A2 /* Citadel in Frameworks */ = {isa = PBXBuildFile; productRef = A1B2C3D400000000000000B2 /* Citadel */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -27,6 +29,18 @@
 		43021D79E9E48C17C8DE52A7 /* BedTermTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BedTermTests.swift; sourceTree = "<group>"; };
 		79DC149F8161013AB2412CF9 /* BedTermApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BedTermApp.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		A1B2C3D400000000000000F1 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A1B2C3D400000000000000A1 /* SwiftTerm in Frameworks */,
+				A1B2C3D400000000000000A2 /* Citadel in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		17D135F5F3C2D922AD89D6B5 /* BedTermTests */ = {
@@ -97,6 +111,7 @@
 			buildConfigurationList = 3C002D513CFD97283C15DA0F /* Build configuration list for PBXNativeTarget "BedTerm" */;
 			buildPhases = (
 				E8CF050B86F74AE226BAC291 /* Sources */,
+				A1B2C3D400000000000000F1 /* Frameworks */,
 			);
 			buildRules = (
 			);
@@ -104,6 +119,8 @@
 			);
 			name = BedTerm;
 			packageProductDependencies = (
+				A1B2C3D400000000000000B1 /* SwiftTerm */,
+				A1B2C3D400000000000000B2 /* Citadel */,
 			);
 			productName = BedTerm;
 			productReference = 0FCBFA740B0BF25EF848DCE5 /* BedTerm.app */;
@@ -137,6 +154,10 @@
 			);
 			mainGroup = CCCC4AAEB9C7F71DB36017F5;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				A1B2C3D400000000000000C1 /* XCRemoteSwiftPackageReference "SwiftTerm" */,
+				A1B2C3D400000000000000C2 /* XCRemoteSwiftPackageReference "Citadel" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 645FE47AA418C2AB27267181 /* Products */;
 			projectDirPath = "";
@@ -410,6 +431,38 @@
 			defaultConfigurationName = Debug;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		A1B2C3D400000000000000C1 /* XCRemoteSwiftPackageReference "SwiftTerm" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/migueldeicaza/SwiftTerm";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.2.0;
+			};
+		};
+		A1B2C3D400000000000000C2 /* XCRemoteSwiftPackageReference "Citadel" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/orlandos-nl/Citadel";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.7.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		A1B2C3D400000000000000B1 /* SwiftTerm */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A1B2C3D400000000000000C1 /* XCRemoteSwiftPackageReference "SwiftTerm" */;
+			productName = SwiftTerm;
+		};
+		A1B2C3D400000000000000B2 /* Citadel */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A1B2C3D400000000000000C2 /* XCRemoteSwiftPackageReference "Citadel" */;
+			productName = Citadel;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 1011341C9E10EDF476211FB5 /* Project object */;
 }
