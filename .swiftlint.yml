@@ -1,0 +1,19 @@
+opt_in_rules:
+  - force_unwrapping
+  - implicit_return
+  - closure_spacing
+  - redundant_type_annotation
+  - sorted_imports
+
+line_length:
+  warning: 140
+  error: 200
+
+type_body_length:
+  warning: 400
+  error: 600
+
+excluded:
+  - .build
+  - .worktrees
+  - BedTermTests/Mocks
