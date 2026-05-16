@@ -1,12 +1,16 @@
 import SwiftUI
 import UIKit
 
-struct ConnectionScreen: View {
+public struct ConnectionScreen: View {
     @Binding var path: NavigationPath
     @State private var viewModel = ConnectionViewModel(clientFactory: { CitadelSSHClient() })
     @State private var keyImporter = false
 
-    var body: some View {
+    public init(path: Binding<NavigationPath>) {
+        self._path = path
+    }
+
+    public var body: some View {
         Form {
             Section("Server") {
                 TextField("Host", text: $viewModel.host)

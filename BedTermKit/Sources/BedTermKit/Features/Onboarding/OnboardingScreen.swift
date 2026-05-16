@@ -3,13 +3,17 @@ import SwiftUI
 /// Root onboarding view (R10). A two-step picker (host kind → location) leads
 /// to either a macOS setup tutorial or a Local Network permission prompt, then
 /// hands off to the Connection form via `onFinish`.
-struct OnboardingScreen: View {
+public struct OnboardingScreen: View {
     let onFinish: () -> Void
 
     @State private var viewModel = OnboardingViewModel()
     @State private var path: [OnboardingViewModel.Step] = []
 
-    var body: some View {
+    public init(onFinish: @escaping () -> Void) {
+        self.onFinish = onFinish
+    }
+
+    public var body: some View {
         NavigationStack(path: $path) {
             HostKindStep(viewModel: viewModel) {
                 path.append(.location)

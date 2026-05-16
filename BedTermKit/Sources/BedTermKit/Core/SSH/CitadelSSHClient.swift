@@ -61,7 +61,7 @@ import NIOSSH
 // Disambiguate Citadel's `SSHClient` class from our `SSHClient` protocol.
 private typealias CitadelClient = Citadel.SSHClient
 
-public final class CitadelSSHClient: BedTerm.SSHClient, @unchecked Sendable {
+public final class CitadelSSHClient: BedTermKit.SSHClient, @unchecked Sendable {
     public var output: AsyncStream<Data> { self.outputStream }
 
     private let outputStream: AsyncStream<Data>
