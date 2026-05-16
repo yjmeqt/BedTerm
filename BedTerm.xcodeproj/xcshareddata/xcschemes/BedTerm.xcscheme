@@ -35,6 +35,20 @@
                ReferencedContainer = "container:BedTerm.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "NO"
+            buildForProfiling = "NO"
+            buildForArchiving = "NO"
+            buildForAnalyzing = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "C1C1C1C1000000000000B001"
+               BuildableName = "BedTermUITests.xctest"
+               BlueprintName = "BedTermUITests"
+               ReferencedContainer = "container:BedTerm.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
       </BuildActionEntries>
    </BuildAction>
    <TestAction
@@ -61,6 +75,17 @@
                BlueprintIdentifier = "053533EBD78519D9A6032A8C"
                BuildableName = "BedTermTests.xctest"
                BlueprintName = "BedTermTests"
+               ReferencedContainer = "container:BedTerm.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "C1C1C1C1000000000000B001"
+               BuildableName = "BedTermUITests.xctest"
+               BlueprintName = "BedTermUITests"
                ReferencedContainer = "container:BedTerm.xcodeproj">
             </BuildableReference>
          </TestableReference>

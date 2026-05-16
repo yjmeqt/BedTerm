@@ -38,10 +38,18 @@
 		B1B1B1B1000000000000A402 /* KeyBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B1B1B1000000000000F402 /* KeyBar.swift */; };
 		B1B1B1B1000000000000A500 /* DisconnectBanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B1B1B1000000000000F500 /* DisconnectBanner.swift */; };
 		B1B1B1B1000000000000A501 /* TerminalScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B1B1B1000000000000F501 /* TerminalScreen.swift */; };
+		C1C1C1C100000000000000A1 /* ConnectionSmokeUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1C1C1C100000000000000F1 /* ConnectionSmokeUITests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
 		6F228B9A810249470C042864 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 1011341C9E10EDF476211FB5 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 17DD468B409E31704B6ADB31;
+			remoteInfo = BedTerm;
+		};
+		C1C1C1C100000000000000D1 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 1011341C9E10EDF476211FB5 /* Project object */;
 			proxyType = 1;
@@ -82,6 +90,8 @@
 		B1B1B1B1000000000000F402 /* KeyBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyBar.swift; sourceTree = "<group>"; };
 		B1B1B1B1000000000000F500 /* DisconnectBanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisconnectBanner.swift; sourceTree = "<group>"; };
 		B1B1B1B1000000000000F501 /* TerminalScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalScreen.swift; sourceTree = "<group>"; };
+		C1C1C1C100000000000000F1 /* ConnectionSmokeUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionSmokeUITests.swift; sourceTree = "<group>"; };
+		C1C1C1C100000000000000E1 /* BedTermUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = BedTermUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -199,8 +209,17 @@
 			children = (
 				0FCBFA740B0BF25EF848DCE5 /* BedTerm.app */,
 				1C940442BF6ACF645A679FED /* BedTermTests.xctest */,
+				C1C1C1C100000000000000E1 /* BedTermUITests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		C1C1C1C1000000000000C001 /* BedTermUITests */ = {
+			isa = PBXGroup;
+			children = (
+				C1C1C1C100000000000000F1 /* ConnectionSmokeUITests.swift */,
+			);
+			path = BedTermUITests;
 			sourceTree = "<group>";
 		};
 		BA9B10BF38849AD6FB861D2E /* BedTerm */ = {
@@ -218,6 +237,7 @@
 			children = (
 				BA9B10BF38849AD6FB861D2E /* BedTerm */,
 				17D135F5F3C2D922AD89D6B5 /* BedTermTests */,
+				C1C1C1C1000000000000C001 /* BedTermUITests */,
 				645FE47AA418C2AB27267181 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -242,6 +262,24 @@
 			productName = BedTermTests;
 			productReference = 1C940442BF6ACF645A679FED /* BedTermTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		C1C1C1C1000000000000B001 /* BedTermUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C1C1C1C1000000000000B201 /* Build configuration list for PBXNativeTarget "BedTermUITests" */;
+			buildPhases = (
+				C1C1C1C1000000000000B101 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				C1C1C1C1000000000000B301 /* PBXTargetDependency */,
+			);
+			name = BedTermUITests;
+			packageProductDependencies = (
+			);
+			productName = BedTermUITests;
+			productReference = C1C1C1C100000000000000E1 /* BedTermUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
 		};
 		17DD468B409E31704B6ADB31 /* BedTerm */ = {
 			isa = PBXNativeTarget;
@@ -280,6 +318,11 @@
 						DevelopmentTeam = "";
 						ProvisioningStyle = Automatic;
 					};
+					C1C1C1C1000000000000B001 = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+						TestTargetID = 17DD468B409E31704B6ADB31;
+					};
 				};
 			};
 			buildConfigurationList = 8B17E13D09169F65DADA9308 /* Build configuration list for PBXProject "BedTerm" */;
@@ -302,6 +345,7 @@
 			targets = (
 				17DD468B409E31704B6ADB31 /* BedTerm */,
 				053533EBD78519D9A6032A8C /* BedTermTests */,
+				C1C1C1C1000000000000B001 /* BedTermUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -350,6 +394,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		C1C1C1C1000000000000B101 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C1C1C1C100000000000000A1 /* ConnectionSmokeUITests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -357,6 +409,11 @@
 			isa = PBXTargetDependency;
 			target = 17DD468B409E31704B6ADB31 /* BedTerm */;
 			targetProxy = 6F228B9A810249470C042864 /* PBXContainerItemProxy */;
+		};
+		C1C1C1C1000000000000B301 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 17DD468B409E31704B6ADB31 /* BedTerm */;
+			targetProxy = C1C1C1C100000000000000D1 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -568,6 +625,46 @@
 			};
 			name = Release;
 		};
+		C1C1C1C1000000000000B401 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.applovin.yi.bedterm.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = BedTerm;
+			};
+			name = Debug;
+		};
+		C1C1C1C1000000000000B402 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.applovin.yi.bedterm.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = BedTerm;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -594,6 +691,15 @@
 			buildConfigurations = (
 				00AE6A8A43403DCD0D09D409 /* Debug */,
 				9F9B71E1A465DEFBD4061F73 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		C1C1C1C1000000000000B201 /* Build configuration list for PBXNativeTarget "BedTermUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C1C1C1C1000000000000B401 /* Debug */,
+				C1C1C1C1000000000000B402 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
