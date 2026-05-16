@@ -34,6 +34,7 @@ An iOS terminal app designed for coding on iPhone. Users SSH into a Mac mini or 
     A slim toolbar pinned above the system keyboard (and above the direction pad — see R11) that exposes the keys most essential to terminal use that are absent from the iOS keyboard. The toolbar is deliberately minimal — only [ESC], [CTRL], and [TAB] — to keep the input area light and uncrowded.
   </description>
   <rule id="keys_present" status="✅">The toolbar displays exactly three keys: [ESC], [CTRL], and [TAB]. No other keys (no arrows, no extras) appear on the toolbar.</rule>
+  <rule id="only_toolbar" status="✅" context="keyboard shown">Only the app's special-keys toolbar appears above the system keyboard. No additional input-accessory bar from the embedded terminal emulator (or any other source) is stacked above or below it.</rule>
   <rule id="keys_fixed" status="✅">The toolbar stays visible when the system keyboard is shown and when it is hidden.</rule>
   <rule id="esc_key" status="✅">Tapping [ESC] sends the escape key (e.g., to exit insert mode in vim).</rule>
   <rule id="liquid_glass_style" status="✅">The toolbar uses the iOS 26+ Liquid Glass material — translucent, depth-aware, responsive to the content scrolling beneath it — instead of an opaque bar.</rule>
@@ -104,8 +105,8 @@ An iOS terminal app designed for coding on iPhone. Users SSH into a Mac mini or 
   <description>
     The app ships with a final designed app icon — not the Xcode placeholder — so it has a recognisable identity on the Home Screen, in Spotlight, and in the App Switcher.
   </description>
-  <rule id="icon_designed" status="❌">A final app icon design exists and is shipped at all iOS-required sizes (Home Screen, Spotlight, Settings, Notifications, App Store marketing).</rule>
-  <rule id="icon_dark_tinted" status="❌">The icon ships variants for iOS 18+ Dark and Tinted Home Screen appearances in addition to the default Light variant.</rule>
+  <rule id="icon_designed" status="✅">A final app icon design exists and is shipped at all iOS-required sizes (Home Screen, Spotlight, Settings, Notifications, App Store marketing).</rule>
+  <rule id="icon_dark_tinted" status="✅">The icon ships variants for iOS 18+ Dark and Tinted Home Screen appearances in addition to the default Light variant.</rule>
 </requirement>
 
 <requirement id="R9" name="System Appearance">
@@ -156,12 +157,61 @@ An iOS terminal app designed for coding on iPhone. Users SSH into a Mac mini or 
   <description>
     Debug builds of the app expose their live view hierarchy to the Lookin Mac client (lookin.work), so the iOS team can inspect SwiftUI / UIKit layout, layer geometry, and view attributes at runtime without rebuilding. Release builds must not include Lookin at all — neither the framework nor any of its symbols ship to the App Store. This is a developer-tooling requirement, not a user-facing feature.
   </description>
-  <rule id="debug_only_present" status="❌" context="Debug build">Debug builds bundle the Lookin server framework, so a running debug instance is inspectable from the Lookin Mac client.</rule>
-  <rule id="release_excluded" status="❌" context="Release build">Release builds (TestFlight / App Store) do not link the Lookin server framework and do not expose any view-inspection endpoint.</rule>
-  <rule id="mac_can_connect" status="❌" context="Debug build, same Wi-Fi">With a Debug build running on a device or simulator on the same Wi-Fi network as the Mac, the Lookin Mac app discovers the running app and can attach to it.</rule>
-  <rule id="hierarchy_visible" status="❌" context="Lookin attached">After attaching, the Lookin client can browse the full SwiftUI/UIKit view hierarchy — the Connection screen, the Terminal screen, the toolbar, the direction pad, and the embedded terminal view — and read each view's frame, bounds, and key properties.</rule>
-  <rule id="no_user_visible_change" status="❌">Lookin's presence does not change any user-visible behaviour, layout, performance, or permission prompts in either Debug or Release builds beyond the standard local-network prompt already covered by R7.</rule>
+  <rule id="debug_only_present" status="✅" context="Debug build">Debug builds bundle the Lookin server framework, so a running debug instance is inspectable from the Lookin Mac client.</rule>
+  <rule id="release_excluded" status="✅" context="Release build">Release builds (TestFlight / App Store) do not link the Lookin server framework and do not expose any view-inspection endpoint.</rule>
+  <rule id="mac_can_connect" status="✅" context="Debug build, same Wi-Fi">With a Debug build running on a device or simulator on the same Wi-Fi network as the Mac, the Lookin Mac app discovers the running app and can attach to it.</rule>
+  <rule id="hierarchy_visible" status="✅" context="Lookin attached">After attaching, the Lookin client can browse the full SwiftUI/UIKit view hierarchy — the Connection screen, the Terminal screen, the toolbar, the direction pad, and the embedded terminal view — and read each view's frame, bounds, and key properties.</rule>
+  <rule id="no_user_visible_change" status="✅">Lookin's presence does not change any user-visible behaviour, layout, performance, or permission prompts in either Debug or Release builds beyond the standard local-network prompt already covered by R7.</rule>
 </requirement>
+
+<requirement id="R13" name="Multiline Input Composer">
+  <description>
+    A user-invoked composer that lets the user draft a multi-line message off the wire and then send it to the terminal as one block. Default behaviour is unchanged: keystrokes from the system keyboard go straight to the PTY. The composer is an explicit opt-in mode, entered with a dedicated toolbar button, exited by sending or by toggling the button off.
+  </description>
+  <rule id="default_passthrough" status="❌">When the composer is not presented, the system keyboard sends keystrokes directly to the PTY (today's behaviour is preserved).</rule>
+  <rule id="open_affordance" status="❌">The special-keys toolbar (R3) gains a fourth control — a compose / multiline glyph — that opens the composer when tapped. The toolbar's other three keys ([ESC], [CTRL], [TAB]) remain unchanged.</rule>
+  <rule id="composer_editor" status="❌" context="composer presented">An editable multi-line text area appears above the toolbar. It uses a monospace font matching the terminal, supports the standard iOS text-editing affordances (caret movement, selection, copy/paste), and disables autocorrect, autocapitalisation, and smart punctuation so typed bytes survive verbatim.</rule>
+  <rule id="composer_height" status="❌" context="composer presented">The composer grows with its content up to roughly 40% of screen height, then scrolls internally so the terminal view above remains visible.</rule>
+  <rule id="send_button" status="❌" context="composer presented">A Send button is visible inside the composer (e.g. trailing inside the input bar). Tapping Send writes the entire buffer to the PTY in one operation, clears the buffer, and collapses the composer back to the default state.</rule>
+  <rule id="send_uses_bracketed_paste" status="❌" context="remote advertises bracketed paste">If the remote terminal has enabled bracketed paste mode (`ESC [ ? 2004 h`), Send wraps the buffer in `ESC [ 200~` … `ESC [ 201~` so shells and editors treat it as a paste rather than per-keystroke input.</rule>
+  <rule id="send_raw_fallback" status="❌" context="bracketed paste not active">If bracketed paste is not active, Send writes the buffer raw with `\r` as the line separator (matching a real Enter press in a TTY).</rule>
+  <rule id="no_auto_trailing_newline" status="❌">Send does not append a trailing newline. Whether the last line executes is determined entirely by whether the user left a final newline in the buffer.</rule>
+  <rule id="dismiss_discards" status="❌" context="composer presented">Tapping the compose toolbar button again (or an explicit Cancel affordance) collapses the composer and discards its buffer. The buffer is not preserved across opens in MVP.</rule>
+  <rule id="focus_returns_to_terminal" status="❌">After Send (or Dismiss), keyboard focus returns to the terminal so the next keystroke is delivered to the PTY (default passthrough).</rule>
+  <rule id="visible_with_terminal" status="❌" context="composer presented">The composer is laid out so the terminal view, the composer, and the toolbar are all visible at once without overlapping the system keyboard or the direction pad (R11).</rule>
+</requirement>
+
+<requirement id="R14" name="Voice Input in Composer">
+  <description>
+    Dictation inside the multiline composer (R13) so the user can speak a long prompt — typically for an AI coding assistant like Claude Code or Codex — instead of typing it on a phone keyboard. Voice input is scoped to the composer only; the main terminal continues to use the system keyboard's built-in dictation if the user wants it there. Recognition runs on-device so audio and transcripts never leave the phone.
+  </description>
+  <rule id="composer_only" status="❌">Voice input is available only when the R13 composer is presented. The default terminal passthrough is unchanged and does not gain a mic affordance from this requirement.</rule>
+  <rule id="mic_affordance" status="❌" context="composer presented">The composer exposes a microphone control alongside the Send button. Tapping it toggles dictation on and off; the control reflects idle, listening, and unavailable states.</rule>
+  <rule id="on_device_only" status="❌">Speech recognition uses Apple's on-device recognizer (`SFSpeechRecognizer` with `requiresOnDeviceRecognition = true`). The app never sends audio or partial transcripts to a network service.</rule>
+  <rule id="unavailable_hidden" status="❌">If on-device recognition is not supported for the current device or locale, the mic control is hidden (or shown disabled with an inline reason) rather than falling back to cloud recognition.</rule>
+  <rule id="permissions" status="❌">First activation requests both Speech Recognition (`NSSpeechRecognitionUsageDescription`) and Microphone (`NSMicrophoneUsageDescription`) permission. If either is denied, the mic control is disabled and a one-time inline hint points the user to Settings.</rule>
+  <rule id="streaming_insert" status="❌" context="dictation active">Recognized text streams into the composer at the caret position as partials arrive; later partials replace the in-progress region so corrections from the recognizer do not leave stale words. Finalized segments are committed as normal editable text.</rule>
+  <rule id="editable_after_stop" status="❌">After dictation stops, the inserted text is fully editable like any other composer content. The user may continue typing, voice again, or send.</rule>
+  <rule id="no_auto_send" status="❌">Stopping dictation does not send. Send remains an explicit user action (R13.send_button), preserving the composer's "draft off the wire" guarantee.</rule>
+  <rule id="cancel_on_dismiss" status="❌">Dismissing the composer (R13.dismiss_discards) or backgrounding the app stops any in-flight recognition and tears down the audio session.</rule>
+  <rule id="locale_default" status="❌">Recognition uses the device locale. No in-app language picker is provided in this iteration.</rule>
+  <rule id="audio_session_scope" status="❌" context="dictation active">The app activates an `AVAudioSession` only for the duration of dictation, using a recording-appropriate category, and deactivates it on stop. No background or lock-screen recording.</rule>
+</requirement>
+
+<bug id="duplicate_input_accessory" status="Open" date="2026-05-16" rule="R3.only_toolbar">
+  <current>
+    Two stacked toolbars appear above the system keyboard: the app's special-keys toolbar (with arrows and extras still present) on top, and a second grey accessory bar from the embedded terminal emulator below it (showing esc, ctrl, ~, |, /, -, arrows, a touch-mode toggle, and a keyboard-dismiss button).
+    <img src="screenshots/r3_duplicate_accessory.png" alt="Two stacked toolbars above the system keyboard"/>
+  </current>
+  <expected>
+    Only the app's special-keys toolbar is visible above the system keyboard. The terminal emulator's built-in input accessory bar does not appear.
+  </expected>
+  <steps>
+    1. Launch the app and connect to any host.
+    2. Tap the terminal area to bring up the system keyboard.
+    3. Observe: two distinct toolbars stack between the terminal and the keyboard.
+  </steps>
+</bug>
 
 <bug id="theme_forced_dark" status="Open" date="2026-05-16" rule="R9.follow_system">
   <current>
@@ -179,7 +229,7 @@ An iOS terminal app designed for coding on iPhone. Users SSH into a Mac mini or 
   </steps>
 </bug>
 
-<bug id="app_icon_missing" status="Open" date="2026-05-16" rule="R8.icon_designed">
+<bug id="app_icon_missing" status="Fixed" date="2026-05-16" rule="R8.icon_designed">
   <current>
     The project has no AppIcon asset — the app launches with the default white/blank iOS placeholder icon on the Home Screen, in Spotlight, and in the App Switcher. No icon design has been produced yet.
   </current>
