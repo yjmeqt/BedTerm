@@ -20,6 +20,7 @@
 		B1B1B1B100000000000000A7 /* CredentialsStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B1B1B100000000000000F7 /* CredentialsStoreTests.swift */; };
 		B1B1B1B100000000000000A8 /* HostKeyStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B1B1B100000000000000F8 /* HostKeyStore.swift */; };
 		B1B1B1B100000000000000A9 /* HostKeyStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B1B1B100000000000000F9 /* HostKeyStoreTests.swift */; };
+		B1B1B1B100000000000000AA /* SSHClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B1B1B100000000000000FA /* SSHClient.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -46,6 +47,7 @@
 		B1B1B1B100000000000000F7 /* CredentialsStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CredentialsStoreTests.swift; sourceTree = "<group>"; };
 		B1B1B1B100000000000000F8 /* HostKeyStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HostKeyStore.swift; sourceTree = "<group>"; };
 		B1B1B1B100000000000000F9 /* HostKeyStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HostKeyStoreTests.swift; sourceTree = "<group>"; };
+		B1B1B1B100000000000000FA /* SSHClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSHClient.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -87,6 +89,7 @@
 			children = (
 				B1B1B1B1000000000000C001 /* Input */,
 				B1B1B1B1000000000000C003 /* Keychain */,
+				B1B1B1B1000000000000C004 /* SSH */,
 			);
 			path = Core;
 			sourceTree = "<group>";
@@ -99,6 +102,14 @@
 				B1B1B1B100000000000000F8 /* HostKeyStore.swift */,
 			);
 			path = Keychain;
+			sourceTree = "<group>";
+		};
+		B1B1B1B1000000000000C004 /* SSH */ = {
+			isa = PBXGroup;
+			children = (
+				B1B1B1B100000000000000FA /* SSHClient.swift */,
+			);
+			path = SSH;
 			sourceTree = "<group>";
 		};
 		402702E3152E5ACED7511228 /* App */ = {
@@ -243,6 +254,7 @@
 				B1B1B1B100000000000000A5 /* Keychain.swift in Sources */,
 				B1B1B1B100000000000000A6 /* CredentialsStore.swift in Sources */,
 				B1B1B1B100000000000000A8 /* HostKeyStore.swift in Sources */,
+				B1B1B1B100000000000000AA /* SSHClient.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
