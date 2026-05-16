@@ -1,0 +1,47 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Mint
+        run: brew install mint
+      - name: Bootstrap tools
+        run: mint bootstrap
+      - name: SwiftFormat lint
+        run: mint run swiftformat --lint .
+      - name: SwiftLint
+        run: mint run swiftlint lint --strict
+
+  build-test:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select Xcode
+        # macos-15 runner ships multiple Xcode versions; pick the latest 26.x present,
+        # falling back to whatever Xcode is available if 26.x is not yet on the image.
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
+          if [ -z "$XCODE" ]; then XCODE=$(ls -d /Applications/Xcode_*.app | sort -V | tail -1); fi
+          echo "Using $XCODE"
+          sudo xcode-select -s "$XCODE"
+          xcodebuild -version
+      - name: Install Mint
+        run: brew install mint
+      - name: Bootstrap tools
+        run: mint bootstrap
+      - name: Build & test
+        # Strategy A: name-only destination (no OS=) so xcodebuild picks the latest
+        # matching iOS Simulator runtime available on the runner image.
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project BedTerm.xcodeproj \
+            -scheme BedTerm \
+            -destination 'platform=iOS Simulator,name=iPhone 16 Pro' \
+            | mint run xcbeautify
