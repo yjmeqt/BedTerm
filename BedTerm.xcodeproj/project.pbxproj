@@ -19,6 +19,7 @@
 		B1B1B1B1000000000000A401 /* KeyBarControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B1B1B1000000000000F401 /* KeyBarControllerTests.swift */; };
 		C1C1C1C100000000000000A1 /* ConnectionSmokeUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1C1C1C100000000000000F1 /* ConnectionSmokeUITests.swift */; };
 		D1D1D1D100000000000000A1 /* BedTermKit in Frameworks */ = {isa = PBXBuildFile; productRef = D1D1D1D100000000000000B1 /* BedTermKit */; };
+		A55E70AC0000000000000B01 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A55E70AC0000000000000A01 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -54,6 +55,7 @@
 		C1C1C1C100000000000000E1 /* BedTermUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = BedTermUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		C1C1C1C100000000000000F1 /* ConnectionSmokeUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionSmokeUITests.swift; sourceTree = "<group>"; };
 		D1D1D1D100000000000000C1 /* BedTermKit */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = BedTermKit; path = BedTermKit; sourceTree = "<group>"; };
+		A55E70AC0000000000000A01 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -66,6 +68,17 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXResourcesBuildPhase section */
+		A55E70AC0000000000000C01 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A55E70AC0000000000000B01 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
 
 /* Begin PBXGroup section */
 		17D135F5F3C2D922AD89D6B5 /* BedTermTests */ = {
@@ -106,6 +119,7 @@
 			isa = PBXGroup;
 			children = (
 				402702E3152E5ACED7511228 /* App */,
+				A55E70AC0000000000000A01 /* Assets.xcassets */,
 			);
 			path = BedTerm;
 			sourceTree = "<group>";
@@ -156,6 +170,7 @@
 			buildPhases = (
 				E8CF050B86F74AE226BAC291 /* Sources */,
 				A1B2C3D400000000000000F1 /* Frameworks */,
+				A55E70AC0000000000000C01 /* Resources */,
 			);
 			buildRules = (
 			);
