@@ -74,6 +74,7 @@ An iOS terminal app designed for coding on iPhone. Users SSH into a Mac mini or 
   <rule id="paste" status="✅">User can paste text from the system clipboard into the terminal.</rule>
   <rule id="scroll" status="✅">User can scroll up and down through terminal history with touch gestures.</rule>
   <rule id="scroll_sync" status="✅">Scrolling pauses auto-scroll; when scrolled to bottom, auto-scroll resumes and follows new output.</rule>
+  <rule id="prompt_anchored_bottom" status="✅">When the transcript is shorter than the viewport, the active prompt line is anchored to the bottom edge of the terminal viewport (just above the special-keys toolbar) and any empty space sits above it. New output fills upward from the bottom, matching the convention of macOS Terminal, iTerm2, and other iOS terminal apps.</rule>
   <rule id="dark_mode" status="✅">The terminal and app UI use a dark color scheme by default.</rule>
   <rule id="font_mono" status="✅">Terminal text renders in a monospace font.</rule>
   <rule id="landscape" status="❌" context="deferred">Landscape orientation. Dropped from MVP — iPhone target locks to portrait. Revisit if real usage demands it.</rule>
@@ -210,6 +211,68 @@ An iOS terminal app designed for coding on iPhone. Users SSH into a Mac mini or 
     1. Launch the app and connect to any host.
     2. Tap the terminal area to bring up the system keyboard.
     3. Observe: two distinct toolbars stack between the terminal and the keyboard.
+  </steps>
+</bug>
+
+<bug id="ansi_colors_lost_with_metal" status="Open" date="2026-05-17" rule="R2.ansi_colors">
+  <current>
+    All terminal text renders in the default foreground colour (light grey) regardless of ANSI colour escapes emitted by the remote shell. Directory listings from <code>ls</code> show no directory-blue, no executable-green; even forcing colour with <code>ls --color=always</code> still produces monochrome output. The same shell, viewed through Terminal.app on the host, renders the colours correctly.
+    <img src="screenshots/no_ansi_colors.jpg" alt="ls --color=always output rendered without any ANSI colours"/>
+  </current>
+  <expected>
+    ANSI 16-colour, 256-colour, and truecolour escape sequences map to their corresponding foreground / background pixels, matching how macOS Terminal and iTerm2 render the same byte stream.
+  </expected>
+  <steps>
+    1. Connect to a remote host whose shell emits coloured output (e.g. zsh with oh-my-zsh, or any shell with <code>ls --color=always</code>).
+    2. Run <code>ls --color=always</code>.
+    3. Observe: every line is the default foreground colour; directory entries are not blue, executables are not green, and so on.
+  </steps>
+</bug>
+
+<bug id="prompt_floats_at_top" status="Fixed" date="2026-05-17" rule="R5.prompt_anchored_bottom">
+  <current>
+    On a fresh terminal session, when the remote shell has emitted only a few lines (e.g. <code>Last login: …</code> plus the prompt), those lines render at the top of the terminal viewport and a large empty band fills the space between the prompt and the special-keys toolbar at the bottom. The prompt and cursor sit roughly in the middle of the screen instead of just above the keyboard.
+    <img src="screenshots/scroll_drawing_fixed_lsla.jpg" alt="Prompt and short transcript sit near the top of the terminal area with empty space below"/>
+  </current>
+  <expected>
+    The active prompt line is anchored to the bottom edge of the terminal viewport. When the transcript is shorter than the viewport, the empty space sits <em>above</em> the transcript, not below it. As new output arrives, lines push the existing content upward, matching the behaviour of macOS Terminal, iTerm2, and standard iOS terminal apps.
+  </expected>
+  <steps>
+    1. Launch the app and connect to any SSH host.
+    2. Observe the freshly opened terminal session — only the login banner line and a prompt are visible.
+    3. Observe: the prompt sits high in the terminal area with a tall empty band between the prompt and the toolbar.
+    4. Expected: the prompt sits just above the toolbar with the empty band above the login banner instead.
+  </steps>
+</bug>
+
+<bug id="scroll_drawing_ghosting" status="Fixed" date="2026-05-17" rule="R5.scroll">
+  <current>
+    Touch-scrolling the terminal history does not erase previous paints before drawing new rows. Each scroll frame layers on top of the prior one, producing severe visual corruption:
+    <ul>
+    <li>Every row above the live prompt shows doubled / horizontally-offset glyphs (the same line painted twice, shifted by ~1 character).</li>
+    <li>After a single swipe-down gesture to reveal scrollback, the entire viewport becomes a vertical-stripe smear of stacked text frames — readable content disappears.</li>
+    <li>Vertical streaks of stale glyphs persist in the top band even after content scrolls out of view, i.e. that region never fully repaints to the background colour.</li>
+    <li>Only the bottommost line (the live prompt being typed into) renders cleanly, which points at the scroll-copy / redraw path rather than the per-glyph renderer.</li>
+    </ul>
+    <img src="screenshots/scroll_drawing_doubled.jpg" alt="ls -la output with every row doubled and offset"/>
+    <img src="screenshots/scroll_drawing_smear.jpg" alt="Terminal viewport reduced to vertical stripes after one swipe-down"/>
+  </current>
+  <expected>
+    Scrolling the terminal history repaints the viewport cleanly on every frame:
+    <ul>
+    <li>Each row appears exactly once at its scrolled position; no doubled or offset duplicates.</li>
+    <li>Areas that scroll out of view are erased to the terminal background colour with no residual glyphs.</li>
+    <li>Continuous scroll gestures produce a smooth visual translation of the existing content, not an accumulation of overlaid frames.</li>
+    </ul>
+  </expected>
+  <steps>
+    1. Open the app and connect to any SSH host so a shell prompt is visible.
+    2. Run a command that produces enough output to fill the viewport, e.g. <code>ls -la</code>.
+    3. Observe: rows above the live prompt already render with doubled / offset glyphs.
+    4. Swipe down inside the terminal view to reveal scrollback history.
+    5. Observe: the viewport becomes a vertical-stripe smear of stacked text frames; no row is individually legible.
+    6. Swipe up to scroll content off-screen.
+    7. Observe: a band of stale glyph streaks remains at the top of the viewport instead of clean background.
   </steps>
 </bug>
 
