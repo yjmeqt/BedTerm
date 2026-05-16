@@ -20,12 +20,12 @@ struct KeyBarStateTests {
 
     @Test("ctrlPending + letter sends Ctrl+letter byte (ASCII & 0x1F) and returns to idle",
           arguments: [
-            (Character("c"), UInt8(0x03)),
-            (Character("d"), UInt8(0x04)),
-            (Character("z"), UInt8(0x1A)),
-            (Character("l"), UInt8(0x0C)),
-            (Character("a"), UInt8(0x01)),
-            (Character("e"), UInt8(0x05)),
+              (Character("c"), UInt8(0x03)),
+              (Character("d"), UInt8(0x04)),
+              (Character("z"), UInt8(0x1A)),
+              (Character("l"), UInt8(0x0C)),
+              (Character("a"), UInt8(0x01)),
+              (Character("e"), UInt8(0x05))
           ])
     func ctrlPendingPlusLetter(_ letter: Character, _ expectedByte: UInt8) {
         var state = KeyBarState.ctrlPending(startedAt: .anchor)
