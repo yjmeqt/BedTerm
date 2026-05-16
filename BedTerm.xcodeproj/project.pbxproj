@@ -33,6 +33,7 @@
 		B1B1B1B1000000000000A300 /* TerminalSessionDescribeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B1B1B1000000000000F300 /* TerminalSessionDescribeTests.swift */; };
 		B1B1B1B1000000000000A400 /* KeyBarController.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B1B1B1000000000000F400 /* KeyBarController.swift */; };
 		B1B1B1B1000000000000A401 /* KeyBarControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B1B1B1000000000000F401 /* KeyBarControllerTests.swift */; };
+		B1B1B1B1000000000000A402 /* KeyBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B1B1B1000000000000F402 /* KeyBar.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -72,6 +73,7 @@
 		B1B1B1B1000000000000F300 /* TerminalSessionDescribeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalSessionDescribeTests.swift; sourceTree = "<group>"; };
 		B1B1B1B1000000000000F400 /* KeyBarController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyBarController.swift; sourceTree = "<group>"; };
 		B1B1B1B1000000000000F401 /* KeyBarControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyBarControllerTests.swift; sourceTree = "<group>"; };
+		B1B1B1B1000000000000F402 /* KeyBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyBar.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -175,6 +177,7 @@
 				B1B1B1B1000000000000F200 /* TerminalHostView.swift */,
 				B1B1B1B1000000000000F201 /* TerminalSession.swift */,
 				B1B1B1B1000000000000F400 /* KeyBarController.swift */,
+				B1B1B1B1000000000000F402 /* KeyBar.swift */,
 			);
 			path = Terminal;
 			sourceTree = "<group>";
@@ -327,6 +330,7 @@
 				B1B1B1B1000000000000A200 /* TerminalHostView.swift in Sources */,
 				B1B1B1B1000000000000A201 /* TerminalSession.swift in Sources */,
 				B1B1B1B1000000000000A400 /* KeyBarController.swift in Sources */,
+				B1B1B1B1000000000000A402 /* KeyBar.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
