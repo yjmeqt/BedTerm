@@ -5,19 +5,16 @@ struct KeyBar: View {
     @Bindable var controller: KeyBarController
 
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 0) {
+            keyButton("⎋", tap: .esc)
             keyButton("⌃", tap: .ctrl, highlighted: controller.isPending)
             keyButton("⇥", tap: .tab)
-            keyButton("⎋", tap: .esc)
-            keyButton("←", tap: .left)
-            keyButton("→", tap: .right)
-            keyButton("↑", tap: .up)
-            keyButton("↓", tap: .down)
         }
-        .padding(.horizontal, 4)
-        .padding(.vertical, 6)
         .frame(maxWidth: .infinity)
-        .background(.bar)
+        .frame(height: 44)
+        .glassEffect(.regular.interactive(), in: .capsule)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 6)
     }
 
     private func keyButton(_ label: String, tap: KeyTap, highlighted: Bool = false) -> some View {
@@ -26,14 +23,20 @@ struct KeyBar: View {
             controller.handle(tap)
         } label: {
             Text(label)
-                .font(.system(size: 18, weight: .medium, design: .monospaced))
-                .frame(maxWidth: .infinity, minHeight: 32)
+                .font(.system(size: 20, weight: .medium, design: .monospaced))
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .foregroundStyle(highlighted ? Color.white : Color.primary)
+                .background {
+                    if highlighted {
+                        Capsule()
+                            .fill(Color.accentColor)
+                            .padding(.vertical, 4)
+                            .padding(.horizontal, 2)
+                    }
+                }
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .background(
-            RoundedRectangle(cornerRadius: 6)
-                .fill(highlighted ? Color.accentColor.opacity(0.35) : Color.gray.opacity(0.15))
-        )
         .accessibilityIdentifier("keybar.\(label)")
     }
 }

@@ -2,12 +2,13 @@ import SwiftUI
 
 struct TerminalScreen: View {
     @State var session: TerminalSession
-    @State private var keyBar: KeyBarController?
+    @State private var keyBar: KeyBarController
     let credential: HostCredential
     let onExit: () -> Void
 
     init(session: TerminalSession, credential: HostCredential, onExit: @escaping () -> Void) {
         _session = State(initialValue: session)
+        _keyBar = State(initialValue: KeyBarController { [weak session] data in session?.send(data) })
         self.credential = credential
         self.onExit = onExit
     }
@@ -29,9 +30,7 @@ struct TerminalScreen: View {
             }
         }
         .safeAreaInset(edge: .bottom) {
-            if let controller = keyBar {
-                KeyBar(controller: controller)
-            }
+            KeyBar(controller: keyBar)
         }
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
@@ -43,9 +42,6 @@ struct TerminalScreen: View {
         }
         .navigationBarBackButtonHidden(true)
         .task {
-            if keyBar == nil {
-                keyBar = KeyBarController { [weak session] data in session?.send(data) }
-            }
             if case .idle = session.state {
                 await session.connect(
                     credential: credential,
