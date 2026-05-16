@@ -29,6 +29,8 @@
 		B1B1B1B1000000000000A100 /* AppRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B1B1B1000000000000F100 /* AppRoute.swift */; };
 		B1B1B1B1000000000000A101 /* ConnectionScreen.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B1B1B1000000000000F101 /* ConnectionScreen.swift */; };
 		B1B1B1B1000000000000A200 /* TerminalHostView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B1B1B1000000000000F200 /* TerminalHostView.swift */; };
+		B1B1B1B1000000000000A201 /* TerminalSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B1B1B1000000000000F201 /* TerminalSession.swift */; };
+		B1B1B1B1000000000000A300 /* TerminalSessionDescribeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B1B1B1000000000000F300 /* TerminalSessionDescribeTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -64,6 +66,8 @@
 		B1B1B1B1000000000000F100 /* AppRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRoute.swift; sourceTree = "<group>"; };
 		B1B1B1B1000000000000F101 /* ConnectionScreen.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionScreen.swift; sourceTree = "<group>"; };
 		B1B1B1B1000000000000F200 /* TerminalHostView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalHostView.swift; sourceTree = "<group>"; };
+		B1B1B1B1000000000000F201 /* TerminalSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalSession.swift; sourceTree = "<group>"; };
+		B1B1B1B1000000000000F300 /* TerminalSessionDescribeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalSessionDescribeTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -89,6 +93,7 @@
 				B1B1B1B100000000000000F9 /* HostKeyStoreTests.swift */,
 				B1B1B1B100000000000000FC /* MockSSHClientTests.swift */,
 				B1B1B1B100000000000000FE /* SSHErrorMappingTests.swift */,
+				B1B1B1B1000000000000F300 /* TerminalSessionDescribeTests.swift */,
 			);
 			path = BedTermTests;
 			sourceTree = "<group>";
@@ -163,6 +168,7 @@
 			isa = PBXGroup;
 			children = (
 				B1B1B1B1000000000000F200 /* TerminalHostView.swift */,
+				B1B1B1B1000000000000F201 /* TerminalSession.swift */,
 			);
 			path = Terminal;
 			sourceTree = "<group>";
@@ -291,6 +297,7 @@
 				B1B1B1B100000000000000A9 /* HostKeyStoreTests.swift in Sources */,
 				B1B1B1B100000000000000AC /* MockSSHClientTests.swift in Sources */,
 				B1B1B1B100000000000000AE /* SSHErrorMappingTests.swift in Sources */,
+				B1B1B1B1000000000000A300 /* TerminalSessionDescribeTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -311,6 +318,7 @@
 				B1B1B1B1000000000000A100 /* AppRoute.swift in Sources */,
 				B1B1B1B1000000000000A101 /* ConnectionScreen.swift in Sources */,
 				B1B1B1B1000000000000A200 /* TerminalHostView.swift in Sources */,
+				B1B1B1B1000000000000A201 /* TerminalSession.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
