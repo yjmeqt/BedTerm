@@ -16,6 +16,8 @@
 		B1B1B1B100000000000000A3 /* KeyBarStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B1B1B100000000000000F3 /* KeyBarStateTests.swift */; };
 		B1B1B1B100000000000000A4 /* ByteSequenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B1B1B100000000000000F4 /* ByteSequenceTests.swift */; };
 		B1B1B1B100000000000000A5 /* Keychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B1B1B100000000000000F5 /* Keychain.swift */; };
+		B1B1B1B100000000000000A6 /* CredentialsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B1B1B100000000000000F6 /* CredentialsStore.swift */; };
+		B1B1B1B100000000000000A7 /* CredentialsStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B1B1B100000000000000F7 /* CredentialsStoreTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -38,6 +40,8 @@
 		B1B1B1B100000000000000F3 /* KeyBarStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyBarStateTests.swift; sourceTree = "<group>"; };
 		B1B1B1B100000000000000F4 /* ByteSequenceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ByteSequenceTests.swift; sourceTree = "<group>"; };
 		B1B1B1B100000000000000F5 /* Keychain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Keychain.swift; sourceTree = "<group>"; };
+		B1B1B1B100000000000000F6 /* CredentialsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CredentialsStore.swift; sourceTree = "<group>"; };
+		B1B1B1B100000000000000F7 /* CredentialsStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CredentialsStoreTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -59,6 +63,7 @@
 				43021D79E9E48C17C8DE52A7 /* BedTermTests.swift */,
 				B1B1B1B100000000000000F3 /* KeyBarStateTests.swift */,
 				B1B1B1B100000000000000F4 /* ByteSequenceTests.swift */,
+				B1B1B1B100000000000000F7 /* CredentialsStoreTests.swift */,
 			);
 			path = BedTermTests;
 			sourceTree = "<group>";
@@ -85,6 +90,7 @@
 			isa = PBXGroup;
 			children = (
 				B1B1B1B100000000000000F5 /* Keychain.swift */,
+				B1B1B1B100000000000000F6 /* CredentialsStore.swift */,
 			);
 			path = Keychain;
 			sourceTree = "<group>";
@@ -216,6 +222,7 @@
 				3BA0EC8B2788B75A6BCFD1FD /* BedTermTests.swift in Sources */,
 				B1B1B1B100000000000000A3 /* KeyBarStateTests.swift in Sources */,
 				B1B1B1B100000000000000A4 /* ByteSequenceTests.swift in Sources */,
+				B1B1B1B100000000000000A7 /* CredentialsStoreTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -227,6 +234,7 @@
 				B1B1B1B100000000000000A1 /* KeyTap.swift in Sources */,
 				B1B1B1B100000000000000A2 /* KeyBarState.swift in Sources */,
 				B1B1B1B100000000000000A5 /* Keychain.swift in Sources */,
+				B1B1B1B100000000000000A6 /* CredentialsStore.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
