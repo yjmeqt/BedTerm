@@ -1,10 +1,7 @@
-// swiftlint:disable sorted_imports
-// swiftformat:disable sortImports blankLineAfterImports
 import Foundation
 import Testing
+
 @testable import BedTerm
-// swiftformat:enable sortImports blankLineAfterImports
-// swiftlint:enable sorted_imports
 
 @Suite("HostKeyStore")
 struct HostKeyStoreTests {

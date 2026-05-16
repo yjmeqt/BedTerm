@@ -8,13 +8,11 @@ enum KeychainError: Error, Equatable {
 
 enum Keychain {
     static func save(service: String, account: String, data: Data) throws {
-        // swiftformat:disable trailingCommas
         let base: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account
         ]
-        // swiftformat:enable trailingCommas
         SecItemDelete(base as CFDictionary)
         var add = base
         add[kSecValueData as String] = data
@@ -24,7 +22,6 @@ enum Keychain {
     }
 
     static func load(service: String, account: String) throws -> Data {
-        // swiftformat:disable trailingCommas
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -32,7 +29,6 @@ enum Keychain {
             kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne
         ]
-        // swiftformat:enable trailingCommas
         var item: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &item)
         if status == errSecItemNotFound { throw KeychainError.notFound }
@@ -43,13 +39,11 @@ enum Keychain {
     }
 
     static func delete(service: String, account: String) {
-        // swiftformat:disable trailingCommas
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account
         ]
-        // swiftformat:enable trailingCommas
         SecItemDelete(query as CFDictionary)
     }
 }

@@ -44,6 +44,8 @@ xcodebuild test \
 
 ```sh
 mint run swiftlint lint --strict
-mint run swiftformat --lint .
+xcrun swift-format lint -r --strict BedTerm BedTermTests
 ```
+
+`swift-format` ships with Xcode 26 — no install needed.
 

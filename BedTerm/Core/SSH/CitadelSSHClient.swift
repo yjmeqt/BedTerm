@@ -302,11 +302,8 @@ public final class CitadelSSHClient: BedTerm.SSHClient, @unchecked Sendable {
 
     private static func errorMentionsEncryption(_ error: Error) -> Bool {
         let text = String(describing: error).lowercased()
-        return text.contains("bcrypt") ||
-            text.contains("cipher") ||
-            text.contains("decrypt") ||
-            text.contains("kdf") ||
-            text.contains("missingdecryptionkey")
+        return text.contains("bcrypt") || text.contains("cipher") || text.contains("decrypt") || text.contains("kdf")
+            || text.contains("missingdecryptionkey")
     }
 
     private static func classifyConnectError(_ error: Error) -> SSHError {
@@ -377,11 +374,12 @@ private final class TOFUHostKeyDelegate: NIOSSHClientServerAuthenticationDelegat
         // base64 component and decode to get the raw key blob.
         let openSSH = String(openSSHPublicKey: key)
         let parts = openSSH.split(separator: " ", maxSplits: 1)
-        let blob: Data = if parts.count == 2, let decoded = Data(base64Encoded: String(parts[1])) {
-            decoded
-        } else {
-            Data(openSSH.utf8)
-        }
+        let blob: Data =
+            if parts.count == 2, let decoded = Data(base64Encoded: String(parts[1])) {
+                decoded
+            } else {
+                Data(openSSH.utf8)
+            }
         let digest = SHA256.hash(data: blob)
         let base64 = Data(digest).base64EncodedString()
             .trimmingCharacters(in: CharacterSet(charactersIn: "="))

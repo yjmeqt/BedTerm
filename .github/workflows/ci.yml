@@ -9,6 +9,11 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
+      - name: Select Xcode
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
+          if [ -z "$XCODE" ]; then XCODE=$(ls -d /Applications/Xcode_*.app | sort -V | tail -1); fi
+          sudo xcode-select -s "$XCODE"
       - name: Install Mint
         run: brew install mint
       - name: Cache Mint
@@ -19,8 +24,8 @@ jobs:
           restore-keys: mint-${{ runner.os }}-
       - name: Bootstrap tools
         run: mint bootstrap
-      - name: SwiftFormat lint
-        run: mint run swiftformat --lint .
+      - name: swift-format lint
+        run: xcrun swift-format lint -r --strict BedTerm BedTermTests
       - name: SwiftLint
         run: mint run swiftlint lint --strict
 

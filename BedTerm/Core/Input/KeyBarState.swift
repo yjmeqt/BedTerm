@@ -14,7 +14,7 @@ public enum KeyBarState: Equatable {
         case let (.ctrlPending, .char(letter)):
             self = .idle
             let scalar = letter.lowercased().unicodeScalars.first?.value ?? 0
-            if (UnicodeScalar("a").value ... UnicodeScalar("z").value).contains(scalar) {
+            if (UnicodeScalar("a").value...UnicodeScalar("z").value).contains(scalar) {
                 let byte = UInt8(scalar & 0x1F)
                 return [.bytes(Data([byte])), .visualUnlatch]
             }

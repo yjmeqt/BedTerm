@@ -1,7 +1,8 @@
-@testable import BedTerm
 import Foundation
 import NIOCore
 import Testing
+
+@testable import BedTerm
 
 @Suite("SSH error mapping")
 struct SSHErrorMappingTests {
