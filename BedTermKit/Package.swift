@@ -10,18 +10,18 @@ let package = Package(
     dependencies: [
         .package(url: "https://github.com/migueldeicaza/SwiftTerm", from: "1.2.0"),
         .package(url: "https://github.com/orlandos-nl/Citadel", from: "0.7.0"),
-        .package(url: "https://github.com/realm/SwiftLint", from: "0.57.0"),
+        .package(url: "https://github.com/realm/SwiftLint", from: "0.57.0")
     ],
     targets: [
         .target(
             name: "BedTermKit",
             dependencies: [
                 .product(name: "SwiftTerm", package: "SwiftTerm"),
-                .product(name: "Citadel", package: "Citadel"),
+                .product(name: "Citadel", package: "Citadel")
             ],
             path: "Sources/BedTermKit",
             plugins: [
-                .plugin(name: "SwiftLintBuildToolPlugin", package: "SwiftLint"),
+                .plugin(name: "SwiftLintBuildToolPlugin", package: "SwiftLint")
             ]
         )
     ]
