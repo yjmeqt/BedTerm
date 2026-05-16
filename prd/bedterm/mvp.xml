@@ -71,7 +71,7 @@ An iOS terminal app designed for coding on iPhone. Users SSH into a Mac mini or 
   <rule id="scroll_sync" status="❌">Scrolling pauses auto-scroll; when scrolled to bottom, auto-scroll resumes and follows new output.</rule>
   <rule id="dark_mode" status="❌">The terminal and app UI use a dark color scheme by default.</rule>
   <rule id="font_mono" status="❌">Terminal text renders in a monospace font.</rule>
-  <rule id="landscape" status="❌">The terminal view and special keys bar adapt correctly to landscape orientation.</rule>
+  <rule id="landscape" status="🟡 deferred">Landscape orientation. Dropped from MVP — iPhone target locks to portrait. Revisit if real usage demands it.</rule>
 </requirement>
 
 <requirement id="R6" name="Host Key TOFU" added="2026-05-16">
