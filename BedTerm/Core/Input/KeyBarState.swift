@@ -18,6 +18,15 @@ public enum KeyBarState: Equatable {
                 return [.bytes(Data([byte])), .visualUnlatch]
             }
             return [.visualUnlatch]
+        case (.ctrlPending, .ctrl):
+            self = .idle
+            return [.visualUnlatch]
+        case let (.ctrlPending(startedAt), .tick(now)):
+            if now - startedAt > .seconds(3) {
+                self = .idle
+                return [.visualUnlatch]
+            }
+            return [.noop]
         default:
             return [.noop]
         }

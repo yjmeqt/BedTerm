@@ -49,6 +49,32 @@ struct KeyBarStateTests {
         #expect(outputs == [.visualUnlatch])
         #expect(state == .idle)
     }
+
+    @Test("tapping CTRL again while pending cancels pending (R4 ctrl_tap_again)")
+    func ctrlPendingPlusCtrlCancels() {
+        var state = KeyBarState.ctrlPending(startedAt: .anchor)
+        let outputs = state.reduce(.ctrl, now: .anchor)
+        #expect(outputs == [.visualUnlatch])
+        #expect(state == .idle)
+    }
+
+    @Test("tick after >3s in pending cancels pending (R4 ctrl_timeout)")
+    func ctrlPendingTimeout() {
+        let start = ContinuousClock().now
+        var state = KeyBarState.ctrlPending(startedAt: start)
+        let outputs = state.reduce(.tick(start.advanced(by: .seconds(4))), now: start.advanced(by: .seconds(4)))
+        #expect(outputs == [.visualUnlatch])
+        #expect(state == .idle)
+    }
+
+    @Test("tick within 3s in pending is a no-op")
+    func ctrlPendingTickEarly() {
+        let start = ContinuousClock().now
+        var state = KeyBarState.ctrlPending(startedAt: start)
+        let outputs = state.reduce(.tick(start.advanced(by: .seconds(1))), now: start.advanced(by: .seconds(1)))
+        #expect(outputs == [.noop])
+        #expect(state == .ctrlPending(startedAt: start))
+    }
 }
 
 extension ContinuousClock.Instant {
