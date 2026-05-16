@@ -6,7 +6,9 @@ import Observation
 /// triggers the iOS local-network permission prompt for same-Wi-Fi targets.
 @MainActor
 @Observable
-final class OnboardingViewModel {
+public final class OnboardingViewModel {
+    public init() {}
+
     enum HostKind: String, Codable, Hashable {
         case macOS
         case other
@@ -34,7 +36,7 @@ final class OnboardingViewModel {
     var isRequestingPermission = false
     var permissionResult: LocalNetworkPrewarmer.Result?
 
-    static var hasCompleted: Bool {
+    public static var hasCompleted: Bool {
         UserDefaults.standard.bool(forKey: "com.applovin.yi.bedterm.onboardingCompleted")
     }
 

@@ -1,3 +1,4 @@
+import BedTermKit
 import SwiftUI
 
 @main

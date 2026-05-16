@@ -1,7 +1,7 @@
 import Foundation
 import Testing
 
-@testable import BedTerm
+@testable import BedTermKit
 
 @Suite("Bare-key byte sequences (R3)")
 struct ByteSequenceTests {

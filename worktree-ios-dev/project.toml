@@ -5,7 +5,7 @@
 schema_version = 1
 
 [project]
-path = "BedTerm.xcodeproj"
+path = "BedTerm.xcworkspace"
 scheme = "BedTerm"
 configuration = "Debug"
 simulator_prefix = "BedTerm"

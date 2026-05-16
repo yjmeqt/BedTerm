@@ -1,7 +1,7 @@
 import Foundation
 import Testing
 
-@testable import BedTerm
+@testable import BedTermKit
 
 @Suite("KeyBarState")
 struct KeyBarStateTests {
