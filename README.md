@@ -26,3 +26,26 @@ Worktrees live at `.worktrees/`.
 ### Target
 
 iOS 26
+
+## Build & test
+
+```sh
+brew install mint
+mint bootstrap
+
+xcodebuild test \
+  -project BedTerm.xcodeproj \
+  -scheme BedTerm \
+  -destination 'platform=iOS Simulator,name=iPhone 17' \
+  | mint run xcbeautify
+```
+
+## Lint
+
+```sh
+mint run swiftlint lint --strict
+xcrun swift-format lint -r --strict BedTerm BedTermTests
+```
+
+`swift-format` ships with Xcode 26 — no install needed.
+

@@ -1,0 +1,78 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select Xcode
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
+          if [ -z "$XCODE" ]; then XCODE=$(ls -d /Applications/Xcode_*.app | sort -V | tail -1); fi
+          sudo xcode-select -s "$XCODE"
+      - name: Install Mint
+        run: brew install mint
+      - name: Cache Mint
+        uses: actions/cache@v4
+        with:
+          path: ~/.mint
+          key: mint-${{ runner.os }}-${{ hashFiles('Mintfile') }}
+          restore-keys: mint-${{ runner.os }}-
+      - name: Bootstrap tools
+        run: mint bootstrap
+      - name: swift-format lint
+        run: xcrun swift-format lint -r --strict BedTerm BedTermTests
+      - name: SwiftLint
+        run: mint run swiftlint lint --strict
+
+  build-test:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select Xcode
+        # macos-latest runner ships multiple Xcode versions; pick the latest 26.x present,
+        # falling back to whatever Xcode is available if 26.x is not yet on the image.
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
+          if [ -z "$XCODE" ]; then XCODE=$(ls -d /Applications/Xcode_*.app | sort -V | tail -1); fi
+          echo "Using $XCODE"
+          sudo xcode-select -s "$XCODE"
+          xcodebuild -version
+      - name: Install Mint
+        run: brew install mint
+      - name: Cache Mint
+        uses: actions/cache@v4
+        with:
+          path: ~/.mint
+          key: mint-${{ runner.os }}-${{ hashFiles('Mintfile') }}
+          restore-keys: mint-${{ runner.os }}-
+      - name: Bootstrap tools
+        run: mint bootstrap
+      - name: Install Metal toolchain
+        # SwiftTerm uses Metal shaders for its renderer and fails to build without
+        # the Metal toolchain installed.
+        run: sudo xcodebuild -downloadComponent MetalToolchain
+      - name: Cache SwiftPM
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Developer/Xcode/DerivedData/**/SourcePackages
+            ~/Library/Caches/org.swift.swiftpm
+          key: spm-${{ runner.os }}-${{ hashFiles('**/Package.resolved') }}
+          restore-keys: spm-${{ runner.os }}-
+      - name: Resolve SwiftPM packages
+        run: xcodebuild -resolvePackageDependencies -project BedTerm.xcodeproj
+      - name: Build & test
+        # Strategy A: name-only destination (no OS=) so xcodebuild picks the latest
+        # matching iOS Simulator runtime available on the runner image.
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project BedTerm.xcodeproj \
+            -scheme BedTerm \
+            -destination 'platform=iOS Simulator,name=iPhone 17' \
+            | mint run xcbeautify
