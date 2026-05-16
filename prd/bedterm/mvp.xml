@@ -91,6 +91,8 @@ An iOS terminal app designed for coding on iPhone. Users SSH into a Mac mini or 
   <todo id="custom_keybar">User-customizable key bar (add/remove keys, reorder).</todo>
   <todo id="ipad_layout">iPad-optimized layout.</todo>
   <todo id="ctrl_not_ctrl_revisit">Revisit R4 ctrl_not_ctrl once real usage clarifies whether any program needs a literal Ctrl interaction.</todo>
+  <todo id="ecdsa_keys">Support ECDSA (p256/p384/p521) OpenSSH private keys. Citadel 0.12.1 only parses ed25519 and RSA OpenSSH key files; users importing ECDSA keys currently get `.privateKeyParse`. Either wait for Citadel upstream or parse them ourselves and pass pre-built CryptoKit `P*.Signing.PrivateKey` into the `.p256` / `.p384` / `.p521` Citadel auth factories.</todo>
+  <todo id="key_passphrase_error">Distinguish wrong-passphrase from corrupt-key for encrypted OpenSSH private keys. Citadel's `InvalidOpenSSHKey` does not say why decryption failed; current code heuristically maps "no passphrase + bcrypt/cipher/decrypt/kdf in error text" to `.privateKeyPassphraseRequired` and everything else to `.privateKeyParse`, so a wrong-passphrase user sees a generic parse error.</todo>
 </todos>
 
 </prd>
