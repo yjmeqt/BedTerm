@@ -127,13 +127,13 @@ struct TerminalHostView: UIViewRepresentable {
         private static func indexOfSubsequence(of needle: [UInt8], in haystack: [UInt8]) -> Int? {
             guard !needle.isEmpty, haystack.count >= needle.count else { return nil }
             let last = haystack.count - needle.count
-            for i in 0...last {
+            for offset in 0...last {
                 var match = true
-                for j in 0..<needle.count where haystack[i + j] != needle[j] {
+                for pos in 0..<needle.count where haystack[offset + pos] != needle[pos] {
                     match = false
                     break
                 }
-                if match { return i }
+                if match { return offset }
             }
             return nil
         }
@@ -159,8 +159,8 @@ struct TerminalHostView: UIViewRepresentable {
             // Only anchor when every visible row strictly below the cursor is blank.
             // If a TUI program (vim, top, less, fzf) has drawn its UI, those rows are
             // populated and we leave the layout alone.
-            for r in (row + 1)..<rows {
-                if let line = terminal.getLine(row: r), line.hasAnyContent() {
+            for rowIndex in (row + 1)..<rows {
+                if let line = terminal.getLine(row: rowIndex), line.hasAnyContent() {
                     return
                 }
             }
