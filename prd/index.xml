@@ -3,6 +3,6 @@
     <entry name="MVP" file="bedterm/mvp.xml" />
     <entry name="Localization" file="bedterm/localization.xml" />
     <entry name="Design" file="bedterm/design.xml" />
-    <entry name="Saved Connections" file="bedterm/saved-connections.xml" />
+    <entry name="Hosts" file="bedterm/saved-connections.xml" />
   </module>
 </prd_index>

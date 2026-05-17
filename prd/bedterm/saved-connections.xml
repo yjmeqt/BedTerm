@@ -1,75 +1,495 @@
-<prd name="Saved Connections">
+<prd name="Hosts">
 
 <overview>
-A list of saved SSH hosts on the home screen so the user can tap a row to connect in one step, instead of retyping host, port, username, and credentials every session. Connections are stored locally on the device; the same hardware is the only place the secrets ever live.
+A list of saved SSH hosts on the home screen so the user can tap a row to connect in one step, instead of retyping host, port, username, and credentials every session. Hosts live only on the device; the same hardware is the only place the secrets ever live.
+
+The Hosts experience is a quiet developer tool for people who live in terminals: free of advertising, marketing chrome, and decorative visual noise. The interface should feel modern on current iOS releases without making host names, usernames, ports, or security states harder to scan.
 </overview>
 <implementation platform="iOS" spec="bedterm/docs/specs/saved-connections.md" />
 
-<requirement id="R1" name="Saved Connections List">
+<requirement id="R1" name="Hosts List">
   <description>
-    After onboarding, the app's home is a list of saved SSH connections rather than an empty Connection form. Each row represents one saved host and is the user's single tap into a session.
+    After onboarding, the app's home is a list of saved hosts rather than an empty Connection form. Each row represents one saved host and is the user's single tap into a session.
+
+    <figure style="margin:0 0 24px 0;display:inline-block;">
+    <div style="width:320px;background:#f2f2f7;border:1px solid #d1d1d6;border-radius:32px;box-shadow:0 4px 16px rgba(0,0,0,0.08);padding:40px 0 24px 0;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display',sans-serif;box-sizing:border-box;">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 20px 16px 20px;">
+    <span style="font-size:28px;font-weight:700;color:#000;">Hosts</span>
+    <span style="font-size:24px;color:#007aff;font-weight:300;line-height:1;">+</span>
+    </div>
+    <div style="margin:0 16px;background:#ffffff;border-radius:12px;overflow:hidden;">
+    <div style="display:flex;align-items:center;padding:12px 16px;border-bottom:1px solid #e5e5ea;">
+    <div style="flex:1;min-width:0;">
+    <div style="font-size:15px;color:#000;font-weight:500;">prod-db</div>
+    <div style="font-size:13px;color:#8e8e93;font-family:'SF Mono',Menlo,monospace;margin-top:2px;">deploy@10.0.0.5</div>
+    </div>
+    <span style="font-size:10px;font-weight:600;color:#3c3c43;background:#e5e5ea;padding:2px 6px;border-radius:4px;letter-spacing:0.5px;">KEY</span>
+    </div>
+    <div style="display:flex;align-items:center;padding:14px 16px;border-bottom:1px solid #e5e5ea;">
+    <div style="flex:1;min-width:0;">
+    <div style="font-size:15px;color:#000;font-family:'SF Mono',Menlo,monospace;">root@example.com</div>
+    </div>
+    <span style="font-size:10px;font-weight:600;color:#ffffff;background:#ff9500;padding:2px 6px;border-radius:4px;letter-spacing:0.5px;">PWD</span>
+    </div>
+    <div style="display:flex;align-items:center;padding:12px 16px;border-bottom:1px solid #e5e5ea;">
+    <div style="flex:1;min-width:0;">
+    <div style="font-size:15px;color:#000;font-weight:500;">staging tunnel</div>
+    <div style="font-size:13px;color:#8e8e93;font-family:'SF Mono',Menlo,monospace;margin-top:2px;">ops@bastion.internal:2222</div>
+    </div>
+    <span style="font-size:10px;font-weight:600;color:#3c3c43;background:#e5e5ea;padding:2px 6px;border-radius:4px;letter-spacing:0.5px;">KEY</span>
+    </div>
+    <div style="display:flex;align-items:center;padding:14px 16px;">
+    <div style="flex:1;min-width:0;">
+    <div style="font-size:15px;color:#000;font-family:'SF Mono',Menlo,monospace;">pi@pi.local</div>
+    </div>
+    <span style="font-size:10px;font-weight:600;color:#ffffff;background:#ff9500;padding:2px 6px;border-radius:4px;letter-spacing:0.5px;">PWD</span>
+    </div>
+    </div>
+    </div>
+    <figcaption style="max-width:320px;font-size:13px;color:#3c3c43;margin-top:8px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;line-height:1.4;">Populated list. Rows with an empty label collapse to a single monospace user@host line when port is 22; default port 22 is hidden in subtitles; non-default ports render after a colon.</figcaption>
+    </figure>
+
+    <figure style="margin:0 0 24px 0;display:inline-block;">
+    <div style="width:320px;background:#f2f2f7;border:1px solid #d1d1d6;border-radius:32px;box-shadow:0 4px 16px rgba(0,0,0,0.08);padding:40px 0 24px 0;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display',sans-serif;box-sizing:border-box;">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 20px 16px 20px;">
+    <span style="font-size:28px;font-weight:700;color:#000;">Hosts</span>
+    <span style="font-size:24px;color:#007aff;font-weight:300;line-height:1;">+</span>
+    </div>
+    <div style="padding:48px 24px 16px 24px;text-align:center;">
+    <div style="width:120px;height:120px;border:1px dashed #c7c7cc;border-radius:8px;margin:0 auto 24px auto;display:flex;align-items:center;justify-content:center;">
+    <span style="font-size:10px;color:#8e8e93;letter-spacing:0.5px;">illustration</span>
+    </div>
+    <div style="font-size:20px;font-weight:600;color:#000;margin-bottom:8px;">No hosts yet</div>
+    <div style="font-size:15px;color:#8e8e93;line-height:1.35;margin-bottom:24px;">Add a server to connect from your bed.</div>
+    <button style="background:#007aff;color:#ffffff;font-size:16px;font-weight:600;border:none;border-radius:10px;padding:12px 24px;width:100%;font-family:inherit;">Add Host</button>
+    </div>
+    </div>
+    <figcaption style="max-width:320px;font-size:13px;color:#3c3c43;margin-top:8px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;line-height:1.4;">Empty state with placeholder illustration, friendly headline, and a primary Add Host call-to-action.</figcaption>
+    </figure>
+
+    <figure style="margin:0 0 24px 0;display:inline-block;">
+    <div style="width:320px;background:#f2f2f7;border:1px solid #d1d1d6;border-radius:32px;box-shadow:0 4px 16px rgba(0,0,0,0.08);padding:40px 0 24px 0;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display',sans-serif;box-sizing:border-box;">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 20px 16px 20px;">
+    <span style="font-size:28px;font-weight:700;color:#000;">Hosts</span>
+    <span style="font-size:24px;color:#007aff;font-weight:300;line-height:1;">+</span>
+    </div>
+    <div style="background:#fff4e5;border-top:1px solid #ffe0b2;border-bottom:1px solid #ffe0b2;padding:10px 16px;display:flex;align-items:center;gap:10px;">
+    <span style="display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:9px;background:#ff9500;color:#ffffff;font-size:12px;font-weight:700;flex-shrink:0;">!</span>
+    <span style="flex:1;font-size:13px;color:#000;line-height:1.3;">Couldn't load saved hosts — device locked.</span>
+    <span style="font-size:14px;color:#007aff;font-weight:500;">Retry</span>
+    </div>
+    <div style="height:240px;"/>
+    </div>
+    <figcaption style="max-width:320px;font-size:13px;color:#3c3c43;margin-top:8px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;line-height:1.4;">Locked-device banner under the nav, with an inline Retry link. The content area stays empty until the Keychain unlocks.</figcaption>
+    </figure>
   </description>
-  <rule id="list_is_home" status="❌">After onboarding completes, the first screen the user lands on is the saved-connections list, not the Connection form.</rule>
-  <rule id="empty_state" status="❌" context="no saved connections">When the list has no entries, the screen shows a friendly empty state with a single primary "Add Connection" action.</rule>
-  <rule id="row_primary_label" status="❌">Each row's primary line shows the user-chosen label for the entry. When the user has not chosen a label, the primary line defaults to "username@host".</rule>
-  <rule id="row_subtitle" status="❌">Each row's secondary line shows "username@host:port". The port is omitted from the secondary line when it equals the SSH default of 22.</rule>
-  <rule id="row_auth_badge" status="❌">Each row shows a small badge indicating its authentication method (password vs. private key) so the user can tell them apart at a glance.</rule>
-  <rule id="add_button" status="❌">A "+" button in the screen's top-trailing toolbar opens the New Connection form.</rule>
-  <rule id="list_stable_order" status="❌">The list preserves the order in which entries were added (newest at the bottom) across launches. v1 does not auto-sort by recency or usage.</rule>
+  <rule id="list_is_home" status="✅">After onboarding completes, the user lands on the hosts list (not the host form), provided at least one saved host exists or migration recovered one.</rule>
+  <rule id="first_run_form_shortcut" status="✅" context="fresh install, zero saved hosts after onboarding">On a fresh install with no saved hosts and nothing recovered by migration, onboarding's completion opens the New Host form directly instead of the empty list. Saving the first host lands on the list with that entry visible; cancelling lands on the empty list. The shortcut runs once — every subsequent launch shows the list (empty or populated), never the form.</rule>
+  <rule id="empty_state" status="✅" context="no saved hosts on a return launch">When the list has no entries on a launch that isn't the first-run shortcut (e.g. the user added a host and later deleted it), the screen shows a friendly empty state with a single primary "Add Host" action.</rule>
+  <rule id="row_primary_label" status="✅">Each row's primary line shows the user-chosen label for the entry. When the user has not chosen a label, the primary line defaults to "username@host".</rule>
+  <rule id="row_subtitle" status="✅">Each row's secondary line shows "username@host:port". The port is omitted when it equals the SSH default of 22. The secondary line is suppressed entirely when it would be identical to the primary line (empty label + port 22).</rule>
+  <rule id="row_subtitle_ipv6" status="✅" context="IPv6 literal host">When the host is an IPv6 literal, the secondary line wraps the host in brackets — "user@[::1]:22" — so the port separator is unambiguous. IPv6 zone identifiers ("%en0") are preserved verbatim.</rule>
+  <rule id="row_auth_badge" status="✅">Each row shows a small badge indicating its authentication method (password vs. private key) so the user can tell them apart at a glance. The badge carries an accessibility label naming the method.</rule>
+  <rule id="add_button" status="✅">A "+" button in the screen's top-trailing toolbar opens the New Host form.</rule>
+  <rule id="list_stable_order" status="✅">The list preserves the order in which entries were added (newest at the bottom) across launches. v1 does not auto-sort by recency or usage.</rule>
+  <rule id="app_switcher_blur" status="✅" context="app resigning active">When the app resigns active, the hosts list and form are obscured in the app-switcher snapshot so labels and host names do not appear in screenshots/recents.</rule>
 </requirement>
 
-<requirement id="R2" name="Tap to Connect">
+<requirement id="R2" name="Connect Button">
   <description>
-    Tapping a saved row connects to that host using the existing prewarm + SSH path. The user never sees the form fields again unless they explicitly edit or add an entry.
+    The Hosts list is a pure display + storage surface — tapping a row body never connects. Each row carries its own explicit Connect button (alongside an always-visible Edit button), and that button is the only path from the list into the existing prewarm + SSH flow. The user never sees the form fields again unless they explicitly edit or add an entry.
+
+    <figure style="margin:0 0 24px 0;display:inline-block;">
+    <div style="width:320px;background:#f2f2f7;border:1px solid #d1d1d6;border-radius:32px;box-shadow:0 4px 16px rgba(0,0,0,0.08);padding:40px 0 24px 0;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display',sans-serif;box-sizing:border-box;">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 20px 16px 20px;">
+    <span style="font-size:28px;font-weight:700;color:#000;">Hosts</span>
+    <span style="font-size:24px;color:#007aff;font-weight:300;line-height:1;">+</span>
+    </div>
+    <div style="margin:0 16px;background:#ffffff;border-radius:12px;overflow:hidden;">
+    <div style="display:flex;align-items:center;padding:12px 16px;border-bottom:1px solid #e5e5ea;opacity:0.6;">
+    <div style="flex:1;min-width:0;">
+    <div style="font-size:15px;color:#000;font-weight:500;">prod-db</div>
+    <div style="font-size:13px;color:#8e8e93;margin-top:2px;">Connecting…</div>
+    </div>
+    <span style="display:inline-block;width:12px;height:12px;border:2px solid #c7c7cc;border-top-color:#007aff;border-radius:50%;margin-right:8px;"/>
+    <span style="font-size:10px;font-weight:600;color:#3c3c43;background:#e5e5ea;padding:2px 6px;border-radius:4px;letter-spacing:0.5px;">KEY</span>
+    </div>
+    <div style="display:flex;align-items:center;padding:14px 16px;border-bottom:1px solid #e5e5ea;">
+    <div style="flex:1;min-width:0;">
+    <div style="font-size:15px;color:#000;font-family:'SF Mono',Menlo,monospace;">root@example.com</div>
+    </div>
+    <span style="font-size:10px;font-weight:600;color:#ffffff;background:#ff9500;padding:2px 6px;border-radius:4px;letter-spacing:0.5px;">PWD</span>
+    </div>
+    <div style="display:flex;align-items:center;padding:12px 16px;">
+    <div style="flex:1;min-width:0;">
+    <div style="font-size:15px;color:#000;font-weight:500;">staging tunnel</div>
+    <div style="font-size:13px;color:#8e8e93;font-family:'SF Mono',Menlo,monospace;margin-top:2px;">ops@bastion.internal:2222</div>
+    </div>
+    <span style="font-size:10px;font-weight:600;color:#3c3c43;background:#e5e5ea;padding:2px 6px;border-radius:4px;letter-spacing:0.5px;">KEY</span>
+    </div>
+    </div>
+    </div>
+    <figcaption style="max-width:320px;font-size:13px;color:#3c3c43;margin-top:8px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;line-height:1.4;">Mid-connect: the active row dims to ~60% with a spinner and "Connecting…" subtitle; other rows remain interactive and tapping one cancels the prior attempt.</figcaption>
+    </figure>
+
+    <figure style="margin:0 0 24px 0;display:inline-block;">
+    <div style="width:320px;background:#f2f2f7;border:1px solid #d1d1d6;border-radius:32px;box-shadow:0 4px 16px rgba(0,0,0,0.08);padding:40px 0 24px 0;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display',sans-serif;box-sizing:border-box;">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 20px 16px 20px;">
+    <span style="font-size:28px;font-weight:700;color:#000;">Hosts</span>
+    <span style="font-size:24px;color:#007aff;font-weight:300;line-height:1;">+</span>
+    </div>
+    <div style="margin:0 16px;background:#ffffff;border-radius:12px;overflow:hidden;">
+    <div style="display:flex;align-items:center;padding:12px 16px;border-bottom:1px solid #e5e5ea;">
+    <div style="flex:1;min-width:0;">
+    <div style="font-size:15px;color:#000;font-weight:500;">prod-db</div>
+    <div style="display:flex;align-items:center;gap:6px;margin-top:3px;min-width:0;">
+    <span style="font-size:10px;font-weight:600;color:#ffffff;background:#ff3b30;padding:2px 6px;border-radius:4px;letter-spacing:0.5px;flex-shrink:0;">error</span>
+    <span style="font-size:13px;color:#ff3b30;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Local network permission denied.</span>
+    </div>
+    </div>
+    <span style="font-size:10px;font-weight:600;color:#3c3c43;background:#e5e5ea;padding:2px 6px;border-radius:4px;letter-spacing:0.5px;">KEY</span>
+    <span style="font-size:16px;color:#8e8e93;margin-left:8px;line-height:1;">⌄</span>
+    </div>
+    <div style="display:flex;align-items:center;padding:14px 16px;border-bottom:1px solid #e5e5ea;">
+    <div style="flex:1;min-width:0;">
+    <div style="font-size:15px;color:#000;font-family:'SF Mono',Menlo,monospace;">root@example.com</div>
+    </div>
+    <span style="font-size:10px;font-weight:600;color:#ffffff;background:#ff9500;padding:2px 6px;border-radius:4px;letter-spacing:0.5px;">PWD</span>
+    </div>
+    <div style="display:flex;align-items:center;padding:12px 16px;">
+    <div style="flex:1;min-width:0;">
+    <div style="font-size:15px;color:#000;font-weight:500;">staging tunnel</div>
+    <div style="font-size:13px;color:#8e8e93;font-family:'SF Mono',Menlo,monospace;margin-top:2px;">ops@bastion.internal:2222</div>
+    </div>
+    <span style="font-size:10px;font-weight:600;color:#3c3c43;background:#e5e5ea;padding:2px 6px;border-radius:4px;letter-spacing:0.5px;">KEY</span>
+    </div>
+    </div>
+    </div>
+    <figcaption style="max-width:320px;font-size:13px;color:#3c3c43;margin-top:8px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;line-height:1.4;">Collapsed error: subtitle becomes an "error" chip plus a one-line message; a trailing chevron hints there's more to see.</figcaption>
+    </figure>
+
+    <figure style="margin:0 0 24px 0;display:inline-block;">
+    <div style="width:320px;background:#f2f2f7;border:1px solid #d1d1d6;border-radius:32px;box-shadow:0 4px 16px rgba(0,0,0,0.08);padding:40px 0 24px 0;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display',sans-serif;box-sizing:border-box;">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 20px 16px 20px;">
+    <span style="font-size:28px;font-weight:700;color:#000;">Hosts</span>
+    <span style="font-size:24px;color:#007aff;font-weight:300;line-height:1;">+</span>
+    </div>
+    <div style="margin:0 16px;background:#ffffff;border-radius:12px;overflow:hidden;">
+    <div style="padding:12px 16px;border-bottom:1px solid #e5e5ea;">
+    <div style="display:flex;align-items:flex-start;">
+    <div style="flex:1;min-width:0;">
+    <div style="font-size:15px;color:#000;font-weight:500;">prod-db</div>
+    </div>
+    <span style="font-size:10px;font-weight:600;color:#3c3c43;background:#e5e5ea;padding:2px 6px;border-radius:4px;letter-spacing:0.5px;">KEY</span>
+    <span style="font-size:16px;color:#8e8e93;margin-left:8px;line-height:1;">⌃</span>
+    </div>
+    <div style="display:flex;align-items:flex-start;gap:6px;margin-top:8px;">
+    <span style="font-size:10px;font-weight:600;color:#ffffff;background:#ff3b30;padding:2px 6px;border-radius:4px;letter-spacing:0.5px;flex-shrink:0;margin-top:2px;">error</span>
+    <span style="font-size:13px;color:#ff3b30;line-height:1.4;">Local network permission denied. BedTerm needs Local Network access to reach hosts on your Wi-Fi. Enable it in Settings &gt; BedTerm.</span>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:12px;">
+    <button style="flex:1;background:#ffffff;color:#007aff;border:1px solid #007aff;border-radius:8px;padding:8px 10px;font-size:13px;font-weight:500;font-family:inherit;">Open Settings</button>
+    <button style="flex:1;background:#007aff;color:#ffffff;border:none;border-radius:8px;padding:8px 10px;font-size:13px;font-weight:600;font-family:inherit;">Retry</button>
+    </div>
+    </div>
+    <div style="display:flex;align-items:center;padding:14px 16px;">
+    <div style="flex:1;min-width:0;">
+    <div style="font-size:15px;color:#000;font-family:'SF Mono',Menlo,monospace;">root@example.com</div>
+    </div>
+    <span style="font-size:10px;font-weight:600;color:#ffffff;background:#ff9500;padding:2px 6px;border-radius:4px;letter-spacing:0.5px;">PWD</span>
+    </div>
+    </div>
+    </div>
+    <figcaption style="max-width:320px;font-size:13px;color:#3c3c43;margin-top:8px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;line-height:1.4;">Expanded error: row grows to show the full message and a recovery-action pair — bordered "Open Settings" and filled primary "Retry".</figcaption>
+    </figure>
+
+    <figure style="margin:0 0 24px 0;display:inline-block;">
+    <div style="width:320px;background:#f2f2f7;border:1px solid #d1d1d6;border-radius:32px;box-shadow:0 4px 16px rgba(0,0,0,0.08);padding:40px 0 24px 0;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display',sans-serif;box-sizing:border-box;position:relative;overflow:hidden;">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 20px 16px 20px;opacity:0.4;">
+    <span style="font-size:28px;font-weight:700;color:#000;">Hosts</span>
+    <span style="font-size:24px;color:#007aff;font-weight:300;line-height:1;">+</span>
+    </div>
+    <div style="margin:0 16px;background:#ffffff;border-radius:12px;opacity:0.4;">
+    <div style="padding:12px 16px;border-bottom:1px solid #e5e5ea;font-size:15px;color:#000;">prod-db</div>
+    <div style="padding:12px 16px;border-bottom:1px solid #e5e5ea;font-size:15px;color:#000;font-family:'SF Mono',Menlo,monospace;">root@example.com</div>
+    <div style="padding:12px 16px;font-size:15px;color:#000;">staging tunnel</div>
+    </div>
+    <div style="position:absolute;left:0;right:0;top:0;bottom:0;background:rgba(0,0,0,0.25);display:flex;align-items:center;justify-content:center;">
+    <div style="width:260px;background:rgba(245,245,247,0.95);border-radius:14px;overflow:hidden;">
+    <div style="padding:16px 16px 14px 16px;text-align:center;">
+    <div style="font-size:17px;font-weight:600;color:#000;line-height:1.25;">End current session and connect to "prod-db"?</div>
+    <div style="font-size:13px;color:#3c3c43;margin-top:6px;line-height:1.35;">Your current SSH session will be disconnected.</div>
+    </div>
+    <div style="border-top:1px solid #d1d1d6;display:flex;">
+    <div style="flex:1;padding:11px 0;text-align:center;font-size:17px;color:#007aff;">Cancel</div>
+    <div style="width:1px;background:#d1d1d6;"/>
+    <div style="flex:1;padding:11px 0;text-align:center;font-size:17px;color:#007aff;font-weight:600;">Connect</div>
+    </div>
+    </div>
+    </div>
+    </div>
+    <figcaption style="max-width:320px;font-size:13px;color:#3c3c43;margin-top:8px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;line-height:1.4;">Single-session swap confirmation as a native iOS alert over a dimmed list; Connect is bold to mark the primary action.</figcaption>
+    </figure>
   </description>
-  <rule id="tap_connects" status="❌">Tapping a saved row immediately starts the connection flow for that entry's credential — no intermediate form.</rule>
-  <rule id="row_progress" status="❌" context="connect in flight">While a connection attempt is in flight, the tapped row shows an inline progress indicator and is not tappable again until the attempt resolves.</rule>
-  <rule id="row_inline_error" status="❌" context="connect failed">A failed connection surfaces its error inline beneath the row that triggered it, with the same wording the Connection screen uses today (including the LAN permission "Open Settings / Retry" affordances when applicable).</rule>
-  <rule id="prewarm_reused" status="❌">The LAN local-network prewarm flow (MVP R7) is reused unchanged — the saved entry's host is fed into the same prewarm check before the SSH handshake.</rule>
-  <rule id="host_key_mismatch_reused" status="❌">Host-key mismatch handling (MVP R6) is reused unchanged — a mismatch pushes the existing mismatch screen onto the navigation stack; trusting the new key auto-retries the connect.</rule>
-  <rule id="connect_success_to_terminal" status="❌">A successful connection transitions the user to the terminal session the same way the Connection form does today.</rule>
+  <rule id="connect_button" status="✅">Each saved row carries a primary Connect button (right-aligned, alongside the Edit button and auth badge). Tapping it starts the connection flow for that entry's credential — no intermediate form. Tapping the row body never starts a connection; the list is display + storage only.</rule>
+  <rule id="edit_button_always_visible" status="✅">Each row also exposes an always-visible Edit button next to the Connect button so users who don't discover swipe-actions can still reach the form. The swipe-action Edit and context-menu Edit paths in R4 continue to work as alternative entry points.</rule>
+  <rule id="single_live_session" status="✅">Only one live session may exist at a time. Tapping the Connect button on a different row while a session is live shows a confirmation ("End current session and connect to \"&lt;label-or-user@host&gt;\"?"), then tears down the prior session and connects to the requested host.</rule>
+  <rule id="row_progress" status="✅" context="connect in flight">While a connection attempt is in flight, the row's Connect button is replaced with an inline progress indicator and is disabled until the attempt resolves. The row's other controls (Edit, swipe, context menu) remain available.</rule>
+  <rule id="rapid_switch_cancels" status="✅" context="connect in flight">Tapping the Connect button on a different row while one connect is in flight cancels the prior attempt and starts the new one. The cancelled attempt does not surface an error on its row.</rule>
+  <rule id="row_inline_error" status="✅" context="connect failed">A failed connection replaces the row's secondary line with a one-line error message in the error color. Tapping the row body in this state expands the row to reveal the full error and any recovery affordances (e.g. the "Open Settings / Retry" pair for LAN-permission failures). Tapping the body again collapses it. The Connect button stays available throughout. The error persists until the user retries (Connect or Retry), edits the entry, or starts a successful connection.</rule>
+  <rule id="prewarm_reused" status="✅">The LAN local-network prewarm flow (MVP R7) is reused unchanged — the saved entry's host is fed into the same prewarm check before the SSH handshake.</rule>
+  <rule id="lan_permission_no_auto_retry" status="✅" context="LAN permission granted after failure">When the user returns from Settings after granting local-network permission, the row stays in error state with Retry available. The app does not auto-reconnect on foreground.</rule>
+  <rule id="host_key_mismatch_reused" status="✅">Host-key mismatch handling (MVP R6) is reused unchanged — a mismatch pushes the existing mismatch screen onto the navigation stack; trusting the new key auto-retries the connect.</rule>
+  <rule id="connect_success_to_terminal" status="✅">A successful connection transitions the user to the terminal session the same way the Connection form does today.</rule>
 </requirement>
 
-<requirement id="R3" name="Add and Edit a Connection">
+<requirement id="R3" name="Add and Edit a Host">
   <description>
-    Adding a new entry and editing an existing one share the same form. Saving is the only outcome of the form in v1 — connecting happens by returning to the list and tapping the row.
+    Adding a new entry and editing an existing one share the same form. The default primary action is "Save", which returns the user to the Hosts list without connecting — connection happens later via the row's Connect button (R2). The first-run shortcut (R1.first_run_form_shortcut) is the one exception: there the primary action becomes "Save &amp; Connect" so a brand-new user goes straight into a session without an extra tap.
+
+    <figure style="margin:0 0 24px 0;display:inline-block;">
+    <div style="width:320px;background:#f2f2f7;border:1px solid #d1d1d6;border-radius:32px;box-shadow:0 4px 16px rgba(0,0,0,0.08);padding:40px 0 24px 0;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display',sans-serif;box-sizing:border-box;">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 16px 16px 16px;">
+    <span style="font-size:15px;color:#007aff;">Cancel</span>
+    <span style="font-size:17px;font-weight:600;color:#000;">Add Host</span>
+    <span style="font-size:15px;color:#c7c7cc;font-weight:600;">Save</span>
+    </div>
+    <div style="margin:0 16px;background:#ffffff;border-radius:12px;overflow:hidden;">
+    <div style="display:flex;align-items:center;padding:11px 16px;border-bottom:1px solid #e5e5ea;">
+    <span style="font-size:15px;color:#000;width:110px;">Label</span>
+    <span style="flex:1;text-align:right;font-size:15px;color:#c7c7cc;"> </span>
+    </div>
+    <div style="display:flex;align-items:center;padding:11px 16px;border-bottom:1px solid #e5e5ea;">
+    <span style="font-size:15px;color:#000;width:110px;">Host</span>
+    <span style="flex:1;text-align:right;font-size:15px;color:#c7c7cc;"> </span>
+    </div>
+    <div style="display:flex;align-items:center;padding:11px 16px;border-bottom:1px solid #e5e5ea;">
+    <span style="font-size:15px;color:#000;width:110px;">Port</span>
+    <span style="flex:1;text-align:right;font-size:15px;color:#000;font-family:'SF Mono',Menlo,monospace;">22</span>
+    </div>
+    <div style="display:flex;align-items:center;padding:11px 16px;border-bottom:1px solid #e5e5ea;">
+    <span style="font-size:15px;color:#000;width:110px;">Username</span>
+    <span style="flex:1;text-align:right;font-size:15px;color:#c7c7cc;"> </span>
+    </div>
+    <div style="display:flex;align-items:center;padding:11px 16px;border-bottom:1px solid #e5e5ea;">
+    <span style="font-size:15px;color:#000;width:110px;">Auth method</span>
+    <div style="flex:1;display:flex;justify-content:flex-end;">
+    <div style="display:inline-flex;background:#e5e5ea;border-radius:7px;padding:2px;">
+    <span style="font-size:13px;padding:4px 10px;background:#ffffff;border-radius:5px;color:#000;font-weight:500;box-shadow:0 1px 2px rgba(0,0,0,0.08);">Password</span>
+    <span style="font-size:13px;padding:4px 10px;color:#3c3c43;">Key</span>
+    </div>
+    </div>
+    </div>
+    <div style="display:flex;align-items:center;padding:11px 16px;">
+    <span style="font-size:15px;color:#000;width:110px;">Password</span>
+    <span style="flex:1;text-align:right;font-size:15px;color:#c7c7cc;"> </span>
+    </div>
+    </div>
+    </div>
+    <figcaption style="max-width:320px;font-size:13px;color:#3c3c43;margin-top:8px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;line-height:1.4;">Add Host form, inset-grouped style. Save is greyed out until required fields are filled; the secret field swaps based on the selected auth method.</figcaption>
+    </figure>
+
+    <figure style="margin:0 0 24px 0;display:inline-block;">
+    <div style="width:320px;background:#f2f2f7;border:1px solid #d1d1d6;border-radius:32px;box-shadow:0 4px 16px rgba(0,0,0,0.08);padding:40px 0 24px 0;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display',sans-serif;box-sizing:border-box;">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 16px 16px 16px;">
+    <span style="font-size:15px;color:#007aff;">Cancel</span>
+    <span style="font-size:17px;font-weight:600;color:#000;">Edit Host</span>
+    <span style="font-size:15px;color:#007aff;font-weight:600;">Save</span>
+    </div>
+    <div style="margin:0 16px;background:#ffffff;border-radius:12px;overflow:hidden;">
+    <div style="display:flex;align-items:center;padding:11px 16px;border-bottom:1px solid #e5e5ea;">
+    <span style="font-size:15px;color:#000;width:110px;">Label</span>
+    <span style="flex:1;text-align:right;font-size:15px;color:#000;">prod-db</span>
+    </div>
+    <div style="display:flex;align-items:center;padding:11px 16px;border-bottom:1px solid #e5e5ea;">
+    <span style="font-size:15px;color:#000;width:110px;">Host</span>
+    <span style="flex:1;text-align:right;font-size:15px;color:#000;font-family:'SF Mono',Menlo,monospace;">10.0.0.5</span>
+    </div>
+    <div style="display:flex;align-items:center;padding:11px 16px;border-bottom:1px solid #e5e5ea;">
+    <span style="font-size:15px;color:#000;width:110px;">Port</span>
+    <span style="flex:1;text-align:right;font-size:15px;color:#000;font-family:'SF Mono',Menlo,monospace;">22</span>
+    </div>
+    <div style="display:flex;align-items:center;padding:11px 16px;border-bottom:1px solid #e5e5ea;">
+    <span style="font-size:15px;color:#000;width:110px;">Username</span>
+    <span style="flex:1;text-align:right;font-size:15px;color:#000;font-family:'SF Mono',Menlo,monospace;">deploy</span>
+    </div>
+    <div style="display:flex;align-items:center;padding:11px 16px;border-bottom:1px solid #e5e5ea;">
+    <span style="font-size:15px;color:#000;width:110px;">Auth method</span>
+    <div style="flex:1;display:flex;justify-content:flex-end;">
+    <div style="display:inline-flex;background:#e5e5ea;border-radius:7px;padding:2px;">
+    <span style="font-size:13px;padding:4px 10px;color:#3c3c43;">Password</span>
+    <span style="font-size:13px;padding:4px 10px;background:#ffffff;border-radius:5px;color:#000;font-weight:500;box-shadow:0 1px 2px rgba(0,0,0,0.08);">Key</span>
+    </div>
+    </div>
+    </div>
+    <div style="display:flex;align-items:center;padding:11px 16px;">
+    <span style="font-size:15px;color:#000;width:110px;">Private key</span>
+    <span style="flex:1;text-align:right;font-size:15px;color:#8e8e93;font-style:italic;">Stored — replace?</span>
+    </div>
+    </div>
+    </div>
+    <figcaption style="max-width:320px;font-size:13px;color:#3c3c43;margin-top:8px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;line-height:1.4;">Edit Host with values pre-filled. The Private key field shows a muted "Stored — replace?" placeholder so the existing secret stays in the Keychain unless overwritten.</figcaption>
+    </figure>
+
+    <figure style="margin:0 0 24px 0;display:inline-block;">
+    <div style="width:320px;background:#f2f2f7;border:1px solid #d1d1d6;border-radius:32px;box-shadow:0 4px 16px rgba(0,0,0,0.08);padding:40px 0 24px 0;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display',sans-serif;box-sizing:border-box;">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 16px 16px 16px;">
+    <span style="font-size:15px;color:#007aff;">Cancel</span>
+    <span style="font-size:17px;font-weight:600;color:#000;">Add Host</span>
+    <span style="font-size:15px;color:#007aff;font-weight:600;">Save</span>
+    </div>
+    <div style="margin:0 16px;background:#ffffff;border-radius:12px;overflow:hidden;">
+    <div style="display:flex;align-items:center;padding:11px 16px;border-bottom:1px solid #e5e5ea;">
+    <span style="font-size:15px;color:#000;width:110px;">Label</span>
+    <span style="flex:1;text-align:right;font-size:15px;color:#c7c7cc;"> </span>
+    </div>
+    <div style="display:flex;align-items:center;padding:11px 16px;border-bottom:1px solid #e5e5ea;">
+    <span style="font-size:15px;color:#000;width:110px;">Host</span>
+    <span style="flex:1;text-align:right;font-size:15px;color:#000;font-family:'SF Mono',Menlo,monospace;">10.0.0.5</span>
+    </div>
+    <div style="display:flex;align-items:center;padding:11px 16px;border-bottom:1px solid #e5e5ea;">
+    <span style="font-size:15px;color:#000;width:110px;">Port</span>
+    <span style="flex:1;text-align:right;font-size:15px;color:#000;font-family:'SF Mono',Menlo,monospace;">22</span>
+    </div>
+    <div style="display:flex;align-items:center;padding:11px 16px;border-bottom:1px solid #e5e5ea;">
+    <span style="font-size:15px;color:#000;width:110px;">Username</span>
+    <span style="flex:1;text-align:right;font-size:15px;color:#000;font-family:'SF Mono',Menlo,monospace;">deploy</span>
+    </div>
+    <div style="display:flex;align-items:center;padding:11px 16px;border-bottom:1px solid #e5e5ea;">
+    <span style="font-size:15px;color:#000;width:110px;">Auth method</span>
+    <div style="flex:1;display:flex;justify-content:flex-end;">
+    <div style="display:inline-flex;background:#e5e5ea;border-radius:7px;padding:2px;">
+    <span style="font-size:13px;padding:4px 10px;background:#ffffff;border-radius:5px;color:#000;font-weight:500;box-shadow:0 1px 2px rgba(0,0,0,0.08);">Password</span>
+    <span style="font-size:13px;padding:4px 10px;color:#3c3c43;">Key</span>
+    </div>
+    </div>
+    </div>
+    <div style="display:flex;align-items:center;padding:11px 16px;">
+    <span style="font-size:15px;color:#000;width:110px;">Password</span>
+    <span style="flex:1;text-align:right;font-size:15px;color:#c7c7cc;"> </span>
+    </div>
+    </div>
+    <div style="margin:8px 16px 0 16px;display:flex;align-items:flex-start;gap:8px;padding:0 4px;">
+    <span style="font-size:10px;font-weight:600;color:#ffffff;background:#ff9500;padding:2px 6px;border-radius:4px;letter-spacing:0.5px;flex-shrink:0;margin-top:2px;">warn</span>
+    <span style="font-size:13px;color:#3c3c43;line-height:1.4;">You already have a saved host for this user@host:port ("prod-db"). Save anyway?</span>
+    </div>
+    </div>
+    <figcaption style="max-width:320px;font-size:13px;color:#3c3c43;margin-top:8px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;line-height:1.4;">Duplicate-host warning: an inline "warn" chip flags the collision; Save stays enabled because duplicates are allowed.</figcaption>
+    </figure>
   </description>
-  <rule id="add_form" status="❌" context="add mode">The "+" action opens the form with empty fields, port pre-filled to 22, auth method defaulting to Password.</rule>
-  <rule id="edit_form" status="❌" context="edit mode">A swipe action or context-menu "Edit" on a row opens the same form pre-filled with that entry's host, port, username, label, and auth method.</rule>
-  <rule id="label_field" status="❌">The form exposes an optional "Label" text field. When the user leaves it blank, the entry is saved with an empty label and the row renders "username@host" as its primary line per R1.row_primary_label.</rule>
-  <rule id="save_action" status="❌">The form's primary action is "Save". On Save, validation matches the Connection form today (host, port, username required; port numeric; private-key file imported when key auth is selected). On success the form is dismissed and the new or updated entry appears in the list.</rule>
-  <rule id="no_connect_button" status="❌">The form has no "Connect" button in v1. Saving is the only outcome; the user connects by tapping the saved row.</rule>
-  <rule id="secret_edit_masking" status="❌" context="edit mode">In edit mode, the password / passphrase / private-key fields are rendered as masked or "Stored — replace?" placeholders. Leaving them untouched preserves the existing secret; entering new content overwrites it.</rule>
-  <rule id="cancel_discards" status="❌">A "Cancel" action discards any unsaved changes and returns to the list without modifying the entry.</rule>
+  <rule id="add_form" status="✅" context="add mode">The "+" action opens the form with empty fields, port pre-filled to 22, auth method defaulting to Password.</rule>
+  <rule id="edit_form" status="✅" context="edit mode">A swipe action or context-menu "Edit" on a row opens the same form pre-filled with that entry's host, port, username, label, and auth method.</rule>
+  <rule id="label_field" status="✅">The form exposes an optional "Label" text field. When the user leaves it blank, the entry is saved with an empty label and the row renders "username@host" as its primary line per R1.row_primary_label.</rule>
+  <rule id="save_action" status="✅">The form's primary action is "Save". On Save, validation matches the Connection form today: host, port, username required; port numeric and within 1–65535; private-key file imported when key auth is selected. On success the form is dismissed and the new or updated entry appears in the list.</rule>
+  <rule id="host_paste_with_port" status="✅">If the user pastes "host:port" into the Host field, the value is split into the Host and Port fields on save.</rule>
+  <rule id="host_user_trim" status="✅">Leading and trailing whitespace is trimmed from Host and Username on save. Mid-typing values are not modified.</rule>
+  <rule id="duplicate_host_warning" status="✅">If a saved entry already exists for the same (host, port, username), the form shows an inline notice ("You already have a saved host for this user@host:port (\"&lt;label&gt;\"). Save anyway?"). The warning is not blocking — the user can still proceed. Edit mode excludes the entry being edited from the duplicate check.</rule>
+  <rule id="save_only_default" status="✅">In the normal Add/Edit path, the form's primary action is "Save". On save the form dismisses to the Hosts list with the new or updated entry visible; the user starts the actual connection later from the row's Connect button (R2.connect_button).</rule>
+  <rule id="first_run_save_and_connect" status="✅" context="first-run shortcut">When the form was opened via the first-run shortcut (R1.first_run_form_shortcut), the primary action's label becomes "Save &amp; Connect" and the validation rules are identical to Save. Tapping it persists the entry and, on dismissal back to the Hosts list, immediately starts a connection to the freshly-saved entry — the user never has to tap a separate Connect afterwards. Cancel still discards and lands on the empty list. Edit mode never opens with this variant.</rule>
+  <rule id="secret_edit_masking" status="✅" context="edit mode">In edit mode, the password / passphrase / private-key fields are rendered as masked or "Stored — replace?" placeholders. Leaving them untouched preserves the existing secret; entering new content overwrites it. Clearing a previously-stored secret field is treated as "leave untouched" rather than "clear the secret" — to remove a secret entirely the user must delete the entry.</rule>
+  <rule id="auth_method_switch" status="✅" context="edit mode">When the user changes the auth method (password ↔ key) in edit mode, the previously-stored secret is discarded on save and the new method's secret is required — the placeholder reads "Required" rather than "Stored — replace?".</rule>
+  <rule id="cancel_discards" status="✅">A "Cancel" action discards any unsaved changes and returns to the list without modifying the entry.</rule>
 </requirement>
 
-<requirement id="R4" name="Delete a Connection">
+<requirement id="R4" name="Delete a Host">
   <description>
     The user can remove a saved entry. Deletion is destructive but recoverable only by re-entering the credentials manually, so it requires an explicit confirmation.
+
+    <figure style="margin:0 0 24px 0;display:inline-block;">
+    <div style="width:320px;background:#f2f2f7;border:1px solid #d1d1d6;border-radius:32px;box-shadow:0 4px 16px rgba(0,0,0,0.08);padding:40px 0 24px 0;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display',sans-serif;box-sizing:border-box;position:relative;overflow:hidden;">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 20px 16px 20px;opacity:0.4;">
+    <span style="font-size:28px;font-weight:700;color:#000;">Hosts</span>
+    <span style="font-size:24px;color:#007aff;font-weight:300;line-height:1;">+</span>
+    </div>
+    <div style="margin:0 16px;background:#ffffff;border-radius:12px;opacity:0.4;">
+    <div style="padding:12px 16px;border-bottom:1px solid #e5e5ea;font-size:15px;color:#000;">prod-db</div>
+    <div style="padding:12px 16px;border-bottom:1px solid #e5e5ea;font-size:15px;color:#000;font-family:'SF Mono',Menlo,monospace;">root@example.com</div>
+    <div style="padding:12px 16px;font-size:15px;color:#000;">staging tunnel</div>
+    </div>
+    <div style="position:absolute;left:0;right:0;top:0;bottom:0;background:rgba(0,0,0,0.25);display:flex;align-items:center;justify-content:center;">
+    <div style="width:260px;background:rgba(245,245,247,0.95);border-radius:14px;overflow:hidden;">
+    <div style="padding:16px 16px 14px 16px;text-align:center;">
+    <div style="font-size:17px;font-weight:600;color:#000;line-height:1.25;">Delete "prod-db"?</div>
+    <div style="font-size:13px;color:#3c3c43;margin-top:6px;line-height:1.35;">This will remove the saved password or key.</div>
+    </div>
+    <div style="border-top:1px solid #d1d1d6;display:flex;">
+    <div style="flex:1;padding:11px 0;text-align:center;font-size:17px;color:#007aff;">Cancel</div>
+    <div style="width:1px;background:#d1d1d6;"/>
+    <div style="flex:1;padding:11px 0;text-align:center;font-size:17px;color:#ff3b30;font-weight:600;">Delete</div>
+    </div>
+    </div>
+    </div>
+    </div>
+    <figcaption style="max-width:320px;font-size:13px;color:#3c3c43;margin-top:8px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;line-height:1.4;">Standard delete confirmation. The destructive action is rendered in red and bold; Cancel stays neutral on the left.</figcaption>
+    </figure>
+
+    <figure style="margin:0 0 24px 0;display:inline-block;">
+    <div style="width:320px;background:#f2f2f7;border:1px solid #d1d1d6;border-radius:32px;box-shadow:0 4px 16px rgba(0,0,0,0.08);padding:40px 0 24px 0;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display',sans-serif;box-sizing:border-box;position:relative;overflow:hidden;">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 20px 16px 20px;opacity:0.4;">
+    <span style="font-size:28px;font-weight:700;color:#000;">Hosts</span>
+    <span style="font-size:24px;color:#007aff;font-weight:300;line-height:1;">+</span>
+    </div>
+    <div style="margin:0 16px;background:#ffffff;border-radius:12px;opacity:0.4;">
+    <div style="padding:12px 16px;border-bottom:1px solid #e5e5ea;font-size:15px;color:#000;">prod-db</div>
+    <div style="padding:12px 16px;border-bottom:1px solid #e5e5ea;font-size:15px;color:#000;font-family:'SF Mono',Menlo,monospace;">root@example.com</div>
+    <div style="padding:12px 16px;font-size:15px;color:#000;">staging tunnel</div>
+    </div>
+    <div style="position:absolute;left:0;right:0;top:0;bottom:0;background:rgba(0,0,0,0.25);display:flex;align-items:center;justify-content:center;">
+    <div style="width:260px;background:rgba(245,245,247,0.95);border-radius:14px;overflow:hidden;">
+    <div style="padding:16px 16px 14px 16px;text-align:center;">
+    <div style="font-size:17px;font-weight:600;color:#000;line-height:1.25;">Disconnect and delete "prod-db"?</div>
+    <div style="font-size:13px;color:#3c3c43;margin-top:6px;line-height:1.35;">You are currently connected. The session will end and the saved password or key will be removed.</div>
+    </div>
+    <div style="border-top:1px solid #d1d1d6;display:flex;">
+    <div style="flex:1;padding:11px 0;text-align:center;font-size:17px;color:#007aff;">Cancel</div>
+    <div style="width:1px;background:#d1d1d6;"/>
+    <div style="flex:1;padding:11px 0;text-align:center;font-size:17px;color:#ff3b30;font-weight:600;">Delete</div>
+    </div>
+    </div>
+    </div>
+    </div>
+    <figcaption style="max-width:320px;font-size:13px;color:#3c3c43;margin-top:8px;font-family:-apple-system,BlinkMacSystemFont,sans-serif;line-height:1.4;">Live-session delete: the title and body explicitly call out the active session so the user knows it will terminate too.</figcaption>
+    </figure>
   </description>
-  <rule id="swipe_to_delete" status="❌">A trailing swipe action on a row exposes "Delete".</rule>
-  <rule id="context_menu_delete" status="❌">A long-press context menu on a row also exposes "Delete" (alongside "Edit") for users who prefer that gesture.</rule>
-  <rule id="delete_confirms" status="❌">Tapping Delete shows a confirmation prompt ("Delete \"&lt;label&gt;\"? This will remove the saved password / key.") with Cancel and a destructive Delete.</rule>
-  <rule id="delete_removes_secret" status="❌">Confirming Delete removes both the index entry and the underlying Keychain item that holds the secret — no orphaned secret remains.</rule>
-  <rule id="delete_animation" status="❌">After confirmation, the row animates out of the list using the standard system list-row removal animation.</rule>
+  <rule id="swipe_to_delete" status="✅">A trailing swipe action on a row exposes "Delete".</rule>
+  <rule id="context_menu_delete" status="✅">A long-press context menu on a row also exposes "Delete" (alongside "Edit") for users who prefer that gesture.</rule>
+  <rule id="delete_confirms" status="✅">Tapping Delete shows a confirmation prompt ("Delete \"&lt;label&gt;\"? This will remove the saved password or key.") with Cancel and a destructive Delete. When the label is empty, the prompt substitutes "user@host".</rule>
+  <rule id="delete_removes_secret" status="✅">Confirming Delete removes both the index entry and the underlying Keychain item that holds the secret — no orphaned secret remains.</rule>
+  <rule id="delete_in_flight" status="✅" context="connect in flight on this row">Deleting a row whose connect is in flight cancels the attempt before the entry is removed. No error appears on the (now removed) row.</rule>
+  <rule id="delete_live_session" status="✅" context="live session on this row">Deleting a row whose session is currently live shows a stronger confirmation ("Disconnect and delete \"&lt;label-or-user@host&gt;\"?") and tears down the session before removing the entry.</rule>
+  <rule id="delete_animation" status="✅">After confirmation, the row animates out of the list using the standard system list-row removal animation.</rule>
 </requirement>
 
 <requirement id="R5" name="Local-Only Storage">
   <description>
-    Saved connections — including passwords, private keys, and passphrases — never leave the device. iCloud Keychain sync, backup-based restore, and any cross-device sharing are explicitly out of scope for v1.
+    Saved hosts — including passwords, private keys, and passphrases — never leave the device. iCloud Keychain sync, backup-based restore, and any cross-device sharing are explicitly out of scope for v1.
   </description>
-  <rule id="device_only_secrets" status="❌">Each saved entry's secret material (password, private key, passphrase) is stored in the iOS Keychain with this-device-only accessibility, matching the protection class already used by the MVP credentials store.</rule>
-  <rule id="no_icloud_sync" status="❌">No saved-connection material is written to iCloud, iCloud Keychain, or any other off-device store. Restoring the app on a new device starts with an empty list.</rule>
-  <rule id="locked_device_unreadable" status="❌">When the device is locked, the saved entries cannot be read — the app surfaces an inline "Couldn't load saved connections — device locked. Retry." banner if launched into this state and recovers when the user unlocks.</rule>
+  <rule id="device_only_secrets" status="✅">Each saved entry's secret material (password, private key, passphrase) is stored in the iOS Keychain with this-device-only accessibility, matching the protection class already used by the MVP credentials store.</rule>
+  <rule id="no_icloud_sync" status="✅">No saved-host material is written to iCloud, iCloud Keychain, or any other off-device store. Restoring the app on a new device starts with an empty list.</rule>
+  <rule id="locked_device_unreadable" status="✅">When the device is locked, the saved entries cannot be read — the app surfaces an inline "Couldn't load saved hosts — device locked. Retry." banner if launched into this state and recovers when the user unlocks. The empty state is not shown while this banner is visible.</rule>
+  <rule id="reconcile_keychain_on_empty_index" status="✅" context="index empty, Keychain not empty">If the saved-hosts index is empty but the Keychain still contains items under the hosts service (e.g. after a UserDefaults wipe or a reinstall with retained Keychain), the app reconciles by listing those Keychain items, treating them as legitimate saved entries, and rebuilding the index from them before any legacy migration runs.</rule>
 </requirement>
 
 <requirement id="R6" name="Migration from Single Credential">
   <description>
     Pre-existing installs already store a single most-recent credential. That entry must seed the new list so users don't lose their working host on update.
   </description>
-  <rule id="migrate_legacy_entry" status="❌">On first launch of the new build, if the legacy single-credential Keychain item exists, the app creates one saved entry from it labeled "Last connection" (so the user can rename it later) and removes the legacy item.</rule>
-  <rule id="migration_is_idempotent" status="❌">Migration runs only when both (a) the legacy item exists and (b) the new saved-connections index is empty for that legacy host. Repeated launches do not create duplicate entries.</rule>
-  <rule id="no_legacy_after_first_save" status="❌">After migration completes successfully (or after the user saves any new entry on a fresh install), the legacy single-credential writer is no longer used.</rule>
+  <rule id="migrate_legacy_entry" status="✅">On first launch of the new build, if the legacy single-credential Keychain item exists, the app creates one saved entry from it labeled "Last connection" (the user can rename it later) and removes the legacy item.</rule>
+  <rule id="migration_step_order" status="✅">Migration writes the new Keychain item first, appends to the index second, and deletes the legacy item last. A crash between steps must leave the system in a state that the next launch resolves cleanly: orphan items are recovered by R5.reconcile_keychain_on_empty_index; an undeleted legacy item is handled by re-running migration under R6.migration_is_idempotent.</rule>
+  <rule id="migration_is_idempotent" status="✅">Migration runs only when (a) the legacy item exists and (b) no saved entry already matches its (host, port, username). Repeated launches do not create duplicate entries.</rule>
+  <rule id="migration_tolerates_corruption" status="✅">If the legacy Keychain item exists but cannot be decoded, migration logs the failure and proceeds as if no legacy item were present — the user is not blocked from the empty state.</rule>
+  <rule id="no_legacy_after_first_save" status="✅">After migration completes successfully (or after the user saves any new entry on a fresh install), the legacy single-credential writer is no longer used.</rule>
+</requirement>
+
+<requirement id="R7" name="Visual System and Motion">
+  <description>
+    Hosts adopts the current iOS visual language as a functional layer, not as decoration. The list remains calm and information-dense, while controls and transient recovery affordances can use system glass and motion to show that they are interactive.
+  </description>
+  <rule id="developer_tool_tone" status="✅">The Hosts surface presents itself as a focused developer utility: no ads, promotional panels, gamified decoration, or marketing-style hero content appear in the host manager.</rule>
+  <rule id="functional_glass_layer" status="✅">On platforms that support the current system glass material, glass treatment is reserved for functional controls and transient surfaces such as the add action, Save/Cancel actions, retry/settings recovery actions, active progress affordances, and confirmation surfaces. Host row content itself stays calm and highly legible.</rule>
+  <rule id="system_components_first" status="✅">Navigation, lists, forms, sheets, confirmation prompts, menus, pickers, buttons, and progress indicators use native system components wherever they can satisfy the interaction, so the app feels like part of iOS rather than a custom skin.</rule>
+  <rule id="motion_is_meaningful" status="✅">Motion communicates state changes without spectacle: adding, deleting, connecting, error expansion, recovery actions, and form presentation animate smoothly; idle content does not animate just to attract attention.</rule>
+  <rule id="accessibility_respected" status="✅">The visual system respects reduced motion, reduced transparency, increased contrast, Dynamic Type, and VoiceOver. If system glass or motion is reduced, the interface falls back to equally readable static system materials and controls.</rule>
 </requirement>
 
 </prd>

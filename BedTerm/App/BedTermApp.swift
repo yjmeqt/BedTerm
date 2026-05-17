@@ -13,7 +13,7 @@ struct BedTermApp: App {
             Group {
                 if onboardingDone {
                     NavigationStack(path: $path) {
-                        ConnectionScreen(path: $path)
+                        HostsScreen(path: $path)
                     }
                 } else {
                     OnboardingScreen {
