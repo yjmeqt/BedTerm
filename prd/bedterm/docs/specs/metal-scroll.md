@@ -1,8 +1,6 @@
 # Metal Terminal — Scroll Implementation Spec
 
-PRD rules: `R5.scroll`, `R5.scroll_sync`, `R5.scroll_inertia`, `R5.scroll_snap_on_input` (mvp.xml). Closes bug `metal_viewport_cannot_scroll`; advances `R2M-R1.scrollback`, `R2M-R2.scroll_clean`, `R2M-R4.r5_ux`.
-
-Parent spec: `prd/bedterm/docs/specs/rust-metal-renderer.md`.
+PRD rules: `terminal-view#R2.scroll`, `terminal-view#R2.scroll_sync`, `terminal-view#R2.scroll_inertia`, `terminal-view#R2.scroll_snap_on_input`. Closes bug `metal_viewport_cannot_scroll`.
 
 ## Goal
 
@@ -11,8 +9,6 @@ Touch-scroll the Metal terminal viewport into scrollback. Drag tracks the finger
 ## Why Rust owns the offset
 
 `bedterm_core` constructs `Term` via `Dims { total_lines == screen_lines == rows }`, so alacritty's scrollback grid currently holds zero history rows. `bt_term_snapshot` only walks the viewport (`Line(0)..Line(rows)`). There is no historical data on the Swift side to scroll over — Swift cannot fake an offset against state it does not have. The fix is to enable scrollback in the Rust core and expose its display offset.
-
-This also closes `R2M-R1.scrollback` ("Scroll position is exposed to the renderer") in the same step.
 
 ## Architecture
 
@@ -110,7 +106,7 @@ Exposing `display_offset` in the snapshot lets the Swift inertia loop check edge
 
 ### Renderer
 
-**No changes.** The renderer pulls grid state via `BtTerm::snapshot_for_renderer()` (in `ffi.rs`), which calls the same `Terminal::snapshot()` that Swift consumes. Applying `display_offset` inside `snapshot()` is sufficient for both. `R2M-R2.scroll_clean` falls out for free once snapshot is offset-aware.
+**No changes.** The renderer pulls grid state via `BtTerm::snapshot_for_renderer()` (in `ffi.rs`), which calls the same `Terminal::snapshot()` that Swift consumes. Applying `display_offset` inside `snapshot()` is sufficient for both.
 
 ### `ffi.rs` cache invalidation
 
@@ -300,8 +296,6 @@ Manual (run via `worktree-ios-dev` skill):
 ## Out of scope (defer)
 
 - "Jump to bottom" floating pill when `scrollOffset > 0` — needs design.
-- Sticky command header — depends on R2M-R3 blocks.
-- 2-finger swipe between blocks — depends on R2M-R3 blocks.
 - Scrollback selection / copy across history rows.
 - Configurable scrollback budget (hardcoded 10 000 here).
 
