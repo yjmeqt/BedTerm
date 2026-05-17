@@ -20,6 +20,7 @@ type_body_length:
 
 excluded:
   - .build
+  - BedTermKit/.build
   - .worktrees
   - worktree-ios-dev
   - BedTermTests/Mocks
