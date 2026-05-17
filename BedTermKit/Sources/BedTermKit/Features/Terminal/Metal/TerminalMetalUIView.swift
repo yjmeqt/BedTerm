@@ -14,6 +14,7 @@ final class TerminalMetalUIView: MTKView {
     private var lastCols: Int = 0
     private var lastRows: Int = 0
     private(set) var cellSize = CGSize(width: 8, height: 16)
+    private let cursorLayer = MetalCursorLayer()
 
     init(feed: AsyncStream<Data>,
          onSend: @escaping (Data) -> Void,
@@ -43,6 +44,8 @@ final class TerminalMetalUIView: MTKView {
         self.presentsWithTransaction = true
         self.backgroundColor = .black
 
+        layer.addSublayer(cursorLayer)
+
         refreshFontMetrics()
 
         consumeTask = Task { @MainActor [weak self] in
@@ -68,6 +71,12 @@ final class TerminalMetalUIView: MTKView {
             into: drawable.texture,
             viewport: size,
             time: elapsed
+        )
+        let snapshot = terminalCore.snapshot()
+        cursorLayer.update(
+            col: Int(snapshot.cursorCol),
+            row: Int(snapshot.cursorRow),
+            cellSize: cellSize
         )
         // Second command buffer is just for presentation — bridge.draw already
         // committed the cell pass on its own buffer. See task spec note.
