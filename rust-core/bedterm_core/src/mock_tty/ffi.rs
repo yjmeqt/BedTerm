@@ -25,6 +25,7 @@ pub unsafe extern "C" fn bt_mock_tty_create(
 ) -> *mut BtMockTty {
     let prog: Box<dyn crate::mock_tty::program::Program> = match program {
         0 => Box::new(crate::mock_tty::programs::echo_shell::EchoShell::new()),
+        1 => Box::new(crate::mock_tty::programs::vim_lite::VimLite::new()),
         3 => Box::new(RawSink::new()),
         _ => Box::new(RawSink::new()),
     };
