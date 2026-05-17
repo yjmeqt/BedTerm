@@ -160,4 +160,25 @@ Replace SwiftTerm with a custom terminal engine: a Rust core (VT100/xterm emulat
   </steps>
 </bug>
 
+<bug id="metal_render_one_frame_late" status="Fixed" date="2026-05-17" rule="R2M-R2.incremental_repaint">
+  <current>
+    With the Metal renderer toggle ON, the painted grid lags the terminal state by exactly one input event:
+    <ul>
+    <li>After pressing Return, the next prompt line (e.g. <code>yi.jiang:fix-saved-connections/</code>) is blank but the cursor sits at the correct column where the prompt's end would be. The prompt only fills in after the next keystroke arrives.</li>
+    <li>Typing <code>hello</code> renders as <code>hell </code> with the cursor one cell to the right of <code>hell</code> — the last typed glyph (<code>o</code>) is missing until another key is pressed, which paints the <code>o</code> and then leaves the new last glyph missing.</li>
+    </ul>
+    The cursor position always reflects the latest state, but the cell at <code>cursor - 1</code> (or the entire row just produced by Return) is the previous state. The Rust core has the correct bytes — it's the Metal paint that runs against the pre-update grid.
+  </current>
+  <expected>
+    Every byte fed to <code>term_feed</code> must be reflected in the very next frame, not the frame after. After pressing Return, the new prompt line should paint together with the cursor. After typing a character, that character should paint in the same frame as the cursor advancing past it.
+  </expected>
+  <steps>
+    1. Build and run with Metal toggle ON. Connect to a host.
+    2. At the prompt, press Return.
+    3. Observe: the new prompt row is empty, but the cursor sits where the end of the prompt should be.
+    4. Type any single key; the previously-missing prompt now appears, and the new key's glyph is itself missing one cell behind the cursor.
+    5. Type <code>hello</code>; observe the rendered text is <code>hell</code> with a one-cell gap before the cursor.
+  </steps>
+</bug>
+
 </prd>

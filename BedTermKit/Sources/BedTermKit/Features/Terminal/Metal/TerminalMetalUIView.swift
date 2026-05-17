@@ -124,11 +124,15 @@ final class TerminalMetalUIView: MTKView {
             row: Int(snapshot.cursorRow),
             cellSize: cellSize
         )
-        // Second command buffer is just for presentation — bridge.draw already
-        // committed the cell pass on its own buffer. See task spec note.
-        guard let cmd = bridge.queue.makeCommandBuffer() else { return }
-        cmd.present(drawable)
-        cmd.commit()
+        // presentsWithTransaction=true requires a synchronous present: wait
+        // for the cell-pass command buffer to be scheduled, then present the
+        // drawable in the current CATransaction. Using cmd.present(drawable)
+        // here would queue an async present that lands one frame after the
+        // cursor CALayer commits, causing the cells-lag-cursor symptom.
+        let fence = bridge.queue.makeCommandBuffer()
+        fence?.commit()
+        fence?.waitUntilScheduled()
+        drawable.present()
     }
 
     override func layoutSubviews() {
