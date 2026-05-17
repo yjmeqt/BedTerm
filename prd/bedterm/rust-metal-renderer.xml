@@ -113,7 +113,7 @@ Replace SwiftTerm with a custom terminal engine: a Rust core (VT100/xterm emulat
   </steps>
 </bug>
 
-<bug id="metal_typed_echo_glyph_drop_on_first_paint" status="Open" date="2026-05-17" rule="R2M-R2.cell_shader">
+<bug id="metal_typed_echo_glyph_drop_on_first_paint" status="Fix Pending" date="2026-05-17" rule="R2M-R2.cell_shader">
   <current>
     On the first command typed after connecting via the Metal renderer, the typed echo line renders with several characters missing or visibly corrupted (e.g. typing "echo metal_input_test" renders as roughly "ec'           _test", with large gaps between fragments). The shell receives every byte correctly — running the command works, and its output ("metal_input_test") renders cleanly on the next line. Subsequent commands typed in the same session render their echo lines correctly.
   </current>
@@ -128,7 +128,7 @@ Replace SwiftTerm with a custom terminal engine: a Rust core (VT100/xterm emulat
   </steps>
 </bug>
 
-<bug id="metal_prompt_floats_at_top" status="Open" date="2026-05-17" rule="R2M-R4.r5_ux">
+<bug id="metal_prompt_floats_at_top" status="Fix Pending" date="2026-05-17" rule="R2M-R4.r5_ux">
   <current>
     With the Metal renderer toggle ON, the shell's first prompt and any short transcript renders pinned to the top of the terminal viewport while the rest of the viewport stays black. After connecting to an SSH host, the screen shows "Last login: …" on row 0 and "yi.jiang:~/ $" on row 1, then a large black gap down to the toolbar — instead of the prompt sitting on the row just above the toolbar with empty space above it.
   </current>

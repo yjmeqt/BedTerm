@@ -11,6 +11,7 @@ final class TerminalMetalUIView: MTKView {
 
     private var startTime = CACurrentMediaTime()
     private var consumeTask: Task<Void, Never>?
+    private var anchorTask: Task<Void, Never>?
     private var lastCols: Int = 0
     private var lastRows: Int = 0
     private(set) var cellSize = CGSize(width: 8, height: 16)
@@ -86,8 +87,10 @@ final class TerminalMetalUIView: MTKView {
         consumeTask = Task { @MainActor [weak self] in
             for await chunk in feed {
                 guard let self else { return }
+                let hadScreenClear = Self.containsScreenClear(chunk)
                 self.terminalCore.feed(chunk)
                 self.setNeedsDisplay()
+                if hadScreenClear { self.scheduleBottomAnchorPass() }
             }
         }
     }
@@ -95,7 +98,10 @@ final class TerminalMetalUIView: MTKView {
     @available(*, unavailable)
     required init(coder: NSCoder) { fatalError("not used") }
 
-    deinit { consumeTask?.cancel() }
+    deinit {
+        consumeTask?.cancel()
+        anchorTask?.cancel()
+    }
 
     override func draw(_ rect: CGRect) {
         guard let drawable = currentDrawable else { return }
@@ -122,16 +128,28 @@ final class TerminalMetalUIView: MTKView {
 
     override func layoutSubviews() {
         super.layoutSubviews()
-        let size = drawableSize
-        guard cellSize.width > 0, cellSize.height > 0 else { return }
-        let cols = max(1, Int(size.width  / cellSize.width))
-        let rows = max(1, Int(size.height / cellSize.height))
+        // `cellSize` from UIKit text metrics is in POINTS. Use `bounds` (also
+        // points) for col/row math. `drawableSize` is in pixels and only
+        // belongs on the Metal-renderer side of the FFI.
+        let pointSize = bounds.size
+        guard cellSize.width > 0, cellSize.height > 0,
+              pointSize.width > 0, pointSize.height > 0 else { return }
+        let cols = max(1, Int(pointSize.width  / cellSize.width))
+        let rows = max(1, Int(pointSize.height / cellSize.height))
         if cols != lastCols || rows != lastRows {
+            let didGrow = rows > lastRows
             terminalCore.resize(cols: cols, rows: rows)
             onResize(cols, rows)
             lastCols = cols
             lastRows = rows
             setNeedsDisplay()
+            // Match SwiftTerm path: re-anchor the prompt on every viewport
+            // growth so the shell's initial banner + prompt land at the
+            // bottom of the new viewport instead of the top. The anchor
+            // pass is a no-op when a TUI app has drawn below the cursor.
+            if didGrow, rows > 3 {
+                scheduleBottomAnchorPass()
+            }
         }
         currentCols = cols
         selectionGR.cellSize = cellSize
@@ -162,25 +180,25 @@ final class TerminalMetalUIView: MTKView {
     }
 
     @objc private func handleFocusTap() {
-        if !isFirstResponder { _ = becomeFirstResponder() }
+        if !isFirstResponder {
+            _ = becomeFirstResponder()
+            reloadInputViews()
+        }
     }
 
-    private func refreshFontMetrics() {
-        let body = UIFontMetrics.default.scaledFont(
-            for: .monospacedSystemFont(ofSize: 14, weight: .regular)
-        )
-        bridge.setFont(pointSize: body.pointSize, scale: UIScreen.main.scale)
-        let charSize = ("M" as NSString).size(withAttributes: [.font: body])
-        cellSize = charSize
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        if window != nil, !isFirstResponder {
+            _ = becomeFirstResponder()
+        }
     }
-
-    // MARK: First responder + keyboard input
 
     override var canBecomeFirstResponder: Bool { true }
 
-    /// Hardware-key handling for keys UIKeyInput cannot deliver: arrows,
-    /// escape, function keys, and Ctrl-combinations. Each maps to the
-    /// canonical xterm/VT byte sequence and is sent straight to the PTY.
+    // MARK: Hardware-key handling
+
+    /// Hardware keys UIKeyInput cannot deliver: arrows, escape, function,
+    /// Ctrl-combos. Each maps to the canonical xterm/VT byte sequence.
     override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
         var handled = false
         for press in presses {
@@ -195,7 +213,6 @@ final class TerminalMetalUIView: MTKView {
 
     private static func encode(key: UIKey) -> Data? {
         let esc: UInt8 = 0x1B
-        // Ctrl-letter: produce the 0x01..0x1A control byte for A..Z.
         if key.modifierFlags.contains(.control), key.characters.count == 1,
            let ascii = key.characters.uppercased().unicodeScalars.first?.value,
            ascii >= 0x40, ascii <= 0x5F {
@@ -217,15 +234,94 @@ final class TerminalMetalUIView: MTKView {
         default: return nil
         }
     }
+
+    private func refreshFontMetrics() {
+        let body = UIFontMetrics.default.scaledFont(
+            for: .monospacedSystemFont(ofSize: 14, weight: .regular)
+        )
+        bridge.setFont(pointSize: body.pointSize, scale: UIScreen.main.scale)
+        let charSize = ("M" as NSString).size(withAttributes: [.font: body])
+        cellSize = charSize
+    }
+
+    // MARK: Bottom anchoring (parity with TerminalHostView.Coordinator)
+
+    // Standard "clear screen" CSI sequences emitted by `clear`, Ctrl+L,
+    // `tput clear`, `reset`, and the `ESC c` RIS code. We bottom-anchor
+    // only after one of these + a quiet period, so TUI apps that clear
+    // before drawing their own UI are not disrupted.
+    private static let screenClearPatterns: [[UInt8]] = [
+        Array("\u{1B}[2J".utf8),
+        Array("\u{1B}[3J".utf8),
+        [0x1B, 0x63]
+    ]
+
+    private static func containsScreenClear(_ chunk: Data) -> Bool {
+        guard !chunk.isEmpty else { return false }
+        let bytes = [UInt8](chunk)
+        for pattern in screenClearPatterns where indexOfSubsequence(of: pattern, in: bytes) != nil {
+            return true
+        }
+        return false
+    }
+
+    private static func indexOfSubsequence(of needle: [UInt8], in haystack: [UInt8]) -> Int? {
+        guard !needle.isEmpty, haystack.count >= needle.count else { return nil }
+        let last = haystack.count - needle.count
+        for offset in 0...last {
+            var match = true
+            for pos in 0..<needle.count where haystack[offset + pos] != needle[pos] {
+                match = false
+                break
+            }
+            if match { return offset }
+        }
+        return nil
+    }
+
+    private func scheduleBottomAnchorPass() {
+        anchorTask?.cancel()
+        anchorTask = Task { @MainActor [weak self] in
+            // Give the shell ~120 ms to finish emitting its new prompt before
+            // we decide. TUI apps keep streaming during this window, which
+            // keeps the post-flight emptiness check below failing and the
+            // anchor pass a no-op.
+            try? await Task.sleep(nanoseconds: 120_000_000)
+            if Task.isCancelled { return }
+            self?.applyBottomAnchorIfShellAtTop()
+        }
+    }
+
+    private func applyBottomAnchorIfShellAtTop() {
+        let snapshot = terminalCore.snapshot()
+        let rows = Int(snapshot.rows)
+        let cols = Int(snapshot.cols)
+        let row = Int(snapshot.cursorRow)
+        let col = Int(snapshot.cursorCol)
+        guard rows > 3, row >= 0, row < rows / 2 else { return }
+        // Only anchor when every visible row strictly below the cursor is blank.
+        for rowIndex in (row + 1)..<rows {
+            for c in 0..<cols {
+                if let cell = snapshot.cell(col: c, row: rowIndex), cell.ch != 0 {
+                    return
+                }
+            }
+        }
+        let linesToInsert = rows - 1 - row
+        guard linesToInsert > 0 else { return }
+        // Same CSI dance as the SwiftTerm path: move to home, insert N blank
+        // lines (which pushes the existing prompt row down to the bottom),
+        // then re-park the cursor on the same column of the new bottom row.
+        let sequence = "\u{1B}[1;1H\u{1B}[\(linesToInsert)L\u{1B}[\(rows);\(col + 1)H"
+        terminalCore.feed(Data(sequence.utf8))
+        setNeedsDisplay()
+    }
 }
 
-extension TerminalMetalUIView: UIKeyInput {
-    /// `UIKeyInput` requires this property; we never echo locally — the
-    /// remote shell handles all echo, so there's no "text" we own.
+extension TerminalMetalUIView: UIKeyInput, UITextInputTraits {
     var hasText: Bool { false }
 
     func insertText(_ text: String) {
-        // Translate a soft-keyboard Return into CR; everything else is UTF-8.
         if text == "\n" {
             onSend(Data([0x0D]))
         } else {
@@ -234,6 +330,40 @@ extension TerminalMetalUIView: UIKeyInput {
     }
 
     func deleteBackward() {
-        onSend(Data([0x7F]))  // DEL — xterm-256color expects 0x7F, not 0x08
+        onSend(Data([0x7F]))  // DEL — xterm-256color expects 0x7F.
+    }
+
+    // UITextInputTraits — terminal-friendly defaults. Without these the
+    // system may refuse to present a soft keyboard for a custom UIKeyInput
+    // view, or may apply IME corrections that mangle commands.
+    var autocorrectionType: UITextAutocorrectionType {
+        get { .no } set { _ = newValue }
+    }
+    var autocapitalizationType: UITextAutocapitalizationType {
+        get { .none } set { _ = newValue }
+    }
+    var spellCheckingType: UITextSpellCheckingType {
+        get { .no } set { _ = newValue }
+    }
+    var smartQuotesType: UITextSmartQuotesType {
+        get { .no } set { _ = newValue }
+    }
+    var smartDashesType: UITextSmartDashesType {
+        get { .no } set { _ = newValue }
+    }
+    var smartInsertDeleteType: UITextSmartInsertDeleteType {
+        get { .no } set { _ = newValue }
+    }
+    var keyboardType: UIKeyboardType {
+        get { .asciiCapable } set { _ = newValue }
+    }
+    var keyboardAppearance: UIKeyboardAppearance {
+        get { .dark } set { _ = newValue }
+    }
+    var returnKeyType: UIReturnKeyType {
+        get { .default } set { _ = newValue }
+    }
+    var enablesReturnKeyAutomatically: Bool {
+        get { false } set { _ = newValue }
     }
 }
