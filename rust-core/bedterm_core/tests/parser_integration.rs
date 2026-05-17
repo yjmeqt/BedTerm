@@ -51,3 +51,24 @@ fn resize_updates_dimensions() {
     assert_eq!(snap.cols, 40);
     assert_eq!(snap.rows, 10);
 }
+
+#[test]
+fn ffi_roundtrip() {
+    use bedterm_core::ffi::*;
+    unsafe {
+        let h = bt_term_new(20, 5);
+        assert!(!h.is_null());
+        let bytes = b"hi";
+        bt_term_feed(h, bytes.as_ptr(), bytes.len());
+        let mut out = std::mem::MaybeUninit::<BtSnapshotView>::uninit();
+        let ok = bt_term_snapshot(h, out.as_mut_ptr());
+        assert_eq!(ok, 0);
+        let view = out.assume_init();
+        assert_eq!(view.cols, 20);
+        assert_eq!(view.rows, 5);
+        let cell0 = *view.cells.add(0);
+        assert_eq!(cell0.ch, 'h' as u32);
+        bt_term_snapshot_release(h);
+        bt_term_free(h);
+    }
+}
