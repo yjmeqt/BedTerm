@@ -98,13 +98,12 @@ impl Terminal {
                 // lives in the previous (WIDE_CHAR) cell; emit 0 so the
                 // renderer skips them and the wide cell's quad covers both
                 // columns without overdrawing a stray space glyph.
-                let ch = if f.contains(CellFlags::WIDE_CHAR_SPACER) {
-                    0
-                } else if cell.c == ' ' && f.is_empty() {
-                    0
-                } else {
-                    cell.c as u32
-                };
+                let ch =
+                    if f.contains(CellFlags::WIDE_CHAR_SPACER) || (cell.c == ' ' && f.is_empty()) {
+                        0
+                    } else {
+                        cell.c as u32
+                    };
 
                 cells.push(CellSnapshot {
                     ch,
