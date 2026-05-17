@@ -177,8 +177,9 @@ void bt_renderer_cell_pixel_size(const struct BtRenderer *r, uint32_t *out_w, ui
 
 /**
  * # Safety
- * `r` must be a live `BtRenderer`. Components are clamped to `[0, 1]`
- * downstream by Metal; values outside that range are tolerated.
+ * `r` must be a live `BtRenderer` pointer, or null (null is a no-op).
+ * Components are clamped to `[0, 1]` downstream by Metal; values outside
+ * that range are tolerated.
  */
 void bt_renderer_set_clear_color(struct BtRenderer *r,
                                  float red,
