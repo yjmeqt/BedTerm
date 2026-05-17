@@ -1,12 +1,12 @@
 import SwiftUI
-import UIKit
 
 struct TerminalScreen: View {
     @State var session: TerminalSession
     @State private var keyBar: KeyBarController
     @State private var composer: ComposerController
     @State private var bracketedPasteProbe: TerminalHostView.BracketedPasteProbe
-    @State private var keyboardHidden: Bool = false
+    @State private var keyboard = KeyboardLayoutObserver()
+    @State private var keyboardHidden = false
     let credential: HostCredential
     let onExit: () -> Void
 
@@ -25,55 +25,38 @@ struct TerminalScreen: View {
     }
 
     var body: some View {
-        ZStack(alignment: .top) {
-            TerminalHostView(
-                feed: session.feed,
-                onSend: { session.send($0) },
-                onResize: { cols, rows in session.resize(cols: cols, rows: rows) },
-                bracketedPasteProbe: bracketedPasteProbe,
-                yieldFirstResponder: composer.isOpen || keyboardHidden
-            )
-            .ignoresSafeArea(edges: [.top, .horizontal])
+        VStack(spacing: 0) {
+            ZStack(alignment: .top) {
+                TerminalHostView(
+                    feed: session.feed,
+                    onSend: { session.send($0) },
+                    onResize: { cols, rows in session.resize(cols: cols, rows: rows) },
+                    bracketedPasteProbe: bracketedPasteProbe,
+                    yieldFirstResponder: composer.isOpen || keyboardHidden
+                )
+                .ignoresSafeArea(edges: [.top, .horizontal])
 
-            if case .closed(let reason) = session.state {
-                DisconnectBanner(reason: reason) {
-                    Task { await reconnect() }
+                if case .closed(let reason) = session.state {
+                    DisconnectBanner(reason: reason) {
+                        Task { await reconnect() }
+                    }
+                    .padding(.top, 8)
                 }
-                .padding(.top, 8)
             }
+            .frame(maxHeight: .infinity)
+
+            bottomBar
         }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
-            if composer.isOpen {
-                ComposerBar(controller: composer)
-            } else {
-                HStack(alignment: .center) {
-                    KeyBar(
-                        controller: keyBar,
-                        keyboardShown: !keyboardHidden,
-                        onToggleKeyboard: { keyboardHidden.toggle() }
-                    )
-                    Spacer()
-                    ComposePill { composer.open() }
-                }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 6)
-            }
-        }
+        // Manage keyboard avoidance ourselves: pad by the observed keyboard
+        // overlap, then ignore SwiftUI's auto-applied keyboard safe area on
+        // the resulting padded view. Modifier order matters — applying
+        // ignoresSafeArea inside the padding causes the outer view to still
+        // respect SwiftUI's keyboard inset, double-counting the keyboard
+        // height and stranding the bar mid-screen.
+        .padding(.bottom, keyboard.overlap)
+        .ignoresSafeArea(.keyboard, edges: .bottom)
         .animation(.smooth(duration: 0.22), value: composer.isOpen)
-        .animation(.smooth(duration: 0.22), value: keyboardHidden)
-        .onReceive(
-            NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)
-        ) { _ in
-            // Interactive scroll-to-dismiss completed (or any other dismissal):
-            // reflect that in our state so the toggle glyph and `yieldFirstResponder`
-            // stay in sync. Ignore while the composer owns the keyboard.
-            if !composer.isOpen { keyboardHidden = true }
-        }
-        .onReceive(
-            NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)
-        ) { _ in
-            if !composer.isOpen { keyboardHidden = false }
-        }
+        .animation(.smooth(duration: 0.22), value: keyboard.overlap)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 Button("Disconnect") {
@@ -90,6 +73,25 @@ struct TerminalScreen: View {
                     initialPTY: .init(cols: 80, rows: 24)
                 )
             }
+        }
+    }
+
+    @ViewBuilder
+    private var bottomBar: some View {
+        if composer.isOpen {
+            ComposerBar(controller: composer)
+        } else {
+            HStack(alignment: .center) {
+                KeyBar(
+                    controller: keyBar,
+                    keyboardShown: !keyboardHidden,
+                    onToggleKeyboard: { keyboardHidden.toggle() }
+                )
+                Spacer()
+                ComposePill { composer.open() }
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 6)
         }
     }
 

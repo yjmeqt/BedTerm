@@ -35,8 +35,9 @@ struct TerminalHostView: UIViewRepresentable {
         bracketedPasteProbe.bind(view)
         view.terminalDelegate = context.coordinator
         view.inputAccessoryView = nil
-        // TerminalView is itself a UIScrollView — let it ride the system
-        // keyboard down interactively (Messages / ChatGPT idiom, R15).
+        // Let the SwiftTerm UIScrollView dismiss the keyboard interactively —
+        // dragging the scrollback downward rides the keyboard with the finger
+        // (Messages / ChatGPT idiom, R15.interactive_scroll_dismiss).
         view.keyboardDismissMode = .interactive
         // SwiftTerm's default CoreGraphics renderer ignores contentOffset when the
         // scrollback buffer exceeds the viewport, which leaves stale glyphs in the
