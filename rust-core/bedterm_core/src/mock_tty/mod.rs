@@ -5,7 +5,7 @@ pub mod program;
 pub mod programs;
 pub mod termios;
 
-use crate::mock_tty::program::Program;
+use crate::mock_tty::program::{Program, TermiosMode};
 use crate::mock_tty::termios::Termios;
 
 pub struct MockTty {
@@ -43,20 +43,33 @@ impl MockTty {
 
     pub fn write_input(&mut self, bytes: &[u8]) {
         for &b in bytes {
+            self.apply_mode_request();
             self.termios
                 .input_byte(b, &mut self.program, &mut self.output);
         }
+        self.apply_mode_request();
         self.flush();
     }
 
     pub fn resize(&mut self, cols: u16, rows: u16) {
         self.program.on_resize(cols, rows, &mut self.output);
+        self.apply_mode_request();
         self.flush();
     }
 
     pub fn tick(&mut self, now_ms: u64) {
         self.program.on_tick(now_ms, &mut self.output);
+        self.apply_mode_request();
         self.flush();
+    }
+
+    fn apply_mode_request(&mut self) {
+        if let Some(mode) = self.program.mode_request() {
+            match mode {
+                TermiosMode::Raw => self.termios.set_raw(),
+                TermiosMode::Cooked => self.termios.set_cooked(),
+            }
+        }
     }
 
     pub(crate) fn set_callback(&mut self, cb: Option<OutputCallback>) {

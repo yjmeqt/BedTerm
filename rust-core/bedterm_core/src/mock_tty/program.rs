@@ -19,10 +19,24 @@ pub trait Program: Send + std::any::Any {
     fn wants_raw(&self) -> bool {
         false
     }
+
+    /// Programs may request a termios mode change between dispatches by
+    /// returning `Some(mode)`. The controller polls this after every byte/
+    /// tick/resize/signal and applies the change before processing the next
+    /// input. Default: never requests a change.
+    fn mode_request(&mut self) -> Option<TermiosMode> {
+        None
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Signal {
     Int,
     Eof,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TermiosMode {
+    Raw,
+    Cooked,
 }

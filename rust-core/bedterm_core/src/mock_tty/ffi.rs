@@ -23,8 +23,9 @@ pub unsafe extern "C" fn bt_mock_tty_create(
     program: u32,
     _opts_json: *const c_char,
 ) -> *mut BtMockTty {
-    #[allow(clippy::match_single_binding)] // expanded by tasks 5–7
     let prog: Box<dyn crate::mock_tty::program::Program> = match program {
+        0 => Box::new(crate::mock_tty::programs::echo_shell::EchoShell::new()),
+        3 => Box::new(RawSink::new()),
         _ => Box::new(RawSink::new()),
     };
     let mut inner = MockTty::new(prog);
