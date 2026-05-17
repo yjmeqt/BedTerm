@@ -2,17 +2,13 @@ import Foundation
 import Observation
 import UIKit
 
-/// Drives the saved-hosts list: holds the entry array, per-row in-flight /
-/// error state, and the connect flow that fans out to `ConnectAttempt`.
+/// Drives the saved-hosts list: holds the entry array, per-row in-flight state,
+/// and the connect flow that fans out to `ConnectAttempt`. Errors,
+/// session-end, device-locked, and host-key-mismatch events surface through the
+/// injected `Toaster` rather than per-row banners.
 @MainActor
 @Observable
 public final class HostsViewModel {
-    public struct RowError: Equatable {
-        public var message: String
-        public var permissionDenied: Bool
-        public var expanded: Bool
-    }
-
     public struct PendingMismatch: Equatable {
         public let stored: String
         public let remote: String
@@ -40,11 +36,17 @@ public final class HostsViewModel {
     private(set) var lastSession: TerminalSession?
     public private(set) var currentSessionID: UUID?
     public var pendingMismatch: PendingMismatch?
-    public var errorByID: [UUID: RowError] = [:]
     public var swapConfirmation: SwapConfirmation?
     public var deleteConfirmation: DeleteConfirmation?
     public private(set) var loadFailed: Bool = false
     public private(set) var didMigrate: Bool = false
+
+    /// Surfaced to the view layer so it can fire toasts. The closure is invoked
+    /// on the main actor for every connect outcome (success cases just hint
+    /// success / "session ready"; error cases carry message + flags so the view
+    /// can render a Retry/Open-Settings toast). Set by `HostsScreen` on first
+    /// connect dispatch; tests can leave it nil.
+    public var onConnectError: ((UUID, String, Bool) -> Void)?
 
     private let store: HostsStore
     private let connectFactory: @MainActor () -> ConnectAttempt
@@ -76,19 +78,6 @@ public final class HostsViewModel {
         self.load()
     }
 
-    // MARK: - Row tap
-
-    /// Tapping the row body only toggles error expansion. The Hosts list is
-    /// pure display + storage; connection only starts via the explicit Connect
-    /// button (routed through `requestConnect(id:)`).
-    public func onRowBodyTap(id: UUID) {
-        if self.errorByID[id] != nil {
-            self.toggleErrorExpansion(id: id)
-            return
-        }
-        self.collapseAllErrors()
-    }
-
     /// Entry point bound to the row's Connect button. Performs the swap-confirm
     /// dance if another session is live; otherwise hands straight to `connect`.
     public func requestConnect(id: UUID) {
@@ -116,15 +105,12 @@ public final class HostsViewModel {
     // MARK: - Connect
 
     public func connect(id: UUID) {
-        // R2.rapid_switch_cancels: cancel any prior attempt; the cancelled row
-        // is silent (no error banner).
+        // R2.rapid_switch_cancels: cancel any prior attempt silently.
         if let prior = self.inFlightID, prior != id {
             self.inFlightTask?.cancel()
-            self.errorByID[prior] = nil
             if self.inFlightID == prior { self.inFlightID = nil }
         }
         self.inFlightID = id
-        self.errorByID[id] = nil
 
         let task = Task { @MainActor in
             await self.runConnect(id: id)
@@ -137,9 +123,10 @@ public final class HostsViewModel {
         do {
             entry = try self.store.load(id: id)
         } catch {
-            self.errorByID[id] = RowError(
-                message: String(localized: "Could not load saved host."),
-                permissionDenied: false, expanded: false
+            self.onConnectError?(
+                id,
+                String(localized: "Could not load saved host."),
+                false
             )
             if self.inFlightID == id { self.inFlightID = nil }
             return
@@ -156,15 +143,13 @@ public final class HostsViewModel {
             self.pendingMismatch = PendingMismatch(
                 stored: stored, remote: remote, host: host, port: port, sourceID: id
             )
-        case .error(let msg, let permissionDenied):
-            self.errorByID[id] = RowError(
-                message: msg, permissionDenied: permissionDenied, expanded: false
-            )
+        case .error(let message, let permissionDenied):
+            self.onConnectError?(id, message, permissionDenied)
         }
         if self.inFlightID == id { self.inFlightID = nil }
     }
 
-    /// Called after the user trusts a new host key on the mismatch screen.
+    /// Called after the user trusts a new host key on the mismatch sheet.
     public func retryAfterMismatch() {
         guard let mismatch = self.pendingMismatch else { return }
         let id = mismatch.sourceID
@@ -180,21 +165,6 @@ public final class HostsViewModel {
     public func sessionEnded() {
         self.lastSession = nil
         self.currentSessionID = nil
-    }
-
-    // MARK: - Errors
-
-    public func toggleErrorExpansion(id: UUID) {
-        guard var current = self.errorByID[id] else { return }
-        current.expanded.toggle()
-        self.errorByID[id] = current
-    }
-
-    public func collapseAllErrors() {
-        for (id, var err) in self.errorByID where err.expanded {
-            err.expanded = false
-            self.errorByID[id] = err
-        }
     }
 
     // MARK: - Delete
@@ -223,7 +193,6 @@ public final class HostsViewModel {
             self.currentSessionID = nil
         }
         self.store.delete(id: conf.targetID)
-        self.errorByID[conf.targetID] = nil
         self.entries.removeAll { $0.id == conf.targetID }
     }
 

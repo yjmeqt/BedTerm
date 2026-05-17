@@ -6,5 +6,4 @@ enum AppRoute: Hashable {
     /// from `HostsStore`).
     case hostForm(SavedHost.ID?)
     case terminal
-    case hostKeyMismatch(stored: String, remote: String, host: String, port: Int)
 }
