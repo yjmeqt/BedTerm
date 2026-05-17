@@ -32,7 +32,6 @@ struct KeyBar: View {
         }
         .frame(width: showsToggle ? 220 : 168, height: 44)
         .glassEffect(.regular.interactive(), in: .capsule)
-        .padding(.vertical, 6)
     }
 
     private func dismissKey(onToggle: @escaping () -> Void) -> some View {
