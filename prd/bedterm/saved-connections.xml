@@ -1,0 +1,75 @@
+<prd name="Saved Connections">
+
+<overview>
+A list of saved SSH hosts on the home screen so the user can tap a row to connect in one step, instead of retyping host, port, username, and credentials every session. Connections are stored locally on the device; the same hardware is the only place the secrets ever live.
+</overview>
+<implementation platform="iOS" spec="bedterm/docs/specs/saved-connections.md" />
+
+<requirement id="R1" name="Saved Connections List">
+  <description>
+    After onboarding, the app's home is a list of saved SSH connections rather than an empty Connection form. Each row represents one saved host and is the user's single tap into a session.
+  </description>
+  <rule id="list_is_home" status="❌">After onboarding completes, the first screen the user lands on is the saved-connections list, not the Connection form.</rule>
+  <rule id="empty_state" status="❌" context="no saved connections">When the list has no entries, the screen shows a friendly empty state with a single primary "Add Connection" action.</rule>
+  <rule id="row_primary_label" status="❌">Each row's primary line shows the user-chosen label for the entry. When the user has not chosen a label, the primary line defaults to "username@host".</rule>
+  <rule id="row_subtitle" status="❌">Each row's secondary line shows "username@host:port". The port is omitted from the secondary line when it equals the SSH default of 22.</rule>
+  <rule id="row_auth_badge" status="❌">Each row shows a small badge indicating its authentication method (password vs. private key) so the user can tell them apart at a glance.</rule>
+  <rule id="add_button" status="❌">A "+" button in the screen's top-trailing toolbar opens the New Connection form.</rule>
+  <rule id="list_stable_order" status="❌">The list preserves the order in which entries were added (newest at the bottom) across launches. v1 does not auto-sort by recency or usage.</rule>
+</requirement>
+
+<requirement id="R2" name="Tap to Connect">
+  <description>
+    Tapping a saved row connects to that host using the existing prewarm + SSH path. The user never sees the form fields again unless they explicitly edit or add an entry.
+  </description>
+  <rule id="tap_connects" status="❌">Tapping a saved row immediately starts the connection flow for that entry's credential — no intermediate form.</rule>
+  <rule id="row_progress" status="❌" context="connect in flight">While a connection attempt is in flight, the tapped row shows an inline progress indicator and is not tappable again until the attempt resolves.</rule>
+  <rule id="row_inline_error" status="❌" context="connect failed">A failed connection surfaces its error inline beneath the row that triggered it, with the same wording the Connection screen uses today (including the LAN permission "Open Settings / Retry" affordances when applicable).</rule>
+  <rule id="prewarm_reused" status="❌">The LAN local-network prewarm flow (MVP R7) is reused unchanged — the saved entry's host is fed into the same prewarm check before the SSH handshake.</rule>
+  <rule id="host_key_mismatch_reused" status="❌">Host-key mismatch handling (MVP R6) is reused unchanged — a mismatch pushes the existing mismatch screen onto the navigation stack; trusting the new key auto-retries the connect.</rule>
+  <rule id="connect_success_to_terminal" status="❌">A successful connection transitions the user to the terminal session the same way the Connection form does today.</rule>
+</requirement>
+
+<requirement id="R3" name="Add and Edit a Connection">
+  <description>
+    Adding a new entry and editing an existing one share the same form. Saving is the only outcome of the form in v1 — connecting happens by returning to the list and tapping the row.
+  </description>
+  <rule id="add_form" status="❌" context="add mode">The "+" action opens the form with empty fields, port pre-filled to 22, auth method defaulting to Password.</rule>
+  <rule id="edit_form" status="❌" context="edit mode">A swipe action or context-menu "Edit" on a row opens the same form pre-filled with that entry's host, port, username, label, and auth method.</rule>
+  <rule id="label_field" status="❌">The form exposes an optional "Label" text field. When the user leaves it blank, the entry is saved with an empty label and the row renders "username@host" as its primary line per R1.row_primary_label.</rule>
+  <rule id="save_action" status="❌">The form's primary action is "Save". On Save, validation matches the Connection form today (host, port, username required; port numeric; private-key file imported when key auth is selected). On success the form is dismissed and the new or updated entry appears in the list.</rule>
+  <rule id="no_connect_button" status="❌">The form has no "Connect" button in v1. Saving is the only outcome; the user connects by tapping the saved row.</rule>
+  <rule id="secret_edit_masking" status="❌" context="edit mode">In edit mode, the password / passphrase / private-key fields are rendered as masked or "Stored — replace?" placeholders. Leaving them untouched preserves the existing secret; entering new content overwrites it.</rule>
+  <rule id="cancel_discards" status="❌">A "Cancel" action discards any unsaved changes and returns to the list without modifying the entry.</rule>
+</requirement>
+
+<requirement id="R4" name="Delete a Connection">
+  <description>
+    The user can remove a saved entry. Deletion is destructive but recoverable only by re-entering the credentials manually, so it requires an explicit confirmation.
+  </description>
+  <rule id="swipe_to_delete" status="❌">A trailing swipe action on a row exposes "Delete".</rule>
+  <rule id="context_menu_delete" status="❌">A long-press context menu on a row also exposes "Delete" (alongside "Edit") for users who prefer that gesture.</rule>
+  <rule id="delete_confirms" status="❌">Tapping Delete shows a confirmation prompt ("Delete \"&lt;label&gt;\"? This will remove the saved password / key.") with Cancel and a destructive Delete.</rule>
+  <rule id="delete_removes_secret" status="❌">Confirming Delete removes both the index entry and the underlying Keychain item that holds the secret — no orphaned secret remains.</rule>
+  <rule id="delete_animation" status="❌">After confirmation, the row animates out of the list using the standard system list-row removal animation.</rule>
+</requirement>
+
+<requirement id="R5" name="Local-Only Storage">
+  <description>
+    Saved connections — including passwords, private keys, and passphrases — never leave the device. iCloud Keychain sync, backup-based restore, and any cross-device sharing are explicitly out of scope for v1.
+  </description>
+  <rule id="device_only_secrets" status="❌">Each saved entry's secret material (password, private key, passphrase) is stored in the iOS Keychain with this-device-only accessibility, matching the protection class already used by the MVP credentials store.</rule>
+  <rule id="no_icloud_sync" status="❌">No saved-connection material is written to iCloud, iCloud Keychain, or any other off-device store. Restoring the app on a new device starts with an empty list.</rule>
+  <rule id="locked_device_unreadable" status="❌">When the device is locked, the saved entries cannot be read — the app surfaces an inline "Couldn't load saved connections — device locked. Retry." banner if launched into this state and recovers when the user unlocks.</rule>
+</requirement>
+
+<requirement id="R6" name="Migration from Single Credential">
+  <description>
+    Pre-existing installs already store a single most-recent credential. That entry must seed the new list so users don't lose their working host on update.
+  </description>
+  <rule id="migrate_legacy_entry" status="❌">On first launch of the new build, if the legacy single-credential Keychain item exists, the app creates one saved entry from it labeled "Last connection" (so the user can rename it later) and removes the legacy item.</rule>
+  <rule id="migration_is_idempotent" status="❌">Migration runs only when both (a) the legacy item exists and (b) the new saved-connections index is empty for that legacy host. Repeated launches do not create duplicate entries.</rule>
+  <rule id="no_legacy_after_first_save" status="❌">After migration completes successfully (or after the user saves any new entry on a fresh install), the legacy single-credential writer is no longer used.</rule>
+</requirement>
+
+</prd>
