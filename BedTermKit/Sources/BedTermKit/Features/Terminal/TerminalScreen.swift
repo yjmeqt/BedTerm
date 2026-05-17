@@ -1,10 +1,12 @@
 import SwiftUI
+import UIKit
 
 struct TerminalScreen: View {
     @State var session: TerminalSession
     @State private var keyBar: KeyBarController
     @State private var composer: ComposerController
     @State private var bracketedPasteProbe: TerminalHostView.BracketedPasteProbe
+    @State private var keyboardHidden: Bool = false
     let credential: HostCredential
     let onExit: () -> Void
 
@@ -29,7 +31,7 @@ struct TerminalScreen: View {
                 onSend: { session.send($0) },
                 onResize: { cols, rows in session.resize(cols: cols, rows: rows) },
                 bracketedPasteProbe: bracketedPasteProbe,
-                yieldFirstResponder: composer.isOpen
+                yieldFirstResponder: composer.isOpen || keyboardHidden
             )
             .ignoresSafeArea(edges: [.top, .horizontal])
 
@@ -45,7 +47,11 @@ struct TerminalScreen: View {
                 ComposerBar(controller: composer)
             } else {
                 HStack(alignment: .center) {
-                    KeyBar(controller: keyBar)
+                    KeyBar(
+                        controller: keyBar,
+                        keyboardShown: !keyboardHidden,
+                        onToggleKeyboard: { keyboardHidden.toggle() }
+                    )
                     Spacer()
                     ComposePill { composer.open() }
                 }
@@ -54,6 +60,20 @@ struct TerminalScreen: View {
             }
         }
         .animation(.smooth(duration: 0.22), value: composer.isOpen)
+        .animation(.smooth(duration: 0.22), value: keyboardHidden)
+        .onReceive(
+            NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)
+        ) { _ in
+            // Interactive scroll-to-dismiss completed (or any other dismissal):
+            // reflect that in our state so the toggle glyph and `yieldFirstResponder`
+            // stay in sync. Ignore while the composer owns the keyboard.
+            if !composer.isOpen { keyboardHidden = true }
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)
+        ) { _ in
+            if !composer.isOpen { keyboardHidden = false }
+        }
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 Button("Disconnect") {
