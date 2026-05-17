@@ -105,22 +105,22 @@ An iOS terminal app designed for coding on iPhone. Users SSH into a Mac mini or 
 
 <requirement id="R8" name="App Icon">
   <description>
-    The app ships with a final designed app icon — not the Xcode placeholder — so it has a recognisable identity on the Home Screen, in Spotlight, and in the App Switcher.
+    Moved to <a href="prd:bedterm/design#R2">Design R2 — App Icon</a>. This stub is kept so the MVP requirement numbering and existing references stay stable.
   </description>
-  <rule id="icon_designed" status="✅">A final app icon design exists and is shipped at all iOS-required sizes (Home Screen, Spotlight, Settings, Notifications, App Store marketing).</rule>
-  <rule id="icon_dark_tinted" status="✅">The icon ships variants for iOS 18+ Dark and Tinted Home Screen appearances in addition to the default Light variant.</rule>
+  <rule id="moved" status="✅">App icon design and Dark/Tinted variants are tracked under <a href="prd:bedterm/design#R2">Design R2 — App Icon</a>.</rule>
 </requirement>
 
 <requirement id="R9" name="System Appearance">
   <description>
-    The app always follows the iOS system appearance — Light when the system is Light, Dark when the system is Dark — for both the SwiftUI chrome and the terminal palette. There is no in-app theme override.
+    <p>The app always follows the iOS system appearance — Light when the system is Light, Dark when the system is Dark — for both the SwiftUI chrome and the terminal palette. There is no in-app theme override.</p>
+    <p>The colour tokens that back this behaviour are defined under <a href="prd:bedterm/design#R1">Design R1 — Colour Tokens</a>. App-chrome rules below are <em>implemented</em> against those tokens; the terminal palette rules remain deferred until SwiftTerm's <code>TerminalTheme</code> is bridged through the same tokens.</p>
   </description>
-  <rule id="follow_system" status="❌">On launch, the app and terminal render in Light or Dark to match the current iOS system appearance, without any in-app theme picker.</rule>
-  <rule id="live_switch" status="❌">Changing the system appearance while the app is open updates both the app chrome and the terminal palette without restart.</rule>
-  <rule id="terminal_palette_light" status="❌">When the system is in Light mode, the terminal uses a light background with dark foreground text and legible ANSI colour mappings.</rule>
-  <rule id="terminal_palette_dark" status="❌">When the system is in Dark mode, the terminal uses a dark background with light foreground text and legible ANSI colour mappings.</rule>
-  <rule id="readable_contrast" status="❌">In both appearances, the special-keys bar, Connect form, error text, and disconnect banner meet contrast standards against their background.</rule>
-  <rule id="all_colors_adaptive" status="❌">Every UI surface, text, icon, border, and accent colour is system-adaptive — no colour in the app remains the same in Light and Dark. Switching system appearance changes the rendered colour of every coloured element.</rule>
+  <rule id="follow_system" status="✅" context="app chrome">On launch, the app chrome renders in Light or Dark to match the current iOS system appearance, without any in-app theme picker.</rule>
+  <rule id="live_switch" status="✅" context="app chrome">Changing the system appearance while the app is open updates the app chrome without restart.</rule>
+  <rule id="terminal_palette_light" status="❌" context="deferred">When the system is in Light mode, the terminal uses a light background with dark foreground text and legible ANSI colour mappings.</rule>
+  <rule id="terminal_palette_dark" status="❌" context="deferred">When the system is in Dark mode, the terminal uses a dark background with light foreground text and legible ANSI colour mappings.</rule>
+  <rule id="readable_contrast" status="✅" context="app chrome">In both appearances, the special-keys bar, Connect form, error text, and disconnect banner meet contrast standards against their background.</rule>
+  <rule id="all_colors_adaptive" status="✅" context="app chrome">Every app-chrome surface, text, icon, border, and accent colour is sourced from a design-system token in the catalogue with both Light and Dark variants — no literal colour values in code. Switching system appearance changes the rendered colour of every coloured element.</rule>
 </requirement>
 
 <requirement id="R10" name="First Launch Onboarding">
@@ -336,20 +336,6 @@ An iOS terminal app designed for coding on iPhone. Users SSH into a Mac mini or 
     3. Observe: the app and terminal render in Dark instead of Light.
     4. With the app open, switch the system appearance to Dark and back to Light.
     5. Observe: the app does not react to the system change.
-  </steps>
-</bug>
-
-<bug id="app_icon_missing" status="Fixed" date="2026-05-16" rule="R8.icon_designed">
-  <current>
-    The project has no AppIcon asset — the app launches with the default white/blank iOS placeholder icon on the Home Screen, in Spotlight, and in the App Switcher. No icon design has been produced yet.
-  </current>
-  <expected>
-    A final app icon design is produced and added as an AppIcon asset catalog entry covering every iOS-required size, including Dark and Tinted variants for iOS 18+.
-  </expected>
-  <steps>
-    1. Build and install the app on a device or simulator.
-    2. Go to the Home Screen.
-    3. Observe: the app appears with the generic placeholder icon instead of a designed icon.
   </steps>
 </bug>
 

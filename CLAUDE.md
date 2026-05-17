@@ -63,6 +63,17 @@ The app ships in English (base), Simplified Chinese, Traditional Chinese, Japane
 
 When you change English copy, mark the affected non-English entries as `needs_review` in the catalogue so the translator pass picks them up. When you add a new string, the catalogue gains the new key on next build — fill the other locales before merging.
 
+## Colors & appearance
+
+The app follows the iOS system appearance (R9). Every colour the user sees — surface, text, icon, border, accent, error, keybar background/label, disconnect banner, etc. — **must** come from the design system as a named colour set in `Assets.xcassets` with both `Any Appearance` (Light) and `Dark Appearance` variants. Reference them via `Color("TokenName")` / `UIColor(named: "TokenName")`.
+
+- **Never** write literal colours in code or views: no `Color(red:green:blue:)`, no `UIColor(red:green:blue:)`, no hex strings, no `Color.black` / `.white` / `.gray` / other `Color.<name>` system constants on user-visible surfaces.
+- Use **semantic** token names (`surface.primary`, `text.muted`, `keybar.background`, `accent`, `error`) — not raw palette names (`gray800`, `blue500`).
+- Symbolic SwiftUI colours that are already adaptive (`Color.primary`, `Color.secondary`, `.tint`, `.accentColor`) are acceptable when a token isn't needed, but prefer a named token for anything brand- or component-specific.
+- SwiftTerm's terminal palette is the one exception — its ANSI colour map is bridged from tokens but lives in a `TerminalTheme` rebuilt on `traitCollectionDidChange`.
+
+If you find yourself reaching for a hex value, stop and add the token to the catalogue first.
+
 ## PRDs
 
 Product requirements live in `prd/<module>/<feature>.xml` (pure XML, schema documented in the `/prd` skill). The `prd` CLI (`uv tool install git+https://github.com/yjmeqt/prd-tool.git`) validates, formats, and rolls up stats:

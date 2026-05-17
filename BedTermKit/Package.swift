@@ -20,6 +20,9 @@ let package = Package(
                 .product(name: "Citadel", package: "Citadel")
             ],
             path: "Sources/BedTermKit",
+            resources: [
+                .process("Resources")
+            ],
             plugins: [
                 .plugin(name: "SwiftLintBuildToolPlugin", package: "SwiftLint")
             ]
