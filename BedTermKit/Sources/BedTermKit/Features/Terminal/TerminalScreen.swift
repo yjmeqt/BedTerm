@@ -168,3 +168,18 @@ struct TerminalScreen: View {
         await session.connect(credential: credential, initialPTY: .init(cols: 80, rows: 24))
     }
 }
+
+#if DEBUG
+    extension TerminalScreen {
+        init(debugClient: any SSHClient, onExit: @escaping () -> Void) {
+            let session = TerminalSession(client: debugClient)
+            let placeholder = HostCredential(
+                host: "debug",
+                port: 0,
+                username: "debug",
+                auth: .password("")
+            )
+            self.init(session: session, credential: placeholder, onExit: onExit)
+        }
+    }
+#endif

@@ -74,16 +74,26 @@ public struct HostsScreen: View {
 
     @ViewBuilder
     private var rootContent: some View {
-        if viewModel.entries.isEmpty && !viewModel.loadFailed {
-            emptyState
-        } else {
+        #if DEBUG
+            // Always show the list in Debug builds so the Debug TTY section
+            // remains reachable even when no hosts have been added yet.
             hostsList
-        }
+        #else
+            if viewModel.entries.isEmpty && !viewModel.loadFailed {
+                emptyState
+            } else {
+                hostsList
+            }
+        #endif
     }
 
     private var hostsList: some View {
         ScrollView {
             LazyVStack(spacing: 12) {
+                #if DEBUG
+                    DebugTTYSection(path: $path)
+                        .padding(.top, 8)
+                #endif
                 ForEach(viewModel.entries) { entry in
                     HostRow(
                         entry: entry,
@@ -179,6 +189,10 @@ public struct HostsScreen: View {
             } else {
                 Text("No session.")
             }
+        #if DEBUG
+            case .debugTerminal(let selection):
+                debugTerminalScreen(for: selection)
+        #endif
         }
     }
 
