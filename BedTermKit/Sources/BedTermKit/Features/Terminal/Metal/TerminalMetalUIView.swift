@@ -254,7 +254,7 @@ final class TerminalMetalUIView: MTKView {
         let body = UIFontMetrics.default.scaledFont(
             for: .monospacedSystemFont(ofSize: 14, weight: .regular)
         )
-        let scale = UIScreen.main.scale
+        let scale = traitCollection.displayScale > 0 ? traitCollection.displayScale : 2
         bridge.setFont(pointSize: body.pointSize, scale: scale)
         // Source the cell size from the renderer directly — anything else
         // (UIFont.lineHeight, NSString.size(withAttributes:)) introduces
