@@ -17,8 +17,8 @@ struct HostKeyMismatchScreen: View {
                 .font(.title2)
                 .foregroundStyle(.orange)
 
-            // swiftlint:disable:next line_length
-            Text("\(host):\(port) presented a different host key than we trusted last time. This could mean the server was reinstalled — or that someone is intercepting the connection.")
+            (Text("\(host):\(port) presented a different host key than we trusted last time. ")
+                + Text("This could mean the server was reinstalled — or that someone is intercepting the connection."))
                 .font(.callout)
 
             VStack(alignment: .leading, spacing: 8) {

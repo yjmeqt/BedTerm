@@ -265,10 +265,15 @@ private struct LocalPermissionStep: View {
             .padding(.bottom)
             .accessibilityIdentifier("onboarding.localPermission.action")
         }
-        .navigationTitle(viewModel.location == .sameWifi
-            ? String(localized: "Permission")
-            : String(localized: "Done"))
+        .navigationTitle(navTitle)
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private var navTitle: String {
+        if viewModel.location == .sameWifi {
+            return String(localized: "Permission")
+        }
+        return String(localized: "Done")
     }
 
     private var detailText: String {
