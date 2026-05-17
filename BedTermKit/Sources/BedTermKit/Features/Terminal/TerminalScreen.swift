@@ -14,13 +14,14 @@ struct TerminalScreen: View {
     let onExit: () -> Void
 
     /// True when a full-screen TUI (vim, htop, claude) is on the remote side
-    /// AND the user has the "Auto-hide composer in full-screen apps" setting
-    /// on. In that state the bottom KeyBar+Composer hides, the terminal
-    /// viewport's top edge clamps to the top safe-area inset (so the Dynamic
-    /// Island / notch stops covering vim's first row), and key events flow
-    /// straight to the PTY (terminal-view R1.alt_screen_top_inset).
-    private var altScreenTakeover: Bool {
-        settings.autoHideComposerInAltScreen && session.mode.contains(.altScreen)
+    /// AND the user has the "Keep first row visible in full-screen apps"
+    /// setting on. In that state the terminal viewport's top edge clamps to
+    /// the top safe-area inset so the Dynamic Island / notch / status bar
+    /// stops covering the TUI's first row (terminal-view
+    /// R1.alt_screen_top_inset). The bottom toolbar (KeyBar + ComposePill)
+    /// stays visible regardless — the user still needs Esc / Ctrl inside vim.
+    private var reserveTopSafeArea: Bool {
+        settings.reserveTopSafeAreaInAltScreen && session.mode.contains(.altScreen)
     }
 
     /// Safe-area edges the Metal terminal view should ignore. `.horizontal`
@@ -28,7 +29,7 @@ struct TerminalScreen: View {
     /// alt-screen; once a TUI takes over we surrender the inset back to the
     /// system so the Dynamic Island doesn't overlap meaningful content.
     private var ignoredTerminalEdges: Edge.Set {
-        altScreenTakeover ? .horizontal : [.top, .horizontal]
+        reserveTopSafeArea ? .horizontal : [.top, .horizontal]
     }
 
     init(session: TerminalSession, credential: HostCredential, onExit: @escaping () -> Void) {
@@ -59,15 +60,15 @@ struct TerminalScreen: View {
                     onSend: { session.send($0) },
                     onResize: { cols, rows in session.resize(cols: cols, rows: rows) },
                     focusHandle: focusHandle,
-                    yieldFirstResponder: !altScreenTakeover && (composer.isOpen || keyboardHidden)
+                    yieldFirstResponder: composer.isOpen || keyboardHidden
                 )
                 .ignoresSafeArea(edges: ignoredTerminalEdges)
                 // Top-inset toggle must be instant (terminal-view
-                // R1.alt_screen_top_inset). Without this, the outer
-                // .animation(value: altScreenTakeover) below would also
-                // smooth-animate the safe-area shift — and animating a
-                // mid-frame PTY reflow tears vim/htop's UI.
-                .transaction(value: altScreenTakeover) { $0.animation = nil }
+                // R1.alt_screen_top_inset). Animating a mid-frame PTY reflow
+                // tears vim/htop's UI; suppress any animation that the
+                // surrounding view tree might otherwise carry into the
+                // safe-area change.
+                .transaction(value: reserveTopSafeArea) { $0.animation = nil }
 
                 if case .closed(let reason) = session.state {
                     DisconnectBanner(reason: reason) {
@@ -97,10 +98,7 @@ struct TerminalScreen: View {
             }
             .frame(maxHeight: .infinity)
 
-            if !altScreenTakeover {
-                bottomBar
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
+            bottomBar
         }
         // Manage keyboard avoidance ourselves: pad by the observed keyboard
         // overlap, then ignore SwiftUI's auto-applied keyboard safe area on
@@ -114,7 +112,6 @@ struct TerminalScreen: View {
         // the system keyboard's own duration — do NOT layer another .animation on it.
         .animation(.smooth(duration: 0.22), value: composer.isOpen)
         .animation(.smooth(duration: 0.22), value: dpadOpen)
-        .animation(.smooth(duration: 0.22), value: altScreenTakeover)
         .onChange(of: composer.isOpen) { _, isOpen in
             if isOpen { dpadOpen = false }
         }

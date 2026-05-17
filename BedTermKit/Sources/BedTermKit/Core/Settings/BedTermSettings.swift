@@ -10,20 +10,22 @@ import Observation
 @Observable
 public final class BedTermSettings {
     private enum Key {
-        static let autoHideComposerInAltScreen = "settings.autoHideComposerInAltScreen"
+        static let reserveTopSafeAreaInAltScreen = "settings.reserveTopSafeAreaInAltScreen"
         static let showCommandBlocks = "settings.showCommandBlocks"
     }
 
     private let defaults: UserDefaults
 
-    /// Hide the bottom composer + key bar when the remote app enters the
-    /// alternate screen buffer (vim / claude / htop / fzf). When hidden, the
-    /// terminal view fills the bottom area and key events flow straight to
-    /// the PTY. Default: on.
-    public var autoHideComposerInAltScreen: Bool {
+    /// When the remote app enters alt-screen mode (vim / htop / claude / fzf),
+    /// reserve the top safe-area inset so the Dynamic Island, notch, or status
+    /// bar no longer overlaps the TUI's first row. The bottom toolbar stays
+    /// visible regardless — users still need Esc / Ctrl inside vim.
+    /// Default: on.
+    public var reserveTopSafeAreaInAltScreen: Bool {
         didSet {
-            if autoHideComposerInAltScreen != oldValue {
-                defaults.set(autoHideComposerInAltScreen, forKey: Key.autoHideComposerInAltScreen)
+            if reserveTopSafeAreaInAltScreen != oldValue {
+                defaults.set(
+                    reserveTopSafeAreaInAltScreen, forKey: Key.reserveTopSafeAreaInAltScreen)
             }
         }
     }
@@ -44,8 +46,8 @@ public final class BedTermSettings {
         // `object(forKey:)` is `nil` for never-written keys; `bool(forKey:)`
         // collapses that to `false`. Use the object check to preserve the
         // documented default of `true` on first launch.
-        self.autoHideComposerInAltScreen =
-            defaults.object(forKey: Key.autoHideComposerInAltScreen) as? Bool ?? true
+        self.reserveTopSafeAreaInAltScreen =
+            defaults.object(forKey: Key.reserveTopSafeAreaInAltScreen) as? Bool ?? true
         self.showCommandBlocks =
             defaults.object(forKey: Key.showCommandBlocks) as? Bool ?? false
     }

@@ -13,26 +13,26 @@ final class BedTermSettingsTests: XCTestCase {
 
     func testDefaultsOnFirstLaunch() throws {
         let settings = BedTermSettings(defaults: try makeDefaults())
-        XCTAssertTrue(settings.autoHideComposerInAltScreen)
+        XCTAssertTrue(settings.reserveTopSafeAreaInAltScreen)
         XCTAssertFalse(settings.showCommandBlocks)
     }
 
     func testTogglePersists() throws {
         let defaults = try makeDefaults()
         let first = BedTermSettings(defaults: defaults)
-        first.autoHideComposerInAltScreen = false
+        first.reserveTopSafeAreaInAltScreen = false
 
         let second = BedTermSettings(defaults: defaults)
-        XCTAssertFalse(second.autoHideComposerInAltScreen)
+        XCTAssertFalse(second.reserveTopSafeAreaInAltScreen)
     }
 
     func testToggleRestoresAfterFlip() throws {
         let defaults = try makeDefaults()
         let settings = BedTermSettings(defaults: defaults)
-        settings.autoHideComposerInAltScreen = false
-        settings.autoHideComposerInAltScreen = true
+        settings.reserveTopSafeAreaInAltScreen = false
+        settings.reserveTopSafeAreaInAltScreen = true
 
         let reloaded = BedTermSettings(defaults: defaults)
-        XCTAssertTrue(reloaded.autoHideComposerInAltScreen)
+        XCTAssertTrue(reloaded.reserveTopSafeAreaInAltScreen)
     }
 }

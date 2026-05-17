@@ -3676,41 +3676,6 @@
         }
       }
     },
-    "Composer" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "入力バー"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "입력 바"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Поле ввода"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "输入栏"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "輸入列"
-          }
-        }
-      }
-    },
     "Blocks" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -3742,76 +3707,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "區塊"
-          }
-        }
-      }
-    },
-    "Auto-hide composer in full-screen apps" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "フルスクリーンアプリで入力バーを自動的に隠す"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "전체 화면 앱에서 입력 바 자동 숨기기"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Скрывать поле ввода в полноэкранных программах"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "全屏应用中自动隐藏输入栏"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "全螢幕應用程式中自動隱藏輸入列"
-          }
-        }
-      }
-    },
-    "Hide the input bar when vim, claude, htop and other full-screen tools take over the terminal." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "vim・claude・htop など全画面ツールがターミナルを占有しているとき、入力バーを隠します。"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "vim, claude, htop 등 전체 화면 도구가 터미널을 점유할 때 입력 바를 숨깁니다."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Скрывать поле ввода, когда vim, claude, htop и другие полноэкранные инструменты занимают терминал."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "当 vim、claude、htop 等全屏工具占据终端时隐藏输入栏。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "當 vim、claude、htop 等全螢幕工具佔據終端機時隱藏輸入列。"
           }
         }
       }
@@ -3917,6 +3812,111 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "shell 整合上線後將命令輸出歸入可摺疊的區塊。"
+          }
+        }
+      }
+    },
+    "Display" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "表示"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "디스플레이"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Дисплей"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "顯示"
+          }
+        }
+      }
+    },
+    "Keep first row visible in full-screen apps" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "フルスクリーンアプリで最上行を表示する"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "전체 화면 앱에서 첫 줄 표시 유지"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Сохранять первую строку видимой в полноэкранных программах"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "全屏应用中保持首行可见"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "全螢幕應用程式中保持首列可見"
+          }
+        }
+      }
+    },
+    "When vim, htop, claude or other full-screen tools run, reserve the top safe area so the Dynamic Island, notch, or status bar doesn't cover their first row." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "vim・htop・claude などの全画面ツールが動作中、ダイナミックアイランド・ノッチ・ステータスバーが最上行を覆わないよう、画面上部のセーフエリアを確保します。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "vim, htop, claude 등 전체 화면 도구가 실행 중일 때 다이내믹 아일랜드, 노치, 상태 표시줄이 첫 줄을 가리지 않도록 화면 상단 안전 영역을 확보합니다."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Когда работают vim, htop, claude или другие полноэкранные инструменты, резервируется верхняя безопасная область, чтобы Dynamic Island, вырез или строка состояния не закрывали первую строку."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "当 vim、htop、claude 等全屏工具运行时,预留顶部安全区域,使灵动岛、刘海或状态栏不会遮挡首行。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "當 vim、htop、claude 等全螢幕工具執行時,預留頂部安全區域,讓動態島、瀏海或狀態列不會遮擋首列。"
           }
         }
       }
