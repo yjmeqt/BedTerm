@@ -1,0 +1,17 @@
+<prd name="Settings">
+
+<overview>
+A dedicated Settings screen, separate from the connection editor, that exposes user-tunable behaviours that today are hard-coded defaults. v1 focuses on connection resilience knobs; the screen is structured so additional categories (appearance, input, advanced) can land later without restructuring.
+</overview>
+
+<requirement id="R1" name="Settings">
+  <description>
+    A dedicated Settings screen, separate from the connection editor, that exposes user-tunable behaviours that today are hard-coded defaults. v1 focuses on connection resilience knobs; the screen is structured so additional categories (appearance, input, advanced) can land later without restructuring.
+  </description>
+  <rule id="settings_entry" status="❌">A settings affordance in the app's primary navigation (e.g. a gear icon in the connection screen toolbar) opens a Settings screen. The screen presents grouped sections; the first section is "Connection".</rule>
+  <rule id="keepalive_setting" status="❌" context="Settings → Connection">The user can choose the TCP keepalive idle interval used by every SSH session. Options include Off, 15s, 30s (default), 60s, 120s. The current selection is persisted across launches and applied to subsequent connections.</rule>
+  <rule id="autoreconnect_setting" status="❌" context="Settings → Connection">A toggle "Reconnect on resume" controls whether the app automatically retries the last session when it returns to the foreground and the session was previously dropped. Default off (so a stranded session shows the existing reconnect banner instead of reconnecting silently).</rule>
+  <rule id="defaults_when_unset" status="❌">If the user has never opened Settings, the app behaves as if the defaults above were chosen (keepalive 30s, auto-reconnect off). The user does not have to visit Settings to get sane behaviour.</rule>
+</requirement>
+
+</prd>

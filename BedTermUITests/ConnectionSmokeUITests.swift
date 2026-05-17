@@ -5,6 +5,7 @@ final class ConnectionSmokeUITests: XCTestCase {
         continueAfterFailure = false
     }
 
+    @MainActor
     func test_launch_showsHostsThenFormFromAddButton() throws {
         let app = XCUIApplication()
         app.launchArguments.append("-uitest-skipOnboarding")

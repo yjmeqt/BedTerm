@@ -3,7 +3,7 @@
 //! events at this layer — the Swift side polls snapshot + damage instead).
 
 use alacritty_terminal::event::VoidListener;
-use alacritty_terminal::grid::Dimensions;
+use alacritty_terminal::grid::{Dimensions, Scroll};
 use alacritty_terminal::index::{Column, Line};
 use alacritty_terminal::term::cell::Flags as CellFlags;
 use alacritty_terminal::term::Config;
@@ -12,20 +12,25 @@ use alacritty_terminal::Term;
 
 use crate::snapshot::{CellSnapshot, GridSnapshot};
 
-/// Minimal Dimensions implementation backed by col/row counts.
+/// Scrollback buffer size. 10 000 lines × 80 cols × ~16 B/cell ≈ 12 MB worst
+/// case, on par with the glyph atlas budget.
+const SCROLLBACK_LINES: u16 = 10_000;
+
+/// Minimal Dimensions implementation. `total_lines` includes scrollback so the
+/// alacritty grid actually allocates history.
 #[derive(Clone, Copy, Debug)]
 struct Dims {
     cols: u16,
-    rows: u16,
+    screen_rows: u16,
 }
 
 impl Dimensions for Dims {
     fn total_lines(&self) -> usize {
-        self.rows as usize
+        self.screen_rows as usize + SCROLLBACK_LINES as usize
     }
 
     fn screen_lines(&self) -> usize {
-        self.rows as usize
+        self.screen_rows as usize
     }
 
     fn columns(&self) -> usize {
@@ -42,7 +47,10 @@ pub struct Terminal {
 
 impl Terminal {
     pub fn new(cols: u16, rows: u16) -> Self {
-        let dims = Dims { cols, rows };
+        let dims = Dims {
+            cols,
+            screen_rows: rows,
+        };
         let term = Term::new(Config::default(), &dims, VoidListener);
         Self {
             parser: Processor::new(),
@@ -57,10 +65,34 @@ impl Terminal {
     }
 
     pub fn resize(&mut self, cols: u16, rows: u16) {
-        let dims = Dims { cols, rows };
+        let dims = Dims {
+            cols,
+            screen_rows: rows,
+        };
         self.term.resize(dims);
         self.cols = cols;
         self.rows = rows;
+    }
+
+    /// Scroll the display by `delta` rows. Positive = into history (up),
+    /// negative = toward live bottom (down). Clamped by alacritty to
+    /// `[0, history_size]`.
+    pub fn scroll_by(&mut self, delta: i32) {
+        if delta != 0 {
+            self.term.scroll_display(Scroll::Delta(delta));
+        }
+    }
+
+    pub fn scroll_to_bottom(&mut self) {
+        self.term.scroll_display(Scroll::Bottom);
+    }
+
+    pub fn scroll_offset(&self) -> u32 {
+        self.term.grid().display_offset() as u32
+    }
+
+    pub fn scrollback_lines(&self) -> u32 {
+        self.term.grid().history_size() as u32
     }
 
     pub fn snapshot(&self) -> GridSnapshot {
@@ -68,10 +100,14 @@ impl Terminal {
         let rows = self.rows;
         let mut cells = Vec::with_capacity(cols as usize * rows as usize);
         let grid = self.term.grid();
+        let offset = grid.display_offset() as i32;
 
         for row in 0..rows as i32 {
             for col in 0..cols as usize {
-                let cell = &grid[Line(row)][Column(col)];
+                // Visible row `row` maps to grid Line(row - offset).
+                // offset=0: 0..rows-1 (live screen). offset=N: -N..rows-1-N
+                // (N rows of history at the top of the viewport).
+                let cell = &grid[Line(row - offset)][Column(col)];
                 let f = cell.flags;
                 let mut flags: u16 = 0;
                 if f.contains(CellFlags::BOLD) {
@@ -94,11 +130,16 @@ impl Terminal {
                 }
 
                 // Blank cells have ' ' as their char — emit 0 for those.
-                let ch = if cell.c == ' ' && f.is_empty() {
-                    0
-                } else {
-                    cell.c as u32
-                };
+                // Wide-char spacers are the trailing half of a CJK glyph that
+                // lives in the previous (WIDE_CHAR) cell; emit 0 so the
+                // renderer skips them and the wide cell's quad covers both
+                // columns without overdrawing a stray space glyph.
+                let ch =
+                    if f.contains(CellFlags::WIDE_CHAR_SPACER) || (cell.c == ' ' && f.is_empty()) {
+                        0
+                    } else {
+                        cell.c as u32
+                    };
 
                 cells.push(CellSnapshot {
                     ch,
@@ -110,11 +151,23 @@ impl Terminal {
         }
 
         let cursor = grid.cursor.point;
+        // Cursor lives at grid Line(cursor.line.0) on the live screen. Its
+        // visible row when display is scrolled is cursor.line.0 + offset.
+        // When the cursor is scrolled off-screen we emit `rows` (one past
+        // the last visible row) as a sentinel — Swift treats this as "hide".
+        let cursor_visual_row = cursor.line.0 + offset;
+        let cursor_row = if (0..rows as i32).contains(&cursor_visual_row) {
+            cursor_visual_row as u16
+        } else {
+            rows
+        };
+
         GridSnapshot {
             cols,
             rows,
             cursor_col: cursor.column.0 as u16,
-            cursor_row: cursor.line.0.max(0) as u16,
+            cursor_row,
+            display_offset: offset.max(0) as u32,
             cells,
         }
     }

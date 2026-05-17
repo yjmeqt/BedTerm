@@ -6,6 +6,9 @@ cpp_compat = true
 
 [export]
 prefix = ""
+# Internal externs to CoreText / CoreFoundation that cbindgen would
+# otherwise leak into the generated header.
+exclude = ["CTFontCreateForString", "CFRange"]
 
 [parse]
 parse_deps = false

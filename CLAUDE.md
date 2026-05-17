@@ -74,7 +74,6 @@ The app follows the iOS system appearance (R9). Every colour the user sees — s
 - **Never** write literal colours in code or views: no `Color(red:green:blue:)`, no `UIColor(red:green:blue:)`, no hex strings, no `Color.black` / `.white` / `.gray` / other `Color.<name>` system constants on user-visible surfaces.
 - Use **semantic** token names (`surface.primary`, `text.muted`, `keybar.background`, `accent`, `error`) — not raw palette names (`gray800`, `blue500`).
 - Symbolic SwiftUI colours that are already adaptive (`Color.primary`, `Color.secondary`, `.tint`, `.accentColor`) are acceptable when a token isn't needed, but prefer a named token for anything brand- or component-specific.
-- SwiftTerm's terminal palette is the one exception — its ANSI colour map is bridged from tokens but lives in a `TerminalTheme` rebuilt on `traitCollectionDidChange`.
 
 If you find yourself reaching for a hex value, stop and add the token to the catalogue first.
 

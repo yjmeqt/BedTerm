@@ -52,7 +52,14 @@ typedef struct BtSnapshotView {
   uint16_t cols;
   uint16_t rows;
   uint16_t cursor_col;
+  /**
+   * Equals `rows` when the cursor is scrolled off-screen.
+   */
   uint16_t cursor_row;
+  /**
+   * 0 = at live bottom; positive = N rows into scrollback.
+   */
+  uint32_t display_offset;
   const struct CellSnapshot *cells;
   uintptr_t cell_count;
 } BtSnapshotView;
@@ -91,6 +98,30 @@ void bt_term_resize(struct BtTerm *h, uint16_t cols, uint16_t rows);
  * The cell pointer in `*out` is valid until the next mutating call or `bt_term_snapshot_release`.
  */
 int bt_term_snapshot(struct BtTerm *h, struct BtSnapshotView *out);
+
+/**
+ * # Safety
+ * `h` must be a valid, non-freed handle.
+ */
+void bt_term_scroll_by(struct BtTerm *h, int32_t delta);
+
+/**
+ * # Safety
+ * `h` must be a valid, non-freed handle.
+ */
+void bt_term_scroll_to_bottom(struct BtTerm *h);
+
+/**
+ * # Safety
+ * `h` must be a valid, non-freed handle.
+ */
+uint32_t bt_term_scroll_offset(const struct BtTerm *h);
+
+/**
+ * # Safety
+ * `h` must be a valid, non-freed handle.
+ */
+uint32_t bt_term_scrollback_lines(const struct BtTerm *h);
 
 /**
  * # Safety

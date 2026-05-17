@@ -18,6 +18,13 @@ final class TerminalSession {
     private let client: any SSHClient
     private var pumpTask: Task<Void, Never>?
 
+    /// Optional hook fired before each `send(_:)` writes to the PTY. Set by
+    /// the terminal view to implement R5.scroll_snap_on_input (snap back to
+    /// the live bottom whenever the user produces a byte while scrolled up).
+    /// Excluded from `@Observable` tracking — it isn't a UI value.
+    @ObservationIgnored
+    var onBeforeSend: (() -> Void)?
+
     init(client: any SSHClient) {
         self.client = client
         var continuation: AsyncStream<Data>.Continuation!
@@ -52,6 +59,7 @@ final class TerminalSession {
 
     func send(_ data: Data) {
         guard case .open = state else { return }
+        onBeforeSend?()
         Task { try? await client.write(data) }
     }
 
