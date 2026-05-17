@@ -22,6 +22,7 @@ pub struct Renderer {
     pub(crate) atlas: GlyphAtlas,
     pub(crate) pixel_size: f32,
     pub(crate) dpr: f32,
+    pub(crate) clear_color: [f32; 4],
 }
 
 impl Renderer {
@@ -50,7 +51,12 @@ impl Renderer {
             atlas,
             pixel_size: 14.0,
             dpr: 3.0,
+            clear_color: [0.0, 0.0, 0.0, 1.0],
         })
+    }
+
+    pub fn set_clear_color(&mut self, r: f32, g: f32, b: f32, a: f32) {
+        self.clear_color = [r, g, b, a];
     }
 
     pub fn set_font(&mut self, pixel_size: f32, dpr: f32) {
@@ -188,7 +194,10 @@ impl Renderer {
         att.set_texture(Some(&*texture));
         att.set_load_action(MTLLoadAction::Clear);
         att.set_store_action(MTLStoreAction::Store);
-        att.set_clear_color(MTLClearColor::new(0.0, 0.0, 0.0, 1.0));
+        let [cr, cg, cb, ca] = self.clear_color;
+        att.set_clear_color(MTLClearColor::new(
+            cr as f64, cg as f64, cb as f64, ca as f64,
+        ));
 
         let cmd = self.queue.new_command_buffer();
         let enc = cmd.new_render_command_encoder(pass);

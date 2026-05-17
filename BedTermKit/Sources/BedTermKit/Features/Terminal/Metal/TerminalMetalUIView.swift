@@ -66,7 +66,6 @@ final class TerminalMetalUIView: MTKView {
         // raw pointer, so the GPU pipeline must allow CPU-readable access.
         self.framebufferOnly = false
         self.colorPixelFormat = .bgra8Unorm
-        self.clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 1)
         // isPaused + enableSetNeedsDisplay: battery-friendly, redraw only on
         // explicit setNeedsDisplay() calls.
         self.isPaused = true
@@ -74,25 +73,13 @@ final class TerminalMetalUIView: MTKView {
         // presentsWithTransaction: needed in Tasks 11/12 to keep cursor/
         // selection CALayers flicker-free; setting now avoids a later flip.
         self.presentsWithTransaction = true
-        self.backgroundColor = .black
 
         layer.addSublayer(cursorLayer)
         layer.addSublayer(selectionLayer)
         installGestureRecognizers()
         refreshFontMetrics()
-
-        // Dynamic Type: re-rasterise atlas + recompute cell size when the
-        // user's preferred content size category changes. Uses the iOS 17+
-        // trait-observation API (the legacy traitCollectionDidChange override
-        // is deprecated on iOS 26). The closure form takes `self` as its first
-        // argument, which avoids creating a retain cycle.
-        registerForTraitChanges(
-            [UITraitPreferredContentSizeCategory.self]
-        ) { (self: TerminalMetalUIView, _: UITraitCollection) in
-            self.refreshFontMetrics()
-            self.setNeedsLayout()
-            self.setNeedsDisplay()
-        }
+        applyAppearance()
+        installTraitObservers()
 
         consumeTask = Task { @MainActor [weak self] in
             for await chunk in feed {
@@ -107,6 +94,60 @@ final class TerminalMetalUIView: MTKView {
 
     @available(*, unavailable)
     required init(coder: NSCoder) { fatalError("not used") }
+
+    /// Register iOS 17+ trait observers for Dynamic Type and Light/Dark
+    /// appearance. Uses the closure form so `self` is the first argument,
+    /// avoiding a retain cycle.
+    private func installTraitObservers() {
+        // Dynamic Type: re-rasterise atlas + recompute cell size when the
+        // user's preferred content size category changes. Uses the iOS 17+
+        // trait-observation API (the legacy traitCollectionDidChange override
+        // is deprecated on iOS 26).
+        registerForTraitChanges(
+            [UITraitPreferredContentSizeCategory.self]
+        ) { (self: TerminalMetalUIView, _: UITraitCollection) in
+            self.refreshFontMetrics()
+            self.setNeedsLayout()
+            self.setNeedsDisplay()
+        }
+
+        registerForTraitChanges(
+            [UITraitUserInterfaceStyle.self]
+        ) { (self: TerminalMetalUIView, prev: UITraitCollection) in
+            guard prev.userInterfaceStyle != self.traitCollection.userInterfaceStyle else {
+                return
+            }
+            self.applyAppearance()
+        }
+    }
+
+    /// Resolve the current `TerminalPalette` for the active trait collection,
+    /// push it to the Rust core, sync the renderer's clear colour, sync the
+    /// MTKView's `clearColor` + UIView `backgroundColor`, and request a
+    /// redraw. Called once at init and again from the
+    /// `UITraitUserInterfaceStyle` trait observer.
+    private func applyAppearance() {
+        let palette = TerminalPalette.resolve(for: traitCollection)
+        terminalCore.setPalette(palette)
+
+        let bgR = Float(palette.defaultBg.r) / 255.0
+        let bgG = Float(palette.defaultBg.g) / 255.0
+        let bgB = Float(palette.defaultBg.b) / 255.0
+        bridge.setClearColor(red: bgR, green: bgG, blue: bgB, alpha: 1.0)
+        clearColor = MTLClearColor(
+            red: Double(bgR),
+            green: Double(bgG),
+            blue: Double(bgB),
+            alpha: 1.0
+        )
+        backgroundColor = UIColor(
+            red: CGFloat(bgR),
+            green: CGFloat(bgG),
+            blue: CGFloat(bgB),
+            alpha: 1.0
+        )
+        setNeedsDisplay()
+    }
 
     private func installGestureRecognizers() {
         selectionGR.cellSize = cellSize

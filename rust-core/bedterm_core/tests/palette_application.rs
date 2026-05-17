@@ -1,0 +1,60 @@
+//! Verifies host-pushed palette is honoured by snapshot colour resolution.
+
+use bedterm_core::term::{BtRgb24, Palette, Terminal};
+
+#[test]
+fn palette_overrides_default_foreground_and_background() {
+    let mut t = Terminal::new(4, 1);
+    let palette = Palette {
+        default_fg: BtRgb24 {
+            r: 0x11,
+            g: 0x22,
+            b: 0x33,
+        },
+        default_bg: BtRgb24 {
+            r: 0x44,
+            g: 0x55,
+            b: 0x66,
+        },
+        ..Palette::default()
+    };
+    t.set_palette(palette);
+
+    // "AB" — every glyph cell whose fg/bg resolves to the Foreground/Background named colour should adopt the configured defaults.
+    t.feed(b"AB");
+    let snap = t.snapshot();
+
+    let cell_a = snap.cells[0];
+    assert_eq!(
+        cell_a.fg_rgba, 0x112233FF,
+        "default fg not applied to glyph"
+    );
+    assert_eq!(
+        cell_a.bg_rgba, 0x445566FF,
+        "default bg not applied to glyph"
+    );
+}
+
+#[test]
+fn palette_overrides_indexed_red() {
+    let mut t = Terminal::new(2, 1);
+    let mut ansi = Palette::default().ansi;
+    ansi[1] = BtRgb24 {
+        r: 0xAB,
+        g: 0xCD,
+        b: 0xEF,
+    };
+    let palette = Palette {
+        ansi,
+        ..Palette::default()
+    };
+    t.set_palette(palette);
+
+    // ESC[31m sets foreground to ANSI 1 (red); "X" then reset.
+    t.feed(b"\x1b[31mX\x1b[0m");
+    let snap = t.snapshot();
+    assert_eq!(
+        snap.cells[0].fg_rgba, 0xABCDEFFF,
+        "ANSI red override ignored"
+    );
+}

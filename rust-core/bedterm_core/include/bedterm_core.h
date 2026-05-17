@@ -64,6 +64,26 @@ typedef struct BtSnapshotView {
   uintptr_t cell_count;
 } BtSnapshotView;
 
+/**
+ * 8-bit-per-channel sRGB triple. The renderer-facing snapshot stores
+ * premultiplied RGBA u32s; this type only exists at the host-config boundary.
+ */
+typedef struct BtRgb24 {
+  uint8_t r;
+  uint8_t g;
+  uint8_t b;
+} BtRgb24;
+
+/**
+ * Flat C view of a `Palette`. 18 × `BtRgb24` = 54 bytes (no padding —
+ * `#[repr(C)]` `BtRgb24` is 3 × u8). Swift passes a pointer; Rust copies in.
+ */
+typedef struct BtPaletteView {
+  struct BtRgb24 default_fg;
+  struct BtRgb24 default_bg;
+  struct BtRgb24 ansi[16];
+} BtPaletteView;
+
 
 
 
@@ -131,6 +151,13 @@ void bt_term_snapshot_release(struct BtTerm *h);
 
 /**
  * # Safety
+ * `h` must be a valid, non-freed handle. `palette` must point to a valid,
+ * aligned `BtPaletteView`, or be null (a null palette is a no-op).
+ */
+void bt_term_set_palette(struct BtTerm *h, const struct BtPaletteView *palette);
+
+/**
+ * # Safety
  * `mtl_device` and `mtl_queue` must be non-null `id<MTLDevice>` /
  * `id<MTLCommandQueue>` pointers. They are borrowed for the renderer's
  * lifetime; the caller (Swift) retains them.
@@ -161,6 +188,18 @@ void bt_renderer_set_font(struct BtRenderer *r, float pixel_size, float device_p
  * pointers to `u32` slots the caller owns.
  */
 void bt_renderer_cell_pixel_size(const struct BtRenderer *r, uint32_t *out_w, uint32_t *out_h);
+
+/**
+ * # Safety
+ * `r` must be a live `BtRenderer` pointer, or null (null is a no-op).
+ * Components are clamped to `[0, 1]` downstream by Metal; values outside
+ * that range are tolerated.
+ */
+void bt_renderer_set_clear_color(struct BtRenderer *r,
+                                 float red,
+                                 float green,
+                                 float blue,
+                                 float alpha);
 
 /**
  * # Safety
