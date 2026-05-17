@@ -1,0 +1,93 @@
+<prd name="BedTerm Release">
+
+<overview>
+Everything required to ship BedTerm to the App Store under an individual Apple Developer Program account. Covers developer-account setup, App Store Connect listing assets, legal documents (privacy policy, support page, EULA fallback), in-app privacy disclosures, build signing, and the submission/review workflow. The product itself is not changing here — this PRD tracks the launch readiness work.
+</overview>
+<implementation platform="iOS" spec="bedterm/docs/specs/release.md" />
+
+<requirement id="R1" name="Apple Developer Program Enrollment">
+  <description>
+    Enroll the developer in the Apple Developer Program as an individual and verify the account can sign, submit, and publish apps.
+  </description>
+  <rule id="enrollment_individual" status="❌">Individual enrollment is purchased and active on the user's Apple ID.</rule>
+  <rule id="two_factor" status="❌">The Apple ID has two-factor authentication enabled.</rule>
+  <rule id="agreements_signed" status="❌">All Program License Agreements and Paid Apps agreements (if needed) are signed in App Store Connect.</rule>
+  <rule id="team_visible_in_xcode" status="❌">The team appears in Xcode under Signing &amp; Capabilities so Automatic signing can issue certificates.</rule>
+</requirement>
+
+<requirement id="R2" name="App Store Connect Record">
+  <description>
+    Create the app record in App Store Connect with the correct bundle ID, primary language, and category, ready to receive builds and metadata.
+  </description>
+  <rule id="bundle_id_registered" status="❌">A unique bundle identifier is registered in the developer portal and matches the Xcode project.</rule>
+  <rule id="app_record_created" status="❌">The App Store Connect record exists with name, primary language, bundle ID, and SKU.</rule>
+  <rule id="category_chosen" status="❌">Primary and secondary App Store categories are selected (e.g., Developer Tools / Utilities).</rule>
+</requirement>
+
+<requirement id="R3" name="Listing Copy and Localization">
+  <description>
+    Marketing copy that appears on the App Store, written in English and localized to the same languages the app supports (zh-Hans, zh-Hant, ja, ko, ru).
+  </description>
+  <rule id="app_name" status="❌">App name (30 char max) chosen and reserved.</rule>
+  <rule id="subtitle" status="❌">Subtitle (30 char max) written.</rule>
+  <rule id="promotional_text" status="❌">Promotional text (170 char max, updatable post-release) drafted.</rule>
+  <rule id="description" status="❌">Long description drafted (4000 char max) emphasising the mobile-keyboard differentiator.</rule>
+  <rule id="keywords" status="❌">Keyword list (100 char max, comma-separated) drafted.</rule>
+  <rule id="whats_new" status="❌">"What's New" copy drafted for the initial release.</rule>
+  <rule id="copy_localized" status="❌">Every above field is translated for zh-Hans, zh-Hant, ja, ko, ru to match the in-app localizations.</rule>
+</requirement>
+
+<requirement id="R4" name="Visual Assets">
+  <description>
+    App icon, screenshots, and (optionally) app preview videos for each required device size.
+  </description>
+  <rule id="app_icon_1024" status="❌">1024×1024 marketing icon produced (no transparency, no rounded corners).</rule>
+  <rule id="iphone_6_9_screenshots" status="❌">Screenshots for 6.9" iPhone (currently required by App Store Connect) — minimum 3, maximum 10.</rule>
+  <rule id="iphone_6_5_screenshots" status="❌" context="if still required by ASC">Screenshots for 6.5" iPhone if the submission flow asks for them.</rule>
+  <rule id="ipad_screenshots" status="❌" context="if app supports iPad">Screenshots for 13" iPad if the app declares iPad support.</rule>
+  <rule id="screenshots_localized" status="❌">Screenshots either use language-neutral content or are produced per-locale.</rule>
+</requirement>
+
+<requirement id="R5" name="Privacy and Legal Documents">
+  <description>
+    Public-facing privacy policy and support page, plus the App Store Connect privacy questionnaire that mirrors them.
+  </description>
+  <rule id="privacy_policy_url" status="❌">A privacy policy is published at a stable URL — covers what data the app collects (none, ideally), SSH credential storage in Keychain, and that no analytics is sent.</rule>
+  <rule id="support_url" status="❌">A support URL is published with contact info and basic help.</rule>
+  <rule id="marketing_url" status="❌" context="optional">Optional marketing URL is published.</rule>
+  <rule id="privacy_questionnaire" status="❌">App Privacy questionnaire in App Store Connect is completed and matches the privacy policy.</rule>
+  <rule id="privacy_manifest" status="❌">App includes a <code>PrivacyInfo.xcprivacy</code> declaring required reason API usage (e.g., file timestamp, user defaults) per Apple's 2024+ rules.</rule>
+  <rule id="eula" status="❌" context="default Apple EULA acceptable">Default Apple EULA is used unless a custom EULA is required.</rule>
+</requirement>
+
+<requirement id="R6" name="In-App Compliance Strings and Settings">
+  <description>
+    Usage descriptions, encryption export compliance, and age rating answers that must be configured before the binary will pass review.
+  </description>
+  <rule id="usage_descriptions" status="❌">Every <code>NS…UsageDescription</code> the app actually triggers is present in <code>InfoPlist.xcstrings</code> with all locales translated.</rule>
+  <rule id="encryption_export" status="❌"><code>ITSAppUsesNonExemptEncryption</code> is set in Info.plist (false if only standard TLS/SSH crypto is used, otherwise the export compliance flow is completed).</rule>
+  <rule id="age_rating" status="❌">Age rating questionnaire is completed in App Store Connect.</rule>
+  <rule id="content_rights" status="❌">"Does your app contain, display, or access third-party content?" answered correctly.</rule>
+</requirement>
+
+<requirement id="R7" name="Signing and Build Upload">
+  <description>
+    Produce a signed, archived build that can be uploaded to App Store Connect and distributed via TestFlight before public release.
+  </description>
+  <rule id="version_build" status="❌">Marketing version (e.g. 1.0.0) and build number are set on the target.</rule>
+  <rule id="distribution_cert" status="❌">A Distribution certificate and App Store provisioning profile exist (Automatic signing is acceptable).</rule>
+  <rule id="archive_uploads" status="❌">An Xcode Archive of the Release configuration uploads successfully to App Store Connect.</rule>
+  <rule id="testflight_internal" status="❌">The uploaded build is testable through TestFlight internal testing on the developer's own device.</rule>
+</requirement>
+
+<requirement id="R8" name="Submission and Review">
+  <description>
+    Submit the build for App Store review and respond to any review feedback.
+  </description>
+  <rule id="review_notes" status="❌">Review notes describe how a reviewer can test the SSH-dependent app (test host credentials, or instructions for using a local sshd).</rule>
+  <rule id="demo_account" status="❌" context="if needed">Demo SSH credentials are supplied to the reviewer if the reviewer cannot otherwise reach a host.</rule>
+  <rule id="submission_sent" status="❌">Build is submitted for review.</rule>
+  <rule id="review_passed" status="❌">App passes review and is approved for release.</rule>
+</requirement>
+
+</prd>
