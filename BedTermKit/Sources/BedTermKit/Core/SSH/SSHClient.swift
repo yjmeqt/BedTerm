@@ -19,6 +19,7 @@ public enum SSHError: Error, Equatable {
     case privateKeyPassphraseRequired
     case hostKeyMismatch(stored: String, remote: String)
     case disconnected(String)
+    case peerReset
     case shellExited(Int)
 }
 

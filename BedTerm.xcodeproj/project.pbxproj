@@ -18,6 +18,12 @@
 		B1B1B1B1000000000000A300 /* TerminalSessionDescribeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B1B1B1000000000000F300 /* TerminalSessionDescribeTests.swift */; };
 		B1B1B1B1000000000000A401 /* KeyBarControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B1B1B1000000000000F401 /* KeyBarControllerTests.swift */; };
 		B1B1B1B1000000000000A501 /* ComposerControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B1B1B1000000000000F501 /* ComposerControllerTests.swift */; };
+		E2E2E2E200000000000000A1 /* TerminalCoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2E2E2E200000000000000F1 /* TerminalCoreTests.swift */; };
+		F3F3F3F300000000000000A1 /* TerminalCoreShadowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3F3F3F300000000000000F1 /* TerminalCoreShadowTests.swift */; };
+		B2B2B2B200000000000000A1 /* MetalRendererBridgeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2B2B2B200000000000000F1 /* MetalRendererBridgeTests.swift */; };
+		B3B3B3B300000000000000A1 /* SelectionGeometryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3B3B3B300000000000000F1 /* SelectionGeometryTests.swift */; };
+		B4B4B4B400000000000000A1 /* TerminalRendererParityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4B4B4B400000000000000F1 /* TerminalRendererParityTests.swift */; };
+		F3F3F3F300000000000000A2 /* Fixtures in Resources */ = {isa = PBXBuildFile; fileRef = F3F3F3F300000000000000F2 /* Fixtures */; };
 		C1C1C1C100000000000000A1 /* ConnectionSmokeUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1C1C1C100000000000000F1 /* ConnectionSmokeUITests.swift */; };
 		D1D1D1D100000000000000A1 /* BedTermKit in Frameworks */ = {isa = PBXBuildFile; productRef = D1D1D1D100000000000000B1 /* BedTermKit */; };
 		A55E70AC0000000000000B01 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A55E70AC0000000000000A01 /* Assets.xcassets */; };
@@ -57,6 +63,12 @@
 		B1B1B1B1000000000000F300 /* TerminalSessionDescribeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalSessionDescribeTests.swift; sourceTree = "<group>"; };
 		B1B1B1B1000000000000F401 /* KeyBarControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyBarControllerTests.swift; sourceTree = "<group>"; };
 		B1B1B1B1000000000000F501 /* ComposerControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerControllerTests.swift; sourceTree = "<group>"; };
+		E2E2E2E200000000000000F1 /* TerminalCoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalCoreTests.swift; sourceTree = "<group>"; };
+		F3F3F3F300000000000000F1 /* TerminalCoreShadowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalCoreShadowTests.swift; sourceTree = "<group>"; };
+		B2B2B2B200000000000000F1 /* MetalRendererBridgeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetalRendererBridgeTests.swift; sourceTree = "<group>"; };
+		B3B3B3B300000000000000F1 /* SelectionGeometryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectionGeometryTests.swift; sourceTree = "<group>"; };
+		B4B4B4B400000000000000F1 /* TerminalRendererParityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalRendererParityTests.swift; sourceTree = "<group>"; };
+		F3F3F3F300000000000000F2 /* Fixtures */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Fixtures; sourceTree = "<group>"; };
 		C1C1C1C100000000000000E1 /* BedTermUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = BedTermUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		C1C1C1C100000000000000F1 /* ConnectionSmokeUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionSmokeUITests.swift; sourceTree = "<group>"; };
 		D1D1D1D100000000000000C1 /* BedTermKit */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = BedTermKit; path = BedTermKit; sourceTree = "<group>"; };
@@ -88,6 +100,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		F3F3F3F300000000000000C1 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				F3F3F3F300000000000000A2 /* Fixtures in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -104,6 +124,12 @@
 				B1B1B1B1000000000000F300 /* TerminalSessionDescribeTests.swift */,
 				B1B1B1B1000000000000F401 /* KeyBarControllerTests.swift */,
 				B1B1B1B1000000000000F501 /* ComposerControllerTests.swift */,
+				E2E2E2E200000000000000F1 /* TerminalCoreTests.swift */,
+				F3F3F3F300000000000000F1 /* TerminalCoreShadowTests.swift */,
+				F3F3F3F300000000000000F2 /* Fixtures */,
+				B2B2B2B200000000000000F1 /* MetalRendererBridgeTests.swift */,
+				B3B3B3B300000000000000F1 /* SelectionGeometryTests.swift */,
+				B4B4B4B400000000000000F1 /* TerminalRendererParityTests.swift */,
 			);
 			path = BedTermTests;
 			sourceTree = "<group>";
@@ -164,6 +190,7 @@
 			buildConfigurationList = 95B7CBDB4267A74D00A10B4B /* Build configuration list for PBXNativeTarget "BedTermTests" */;
 			buildPhases = (
 				6EFD3FE5E88F63B40A921FFC /* Sources */,
+				F3F3F3F300000000000000C1 /* Resources */,
 			);
 			buildRules = (
 			);
@@ -285,6 +312,11 @@
 				B1B1B1B1000000000000A300 /* TerminalSessionDescribeTests.swift in Sources */,
 				B1B1B1B1000000000000A401 /* KeyBarControllerTests.swift in Sources */,
 				B1B1B1B1000000000000A501 /* ComposerControllerTests.swift in Sources */,
+				E2E2E2E200000000000000A1 /* TerminalCoreTests.swift in Sources */,
+				F3F3F3F300000000000000A1 /* TerminalCoreShadowTests.swift in Sources */,
+				B2B2B2B200000000000000A1 /* MetalRendererBridgeTests.swift in Sources */,
+				B3B3B3B300000000000000A1 /* SelectionGeometryTests.swift in Sources */,
+				B4B4B4B400000000000000A1 /* TerminalRendererParityTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

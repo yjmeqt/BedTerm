@@ -6,6 +6,24 @@
       parallelizeBuildables = "YES"
       buildImplicitDependencies = "YES"
       runPostActionsOnFailure = "NO">
+      <PreActions>
+         <ExecutionAction
+            ActionType = "Xcode.IDEStandardExecutionActionsCore.ExecutionActionType.ShellScriptAction">
+            <ActionContent
+               title = "Build Rust xcframework (BedTermCore)"
+               scriptText = "&quot;${PROJECT_DIR}/scripts/build-rust-xcframework.sh&quot; &quot;${CONFIGURATION:-Debug}&quot;">
+               <EnvironmentBuildable>
+                  <BuildableReference
+                     BuildableIdentifier = "primary"
+                     BlueprintIdentifier = "17DD468B409E31704B6ADB31"
+                     BuildableName = "BedTerm.app"
+                     BlueprintName = "BedTerm"
+                     ReferencedContainer = "container:BedTerm.xcodeproj">
+                  </BuildableReference>
+               </EnvironmentBuildable>
+            </ActionContent>
+         </ExecutionAction>
+      </PreActions>
       <BuildActionEntries>
          <BuildActionEntry
             buildForTesting = "YES"

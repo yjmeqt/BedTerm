@@ -5,6 +5,9 @@ public struct ConnectionScreen: View {
     @Binding var path: NavigationPath
     @State private var viewModel = ConnectionViewModel(clientFactory: { CitadelSSHClient() })
     @State private var keyImporter = false
+    #if DEBUG
+        @AppStorage("debug.useMetalRenderer") private var useMetalRenderer: Bool = false
+    #endif
 
     public init(path: Binding<NavigationPath>) {
         self._path = path
@@ -67,6 +70,12 @@ public struct ConnectionScreen: View {
                     }
                 }
             }
+
+            #if DEBUG
+                Section("Debug") {
+                    Toggle("Metal renderer (experimental)", isOn: $useMetalRenderer)
+                }
+            #endif
 
             Section {
                 Button {

@@ -9,7 +9,11 @@ Bootstrap once per checkout:
 ```sh
 brew install mint
 mint bootstrap
+rustup show   # materialises the toolchain pinned by rust-core/rust-toolchain.toml
+rustup target add aarch64-apple-ios aarch64-apple-ios-sim aarch64-apple-darwin
 ```
+
+The Rust core (`rust-core/bedterm_core`) is packaged into `BedTermKit/BinaryFrameworks/BedTermCore.xcframework` (consumed as a SwiftPM `.binaryTarget`). The `BedTerm.xcscheme` build pre-action runs `scripts/build-rust-xcframework.sh ${CONFIGURATION}` automatically, so any `xcodebuild build|test` rebuilds the xcframework if Rust changed. The script is idempotent — a no-op build skips the `-create-xcframework` step entirely. Slice `.a` files are gitignored; only `Info.plist` is tracked.
 
 Build & test (iOS 26 simulator):
 

@@ -33,12 +33,23 @@ iOS 26
 brew install mint
 mint bootstrap
 
+# Rust toolchain — the terminal core lives in `rust-core/` and is packaged
+# into a SwiftPM binary target. rustup picks up the channel pinned in
+# rust-core/rust-toolchain.toml automatically.
+rustup show
+rustup target add aarch64-apple-ios aarch64-apple-ios-sim aarch64-apple-darwin
+
 xcodebuild test \
   -project BedTerm.xcodeproj \
   -scheme BedTerm \
   -destination 'platform=iOS Simulator,name=iPhone 17' \
   | mint run xcbeautify
 ```
+
+The `BedTerm` scheme has a build pre-action that runs
+`scripts/build-rust-xcframework.sh` automatically, so `xcodebuild build|test`
+keeps `BedTermKit/BinaryFrameworks/BedTermCore.xcframework` in sync with
+`rust-core/`. The script is idempotent — a no-op build skips the rebuild.
 
 ## Lint
 

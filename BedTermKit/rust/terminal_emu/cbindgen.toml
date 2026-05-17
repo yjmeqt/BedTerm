@@ -1,0 +1,35 @@
+language = "C"
+
+[parse]
+parse_deps = false
+
+[parse.expand]
+crates = ["terminal_emu"]
+
+[export]
+include = [
+    "TerminalGrid",
+    "Cell",
+    "Color",
+    "DirtyRange",
+    "InputBuffer",
+]
+
+[export.rename]
+"TerminalGrid" = "TEGrid"
+"Cell" = "TECell"
+"Color" = "TEColor"
+"DirtyRange" = "TEDirtyRange"
+
+[fn]
+must_use = "TEGrid"
+
+[struct]
+derive_eq = true
+derive_ostream = false
+
+[enum]
+derive_helper_methods = true
+
+[defines]
+"target_os = ios" = "TARGET_OS_IOS"
