@@ -13,9 +13,14 @@ let package = Package(
         .package(url: "https://github.com/realm/SwiftLint", from: "0.57.0")
     ],
     targets: [
+        .binaryTarget(
+            name: "BedTermCore",
+            path: "BinaryFrameworks/BedTermCore.xcframework"
+        ),
         .target(
             name: "BedTermKit",
             dependencies: [
+                "BedTermCore",
                 .product(name: "SwiftTerm", package: "SwiftTerm"),
                 .product(name: "Citadel", package: "Citadel")
             ],
