@@ -37,21 +37,31 @@ struct TerminalPalette: Equatable {
     }
 
     private static func toComponent(_ ui: UIColor) -> Component {
-        var red: CGFloat = 0
-        var green: CGFloat = 0
-        var blue: CGFloat = 0
+        // swiftlint:disable identifier_name
+        var r: CGFloat = 0
+        var g: CGFloat = 0
+        var b: CGFloat = 0
+        // swiftlint:enable identifier_name
         var alpha: CGFloat = 0
-        ui.getRed(&red, green: &green, blue: &blue, alpha: &alpha)
+        guard ui.getRed(&r, green: &g, blue: &b, alpha: &alpha) else {
+            preconditionFailure(
+                """
+                Terminal palette token is not in an RGB-compatible colour space — \
+                all TerminalAnsi/TerminalForeground/TerminalBackground colorsets must \
+                use sRGB.
+                """
+            )
+        }
         return Component(
-            r: UInt8((red * 255.0).rounded().clamped(to: 0...255)),
-            g: UInt8((green * 255.0).rounded().clamped(to: 0...255)),
-            b: UInt8((blue * 255.0).rounded().clamped(to: 0...255))
+            r: Self.toByte(r),
+            g: Self.toByte(g),
+            b: Self.toByte(b)
         )
     }
-}
 
-private extension CGFloat {
-    func clamped(to range: ClosedRange<CGFloat>) -> CGFloat {
-        Swift.min(Swift.max(self, range.lowerBound), range.upperBound)
+    private static func toByte(_ component: CGFloat) -> UInt8 {
+        let scaled = (component * 255.0).rounded()
+        let clamped = Swift.min(Swift.max(scaled, 0), 255)
+        return UInt8(clamped)
     }
 }

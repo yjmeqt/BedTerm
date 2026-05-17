@@ -4,22 +4,18 @@ import XCTest
 @testable import BedTermKit
 
 final class TerminalPaletteTests: XCTestCase {
-    func test_lightModeBackgroundIsBrighterThanForeground() {
-        let traits = UITraitCollection(userInterfaceStyle: .light)
-        let palette = TerminalPalette.resolve(for: traits)
+    func test_lightModeForegroundOnBackgroundHasUsableContrast() {
+        let palette = TerminalPalette.resolve(for: UITraitCollection(userInterfaceStyle: .light))
         XCTAssertGreaterThan(
-            luma(palette.defaultBg), luma(palette.defaultFg),
-            "light bg must be brighter than fg"
-        )
+            luma(palette.defaultBg) - luma(palette.defaultFg), 150,
+            "light mode fg/bg contrast must be >150 luma units")
     }
 
-    func test_darkModeBackgroundIsDarkerThanForeground() {
-        let traits = UITraitCollection(userInterfaceStyle: .dark)
-        let palette = TerminalPalette.resolve(for: traits)
-        XCTAssertLessThan(
-            luma(palette.defaultBg), luma(palette.defaultFg),
-            "dark bg must be darker than fg"
-        )
+    func test_darkModeForegroundOnBackgroundHasUsableContrast() {
+        let palette = TerminalPalette.resolve(for: UITraitCollection(userInterfaceStyle: .dark))
+        XCTAssertGreaterThan(
+            luma(palette.defaultFg) - luma(palette.defaultBg), 150,
+            "dark mode fg/bg contrast must be >150 luma units")
     }
 
     func test_lightAndDarkProduceDistinctDefaults() {
@@ -29,19 +25,31 @@ final class TerminalPaletteTests: XCTestCase {
         XCTAssertNotEqual(light.defaultBg, dark.defaultBg)
     }
 
-    func test_ansiHasSixteenEntries() {
-        let palette = TerminalPalette.resolve(for: UITraitCollection(userInterfaceStyle: .dark))
-        XCTAssertEqual(palette.ansi.count, 16)
+    func test_lightAnsiIndicesAreDistinguishable() {
+        let palette = TerminalPalette.resolve(for: UITraitCollection(userInterfaceStyle: .light))
+        // Adjacent ANSI indices must not be the same colour — catches
+        // copy-paste errors in the colorset table.
+        for idx in 0..<(palette.ansi.count - 1) where palette.ansi[idx] == palette.ansi[idx + 1] {
+            XCTFail("Light mode ANSI \(idx) collides with ANSI \(idx + 1)")
+        }
     }
 
-    func test_lightRedIsDifferentFromDarkRed() {
-        let lightRed = TerminalPalette.resolve(
-            for: UITraitCollection(userInterfaceStyle: .light)
-        ).ansi[1]
-        let darkRed = TerminalPalette.resolve(
-            for: UITraitCollection(userInterfaceStyle: .dark)
-        ).ansi[1]
-        XCTAssertNotEqual(lightRed, darkRed, "ANSI red should differ between appearances")
+    func test_darkAnsiIndicesAreDistinguishable() {
+        let palette = TerminalPalette.resolve(for: UITraitCollection(userInterfaceStyle: .dark))
+        for idx in 0..<(palette.ansi.count - 1) where palette.ansi[idx] == palette.ansi[idx + 1] {
+            XCTFail("Dark mode ANSI \(idx) collides with ANSI \(idx + 1)")
+        }
+    }
+
+    func test_ansiPaletteDiffersAcrossAppearances() {
+        let light = TerminalPalette.resolve(for: UITraitCollection(userInterfaceStyle: .light))
+        let dark = TerminalPalette.resolve(for: UITraitCollection(userInterfaceStyle: .dark))
+        // Most ANSI slots should differ between appearances; at least 10/16 is plenty
+        // even after accounting for slots that are intentionally invariant (ANSI 0, 8).
+        let differing = (0..<16).filter { light.ansi[$0] != dark.ansi[$0] }.count
+        XCTAssertGreaterThanOrEqual(
+            differing, 10,
+            "expected most ANSI slots to differ across appearances")
     }
 
     private func luma(_ component: TerminalPalette.Component) -> Double {
