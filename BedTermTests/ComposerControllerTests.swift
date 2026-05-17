@@ -19,7 +19,7 @@ struct ComposerControllerTests {
         #expect(controller.isOpen == true)
     }
 
-    @Test("submit without bracketed paste writes raw UTF-8 with CR line breaks")
+    @Test("submit without bracketed paste writes raw UTF-8 with CR line breaks and trailing CR")
     func submitRaw() async {
         var captured: [Data] = []
         let controller = ComposerController(
@@ -28,13 +28,13 @@ struct ComposerControllerTests {
         )
         controller.text = "echo hi\necho bye"
         controller.submit()
-        #expect(captured == [Data("echo hi\recho bye".utf8)])
+        #expect(captured == [Data("echo hi\recho bye\r".utf8)])
         #expect(controller.text == "")
         #expect(controller.isOpen == false)
     }
 
-    @Test("submit does not append a trailing newline")
-    func submitNoAutoNewline() async {
+    @Test("submit appends a trailing CR so the last line auto-executes")
+    func submitAutoExecutes() async {
         var captured: [Data] = []
         let controller = ComposerController(
             send: { captured.append($0) },
@@ -42,10 +42,10 @@ struct ComposerControllerTests {
         )
         controller.text = "ls"
         controller.submit()
-        #expect(captured == [Data("ls".utf8)])
+        #expect(captured == [Data("ls\r".utf8)])
     }
 
-    @Test("submit with bracketed paste wraps payload in ESC [ 200~ ... ESC [ 201~")
+    @Test("submit with bracketed paste wraps payload and appends trailing CR after the close marker")
     func submitBracketed() async {
         var captured: [Data] = []
         let controller = ComposerController(
@@ -57,7 +57,9 @@ struct ComposerControllerTests {
         let prefix = Data([0x1B, 0x5B, 0x32, 0x30, 0x30, 0x7E])
         let suffix = Data([0x1B, 0x5B, 0x32, 0x30, 0x31, 0x7E])
         let body = Data("line one\nline two".utf8)
-        #expect(captured == [prefix + body + suffix])
+        let cr = Data([0x0D])
+        let expected: Data = prefix + body + suffix + cr
+        #expect(captured == [expected])
     }
 
     @Test("cancel discards buffer and closes composer")
