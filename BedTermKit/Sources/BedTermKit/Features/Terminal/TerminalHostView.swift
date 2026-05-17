@@ -10,6 +10,17 @@ struct TerminalHostView: UIViewRepresentable {
     let feed: AsyncStream<Data>
     let onSend: (Data) -> Void
     let onResize: (Int, Int) -> Void
+    /// Bound on `makeUIView`. Callers can ask whether the remote has enabled
+    /// bracketed paste mode (CSI ? 2004 h). Returns `false` until the view exists.
+    let bracketedPasteProbe: BracketedPasteProbe
+
+    final class BracketedPasteProbe {
+        private weak var view: SwiftTerm.TerminalView?
+        func bind(_ view: SwiftTerm.TerminalView) { self.view = view }
+        @MainActor func isActive() -> Bool {
+            view?.getTerminal().bracketedPasteMode ?? false
+        }
+    }
 
     func makeCoordinator() -> Coordinator {
         Coordinator(onSend: onSend, onResize: onResize)
@@ -17,6 +28,7 @@ struct TerminalHostView: UIViewRepresentable {
 
     func makeUIView(context: Context) -> SwiftTerm.TerminalView {
         let view = SwiftTerm.TerminalView()
+        bracketedPasteProbe.bind(view)
         view.terminalDelegate = context.coordinator
         view.inputAccessoryView = nil
         // SwiftTerm's default CoreGraphics renderer ignores contentOffset when the

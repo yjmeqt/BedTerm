@@ -18,7 +18,8 @@ struct TerminalScreen: View {
             TerminalHostView(
                 feed: session.feed,
                 onSend: { session.send($0) },
-                onResize: { cols, rows in session.resize(cols: cols, rows: rows) }
+                onResize: { cols, rows in session.resize(cols: cols, rows: rows) },
+                bracketedPasteProbe: TerminalHostView.BracketedPasteProbe()
             )
             .ignoresSafeArea(edges: [.top, .horizontal])
 
