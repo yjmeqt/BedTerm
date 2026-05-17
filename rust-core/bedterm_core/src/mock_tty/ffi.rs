@@ -15,17 +15,82 @@ pub struct BtMockTty {
 // (cbindgen renders `Option<TypeAlias>` as an opaque struct).
 // pub type BtMockTtyOutputCallback = unsafe extern "C" fn(*const u8, usize, *mut c_void);
 
+/// Look up a JSON string value inside `opts_json` by key.
+///
+/// This is intentionally a tiny ad-hoc parser; we only need a couple of keys
+/// for the replay program and don't want to drag in `serde`. It does not
+/// handle nested objects or non-string values.
+fn extract_opt(opts_json: *const c_char, key: &str) -> Option<String> {
+    if opts_json.is_null() {
+        return None;
+    }
+    let raw = unsafe { std::ffi::CStr::from_ptr(opts_json) }
+        .to_str()
+        .ok()?;
+    let needle = format!("\"{key}\":\"");
+    let start = raw.find(&needle)? + needle.len();
+    let bytes = raw.as_bytes();
+    let mut i = start;
+    while i < bytes.len() {
+        if bytes[i] == b'"' && (i == 0 || bytes[i - 1] != b'\\') {
+            return Some(raw[start..i].to_string());
+        }
+        i += 1;
+    }
+    None
+}
+
+/// JSON-unescape an inline string captured by `extract_opt` (which preserves
+/// raw `\n` / `\"` / `\\` sequences as-written).
+fn unescape_inline(s: &str) -> String {
+    let bytes = s.as_bytes();
+    let mut out = String::with_capacity(s.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'\\' && i + 1 < bytes.len() {
+            match bytes[i + 1] {
+                b'n' => out.push('\n'),
+                b'r' => out.push('\r'),
+                b't' => out.push('\t'),
+                b'"' => out.push('"'),
+                b'\\' => out.push('\\'),
+                other => {
+                    out.push('\\');
+                    out.push(other as char);
+                }
+            }
+            i += 2;
+        } else {
+            out.push(bytes[i] as char);
+            i += 1;
+        }
+    }
+    out
+}
+
 /// # Safety
 /// `opts_json` must be either null or point to a NUL-terminated UTF-8 string
 /// owned by the caller for the duration of this call.
 #[no_mangle]
 pub unsafe extern "C" fn bt_mock_tty_create(
     program: u32,
-    _opts_json: *const c_char,
+    opts_json: *const c_char,
 ) -> *mut BtMockTty {
     let prog: Box<dyn crate::mock_tty::program::Program> = match program {
         0 => Box::new(crate::mock_tty::programs::echo_shell::EchoShell::new()),
         1 => Box::new(crate::mock_tty::programs::vim_lite::VimLite::new()),
+        2 => {
+            let text = extract_opt(opts_json, "cast_inline")
+                .map(|s| unescape_inline(&s))
+                .or_else(|| {
+                    extract_opt(opts_json, "cast_path")
+                        .and_then(|p| std::fs::read_to_string(p).ok())
+                })
+                .unwrap_or_default();
+            Box::new(crate::mock_tty::programs::replay::Replay::from_cast_text(
+                &text,
+            ))
+        }
         3 => Box::new(RawSink::new()),
         _ => Box::new(RawSink::new()),
     };
