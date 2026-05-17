@@ -15,6 +15,7 @@ The terminal viewport: ANSI/VT100 emulation rendered by the Metal renderer, basi
   <rule id="top_display" status="✅">Running top or htop displays the process list with live updates.</rule>
   <rule id="text_wrap" status="✅">Long lines wrap correctly within the terminal width.</rule>
   <rule id="glyph_completeness" status="❌">Every rendered character cell shows the complete glyph: descenders (g, j, p, q, y) are fully visible and no row is vertically clipped, regardless of scroll position, input timing, or row position in the viewport.</rule>
+  <rule id="alt_screen_top_inset" status="✅" context="remote in alt-screen mode AND &quot;Auto-hide composer in full-screen apps&quot; setting enabled">When the remote application enters alt-screen mode (<code>CSI ?1049h</code>) — vim, htop, less, fzf, claude, etc. — the terminal viewport's top edge clamps to the top safe-area inset so the Dynamic Island, notch, or status bar no longer overlaps the TUI's first row. The PTY resizes to match the reduced row count. The same setting that hides the composer (<a href="prd:bedterm/input-bar">input-bar</a>) gates this behaviour. On exit from alt-screen the viewport returns to drawing under the top safe area (where harmless scrollback flows). Both transitions are instant — no animation — because reflowing a running TUI mid-frame looks worse than a snap.</rule>
 </requirement>
 
 <requirement id="R2" name="Basic Terminal UX">

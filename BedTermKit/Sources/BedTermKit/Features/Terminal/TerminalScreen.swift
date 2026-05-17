@@ -13,12 +13,22 @@ struct TerminalScreen: View {
     let credential: HostCredential
     let onExit: () -> Void
 
-    /// Composer/key-bar is hidden when a full-screen TUI (vim, claude, htop)
-    /// is on the remote side AND the user has the auto-hide preference on.
-    /// In that state the terminal grid fills the bottom area and key events
-    /// flow straight to the PTY.
-    private var hideBottomBar: Bool {
+    /// True when a full-screen TUI (vim, htop, claude) is on the remote side
+    /// AND the user has the "Auto-hide composer in full-screen apps" setting
+    /// on. In that state the bottom KeyBar+Composer hides, the terminal
+    /// viewport's top edge clamps to the top safe-area inset (so the Dynamic
+    /// Island / notch stops covering vim's first row), and key events flow
+    /// straight to the PTY (terminal-view R1.alt_screen_top_inset).
+    private var altScreenTakeover: Bool {
         settings.autoHideComposerInAltScreen && session.mode.contains(.altScreen)
+    }
+
+    /// Safe-area edges the Metal terminal view should ignore. `.horizontal`
+    /// always — the grid runs edge-to-edge. `.top` only when no TUI is in
+    /// alt-screen; once a TUI takes over we surrender the inset back to the
+    /// system so the Dynamic Island doesn't overlap meaningful content.
+    private var ignoredTerminalEdges: Edge.Set {
+        altScreenTakeover ? .horizontal : [.top, .horizontal]
     }
 
     init(session: TerminalSession, credential: HostCredential, onExit: @escaping () -> Void) {
@@ -49,9 +59,15 @@ struct TerminalScreen: View {
                     onSend: { session.send($0) },
                     onResize: { cols, rows in session.resize(cols: cols, rows: rows) },
                     focusHandle: focusHandle,
-                    yieldFirstResponder: !hideBottomBar && (composer.isOpen || keyboardHidden)
+                    yieldFirstResponder: !altScreenTakeover && (composer.isOpen || keyboardHidden)
                 )
-                .ignoresSafeArea(edges: [.top, .horizontal])
+                .ignoresSafeArea(edges: ignoredTerminalEdges)
+                // Top-inset toggle must be instant (terminal-view
+                // R1.alt_screen_top_inset). Without this, the outer
+                // .animation(value: altScreenTakeover) below would also
+                // smooth-animate the safe-area shift — and animating a
+                // mid-frame PTY reflow tears vim/htop's UI.
+                .transaction(value: altScreenTakeover) { $0.animation = nil }
 
                 if case .closed(let reason) = session.state {
                     DisconnectBanner(reason: reason) {
@@ -81,7 +97,7 @@ struct TerminalScreen: View {
             }
             .frame(maxHeight: .infinity)
 
-            if !hideBottomBar {
+            if !altScreenTakeover {
                 bottomBar
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
@@ -98,7 +114,7 @@ struct TerminalScreen: View {
         // the system keyboard's own duration — do NOT layer another .animation on it.
         .animation(.smooth(duration: 0.22), value: composer.isOpen)
         .animation(.smooth(duration: 0.22), value: dpadOpen)
-        .animation(.smooth(duration: 0.22), value: hideBottomBar)
+        .animation(.smooth(duration: 0.22), value: altScreenTakeover)
         .onChange(of: composer.isOpen) { _, isOpen in
             if isOpen { dpadOpen = false }
         }
