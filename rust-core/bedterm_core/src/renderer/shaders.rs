@@ -10,6 +10,7 @@ struct CellVertex {
     float2 uv;         // atlas UV (0..1, origin top-left)
     float4 fg;
     float4 bg;
+    float  isColor;    // 1.0 = color bitmap glyph, 0.0 = monochrome alpha mask
 };
 
 struct Uniforms {
@@ -21,6 +22,7 @@ struct VertexOut {
     float2 uv;
     float4 fg;
     float4 bg;
+    float  isColor;
 };
 
 vertex VertexOut cell_vertex(uint vid [[vertex_id]],
@@ -34,6 +36,7 @@ vertex VertexOut cell_vertex(uint vid [[vertex_id]],
     out.uv = v.uv;
     out.fg = v.fg;
     out.bg = v.bg;
+    out.isColor = v.isColor;
     return out;
 }
 
@@ -41,7 +44,17 @@ constexpr sampler glyph_sampler(filter::linear, address::clamp_to_edge);
 
 fragment float4 cell_fragment(VertexOut in [[stage_in]],
                               texture2d<float> atlas [[texture(0)]]) {
-    float a = atlas.sample(glyph_sampler, in.uv).r;
-    return mix(in.bg, in.fg, a);
+    // Atlas is BGRA8Unorm premultiplied. Metal's float sample returns RGBA
+    // in linear order regardless of the underlying byte order, so `sample`
+    // is (R, G, B, A) — already premultiplied.
+    float4 sample = atlas.sample(glyph_sampler, in.uv);
+    if (in.isColor > 0.5) {
+        // Color bitmap glyph (Apple Color Emoji). Composite over the cell
+        // background using the premultiplied source-over formula.
+        return float4(sample.rgb + in.bg.rgb * (1.0 - sample.a), 1.0);
+    }
+    // Monochrome glyph: the bitmap is white premultiplied by coverage, so
+    // sample.a is the alpha mask. Tint by foreground colour over background.
+    return mix(in.bg, in.fg, sample.a);
 }
 "#;

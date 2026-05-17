@@ -94,11 +94,16 @@ impl Terminal {
                 }
 
                 // Blank cells have ' ' as their char — emit 0 for those.
-                let ch = if cell.c == ' ' && f.is_empty() {
-                    0
-                } else {
-                    cell.c as u32
-                };
+                // Wide-char spacers are the trailing half of a CJK glyph that
+                // lives in the previous (WIDE_CHAR) cell; emit 0 so the
+                // renderer skips them and the wide cell's quad covers both
+                // columns without overdrawing a stray space glyph.
+                let ch =
+                    if f.contains(CellFlags::WIDE_CHAR_SPACER) || (cell.c == ' ' && f.is_empty()) {
+                        0
+                    } else {
+                        cell.c as u32
+                    };
 
                 cells.push(CellSnapshot {
                     ch,
