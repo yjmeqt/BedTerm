@@ -44,7 +44,12 @@ impl Terminal {
     pub fn new(cols: u16, rows: u16) -> Self {
         let dims = Dims { cols, rows };
         let term = Term::new(Config::default(), &dims, VoidListener);
-        Self { parser: Processor::new(), term, cols, rows }
+        Self {
+            parser: Processor::new(),
+            term,
+            cols,
+            rows,
+        }
     }
 
     pub fn feed(&mut self, bytes: &[u8]) {
@@ -89,7 +94,11 @@ impl Terminal {
                 }
 
                 // Blank cells have ' ' as their char — emit 0 for those.
-                let ch = if cell.c == ' ' && f.is_empty() { 0 } else { cell.c as u32 };
+                let ch = if cell.c == ' ' && f.is_empty() {
+                    0
+                } else {
+                    cell.c as u32
+                };
 
                 cells.push(CellSnapshot {
                     ch,
@@ -111,47 +120,118 @@ impl Terminal {
     }
 }
 
-fn color_to_rgba(
-    c: alacritty_terminal::vte::ansi::Color,
-    term: &Term<VoidListener>,
-) -> u32 {
+fn color_to_rgba(c: alacritty_terminal::vte::ansi::Color, term: &Term<VoidListener>) -> u32 {
     use alacritty_terminal::vte::ansi::Color;
     let rgb = match c {
         Color::Spec(rgb) => rgb,
-        Color::Named(named) => {
-            term.colors()[named].unwrap_or_else(|| default_named(named))
-        },
-        Color::Indexed(i) => {
-            term.colors()[i as usize].unwrap_or_else(|| default_indexed(i))
-        },
+        Color::Named(named) => term.colors()[named].unwrap_or_else(|| default_named(named)),
+        Color::Indexed(i) => term.colors()[i as usize].unwrap_or_else(|| default_indexed(i)),
     };
     ((rgb.r as u32) << 24) | ((rgb.g as u32) << 16) | ((rgb.b as u32) << 8) | 0xFF
 }
 
-fn default_named(n: alacritty_terminal::vte::ansi::NamedColor) -> alacritty_terminal::vte::ansi::Rgb {
+fn default_named(
+    n: alacritty_terminal::vte::ansi::NamedColor,
+) -> alacritty_terminal::vte::ansi::Rgb {
     use alacritty_terminal::vte::ansi::{NamedColor::*, Rgb};
     match n {
-        Black | DimBlack => Rgb { r: 0x00, g: 0x00, b: 0x00 },
-        Red | DimRed => Rgb { r: 0xCC, g: 0x33, b: 0x33 },
-        Green | DimGreen => Rgb { r: 0x33, g: 0xCC, b: 0x33 },
-        Yellow | DimYellow => Rgb { r: 0xCC, g: 0xCC, b: 0x33 },
-        Blue | DimBlue => Rgb { r: 0x33, g: 0x66, b: 0xCC },
-        Magenta | DimMagenta => Rgb { r: 0xCC, g: 0x33, b: 0xCC },
-        Cyan | DimCyan => Rgb { r: 0x33, g: 0xCC, b: 0xCC },
-        White | DimWhite => Rgb { r: 0xCC, g: 0xCC, b: 0xCC },
-        BrightBlack => Rgb { r: 0x55, g: 0x55, b: 0x55 },
-        BrightRed => Rgb { r: 0xFF, g: 0x55, b: 0x55 },
-        BrightGreen => Rgb { r: 0x55, g: 0xFF, b: 0x55 },
-        BrightYellow => Rgb { r: 0xFF, g: 0xFF, b: 0x55 },
-        BrightBlue => Rgb { r: 0x55, g: 0x55, b: 0xFF },
-        BrightMagenta => Rgb { r: 0xFF, g: 0x55, b: 0xFF },
-        BrightCyan => Rgb { r: 0x55, g: 0xFF, b: 0xFF },
-        BrightWhite => Rgb { r: 0xFF, g: 0xFF, b: 0xFF },
+        Black | DimBlack => Rgb {
+            r: 0x00,
+            g: 0x00,
+            b: 0x00,
+        },
+        Red | DimRed => Rgb {
+            r: 0xCC,
+            g: 0x33,
+            b: 0x33,
+        },
+        Green | DimGreen => Rgb {
+            r: 0x33,
+            g: 0xCC,
+            b: 0x33,
+        },
+        Yellow | DimYellow => Rgb {
+            r: 0xCC,
+            g: 0xCC,
+            b: 0x33,
+        },
+        Blue | DimBlue => Rgb {
+            r: 0x33,
+            g: 0x66,
+            b: 0xCC,
+        },
+        Magenta | DimMagenta => Rgb {
+            r: 0xCC,
+            g: 0x33,
+            b: 0xCC,
+        },
+        Cyan | DimCyan => Rgb {
+            r: 0x33,
+            g: 0xCC,
+            b: 0xCC,
+        },
+        White | DimWhite => Rgb {
+            r: 0xCC,
+            g: 0xCC,
+            b: 0xCC,
+        },
+        BrightBlack => Rgb {
+            r: 0x55,
+            g: 0x55,
+            b: 0x55,
+        },
+        BrightRed => Rgb {
+            r: 0xFF,
+            g: 0x55,
+            b: 0x55,
+        },
+        BrightGreen => Rgb {
+            r: 0x55,
+            g: 0xFF,
+            b: 0x55,
+        },
+        BrightYellow => Rgb {
+            r: 0xFF,
+            g: 0xFF,
+            b: 0x55,
+        },
+        BrightBlue => Rgb {
+            r: 0x55,
+            g: 0x55,
+            b: 0xFF,
+        },
+        BrightMagenta => Rgb {
+            r: 0xFF,
+            g: 0x55,
+            b: 0xFF,
+        },
+        BrightCyan => Rgb {
+            r: 0x55,
+            g: 0xFF,
+            b: 0xFF,
+        },
+        BrightWhite => Rgb {
+            r: 0xFF,
+            g: 0xFF,
+            b: 0xFF,
+        },
         // Foreground defaults to a light colour; Background to black.
-        Foreground | BrightForeground | DimForeground => Rgb { r: 0xCC, g: 0xCC, b: 0xCC },
-        Background => Rgb { r: 0x00, g: 0x00, b: 0x00 },
+        Foreground | BrightForeground | DimForeground => Rgb {
+            r: 0xCC,
+            g: 0xCC,
+            b: 0xCC,
+        },
+        Background => Rgb {
+            r: 0x00,
+            g: 0x00,
+            b: 0x00,
+        },
         // Cursor and anything else — white-ish.
-        _ => Rgb { r: 0xCC, g: 0xCC, b: 0xCC },
+        _ => Rgb {
+            r: 0xCC,
+            g: 0xCC,
+            b: 0xCC,
+        },
     }
 }
 
@@ -189,9 +269,17 @@ fn default_indexed(i: u8) -> alacritty_terminal::vte::ansi::Rgb {
         let g_idx = (idx / 6) % 6;
         let r_idx = idx / 36;
         let scale = |v: u8| if v == 0 { 0 } else { 55 + v * 40 };
-        return Rgb { r: scale(r_idx), g: scale(g_idx), b: scale(b_idx) };
+        return Rgb {
+            r: scale(r_idx),
+            g: scale(g_idx),
+            b: scale(b_idx),
+        };
     }
     // Greyscale ramp 232–255.
     let level = 8 + (i - 232) * 10;
-    Rgb { r: level, g: level, b: level }
+    Rgb {
+        r: level,
+        g: level,
+        b: level,
+    }
 }

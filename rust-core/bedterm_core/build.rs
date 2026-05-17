@@ -3,7 +3,9 @@ use std::path::PathBuf;
 
 fn main() {
     let crate_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
-    let out = PathBuf::from(&crate_dir).join("include").join("bedterm_core.h");
+    let out = PathBuf::from(&crate_dir)
+        .join("include")
+        .join("bedterm_core.h");
     std::fs::create_dir_all(out.parent().unwrap()).unwrap();
     println!("cargo:rerun-if-changed=src/ffi.rs");
     println!("cargo:rerun-if-changed=src/snapshot.rs");

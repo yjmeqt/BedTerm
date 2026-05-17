@@ -27,6 +27,7 @@ impl GridSnapshot {
         if col >= self.cols || row >= self.rows {
             return None;
         }
-        self.cells.get(row as usize * self.cols as usize + col as usize)
+        self.cells
+            .get(row as usize * self.cols as usize + col as usize)
     }
 }

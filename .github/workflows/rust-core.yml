@@ -1,0 +1,28 @@
+name: rust-core
+on:
+  pull_request:
+    paths:
+      - 'rust-core/**'
+      - 'scripts/build-rust-xcframework.sh'
+      - '.github/workflows/rust-core.yml'
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: macos-15
+    defaults:
+      run:
+        working-directory: rust-core
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install toolchain
+        run: |
+          rustup show
+          rustup target add aarch64-apple-ios aarch64-apple-ios-sim aarch64-apple-darwin
+      - run: cargo fmt --check
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo test --workspace
+      - name: Build xcframework
+        working-directory: ${{ github.workspace }}
+        run: ./scripts/build-rust-xcframework.sh release
