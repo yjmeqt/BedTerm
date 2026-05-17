@@ -1,6 +1,6 @@
 import Foundation
 
-public struct PTYDimensions: Equatable {
+public struct PTYDimensions: Equatable, Sendable {
     public var cols: Int
     public var rows: Int
     public init(cols: Int, rows: Int) {
@@ -9,7 +9,7 @@ public struct PTYDimensions: Equatable {
     }
 }
 
-public enum SSHError: Error, Equatable {
+public enum SSHError: Error, Equatable, Sendable {
     case dnsResolution
     case tcpRefused
     case timeout
@@ -23,7 +23,7 @@ public enum SSHError: Error, Equatable {
     case shellExited(Int)
 }
 
-public struct SSHConnectionRequest {
+public struct SSHConnectionRequest: Sendable {
     public let credential: HostCredential
     public let initialPTY: PTYDimensions
     public init(credential: HostCredential, initialPTY: PTYDimensions) {
@@ -32,7 +32,7 @@ public struct SSHConnectionRequest {
     }
 }
 
-public protocol SSHClient: AnyObject {
+public protocol SSHClient: AnyObject, Sendable {
     /// Stream of remote stdout/stderr bytes. The implementation should complete the stream when the session ends.
     var output: AsyncStream<Data> { get }
 
