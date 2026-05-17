@@ -95,26 +95,47 @@ impl Renderer {
             let cols = snap.cols as usize;
             let rows = snap.rows as usize;
             verts.reserve(cols * rows * VERTICES_PER_CELL);
+            // Flag bits — must match `term.rs` snapshot encoding.
+            const FLAG_WIDE_LEADING: u16 = 16;
+            const FLAG_WIDE_TRAILING: u16 = 32;
             // Pre-ensure all needed glyphs (one-pass; the HashMap dedups).
+            // Wide (CJK) glyphs get rasterised into a 2-cell-wide slot.
             for cell in &snap.cells {
                 if cell.ch != 0 {
-                    self.atlas.ensure(cell.ch);
+                    let wide = (cell.flags & FLAG_WIDE_LEADING) != 0;
+                    self.atlas.ensure(cell.ch, wide);
                 }
             }
             for r in 0..rows {
                 for c in 0..cols {
                     let cell = snap.cells[r * cols + c];
+                    // Wide-trailing spacer cells contribute no quad — the
+                    // preceding WIDE_LEADING cell's quad already spans both
+                    // columns (including the spacer's background).
+                    if (cell.flags & FLAG_WIDE_TRAILING) != 0 {
+                        continue;
+                    }
                     let glyph = self.atlas.lookup(cell.ch).copied();
                     let (uvo, uvs) = match glyph {
                         Some(g) => (g.uv_origin, g.uv_size),
                         None => ((0.0, 0.0), (0.0, 0.0)),
                     };
+                    // Wide (CJK) glyphs draw across two cell columns. A wide
+                    // cell whose glyph couldn't be rasterised still claims
+                    // both columns so the trailing spacer isn't drawn over by
+                    // a neighbour and the bg colour stays consistent.
+                    let span = if (cell.flags & FLAG_WIDE_LEADING) != 0 {
+                        2.0
+                    } else {
+                        1.0
+                    };
+                    let cell_span_w = cell_wf * span;
                     let x = c as f32 * cell_wf;
                     let y = r as f32 * cell_hf;
                     let fg = rgba_to_float(cell.fg_rgba);
                     let bg = rgba_to_float(cell.bg_rgba);
                     let v = |dx: f32, dy: f32, du: f32, dv: f32| CellVertex {
-                        pos_x: x + dx * cell_wf,
+                        pos_x: x + dx * cell_span_w,
                         pos_y: y + dy * cell_hf,
                         uv_x: uvo.0 + du * uvs.0,
                         uv_y: uvo.1 + dv * uvs.1,
