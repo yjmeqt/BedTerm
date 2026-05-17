@@ -10,75 +10,75 @@ A debug-only mock TTY built into the Rust core (bedterm_core) and surfaced in th
   <description>
     A Rust module inside bedterm_core implements a pluggable mock TTY: a small termios state machine plus a Program trait whose implementations produce the output byte stream. The module is feature-gated; Release builds omit it entirely.
   </description>
-  <rule id="feature_gate" status="❌">The mock TTY module compiles only when the bedterm_core Cargo feature mock-tty is enabled. Release xcframework builds disable the feature; Debug builds enable it.</rule>
-  <rule id="release_zero_symbols" status="❌">A Release-flavoured xcframework contains no bt_mock_tty_* exported symbols (verified by nm in CI).</rule>
-  <rule id="ffi_surface" status="❌">The C FFI exposes exactly six symbols: create, free, set_output_callback, write, resize, tick. No other mock-related symbols are exported.</rule>
-  <rule id="termios_subset" status="❌">The termios state machine implements ICANON, ECHO, ECHOE, ISIG, ICRNL, ONLCR, and the control chars VINTR (0x03), VERASE (0x7F), VEOF (0x04). Programs may switch between cooked and raw mode at runtime.</rule>
-  <rule id="program_isolation" status="❌">Each Program implementation is self-contained: its only inputs are bytes, resize events, and tick events; its only output is bytes. Programs cannot reach into the FFI or the termios state of another program.</rule>
-  <rule id="reentry_guard" status="❌">A debug-assertion-only guard inside the mock panics if a caller re-enters the handle from within the output callback. The Swift wrapper must not violate this rule.</rule>
+  <rule id="feature_gate" status="✅">The mock TTY module compiles only when the bedterm_core Cargo feature mock-tty is enabled. Release xcframework builds disable the feature; Debug builds enable it.</rule>
+  <rule id="release_zero_symbols" status="✅">A Release-flavoured xcframework contains no bt_mock_tty_* exported symbols (verified by nm in CI).</rule>
+  <rule id="ffi_surface" status="✅">The C FFI exposes exactly six symbols: create, free, set_output_callback, write, resize, tick. No other mock-related symbols are exported.</rule>
+  <rule id="termios_subset" status="✅">The termios state machine implements ICANON, ECHO, ECHOE, ISIG, ICRNL, ONLCR, and the control chars VINTR (0x03), VERASE (0x7F), VEOF (0x04). Programs may switch between cooked and raw mode at runtime.</rule>
+  <rule id="program_isolation" status="✅">Each Program implementation is self-contained: its only inputs are bytes, resize events, and tick events; its only output is bytes. Programs cannot reach into the FFI or the termios state of another program.</rule>
+  <rule id="reentry_guard" status="✅">A debug-assertion-only guard inside the mock panics if a caller re-enters the handle from within the output callback. The Swift wrapper must not violate this rule.</rule>
 </requirement>
 
 <requirement id="R2" name="Echo Shell Program">
   <description>
     A cooked-mode interactive prompt with a small set of built-in commands targeted at terminal-renderer and keyboard-input verification.
   </description>
-  <rule id="prompt" status="❌">The shell prints "bedterm-debug$ " at start and after every command. Backspace, Ctrl-U, and CR behave per ICANON line discipline.</rule>
-  <rule id="cmd_keys" status="❌">The "keys" command enters a sub-mode that prints each received input byte as a hex value with a mnemonic (e.g., 0x1B  ESC) until the user presses q. Verifies KeyBar, soft-keyboard, IME, and arrow-key byte sequences.</rule>
-  <rule id="cmd_colors" status="❌">The "colors" command emits a 16-colour bar, a 256-colour block, and a 24-bit truecolor gradient. Verifies SGR handling at each colour depth.</rule>
-  <rule id="cmd_cursor" status="❌">The "cursor" command emits CUP, CHA, and DECTCEM sequences that leave a known checkerboard pattern. Verifies cursor-positioning and show/hide rendering.</rule>
-  <rule id="cmd_altscreen" status="❌">The "altscreen" command enters the alternate screen (ESC[?1049h), draws a banner, waits, and exits (ESC[?1049l). Verifies alt-screen save/restore in the renderer.</rule>
-  <rule id="cmd_demo" status="❌">"demo vim", "demo codex", "demo claude" each switch to the replay program loaded with the corresponding bundled cast fixture, then return to the echo shell when the fixture finishes.</rule>
-  <rule id="cmd_stress" status="❌">The "stress" command emits a stream of random cursor positioning plus truecolor SGR for several seconds. Manual Metal renderer stability check.</rule>
-  <rule id="cmd_vim_clear_exit" status="❌">"vim" switches the active program to vim-lite. "clear" issues ESC[2J + cursor home. "exit" closes the session.</rule>
+  <rule id="prompt" status="✅">The shell prints "bedterm-debug$ " at start and after every command. Backspace, Ctrl-U, and CR behave per ICANON line discipline.</rule>
+  <rule id="cmd_keys" status="✅">The "keys" command enters a sub-mode that prints each received input byte as a hex value with a mnemonic (e.g., 0x1B  ESC) until the user presses q. Verifies KeyBar, soft-keyboard, IME, and arrow-key byte sequences.</rule>
+  <rule id="cmd_colors" status="✅">The "colors" command emits a 16-colour bar, a 256-colour block, and a 24-bit truecolor gradient. Verifies SGR handling at each colour depth.</rule>
+  <rule id="cmd_cursor" status="✅">The "cursor" command emits CUP, CHA, and DECTCEM sequences that leave a known checkerboard pattern. Verifies cursor-positioning and show/hide rendering.</rule>
+  <rule id="cmd_altscreen" status="✅">The "altscreen" command enters the alternate screen (ESC[?1049h), draws a banner, waits, and exits (ESC[?1049l). Verifies alt-screen save/restore in the renderer.</rule>
+  <rule id="cmd_demo" status="✅">"demo vim", "demo codex", "demo claude" each switch to the replay program loaded with the corresponding bundled cast fixture, then return to the echo shell when the fixture finishes.</rule>
+  <rule id="cmd_stress" status="✅">The "stress" command emits a stream of random cursor positioning plus truecolor SGR for several seconds. Manual Metal renderer stability check.</rule>
+  <rule id="cmd_vim_clear_exit" status="✅">"vim" switches the active program to vim-lite. "clear" issues ESC[2J + cursor home. "exit" closes the session.</rule>
 </requirement>
 
 <requirement id="R3" name="Vim-Lite Program">
   <description>
     A minimal modal editor used to exercise alt-screen flow, mode-driven key handling, and resize behaviour against the renderer.
   </description>
-  <rule id="enter_exit" status="❌">On entry the editor enters the alternate screen, hides the cursor briefly, draws a seeded buffer plus a status line, and sets cursor shape to block (ESC[2 q). On exit it restores the previous screen and resets cursor shape.</rule>
-  <rule id="normal_mode" status="❌">In NORMAL mode the keys h, j, k, l move the cursor; 0 and $ jump to line start/end; gg and G jump to file start/end; x deletes a character; dd deletes a line; i, a, o enter INSERT mode; : enters COMMAND mode.</rule>
-  <rule id="insert_mode" status="❌">In INSERT mode the cursor shape is bar (ESC[6 q). Printable bytes append at the cursor. 0x7F deletes the character to the left. 0x1B (ESC) returns to NORMAL mode.</rule>
-  <rule id="command_mode" status="❌">In COMMAND mode the user types after ':' on the status line. ":q" exits to the echo shell, ":w" flashes "written" on the status line, ":wq" does both. ESC aborts the command.</rule>
-  <rule id="resize_redraw" status="❌">A resize event triggers a full redraw of the buffer and status line at the new dimensions.</rule>
+  <rule id="enter_exit" status="✅">On entry the editor enters the alternate screen, hides the cursor briefly, draws a seeded buffer plus a status line, and sets cursor shape to block (ESC[2 q). On exit it restores the previous screen and resets cursor shape.</rule>
+  <rule id="normal_mode" status="✅">In NORMAL mode the keys h, j, k, l move the cursor; 0 and $ jump to line start/end; gg and G jump to file start/end; x deletes a character; dd deletes a line; i, a, o enter INSERT mode; : enters COMMAND mode.</rule>
+  <rule id="insert_mode" status="✅">In INSERT mode the cursor shape is bar (ESC[6 q). Printable bytes append at the cursor. 0x7F deletes the character to the left. 0x1B (ESC) returns to NORMAL mode.</rule>
+  <rule id="command_mode" status="✅">In COMMAND mode the user types after ':' on the status line. ":q" exits to the echo shell, ":w" flashes "written" on the status line, ":wq" does both. ESC aborts the command.</rule>
+  <rule id="resize_redraw" status="✅">A resize event triggers a full redraw of the buffer and status line at the new dimensions.</rule>
 </requirement>
 
 <requirement id="R4" name="Replay Program">
   <description>
     Plays back a recorded asciinema v2 cast file at its recorded timing, so the renderer can be exercised against authentic vim, Codex, and Claude Code byte streams without depending on a live session.
   </description>
-  <rule id="cast_format" status="❌">The replay program accepts asciinema v2 cast files (JSONL: one header object plus rows of [time, "o", bytes]). Non-output rows are skipped. No external JSON dependency is used.</rule>
-  <rule id="tick_clock" status="❌">A wall-clock tick driven from Swift releases all events whose recorded time is less than or equal to elapsed wall time since the program started. Tick frequency is not normatively specified but must be fine enough for visually smooth replay (60 Hz suffices).</rule>
-  <rule id="bundled_fixtures" status="❌">Three cast files ship with the Debug build: a vim editing session, a Codex TUI session, and a Claude Code session. The Codex and Claude Code fixtures must exercise synchronized output (ESC[?2026), bracketed paste, truecolor, and OSC 8 hyperlinks where present.</rule>
-  <rule id="fixture_provenance" status="❌">Each bundled cast file has a sibling README entry describing what was recorded, when, with which app version, so it can be re-recorded as those apps evolve.</rule>
+  <rule id="cast_format" status="✅">The replay program accepts asciinema v2 cast files (JSONL: one header object plus rows of [time, "o", bytes]). Non-output rows are skipped. No external JSON dependency is used.</rule>
+  <rule id="tick_clock" status="✅">A wall-clock tick driven from Swift releases all events whose recorded time is less than or equal to elapsed wall time since the program started. Tick frequency is not normatively specified but must be fine enough for visually smooth replay (60 Hz suffices).</rule>
+  <rule id="bundled_fixtures" status="✅">Three cast files ship with the Debug build: a vim editing session, a Codex TUI session, and a Claude Code session. The Codex and Claude Code fixtures must exercise synchronized output (ESC[?2026), bracketed paste, truecolor, and OSC 8 hyperlinks where present.</rule>
+  <rule id="fixture_provenance" status="✅">Each bundled cast file has a sibling README entry describing what was recorded, when, with which app version, so it can be re-recorded as those apps evolve.</rule>
 </requirement>
 
 <requirement id="R5" name="Raw Sink Program">
   <description>
     A pass-through program that produces no shell behaviour, used to inspect exactly which bytes the iOS input surfaces produce for each key, gesture, and IME interaction.
   </description>
-  <rule id="raw_passthrough" status="❌">Every input byte is delivered to output unchanged. Termios runs in raw mode (no ICANON, no ECHO, no ICRNL, no ONLCR).</rule>
-  <rule id="zero_synthesis" status="❌">The raw sink program does not emit any byte that did not come from input. No prompt, no banner, no echo augmentation.</rule>
+  <rule id="raw_passthrough" status="✅">Every input byte is delivered to output unchanged. Termios runs in raw mode (no ICANON, no ECHO, no ICRNL, no ONLCR).</rule>
+  <rule id="zero_synthesis" status="✅">The raw sink program does not emit any byte that did not come from input. No prompt, no banner, no echo augmentation.</rule>
 </requirement>
 
 <requirement id="R6" name="iOS Debug Entry">
   <description>
     The mock TTY is reachable from inside the Debug build of the iOS app, without any SSH credential entry, by a single tap on a clearly-marked entry in the existing Hosts screen.
   </description>
-  <rule id="hosts_section" status="❌">In Debug builds, the Hosts screen displays an additional section titled "Debug TTY" with four entries: Echo Shell, Vim-Lite, Replay…, Raw Sink. In Release builds this section does not exist.</rule>
-  <rule id="replay_picker" status="❌">Tapping "Replay…" presents a picker listing the bundled cast fixtures by name. Selecting a fixture launches the terminal screen with the replay program preloaded with that fixture.</rule>
-  <rule id="skip_credentials" status="❌">Tapping any Debug TTY entry pushes the existing terminal screen directly. No host, username, port, or key fields are shown, requested, or persisted.</rule>
-  <rule id="reuses_terminal_screen" status="❌">The Debug TTY entries reuse the production terminal screen, key bar, composer, and Metal renderer unchanged. The mock TTY only replaces the SSH client.</rule>
-  <rule id="no_localization" status="❌">Debug TTY labels are developer-only English strings and are not added to the localization catalogues.</rule>
+  <rule id="hosts_section" status="✅">In Debug builds, the Hosts screen displays an additional section titled "Debug TTY" with four entries: Echo Shell, Vim-Lite, Replay…, Raw Sink. In Release builds this section does not exist.</rule>
+  <rule id="replay_picker" status="✅">Tapping "Replay…" presents a picker listing the bundled cast fixtures by name. Selecting a fixture launches the terminal screen with the replay program preloaded with that fixture.</rule>
+  <rule id="skip_credentials" status="✅">Tapping any Debug TTY entry pushes the existing terminal screen directly. No host, username, port, or key fields are shown, requested, or persisted.</rule>
+  <rule id="reuses_terminal_screen" status="✅">The Debug TTY entries reuse the production terminal screen, key bar, composer, and Metal renderer unchanged. The mock TTY only replaces the SSH client.</rule>
+  <rule id="no_localization" status="✅">Debug TTY labels are developer-only English strings and are not added to the localization catalogues.</rule>
 </requirement>
 
 <requirement id="R7" name="Rust Loopback Test Coverage">
   <description>
     The mock TTY's main justification for living in Rust is delivering cargo-level end-to-end regression tests over the alacritty_terminal integration.
   </description>
-  <rule id="loopback_test" status="❌">A cargo integration test pipes the mock TTY's output through alacritty_terminal's Term and asserts on the resulting grid for each echo-shell command (keys sub-mode, colors, cursor, altscreen) and for a scripted vim-lite session.</rule>
-  <rule id="termios_test" status="❌">A cargo test exercises ICANON line editing, VINTR signal delivery, VEOF at line start, and raw-mode toggle round-trip.</rule>
-  <rule id="replay_test" status="❌">A cargo test loads a tiny in-repo cast file and drives the tick clock with a fake time source, asserting the released byte sequence matches the cast.</rule>
+  <rule id="loopback_test" status="✅">A cargo integration test pipes the mock TTY's output through alacritty_terminal's Term and asserts on the resulting grid for each echo-shell command (keys sub-mode, colors, cursor, altscreen) and for a scripted vim-lite session.</rule>
+  <rule id="termios_test" status="✅">A cargo test exercises ICANON line editing, VINTR signal delivery, VEOF at line start, and raw-mode toggle round-trip.</rule>
+  <rule id="replay_test" status="✅">A cargo test loads a tiny in-repo cast file and drives the tick clock with a fake time source, asserting the released byte sequence matches the cast.</rule>
   <rule id="ci_runs_tests" status="❌">These cargo tests run on every PR that touches rust-core/, in addition to the existing iOS test job.</rule>
 </requirement>
 <issue id="release_symbol_proof" status="Open">
