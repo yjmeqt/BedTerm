@@ -1,0 +1,123 @@
+<prd name="Terminal View">
+
+<overview>
+The terminal viewport: ANSI/VT100 emulation rendered by the Metal renderer, basic UX (copy/paste, scrolling, dark mode, font), and the opt-in Warp-style Block Mode that re-presents the same stream as a chat-like list of command blocks.
+</overview>
+
+<requirement id="R1" name="Terminal Display">
+  <description>
+    Full terminal emulation rendering ANSI escape sequences, VT100 control codes, colors, and cursor positioning correctly.
+  </description>
+  <rule id="ansi_colors" status="✅">ANSI color codes (16-color and 256-color) render with correct foreground and background colors.</rule>
+  <rule id="vt100_cursor" status="✅">VT100 cursor movement and positioning work correctly.</rule>
+  <rule id="clear_screen" status="✅">Clear screen sequences repaint the terminal viewport correctly.</rule>
+  <rule id="vim_display" status="✅">Running vim or nano displays the editor UI correctly, including status lines and cursor positioning.</rule>
+  <rule id="top_display" status="✅">Running top or htop displays the process list with live updates.</rule>
+  <rule id="text_wrap" status="✅">Long lines wrap correctly within the terminal width.</rule>
+  <rule id="glyph_completeness" status="❌">Every rendered character cell shows the complete glyph: descenders (g, j, p, q, y) are fully visible and no row is vertically clipped, regardless of scroll position, input timing, or row position in the viewport.</rule>
+</requirement>
+
+<requirement id="R2" name="Basic Terminal UX">
+  <description>
+    Standard terminal app conventions for copy, paste, scrolling, text selection, and dark mode.
+  </description>
+  <rule id="copy" status="✅">User can select text in the terminal and copy it to the system clipboard.</rule>
+  <rule id="paste" status="✅">User can paste text from the system clipboard into the terminal.</rule>
+  <rule id="scroll" status="✅">User can scroll up and down through terminal history with touch gestures.</rule>
+  <rule id="scroll_sync" status="✅">Scrolling pauses auto-scroll; when scrolled to bottom, auto-scroll resumes and follows new output.</rule>
+  <rule id="scroll_inertia" status="❌">Touch-scroll has native iOS feel: drag tracks the finger 1:1, lifting the finger with velocity decelerates and snaps to whole rows, and tapping during deceleration stops it immediately. Dragging past the top of scrollback or below the live bottom does not produce content — the scroll clamps at the edge.</rule>
+  <rule id="scroll_snap_on_input" status="❌">When the user is scrolled up into scrollback (offset &gt; 0) and types any character, sends a special key from the toolbar, or commits the composer, the viewport snaps back to the live bottom in the same frame as the byte is dispatched to the PTY. Auto-follow resumes from that point. Rationale: typing without seeing the cursor is more disorienting than losing read position; this matches Warp's behavior.</rule>
+  <rule id="prompt_anchored_bottom" status="✅">When the transcript is shorter than the viewport, the active prompt line is anchored to the bottom edge of the terminal viewport (just above the special-keys toolbar) and any empty space sits above it. New output fills upward from the bottom, matching the convention of macOS Terminal, iTerm2, and other iOS terminal apps.</rule>
+  <rule id="dark_mode" status="✅">The terminal and app UI use a dark color scheme by default.</rule>
+  <rule id="font_mono" status="✅">Terminal text renders in a monospace font.</rule>
+  <rule id="landscape" status="❌" context="deferred">Landscape orientation. Dropped from MVP — iPhone target locks to portrait. Revisit if real usage demands it.</rule>
+</requirement>
+
+<requirement id="R3" name="Warp-Style Block Mode">
+  <description>
+    A Warp-inspired alternative terminal view where each shell prompt → command → output cycle is captured as a discrete "block" in a vertically scrolling list, with a persistent composer pinned at the bottom of the screen as the sole input surface. Block Mode replaces the inline cursor-and-prompt model with a chat-like UX better suited to a phone — input lives in one place and output is grouped by command. Block Mode is also the primary delivery vehicle for using the Claude Code CLI (`claude`) over SSH from a phone: the composer's multi-line / voice input (R13, R14) feeds long natural-language prompts into the remote `claude` process, and Block view's alt-screen handling keeps `claude`'s interactive TUI rendering correctly. Block Mode is an opt-in view toggle alongside the classic terminal view (R2), not a replacement; the user can switch between them per session.
+  </description>
+  <rule id="block_mode_toggle" status="❌">A control in the terminal screen toggles between Classic view (R2, inline prompt) and Block view (this requirement). The choice persists per host and across launches.</rule>
+  <rule id="block_per_command" status="❌" context="block view">Each shell prompt → command → output cycle renders as a distinct block in a top-to-bottom scrolling list. A new block begins on every prompt; the previous block is sealed and shows its command, output, exit code, and duration.</rule>
+  <rule id="block_header" status="❌" context="block view">Each block displays a header row with the command string, a coloured exit-code chip (green for 0, red for non-zero, neutral for still-running), and elapsed duration. Tapping the header collapses the block's output body.</rule>
+  <rule id="block_body_monospace" status="❌" context="block view">Each block's output body renders the captured grid rows in the same monospace font and ANSI palette as Classic view, preserving colours, cursor positioning, and wrapping for that block's row range.</rule>
+  <rule id="composer_is_only_input" status="❌" context="block view, normal screen">In Block view, the system keyboard's keystrokes route to the composer at the bottom of the screen — not to the PTY. The composer flushes its buffer to the PTY only when the user taps Send or presses Return inside it. This supersedes R13.default_passthrough while Block view is active.</rule>
+  <rule id="composer_bottom_pinned" status="❌" context="block view">The composer is pinned to the bottom of the screen above the R3 toolbar (and above the keyboard when shown), always visible, never scrolled with the block list.</rule>
+  <rule id="composer_typing_while_running" status="❌" context="block view, previous command still running">The user can begin typing the next command in the composer while the previous block's command is still producing output. Composer state is independent of PTY echo until Send.</rule>
+  <rule id="osc133_detection" status="❌">The terminal parser recognises OSC 133 shell-integration sequences (`A` prompt start, `B` command start, `C` output start, `D;&lt;exit&gt;` command end) and emits a block-boundary event on each, used by Block view to delimit blocks.</rule>
+  <rule id="shell_integration_install" status="❌">On first successful connect to a host, the app offers to install an OSC 133 shell-integration snippet for the remote user's detected shell (zsh, bash, fish) by appending to the appropriate rc file. The user can accept, decline, or "ask again later"; the choice is remembered per host.</rule>
+  <rule id="shell_integration_fallback" status="❌" context="OSC 133 not present">If the remote shell has not been instrumented with OSC 133, Block view falls back to a single rolling block that contains all output until the user opens a new session. No heuristic prompt detection is attempted in MVP.</rule>
+  <rule id="alt_screen_collapse" status="❌" context="block view, remote enters alt-screen (CSI ?1049h)">When the remote application enters alt-screen mode (vim, less, htop, fzf, ssh password prompts), Block view automatically collapses into a single fullscreen Classic-style grid and routes keystrokes directly to the PTY. On exit from alt-screen (`CSI ?1049l`), the view restores to Block mode and the alt-screen session is recorded as one block.</rule>
+  <rule id="block_scrollback_cap" status="❌" context="block view">The app caps in-memory block output: the most recent N blocks (target: 50) retain full output; older blocks retain only their command, exit code, duration, and an output byte count. Reopening an old block re-renders from a compressed copy on disk if available, otherwise shows a "truncated" placeholder.</rule>
+  <rule id="block_copy" status="❌" context="block view">Each block exposes a one-tap "Copy output" action that copies the block's full output (or full command + output) to the system clipboard. R5.copy continues to apply for arbitrary text selection within a block.</rule>
+  <rule id="claude_cli_is_remote" status="❌">"Claude support" in BedTerm means first-class support for the Claude Code CLI (`claude`) running as a remote process over SSH, not calling the Anthropic API from the app. BedTerm never holds an Anthropic API key, never makes network calls to `api.anthropic.com`, and never sends terminal contents to any AI service. All AI capability is whatever the user has installed on the remote host.</rule>
+  <rule id="claude_cli_detection" status="❌" context="block view">When the foreground process on the remote PTY is detected as `claude` (via OSC 133 command capture, or via a recognisable banner / title sequence emitted by Claude Code), the active block is tagged as a Claude session and rendered with a distinct accent so the user can tell at a glance that they are talking to Claude, not the shell.</rule>
+  <rule id="claude_cli_alt_screen" status="❌" context="claude session active">Because Claude Code's interactive TUI uses alt-screen, R15.alt_screen_collapse applies: Block view collapses to a single fullscreen grid for the duration of the Claude session and restores to Block mode on exit. The whole session is captured as one Claude-tagged block in the history.</rule>
+  <rule id="claude_cli_composer" status="❌" context="claude session active">The R13 composer (and its R14 voice input) is the recommended input path for sending long natural-language prompts to `claude`. Send uses bracketed paste when the remote advertises it so multi-line prompts arrive as a single message rather than per-keystroke input — preserving Claude Code's own input handling.</rule>
+  <rule id="claude_cli_quick_launch" status="❌" context="block view">Block view offers a quick-launch affordance (e.g. a "Start Claude" button surfaced when no Claude session is active) that sends `claude` (or a user-configured launch command) to the PTY. The launch command is editable per host so users with custom invocations (`claude --model …`, `npx @anthropic-ai/claude-code`, etc.) can override it.</rule>
+  <rule id="claude_cli_no_app_keys" status="❌">BedTerm never prompts for, stores, or transmits an Anthropic API key. Authentication for Claude Code lives entirely on the remote host (its own config / login flow). This is a security guarantee: the app has no AI credentials to leak.</rule>
+</requirement>
+
+<bug id="prompt_floats_at_top" status="Fixed" date="2026-05-17" rule="R2.prompt_anchored_bottom">
+  <current>
+    On a fresh terminal session, when the remote shell has emitted only a few lines (e.g. <code>Last login: …</code> plus the prompt), those lines render at the top of the terminal viewport and a large empty band fills the space between the prompt and the special-keys toolbar at the bottom. The prompt and cursor sit roughly in the middle of the screen instead of just above the keyboard.
+    <img src="screenshots/scroll_drawing_fixed_lsla.jpg" alt="Prompt and short transcript sit near the top of the terminal area with empty space below"/>
+  </current>
+  <expected>
+    The active prompt line is anchored to the bottom edge of the terminal viewport. When the transcript is shorter than the viewport, the empty space sits <em>above</em> the transcript, not below it. As new output arrives, lines push the existing content upward, matching the behaviour of macOS Terminal, iTerm2, and standard iOS terminal apps.
+  </expected>
+  <steps>
+    1. Launch the app and connect to any SSH host.
+    2. Observe the freshly opened terminal session — only the login banner line and a prompt are visible.
+    3. Observe: the prompt sits high in the terminal area with a tall empty band between the prompt and the toolbar.
+    4. Expected: the prompt sits just above the toolbar with the empty band above the login banner instead.
+  </steps>
+</bug>
+
+<bug id="scroll_drawing_ghosting" status="Fixed" date="2026-05-17" rule="R2.scroll">
+  <current>
+    Touch-scrolling the terminal history does not erase previous paints before drawing new rows. Each scroll frame layers on top of the prior one, producing severe visual corruption:
+    <ul>
+    <li>Every row above the live prompt shows doubled / horizontally-offset glyphs (the same line painted twice, shifted by ~1 character).</li>
+    <li>After a single swipe-down gesture to reveal scrollback, the entire viewport becomes a vertical-stripe smear of stacked text frames — readable content disappears.</li>
+    <li>Vertical streaks of stale glyphs persist in the top band even after content scrolls out of view, i.e. that region never fully repaints to the background colour.</li>
+    <li>Only the bottommost line (the live prompt being typed into) renders cleanly, which points at the scroll-copy / redraw path rather than the per-glyph renderer.</li>
+    </ul>
+    <img src="screenshots/scroll_drawing_doubled.jpg" alt="ls -la output with every row doubled and offset"/>
+    <img src="screenshots/scroll_drawing_smear.jpg" alt="Terminal viewport reduced to vertical stripes after one swipe-down"/>
+  </current>
+  <expected>
+    Scrolling the terminal history repaints the viewport cleanly on every frame:
+    <ul>
+    <li>Each row appears exactly once at its scrolled position; no doubled or offset duplicates.</li>
+    <li>Areas that scroll out of view are erased to the terminal background colour with no residual glyphs.</li>
+    <li>Continuous scroll gestures produce a smooth visual translation of the existing content, not an accumulation of overlaid frames.</li>
+    </ul>
+  </expected>
+  <steps>
+    1. Open the app and connect to any SSH host so a shell prompt is visible.
+    2. Run a command that produces enough output to fill the viewport, e.g. <code>ls -la</code>.
+    3. Observe: rows above the live prompt already render with doubled / offset glyphs.
+    4. Swipe down inside the terminal view to reveal scrollback history.
+    5. Observe: the viewport becomes a vertical-stripe smear of stacked text frames; no row is individually legible.
+    6. Swipe up to scroll content off-screen.
+    7. Observe: a band of stale glyph streaks remains at the top of the viewport instead of clean background.
+  </steps>
+</bug>
+
+<bug id="line_cut_after_input" status="Open" date="2026-05-17" rule="R1.glyph_completeness">
+  <current>
+    After typing input and pressing enter, the current line sometimes renders with the bottom portion of characters clipped off — descenders (g, j, p, q, y) are cut, and the bottom few pixels of every character on the affected row are missing. Other rows render correctly. The issue is intermittent, occurring after some inputs but not others.
+    <img src="screenshots/line_cut_after_input.png" alt="Terminal text with bottom of characters clipped on a line"/>
+  </current>
+  <expected>
+    Every character cell renders in full — descenders are fully visible, no row is vertically clipped. All rows in the viewport display complete glyphs regardless of scroll position or input timing.
+  </expected>
+  <steps>
+    1. Connect to an SSH host and get a shell prompt.
+    2. Type several commands and observe the terminal output after each press of enter.
+    3. Notice: on some lines, the bottom portion of characters is visibly cut off.
+  </steps>
+</bug>
+
+</prd>

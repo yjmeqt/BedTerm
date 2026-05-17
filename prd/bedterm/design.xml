@@ -7,7 +7,7 @@ The shared design system for BedTerm's app chrome — colour tokens for Light/Da
 
 <requirement id="R1" name="Colour Tokens">
   <description>
-    <p>Every user-visible app-chrome surface, text, icon, border, and accent colour resolves to one of the named tokens below. Each token has both a Light value and a Dark value; SwiftUI/UIKit resolve them automatically as the iOS system appearance changes. Tokens are referenced by semantic name (e.g. <code>surface.elevated</code>) — never by palette name. The terminal viewport's own palette is tracked separately under <a href="prd:bedterm/mvp#R9">MVP R9</a> and is currently deferred.</p>
+    <p>Every user-visible app-chrome surface, text, icon, border, and accent colour resolves to one of the named tokens below. Each token has both a Light value and a Dark value; SwiftUI/UIKit resolve them automatically as the iOS system appearance changes. Tokens are referenced by semantic name (e.g. <code>surface.elevated</code>) — never by palette name. The terminal viewport's own palette is tracked separately under <a href="prd:bedterm/appearance#R1">Appearance R1</a> and is currently deferred.</p>
     <table style="border-collapse:collapse;font-family:-apple-system,system-ui,sans-serif;font-size:13px;">
     <thead>
     <tr style="border-bottom:1px solid #888;">
@@ -74,7 +74,6 @@ The shared design system for BedTerm's app chrome — colour tokens for Light/Da
   <rule id="semantic_naming" status="✅">Tokens use semantic names that describe their role (<code>surface.elevated</code>, <code>text.muted</code>) — not palette names (<code>gray800</code>, <code>blue500</code>).</rule>
   <rule id="no_literals" status="✅">No literal colour values appear in code or views: no <code>Color(red:green:blue:)</code>, no <code>UIColor(red:green:blue:)</code>, no hex strings, no <code>Color.black</code> / <code>.white</code> / <code>.gray</code> / other static <code>Color.&lt;name&gt;</code> constants on user-visible surfaces.</rule>
   <rule id="symbolic_allowed" status="✅" context="when no brand-specific token applies">Adaptive SwiftUI symbolic colours — <code>Color.primary</code>, <code>Color.secondary</code>, <code>Color.accentColor</code>, <code>.tint</code>, materials such as <code>.regularMaterial</code> — are acceptable. They are already system-adaptive and do not need a custom token.</rule>
-  <rule id="terminal_exception" status="✅">SwiftTerm's terminal palette is the one bridge exception — its ANSI colour map is rebuilt from tokens inside a <code>TerminalTheme</code> when the system appearance changes. Terminal palette tokens themselves are tracked under <a href="prd:bedterm/mvp#R9">MVP R9</a> (deferred).</rule>
 </requirement>
 
 <requirement id="R2" name="App Icon">

@@ -252,7 +252,7 @@ session.setBeforeSendHook { [weak self] in
 }
 ```
 
-A weak `session` reference is added to the `TerminalMetalHostView` props next to `feed`/`onSend`/`onResize` so the view can call `setBeforeSendHook`. The SwiftTerm path leaves the hook unset (it manages its own scroll state internally), so the snap is a no-op there.
+A weak `session` reference is added to the `TerminalMetalHostView` props next to `feed`/`onSend`/`onResize` so the view can call `setBeforeSendHook`.
 
 #### Gesture delegate
 
@@ -274,7 +274,6 @@ extension TerminalMetalUIView: UIGestureRecognizerDelegate {
 - Cursor blink layer — when offset > 0 and snapshot reports `cursor_row_or_negative == -1`, the cursor layer hides; this is the natural behavior of pointing at off-screen content.
 - Selection layer — selection coordinates are viewport-relative today. While scrolled, the user can still select what's visible; copying the selection extracts it from the visible snapshot. Selection across scrollback rows is a separate feature, out of scope here.
 - ANSI / atlas / shader code.
-- SwiftTerm path: untouched.
 
 ## Test plan
 
@@ -292,12 +291,11 @@ Swift tests (`MetalRendererBridgeTests` extension):
 3. `send(byte)` while `scrollOffset > 0` calls `scrollToBottom` exactly once before the byte is written.
 
 Manual (run via `worktree-ios-dev` skill):
-1. Metal toggle ON. `ls -la /usr/bin` → drag up → scrollback reveals; drag past top → clamps.
+1. `ls -la /usr/bin` → drag up → scrollback reveals; drag past top → clamps.
 2. Release with velocity → decelerates and stops at a whole row.
 3. Tap during deceleration → stops immediately.
 4. Scroll up halfway through history; type any char → viewport jumps to live bottom in the same frame.
 5. Scroll up; toolbar `ESC` tap → also snaps.
-6. SwiftTerm toggle OFF — confirm no regression.
 
 ## Out of scope (defer)
 
