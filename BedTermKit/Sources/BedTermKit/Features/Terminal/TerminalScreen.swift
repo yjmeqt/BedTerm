@@ -5,8 +5,10 @@ struct TerminalScreen: View {
     @State private var keyBar: KeyBarController
     @State private var composer: ComposerController
     @State private var bracketedPasteProbe: TerminalHostView.BracketedPasteProbe
+    @State private var focusHandle: TerminalHostView.FocusHandle
     @State private var keyboard = KeyboardLayoutObserver()
     @State private var keyboardHidden = false
+    @Namespace private var composerMorph
     let credential: HostCredential
     let onExit: () -> Void
 
@@ -15,10 +17,15 @@ struct TerminalScreen: View {
         _keyBar = State(initialValue: KeyBarController { [weak session] data in session?.send(data) })
         let probe = TerminalHostView.BracketedPasteProbe()
         _bracketedPasteProbe = State(initialValue: probe)
+        let focusHandle = TerminalHostView.FocusHandle()
+        _focusHandle = State(initialValue: focusHandle)
         _composer = State(
             initialValue: ComposerController(
                 send: { [weak session] data in session?.send(data) },
-                isBracketedPasteActive: { MainActor.assumeIsolated { probe.isActive() } }
+                isBracketedPasteActive: { MainActor.assumeIsolated { probe.isActive() } },
+                returnFocusToTerminal: {
+                    MainActor.assumeIsolated { focusHandle.claimFirstResponder() }
+                }
             ))
         self.credential = credential
         self.onExit = onExit
@@ -32,6 +39,7 @@ struct TerminalScreen: View {
                     onSend: { session.send($0) },
                     onResize: { cols, rows in session.resize(cols: cols, rows: rows) },
                     bracketedPasteProbe: bracketedPasteProbe,
+                    focusHandle: focusHandle,
                     yieldFirstResponder: composer.isOpen || keyboardHidden
                 )
                 .ignoresSafeArea(edges: [.top, .horizontal])
@@ -78,21 +86,31 @@ struct TerminalScreen: View {
 
     @ViewBuilder
     private var bottomBar: some View {
-        if composer.isOpen {
-            ComposerBar(controller: composer)
-        } else {
-            HStack(alignment: .center) {
-                KeyBar(
-                    controller: keyBar,
-                    keyboardShown: !keyboardHidden,
-                    onToggleKeyboard: { keyboardHidden.toggle() }
-                )
-                Spacer()
-                ComposePill { composer.open() }
+        // Wrap KeyBar + ComposePill + ComposerBar in a single GlassEffectContainer
+        // so the Liquid Glass capsule with id "composer-capsule" morphs
+        // continuously from the closed-state pill into the open-state composer
+        // bar (R13.open_close_morph). The KeyBar slides off the leading edge to
+        // make room for the morph (R13.row_height_symmetry).
+        GlassEffectContainer(spacing: 8) {
+            HStack(alignment: .bottom, spacing: 8) {
+                if !composer.isOpen {
+                    KeyBar(
+                        controller: keyBar,
+                        keyboardShown: !keyboardHidden,
+                        onToggleKeyboard: { keyboardHidden.toggle() }
+                    )
+                    .transition(.move(edge: .leading).combined(with: .opacity))
+                    Spacer(minLength: 0)
+                    ComposePill(morphNamespace: composerMorph) { composer.open() }
+                } else {
+                    ComposerBar(controller: composer, morphNamespace: composerMorph)
+                        .frame(maxWidth: .infinity)
+                }
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 6)
         }
+        .animation(.smooth(duration: 0.32), value: composer.isOpen)
     }
 
     private func reconnect() async {
