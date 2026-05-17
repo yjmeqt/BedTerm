@@ -10,7 +10,7 @@
 use std::os::raw::c_int;
 
 use crate::snapshot::{CellSnapshot, GridSnapshot};
-use crate::term::Terminal;
+use crate::term::{Palette, Rgb24, Terminal};
 
 #[repr(C)]
 pub struct BtSnapshotView {
@@ -162,4 +162,32 @@ pub unsafe extern "C" fn bt_term_snapshot_release(h: *mut BtTerm) {
     }
     let term = &mut *h;
     term.cached = None;
+}
+
+/// Flat C view of a `Palette`. 18 × `Rgb24` = 54 bytes (no padding —
+/// `#[repr(C)]` `Rgb24` is 3 × u8). Swift passes a pointer; Rust copies in.
+#[repr(C)]
+pub struct BtPaletteView {
+    pub default_fg: Rgb24,
+    pub default_bg: Rgb24,
+    pub ansi: [Rgb24; 16],
+}
+
+/// # Safety
+/// `h` must be a valid, non-freed handle. `palette` must be a non-null
+/// pointer to a valid `BtPaletteView`.
+#[no_mangle]
+pub unsafe extern "C" fn bt_term_set_palette(h: *mut BtTerm, palette: *const BtPaletteView) {
+    if h.is_null() || palette.is_null() {
+        return;
+    }
+    let term = &mut *h;
+    let p = &*palette;
+    // Invalidate the cached snapshot — old RGBA values no longer apply.
+    term.cached = None;
+    term.inner.set_palette(Palette {
+        default_fg: p.default_fg,
+        default_bg: p.default_bg,
+        ansi: p.ansi,
+    });
 }
