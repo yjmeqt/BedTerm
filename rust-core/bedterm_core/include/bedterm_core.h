@@ -15,13 +15,19 @@
  */
 #define VERTICES_PER_CELL 6
 
+#define VINTR 3
+
+#define VEOF 4
+
+#define VERASE 127
+
 typedef struct BtMockTty BtMockTty;
 
 typedef struct BtRenderer BtRenderer;
 
 typedef struct BtTerm BtTerm;
 
-typedef struct Option_BtMockTtyOutputCallback Option_BtMockTtyOutputCallback;
+typedef struct Flags Flags;
 
 typedef struct CellSnapshot {
   /**
@@ -50,6 +56,10 @@ typedef struct BtSnapshotView {
   const struct CellSnapshot *cells;
   uintptr_t cell_count;
 } BtSnapshotView;
+
+
+
+
 
 #ifdef __cplusplus
 extern "C" {
@@ -151,9 +161,9 @@ void bt_mock_tty_free(struct BtMockTty *h);
  * # Safety
  * `h` must be a valid, non-freed handle.
  */
-void bt_mock_tty_set_output_callback(struct BtMockTty *h,
-                                     struct Option_BtMockTtyOutputCallback cb,
-                                     void *user_data);
+void bt_mock_tty_set_output_callback(struct BtMockTty *h, void (*cb)(const uint8_t*,
+                                                                     uintptr_t,
+                                                                     void*), void *user_data);
 
 /**
  * # Safety

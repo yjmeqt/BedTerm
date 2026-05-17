@@ -10,7 +10,10 @@ pub struct BtMockTty {
     inner: MockTty,
 }
 
-pub type BtMockTtyOutputCallback = unsafe extern "C" fn(*const u8, usize, *mut c_void);
+// NOTE: kept as a doc-only alias. The actual FFI symbol uses the function
+// pointer type inline below so cbindgen emits a usable C function pointer
+// (cbindgen renders `Option<TypeAlias>` as an opaque struct).
+// pub type BtMockTtyOutputCallback = unsafe extern "C" fn(*const u8, usize, *mut c_void);
 
 /// # Safety
 /// `opts_json` must be either null or point to a NUL-terminated UTF-8 string
@@ -44,7 +47,7 @@ pub unsafe extern "C" fn bt_mock_tty_free(h: *mut BtMockTty) {
 #[no_mangle]
 pub unsafe extern "C" fn bt_mock_tty_set_output_callback(
     h: *mut BtMockTty,
-    cb: Option<BtMockTtyOutputCallback>,
+    cb: Option<unsafe extern "C" fn(*const u8, usize, *mut c_void)>,
     user_data: *mut c_void,
 ) {
     if h.is_null() {
