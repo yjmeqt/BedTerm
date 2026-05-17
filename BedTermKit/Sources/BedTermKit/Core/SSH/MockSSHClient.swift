@@ -1,6 +1,6 @@
 import Foundation
 
-public final class MockSSHClient: SSHClient {
+public final class MockSSHClient: SSHClient, @unchecked Sendable {
     public private(set) var written: [Data] = []
     public private(set) var lastResize: PTYDimensions?
     public private(set) var connectCalls = 0
