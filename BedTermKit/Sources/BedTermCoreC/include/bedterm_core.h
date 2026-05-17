@@ -149,7 +149,7 @@ int bt_renderer_draw(struct BtRenderer *r,
  * `opts_json` must be either null or point to a NUL-terminated UTF-8 string
  * owned by the caller for the duration of this call.
  */
-struct BtMockTty *bt_mock_tty_create(uint32_t program, const char *_opts_json);
+struct BtMockTty *bt_mock_tty_create(uint32_t program, const char *opts_json);
 
 /**
  * # Safety
