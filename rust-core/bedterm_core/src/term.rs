@@ -16,7 +16,7 @@ use crate::snapshot::{CellSnapshot, GridSnapshot};
 /// premultiplied RGBA u32s; this type only exists at the host-config boundary.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(C)]
-pub struct Rgb24 {
+pub struct BtRgb24 {
     pub r: u8,
     pub g: u8,
     pub b: u8,
@@ -28,9 +28,9 @@ pub struct Rgb24 {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(C)]
 pub struct Palette {
-    pub default_fg: Rgb24,
-    pub default_bg: Rgb24,
-    pub ansi: [Rgb24; 16],
+    pub default_fg: BtRgb24,
+    pub default_bg: BtRgb24,
+    pub ansi: [BtRgb24; 16],
 }
 
 impl Default for Palette {
@@ -38,9 +38,9 @@ impl Default for Palette {
         // Matches the legacy hardcoded palette (the values that previously
         // lived in `default_named`). Kept as the no-host-yet fallback.
         use alacritty_terminal::vte::ansi::NamedColor;
-        let n = |c: NamedColor| -> Rgb24 {
+        let n = |c: NamedColor| -> BtRgb24 {
             let rgb = legacy_default_named(c);
-            Rgb24 { r: rgb.r, g: rgb.g, b: rgb.b }
+            BtRgb24 { r: rgb.r, g: rgb.g, b: rgb.b }
         };
         Self {
             default_fg: n(NamedColor::Foreground),
@@ -229,7 +229,7 @@ impl Terminal {
 fn color_to_rgba(c: alacritty_terminal::vte::ansi::Color, palette: &Palette) -> u32 {
     use alacritty_terminal::vte::ansi::Color;
     let rgb = match c {
-        Color::Spec(rgb) => Rgb24 { r: rgb.r, g: rgb.g, b: rgb.b },
+        Color::Spec(rgb) => BtRgb24 { r: rgb.r, g: rgb.g, b: rgb.b },
         Color::Named(named) => named_from_palette(named, palette),
         Color::Indexed(i) => {
             if (i as usize) < 16 {
@@ -237,7 +237,7 @@ fn color_to_rgba(c: alacritty_terminal::vte::ansi::Color, palette: &Palette) -> 
             } else {
                 // 16..=255 — colour cube and greyscale ramp, not palette-controlled.
                 let rgb = default_indexed(i);
-                Rgb24 { r: rgb.r, g: rgb.g, b: rgb.b }
+                BtRgb24 { r: rgb.r, g: rgb.g, b: rgb.b }
             }
         }
     };
@@ -247,7 +247,7 @@ fn color_to_rgba(c: alacritty_terminal::vte::ansi::Color, palette: &Palette) -> 
 fn named_from_palette(
     n: alacritty_terminal::vte::ansi::NamedColor,
     p: &Palette,
-) -> Rgb24 {
+) -> BtRgb24 {
     use alacritty_terminal::vte::ansi::NamedColor::*;
     match n {
         Foreground | BrightForeground | DimForeground => p.default_fg,

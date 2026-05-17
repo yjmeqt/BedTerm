@@ -58,20 +58,20 @@ typedef struct BtSnapshotView {
  * 8-bit-per-channel sRGB triple. The renderer-facing snapshot stores
  * premultiplied RGBA u32s; this type only exists at the host-config boundary.
  */
-typedef struct Rgb24 {
+typedef struct BtRgb24 {
   uint8_t r;
   uint8_t g;
   uint8_t b;
-} Rgb24;
+} BtRgb24;
 
 /**
- * Flat C view of a `Palette`. 18 × `Rgb24` = 54 bytes (no padding —
- * `#[repr(C)]` `Rgb24` is 3 × u8). Swift passes a pointer; Rust copies in.
+ * Flat C view of a `Palette`. 18 × `BtRgb24` = 54 bytes (no padding —
+ * `#[repr(C)]` `BtRgb24` is 3 × u8). Swift passes a pointer; Rust copies in.
  */
 typedef struct BtPaletteView {
-  struct Rgb24 default_fg;
-  struct Rgb24 default_bg;
-  struct Rgb24 ansi[16];
+  struct BtRgb24 default_fg;
+  struct BtRgb24 default_bg;
+  struct BtRgb24 ansi[16];
 } BtPaletteView;
 
 #ifdef __cplusplus
@@ -137,8 +137,8 @@ void bt_term_snapshot_release(struct BtTerm *h);
 
 /**
  * # Safety
- * `h` must be a valid, non-freed handle. `palette` must be a non-null
- * pointer to a valid `BtPaletteView`.
+ * `h` must be a valid, non-freed handle. `palette` must point to a valid,
+ * aligned `BtPaletteView`, or be null (a null palette is a no-op).
  */
 void bt_term_set_palette(struct BtTerm *h, const struct BtPaletteView *palette);
 
