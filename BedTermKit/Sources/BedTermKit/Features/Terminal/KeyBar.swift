@@ -10,10 +10,8 @@ struct KeyBar: View {
             keyButton("⌃", tap: .ctrl, highlighted: controller.isPending)
             keyButton("⇥", tap: .tab)
         }
-        .frame(maxWidth: .infinity)
-        .frame(height: 44)
+        .frame(width: 168, height: 44)
         .glassEffect(.regular.interactive(), in: .capsule)
-        .padding(.horizontal, 16)
         .padding(.vertical, 6)
     }
 

@@ -3,12 +3,21 @@ import SwiftUI
 struct TerminalScreen: View {
     @State var session: TerminalSession
     @State private var keyBar: KeyBarController
+    @State private var composer: ComposerController
+    @Namespace private var glassNS
+    private let bracketedPasteProbe: TerminalHostView.BracketedPasteProbe
     let credential: HostCredential
     let onExit: () -> Void
 
     init(session: TerminalSession, credential: HostCredential, onExit: @escaping () -> Void) {
         _session = State(initialValue: session)
         _keyBar = State(initialValue: KeyBarController { [weak session] data in session?.send(data) })
+        let probe = TerminalHostView.BracketedPasteProbe()
+        self.bracketedPasteProbe = probe
+        _composer = State(initialValue: ComposerController(
+            send: { [weak session] data in session?.send(data) },
+            isBracketedPasteActive: { MainActor.assumeIsolated { probe.isActive() } }
+        ))
         self.credential = credential
         self.onExit = onExit
     }
@@ -19,7 +28,7 @@ struct TerminalScreen: View {
                 feed: session.feed,
                 onSend: { session.send($0) },
                 onResize: { cols, rows in session.resize(cols: cols, rows: rows) },
-                bracketedPasteProbe: TerminalHostView.BracketedPasteProbe()
+                bracketedPasteProbe: bracketedPasteProbe
             )
             .ignoresSafeArea(edges: [.top, .horizontal])
 
@@ -31,7 +40,21 @@ struct TerminalScreen: View {
             }
         }
         .safeAreaInset(edge: .bottom) {
-            KeyBar(controller: keyBar)
+            GlassEffectContainer {
+                if composer.isOpen {
+                    ComposerBar(controller: composer)
+                        .glassEffectID("composer", in: glassNS)
+                } else {
+                    HStack(alignment: .center) {
+                        KeyBar(controller: keyBar)
+                        Spacer()
+                        ComposePill { composer.open() }
+                            .glassEffectID("composer", in: glassNS)
+                    }
+                    .padding(.horizontal, 16)
+                }
+            }
+            .animation(.smooth(duration: 0.28), value: composer.isOpen)
         }
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
