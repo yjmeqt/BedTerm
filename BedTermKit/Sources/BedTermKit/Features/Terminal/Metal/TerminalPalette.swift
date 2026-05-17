@@ -4,25 +4,26 @@ import UIKit
 /// (`Tokens.xcassets` → `TerminalForeground`, `TerminalBackground`,
 /// `TerminalAnsi0` … `TerminalAnsi15`). Every colour reaches the Metal
 /// renderer through here — no hex literals in code.
-struct TerminalPalette: Equatable {
-    struct Component: Equatable {
+public struct TerminalPalette: Equatable {
+    public struct Component: Equatable {
         // swiftlint:disable identifier_name
-        let r: UInt8
-        let g: UInt8
-        let b: UInt8
+        public let r: UInt8
+        public let g: UInt8
+        public let b: UInt8
         // swiftlint:enable identifier_name
     }
 
-    let defaultFg: Component
-    let defaultBg: Component
-    let ansi: [Component]  // exactly 16 entries, index = ANSI colour number
+    public let defaultFg: Component
+    public let defaultBg: Component
+    public let ansi: [Component]  // exactly 16 entries, index = ANSI colour number
 
-    static func resolve(
+    public static func resolve(
         for traits: UITraitCollection,
-        bundle: Bundle = .module
+        bundle: Bundle? = nil
     ) -> TerminalPalette {
+        let resolvedBundle = bundle ?? Bundle.module
         let load = { (name: String) -> Component in
-            guard let ui = UIColor(named: name, in: bundle, compatibleWith: traits) else {
+            guard let ui = UIColor(named: name, in: resolvedBundle, compatibleWith: traits) else {
                 preconditionFailure(
                     "Missing colour token: \(name)"
                 )
