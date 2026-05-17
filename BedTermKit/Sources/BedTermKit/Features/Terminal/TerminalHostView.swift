@@ -82,7 +82,8 @@ struct TerminalHostView: UIViewRepresentable {
         }
     }
 
-    final class Coordinator: NSObject, TerminalViewDelegate {
+    @MainActor
+    final class Coordinator: NSObject, @preconcurrency TerminalViewDelegate {
         private let onSend: (Data) -> Void
         private let onResize: (Int, Int) -> Void
         private var consumeTask: Task<Void, Never>?

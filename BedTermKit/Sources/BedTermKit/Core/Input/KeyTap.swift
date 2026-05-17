@@ -1,6 +1,6 @@
 import Foundation
 
-public enum KeyTap: Equatable {
+public enum KeyTap: Equatable, Sendable {
     case ctrl
     case tab
     case esc
@@ -12,7 +12,7 @@ public enum KeyTap: Equatable {
     case tick(ContinuousClock.Instant)
 }
 
-public enum KeyBarOutput: Equatable {
+public enum KeyBarOutput: Equatable, Sendable {
     case bytes(Data)
     case visualLatch
     case visualUnlatch
