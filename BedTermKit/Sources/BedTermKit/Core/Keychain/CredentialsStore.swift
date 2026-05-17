@@ -1,7 +1,7 @@
 import Foundation
 
-public struct HostCredential: Equatable, Codable {
-    public enum AuthMethod: Equatable, Codable {
+public struct HostCredential: Equatable, Codable, Sendable {
+    public enum AuthMethod: Equatable, Codable, Sendable {
         case password(String)
         case privateKey(Data, passphrase: String?)
     }

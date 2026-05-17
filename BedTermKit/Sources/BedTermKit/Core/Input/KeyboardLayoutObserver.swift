@@ -23,7 +23,8 @@ final class KeyboardLayoutObserver {
             object: nil,
             queue: .main
         ) { [weak self] note in
-            MainActor.assumeIsolated { self?.update(from: note) }
+            let endFrame = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect
+            MainActor.assumeIsolated { self?.update(endFrame: endFrame) }
         }
         center.addObserver(
             forName: UIResponder.keyboardWillHideNotification,
@@ -34,11 +35,8 @@ final class KeyboardLayoutObserver {
         }
     }
 
-    private func update(from note: Notification) {
-        guard let userInfo = note.userInfo,
-            let endFrame = userInfo[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect,
-            let window = Self.keyWindow
-        else { return }
+    private func update(endFrame: CGRect?) {
+        guard let endFrame, let window = Self.keyWindow else { return }
         let intersection = window.bounds.intersection(endFrame)
         overlap = max(0, intersection.height - window.safeAreaInsets.bottom)
     }
