@@ -3,13 +3,10 @@ import XCTest
 
 @testable import BedTermKit
 
-/// Renders each Plan A fixture through the Metal renderer into an offscreen
-/// texture and asserts the result is non-empty. True pixel-vs-SwiftTerm
-/// parity is deferred to Plan B2 (SwiftTerm renders into a UIView's CALayer
-/// and offscreening it requires a separate snapshot harness).
-///
-/// The value of this sweep: if any regression makes `bridge.draw` produce
-/// an empty texture, this test catches it per-fixture with a clear error.
+/// Renders each fixture through the Metal renderer into an offscreen
+/// texture and asserts the result is non-empty. If any regression makes
+/// `bridge.draw` produce an empty texture, this test catches it
+/// per-fixture with a clear error.
 final class TerminalRendererParityTests: XCTestCase {
     private let fixtures = [
         "00_ascii_hello",
@@ -101,9 +98,8 @@ final class TerminalRendererParityTests: XCTestCase {
         )
     }
 
-    /// Resolve fixture URL using the same pattern as `TerminalCoreShadowTests`:
-    /// the Fixtures directory is shipped as a folder reference, so files sit
-    /// under `<bundle>/Fixtures/byte_streams/<name>.bin`.
+    /// Fixtures ship as a folder reference, so files sit under
+    /// `<bundle>/Fixtures/byte_streams/<name>.bin`.
     private static func fixtureURL(named name: String) -> URL? {
         let bundle = Bundle(for: TerminalRendererParityTests.self)
         let dir = bundle.bundleURL.appendingPathComponent("Fixtures/byte_streams")

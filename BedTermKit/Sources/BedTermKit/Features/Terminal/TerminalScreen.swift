@@ -4,29 +4,23 @@ struct TerminalScreen: View {
     @State var session: TerminalSession
     @State private var keyBar: KeyBarController
     @State private var composer: ComposerController
-    @State private var bracketedPasteProbe: TerminalHostView.BracketedPasteProbe
-    @State private var focusHandle: TerminalHostView.FocusHandle
+    @State private var focusHandle: TerminalMetalHostView.FocusHandle
     @State private var keyboard = KeyboardLayoutObserver()
     @State private var keyboardHidden = false
     @State private var dpadOpen = false
     @Namespace private var composerMorph
-    #if DEBUG
-        @AppStorage("debug.useMetalRenderer") private var useMetalRenderer: Bool = false
-    #endif
     let credential: HostCredential
     let onExit: () -> Void
 
     init(session: TerminalSession, credential: HostCredential, onExit: @escaping () -> Void) {
         _session = State(initialValue: session)
         _keyBar = State(initialValue: KeyBarController { [weak session] data in session?.send(data) })
-        let probe = TerminalHostView.BracketedPasteProbe()
-        _bracketedPasteProbe = State(initialValue: probe)
-        let focusHandle = TerminalHostView.FocusHandle()
+        let focusHandle = TerminalMetalHostView.FocusHandle()
         _focusHandle = State(initialValue: focusHandle)
         _composer = State(
             initialValue: ComposerController(
                 send: { [weak session] data in session?.send(data) },
-                isBracketedPasteActive: { MainActor.assumeIsolated { probe.isActive() } },
+                isBracketedPasteActive: { false },
                 returnFocusToTerminal: {
                     MainActor.assumeIsolated { focusHandle.claimFirstResponder() }
                 }
@@ -38,38 +32,15 @@ struct TerminalScreen: View {
     var body: some View {
         VStack(spacing: 0) {
             ZStack(alignment: .top) {
-                #if DEBUG
-                    if useMetalRenderer {
-                        TerminalMetalHostView(
-                            session: session,
-                            feed: session.feed,
-                            onSend: { session.send($0) },
-                            onResize: { cols, rows in session.resize(cols: cols, rows: rows) },
-                            yieldFirstResponder: composer.isOpen || keyboardHidden
-                        )
-                        .ignoresSafeArea(edges: [.top, .horizontal])
-                    } else {
-                        TerminalHostView(
-                            feed: session.feed,
-                            onSend: { session.send($0) },
-                            onResize: { cols, rows in session.resize(cols: cols, rows: rows) },
-                            bracketedPasteProbe: bracketedPasteProbe,
-                            focusHandle: focusHandle,
-                            yieldFirstResponder: composer.isOpen || keyboardHidden
-                        )
-                        .ignoresSafeArea(edges: [.top, .horizontal])
-                    }
-                #else
-                    TerminalHostView(
-                        feed: session.feed,
-                        onSend: { session.send($0) },
-                        onResize: { cols, rows in session.resize(cols: cols, rows: rows) },
-                        bracketedPasteProbe: bracketedPasteProbe,
-                        focusHandle: focusHandle,
-                        yieldFirstResponder: composer.isOpen || keyboardHidden
-                    )
-                    .ignoresSafeArea(edges: [.top, .horizontal])
-                #endif
+                TerminalMetalHostView(
+                    session: session,
+                    feed: session.feed,
+                    onSend: { session.send($0) },
+                    onResize: { cols, rows in session.resize(cols: cols, rows: rows) },
+                    focusHandle: focusHandle,
+                    yieldFirstResponder: composer.isOpen || keyboardHidden
+                )
+                .ignoresSafeArea(edges: [.top, .horizontal])
 
                 if case .closed(let reason) = session.state {
                     DisconnectBanner(reason: reason) {
