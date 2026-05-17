@@ -40,11 +40,13 @@ public final class TerminalCore {
         bt_term_resize(handle, colsClamped, rowsClamped)
     }
 
-    /// Push an 18-entry palette to the Rust core. Subsequent snapshots resolve
+    /// Push a palette (16 ANSI entries + 2 defaults) to the Rust core. Subsequent snapshots resolve
     /// named/indexed/default colours through these values.
     public func setPalette(_ palette: TerminalPalette) {
         precondition(palette.ansi.count == 16, "TerminalPalette.ansi must have exactly 16 entries")
         let ansi = palette.ansi
+        // C interop: BtPaletteView.ansi is a Swift tuple (cbindgen surfaces fixed
+        // C arrays as tuples), not a Swift Array — list all 16 elements explicitly.
         var view = BtPaletteView(
             default_fg: Self.btRgb(palette.defaultFg),
             default_bg: Self.btRgb(palette.defaultBg),

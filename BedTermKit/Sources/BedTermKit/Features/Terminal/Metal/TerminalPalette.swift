@@ -17,6 +17,9 @@ public struct TerminalPalette: Equatable {
     public let defaultBg: Component
     public let ansi: [Component]  // exactly 16 entries, index = ANSI colour number
 
+    // `Bundle.module` is synthesised internal by SwiftPM and cannot appear as
+    // the default value in a `public` function signature. Callers outside the
+    // package pass `nil`; the body falls back to `Bundle.module` below.
     public static func resolve(
         for traits: UITraitCollection,
         bundle: Bundle? = nil
