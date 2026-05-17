@@ -1,13 +1,12 @@
 import SwiftUI
-import UIKit
 
 struct TerminalScreen: View {
     @State var session: TerminalSession
     @State private var keyBar: KeyBarController
     @State private var composer: ComposerController
     @State private var bracketedPasteProbe: TerminalHostView.BracketedPasteProbe
-    @State private var keyboardHidden: Bool = false
-    @State private var keyboardOverlap: CGFloat = 0
+    @State private var keyboard = KeyboardLayoutObserver()
+    @State private var keyboardHidden = false
     let credential: HostCredential
     let onExit: () -> Void
 
@@ -26,42 +25,38 @@ struct TerminalScreen: View {
     }
 
     var body: some View {
-        ZStack(alignment: .top) {
-            TerminalHostView(
-                feed: session.feed,
-                onSend: { session.send($0) },
-                onResize: { cols, rows in session.resize(cols: cols, rows: rows) },
-                bracketedPasteProbe: bracketedPasteProbe,
-                yieldFirstResponder: composer.isOpen || keyboardHidden
-            )
-            .ignoresSafeArea(edges: [.top, .horizontal])
+        VStack(spacing: 0) {
+            ZStack(alignment: .top) {
+                TerminalHostView(
+                    feed: session.feed,
+                    onSend: { session.send($0) },
+                    onResize: { cols, rows in session.resize(cols: cols, rows: rows) },
+                    bracketedPasteProbe: bracketedPasteProbe,
+                    yieldFirstResponder: composer.isOpen || keyboardHidden
+                )
+                .ignoresSafeArea(edges: [.top, .horizontal])
 
-            if case .closed(let reason) = session.state {
-                DisconnectBanner(reason: reason) {
-                    Task { await reconnect() }
+                if case .closed(let reason) = session.state {
+                    DisconnectBanner(reason: reason) {
+                        Task { await reconnect() }
+                    }
+                    .padding(.top, 8)
                 }
-                .padding(.top, 8)
             }
-        }
-        // Manage keyboard avoidance ourselves — SwiftUI's auto-avoidance
-        // intermittently fails to release after resignFirstResponder, leaving
-        // the bottom bar stuck mid-screen (bug r15_toolbar_stuck_midscreen).
-        .ignoresSafeArea(.keyboard, edges: .bottom)
-        .safeAreaInset(edge: .bottom, spacing: 0) {
+            .frame(maxHeight: .infinity)
+
             bottomBar
-                .padding(.bottom, keyboardOverlap)
         }
+        // Manage keyboard avoidance ourselves: pad by the observed keyboard
+        // overlap, then ignore SwiftUI's auto-applied keyboard safe area on
+        // the resulting padded view. Modifier order matters — applying
+        // ignoresSafeArea inside the padding causes the outer view to still
+        // respect SwiftUI's keyboard inset, double-counting the keyboard
+        // height and stranding the bar mid-screen.
+        .padding(.bottom, keyboard.overlap)
+        .ignoresSafeArea(.keyboard, edges: .bottom)
         .animation(.smooth(duration: 0.22), value: composer.isOpen)
-        .onReceive(
-            NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)
-        ) { note in
-            updateKeyboardOverlap(from: note)
-        }
-        .onReceive(
-            NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)
-        ) { _ in
-            keyboardOverlap = 0
-        }
+        .animation(.smooth(duration: 0.22), value: keyboard.overlap)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 Button("Disconnect") {
@@ -98,23 +93,6 @@ struct TerminalScreen: View {
             .padding(.horizontal, 16)
             .padding(.bottom, 6)
         }
-    }
-
-    private func updateKeyboardOverlap(from note: Notification) {
-        guard let userInfo = note.userInfo,
-            let endFrame = userInfo[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect,
-            let window = Self.keyWindow
-        else { return }
-        let windowFrame = window.bounds
-        let intersection = windowFrame.intersection(endFrame)
-        keyboardOverlap = max(0, intersection.height - window.safeAreaInsets.bottom)
-    }
-
-    private static var keyWindow: UIWindow? {
-        UIApplication.shared.connectedScenes
-            .compactMap { $0 as? UIWindowScene }
-            .flatMap(\.windows)
-            .first(where: \.isKeyWindow)
     }
 
     private func reconnect() async {
