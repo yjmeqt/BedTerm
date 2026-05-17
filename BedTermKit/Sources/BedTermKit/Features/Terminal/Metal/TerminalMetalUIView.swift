@@ -165,6 +165,7 @@ final class TerminalMetalUIView: MTKView {
                 cellSize: cellSize
             )
         }
+        updatePreeditOverlay()
         // presentsWithTransaction=true requires a synchronous present: wait
         // for the cell-pass command buffer to be scheduled, then present the
         // drawable in the current CATransaction. Using cmd.present(drawable)
