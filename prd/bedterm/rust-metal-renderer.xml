@@ -160,6 +160,36 @@ Replace SwiftTerm with a custom terminal engine: a Rust core (VT100/xterm emulat
   </steps>
 </bug>
 
+<bug id="metal_keyboard_language_switch_blocked" status="Fix Pending" date="2026-05-17" rule="R2M-R4.r5_ux">
+  <current>
+    With the Metal renderer toggle ON, the iOS system keyboard's globe / language-switch key has no effect when focus is in the terminal view. The user cannot switch to a non-English input method (e.g. Pinyin, Japanese Romaji, Korean 2-set) to type CJK input. Under the SwiftTerm path, the same keyboard correctly cycles through installed input modes.
+  </current>
+  <expected>
+    The Metal terminal view should accept every installed iOS keyboard language. Tapping the globe key (or long-pressing it) should cycle through input modes the same way it does in any standard text field, and the selected IME's marked-text / composition UI should appear over the terminal viewport. Committed text from the IME should be fed into the PTY as UTF-8 bytes.
+  </expected>
+  <steps>
+    1. In iOS Settings → General → Keyboard, add a non-English keyboard (e.g. Chinese — Simplified, Pinyin).
+    2. Build and run with the Metal toggle ON. Connect to a host.
+    3. Bring up the soft keyboard on the terminal view.
+    4. Tap the globe key to switch input language.
+    5. Observe: the keyboard does not switch language, or the globe key is unresponsive. The current input mode remains English. Toggle Metal OFF and repeat — SwiftTerm switches input modes normally.
+  </steps>
+</bug>
+
+<bug id="metal_cjk_not_rendered" status="Fix Pending" date="2026-05-17" rule="R2M-R2.glyph_atlas">
+  <current>
+    With the Metal renderer toggle ON, CJK characters (Chinese, Japanese, Korean) are not rendered in the terminal viewport. Output containing CJK codepoints either shows as blank cells, tofu boxes, or garbled glyphs — even though the Rust core's grid correctly stores the codepoints (the same session under SwiftTerm renders the characters correctly).
+  </current>
+  <expected>
+    Every codepoint stored in the terminal grid should be rasterised into the Metal glyph atlas on first encounter and rendered with the correct shape, including the full CJK Unified Ideographs range and Hiragana/Katakana/Hangul blocks. Wide (double-width) CJK glyphs should occupy two cells horizontally without clipping or overlap with neighbouring cells.
+  </expected>
+  <steps>
+    1. Build and run with Metal toggle ON. Connect to a host.
+    2. At the prompt, run a command that prints CJK text, e.g. <code>echo "你好 こんにちは 안녕"</code>.
+    3. Observe: the CJK characters do not appear correctly in the Metal viewport — blank cells, tofu, or garbled output. Toggle Metal OFF and repeat: SwiftTerm renders the same string correctly.
+  </steps>
+</bug>
+
 <bug id="metal_render_one_frame_late" status="Fixed" date="2026-05-17" rule="R2M-R2.incremental_repaint">
   <current>
     With the Metal renderer toggle ON, the painted grid lags the terminal state by exactly one input event:

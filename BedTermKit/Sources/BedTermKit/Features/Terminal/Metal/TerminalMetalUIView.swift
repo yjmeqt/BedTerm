@@ -353,9 +353,8 @@ extension TerminalMetalUIView: UIKeyInput, UITextInputTraits {
         onSend(Data([0x7F]))  // DEL — xterm-256color expects 0x7F.
     }
 
-    // UITextInputTraits — terminal-friendly defaults. Without these the
-    // system may refuse to present a soft keyboard for a custom UIKeyInput
-    // view, or may apply IME corrections that mangle commands.
+    // UITextInputTraits — terminal-friendly defaults. Required for the
+    // soft keyboard, and to keep IME corrections from mangling commands.
     var autocorrectionType: UITextAutocorrectionType {
         get { .no }
         set { _ = newValue }
@@ -380,8 +379,10 @@ extension TerminalMetalUIView: UIKeyInput, UITextInputTraits {
         get { .no }
         set { _ = newValue }
     }
+    // `.default`, not `.asciiCapable` — `.asciiCapable` hides every non-Latin
+    // keyboard, blocking the globe key from cycling to CJK IMEs.
     var keyboardType: UIKeyboardType {
-        get { .asciiCapable }
+        get { .default }
         set { _ = newValue }
     }
     var keyboardAppearance: UIKeyboardAppearance {
