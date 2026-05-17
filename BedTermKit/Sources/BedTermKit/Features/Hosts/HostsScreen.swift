@@ -3,8 +3,12 @@ import UIKit
 
 public struct HostsScreen: View {
     @Binding var path: NavigationPath
+    @Environment(\.toaster) private var toaster
     @State private var viewModel = HostsViewModel()
     @State private var didFirstAppear = false
+    @State private var showingMismatchReview = false
+    @State private var deviceLockedToastID: UUID?
+    @State private var mismatchToastID: UUID?
     /// Set true while the first-run shortcut form is on-screen, so the form's
     /// primary action becomes "Save & Connect" instead of "Save".
     @State private var pendingConnectOnSave = false
@@ -16,11 +20,8 @@ public struct HostsScreen: View {
     }
 
     public var body: some View {
-        decoratedRoot
-    }
-
-    private var decoratedRoot: some View {
         rootContent
+            .background(Color("ShadcnBackground", bundle: .module).ignoresSafeArea())
             .navigationTitle(Text("Hosts"))
             .toolbar { toolbarContent }
             .navigationDestination(for: AppRoute.self) { route in
@@ -28,12 +29,32 @@ public struct HostsScreen: View {
             }
             .modifier(SwapDialogModifier(viewModel: viewModel))
             .modifier(DeleteDialogModifier(viewModel: viewModel))
+            .sheet(isPresented: $showingMismatchReview) {
+                if let mismatch = viewModel.pendingMismatch {
+                    HostKeyMismatchReviewSheet(
+                        mismatch: mismatch,
+                        onTrust: {
+                            showingMismatchReview = false
+                            dismissMismatchToast()
+                            viewModel.retryAfterMismatch()
+                        },
+                        onReject: {
+                            showingMismatchReview = false
+                            dismissMismatchToast()
+                            viewModel.clearMismatch()
+                        }
+                    )
+                }
+            }
             .onAppear(perform: onAppear)
+            .onChange(of: viewModel.loadFailed) { _, locked in
+                handleLoadFailed(locked)
+            }
             .onChange(of: viewModel.currentSessionID) { _, new in
                 if new != nil { path.append(AppRoute.terminal) }
             }
             .onChange(of: viewModel.pendingMismatch?.sourceID) { _, _ in
-                pushMismatchIfNeeded()
+                handlePendingMismatchChanged()
             }
             .privacySensitive()
     }
@@ -51,22 +72,9 @@ public struct HostsScreen: View {
         }
     }
 
-    private func pushMismatchIfNeeded() {
-        guard let mismatch = viewModel.pendingMismatch else { return }
-        path.append(
-            AppRoute.hostKeyMismatch(
-                stored: mismatch.stored,
-                remote: mismatch.remote,
-                host: mismatch.host,
-                port: mismatch.port
-            ))
-    }
-
     @ViewBuilder
     private var rootContent: some View {
-        if viewModel.loadFailed {
-            lockedBanner
-        } else if viewModel.entries.isEmpty {
+        if viewModel.entries.isEmpty && !viewModel.loadFailed {
             emptyState
         } else {
             hostsList
@@ -74,74 +82,71 @@ public struct HostsScreen: View {
     }
 
     private var hostsList: some View {
-        List {
-            ForEach(viewModel.entries) { entry in
-                HostRow(
-                    entry: entry,
-                    inFlight: viewModel.inFlightID == entry.id,
-                    error: viewModel.errorByID[entry.id],
-                    isCurrentSession: viewModel.currentSessionID == entry.id,
-                    onRowBodyTap: { viewModel.onRowBodyTap(id: entry.id) },
-                    onConnect: { viewModel.requestConnect(id: entry.id) },
-                    onEdit: { path.append(AppRoute.hostForm(entry.id)) },
-                    onRetry: { viewModel.requestConnect(id: entry.id) },
-                    onOpenSettings: openSettings
-                )
-                .contentShape(Rectangle())
-                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                    Button(role: .destructive) {
-                        viewModel.requestDelete(id: entry.id)
-                    } label: {
-                        Label(String(localized: "Delete"), systemImage: "trash")
-                    }
-                    Button {
-                        path.append(AppRoute.hostForm(entry.id))
-                    } label: {
-                        Label(String(localized: "Edit"), systemImage: "pencil")
-                    }
-                    .tint(.blue)
-                }
-                .contextMenu {
-                    Button(String(localized: "Edit"), systemImage: "pencil") {
-                        path.append(AppRoute.hostForm(entry.id))
-                    }
-                    Button(String(localized: "Delete"), systemImage: "trash", role: .destructive) {
-                        viewModel.requestDelete(id: entry.id)
+        ScrollView {
+            LazyVStack(spacing: 12) {
+                ForEach(viewModel.entries) { entry in
+                    HostRow(
+                        entry: entry,
+                        inFlight: viewModel.inFlightID == entry.id,
+                        isCurrentSession: viewModel.currentSessionID == entry.id,
+                        onEdit: { path.append(AppRoute.hostForm(entry.id)) },
+                        onConnect: {
+                            viewModel.onConnectError = handleConnectError
+                            viewModel.requestConnect(id: entry.id)
+                        }
+                    )
+                    .contextMenu {
+                        Button(String(localized: "Edit"), systemImage: "pencil") {
+                            path.append(AppRoute.hostForm(entry.id))
+                        }
+                        Button(String(localized: "Delete"), systemImage: "trash", role: .destructive) {
+                            viewModel.requestDelete(id: entry.id)
+                        }
                     }
                 }
             }
+            .padding(16)
         }
-        .listStyle(.insetGrouped)
     }
 
     private var emptyState: some View {
-        ContentUnavailableView {
-            Label(String(localized: "No hosts yet"), systemImage: "server.rack")
-        } description: {
-            Text("Add a server to connect from your bed.")
-        } actions: {
-            Button(String(localized: "Add Host")) {
-                path.append(AppRoute.hostForm(nil))
+        VStack(spacing: 16) {
+            Image(systemName: "server.rack")
+                .font(.title)
+                .foregroundStyle(Color("ShadcnMutedForeground", bundle: .module))
+                .frame(width: 56, height: 56)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color("ShadcnCard", bundle: .module))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(Color("ShadcnBorder", bundle: .module), lineWidth: 1)
+                        )
+                )
+            VStack(spacing: 4) {
+                Text("No hosts yet")
+                    .font(.headline)
+                    .foregroundStyle(Color("ShadcnPrimary", bundle: .module))
+                Text("Add a server to connect from your bed.")
+                    .font(.subheadline)
+                    .foregroundStyle(Color("ShadcnMutedForeground", bundle: .module))
             }
-            .buttonStyle(.borderedProminent)
+            Button {
+                path.append(AppRoute.hostForm(nil))
+            } label: {
+                Text("Add Host")
+                    .font(.footnote.weight(.medium))
+                    .padding(.horizontal, 16)
+                    .frame(height: 36)
+                    .foregroundStyle(Color("ShadcnPrimaryForeground", bundle: .module))
+                    .background(Color("ShadcnPrimary", bundle: .module))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+            .buttonStyle(.plain)
             .accessibilityIdentifier("hosts.emptyState.add")
         }
-    }
-
-    private var lockedBanner: some View {
-        VStack {
-            HStack(spacing: 10) {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.orange)
-                Text("Couldn't load saved hosts — device locked.")
-                    .font(.callout)
-                Spacer()
-                Button(String(localized: "Retry")) { viewModel.retryLoad() }
-            }
-            .padding()
-            .background(Color.orange.opacity(0.1))
-            Spacer()
-        }
+        .padding(32)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     // MARK: - Destination
@@ -161,22 +166,19 @@ public struct HostsScreen: View {
                     session: session,
                     credential: entry.credential,
                     onExit: {
+                        let label = viewModel.displayName(for: entry.id)
                         viewModel.sessionEnded()
                         path = NavigationPath()
+                        toaster.show(
+                            .info,
+                            title: String(localized: "Session ended"),
+                            description: String(localized: "Disconnected from \(label).")
+                        )
                     }
                 )
             } else {
                 Text("No session.")
             }
-        case .hostKeyMismatch(let stored, let remote, let host, let port):
-            HostKeyMismatchScreen(
-                stored: stored, remote: remote, host: host, port: port,
-                onTrust: { viewModel.retryAfterMismatch() },
-                onReject: {
-                    viewModel.clearMismatch()
-                    path = NavigationPath()
-                }
-            )
         }
     }
 
@@ -192,9 +194,93 @@ public struct HostsScreen: View {
         pendingConnectOnSave = false
         switch outcome {
         case .savedAndConnect(let id):
+            toaster.show(
+                .success,
+                title: String(localized: "Host saved"),
+                description: String(localized: "Connecting to \(viewModel.displayName(for: id))…")
+            )
+            viewModel.onConnectError = handleConnectError
             viewModel.connect(id: id)
-        case .saved, .cancelled:
+        case .saved(let id):
+            toaster.show(
+                .success,
+                title: String(localized: "Host saved"),
+                description: viewModel.displayName(for: id)
+            )
+        case .cancelled:
             _ = formWasShortcut
+        }
+    }
+
+    // MARK: - Toast wiring
+
+    private func handleConnectError(id: UUID, message: String, permissionDenied: Bool) {
+        let name = viewModel.displayName(for: id)
+        var actions: [Toaster.Action] = []
+        if permissionDenied {
+            actions.append(
+                Toaster.Action(String(localized: "Open Settings")) { openSettings() }
+            )
+        }
+        actions.append(
+            Toaster.Action(String(localized: "Retry")) {
+                viewModel.onConnectError = handleConnectError
+                viewModel.requestConnect(id: id)
+            }
+        )
+        toaster.show(
+            .error,
+            title: String(localized: "Connection failed · \(name)"),
+            description: message,
+            actions: actions
+        )
+    }
+
+    private func handleLoadFailed(_ locked: Bool) {
+        if locked {
+            if deviceLockedToastID == nil {
+                deviceLockedToastID = toaster.show(
+                    .warning,
+                    title: String(localized: "Saved hosts unavailable"),
+                    description: String(
+                        localized: "Unlock your device to access stored credentials."),
+                    actions: [
+                        Toaster.Action(String(localized: "Retry")) {
+                            viewModel.retryLoad()
+                        }
+                    ],
+                    persistent: true
+                )
+            }
+        } else if let id = deviceLockedToastID {
+            toaster.dismiss(id: id)
+            deviceLockedToastID = nil
+        }
+    }
+
+    private func handlePendingMismatchChanged() {
+        if let id = mismatchToastID {
+            toaster.dismiss(id: id)
+            mismatchToastID = nil
+        }
+        guard let mismatch = viewModel.pendingMismatch else { return }
+        mismatchToastID = toaster.show(
+            .warning,
+            title: String(localized: "Host key changed · \(mismatch.host)"),
+            description: String(localized: "Tap to review and accept or reject."),
+            actions: [
+                Toaster.Action(String(localized: "Review")) {
+                    showingMismatchReview = true
+                }
+            ],
+            persistent: true
+        )
+    }
+
+    private func dismissMismatchToast() {
+        if let id = mismatchToastID {
+            toaster.dismiss(id: id)
+            mismatchToastID = nil
         }
     }
 
@@ -204,8 +290,6 @@ public struct HostsScreen: View {
         viewModel.load()
         guard !didFirstAppear else { return }
         didFirstAppear = true
-        // R1.first_run_form_shortcut: after onboarding, if no saved hosts and we
-        // haven't run this shortcut yet, jump straight to the New Host form.
         let defaults = UserDefaults.standard
         let alreadyShortcut = defaults.bool(forKey: Self.firstRunShortcutKey)
         if !alreadyShortcut && viewModel.entries.isEmpty {

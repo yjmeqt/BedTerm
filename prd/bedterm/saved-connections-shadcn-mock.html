@@ -1,0 +1,856 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Saved Connections — shadcn gray mock</title>
+<style>
+  :root {
+    --background:#F5F5F5; --foreground:#0B0B0B;
+    --card:#FFFFFF; --card-foreground:#0B0B0B;
+    --primary:#0B0B0B; --primary-foreground:#F5F5F5;
+    --secondary:#F4F4F5; --secondary-foreground:#18181B;
+    --muted:#F5F5F5; --muted-foreground:#737373;
+    --destructive:#DF2225;
+    --border:#E5E5E5; --input:#E5E5E5; --ring:#0B0B0B;
+    --radius:10px;
+  }
+  .dark {
+    --background:#0B0B0B; --foreground:#F5F5F5;
+    --card:#161616; --card-foreground:#F5F5F5;
+    --primary:#F5F5F5; --primary-foreground:#0B0B0B;
+    --secondary:#27272A; --secondary-foreground:#FAFAFA;
+    --muted:#262626; --muted-foreground:#A1A1A1;
+    --destructive:#FF6568;
+    --border:rgba(255,255,255,0.10); --input:rgba(255,255,255,0.15); --ring:#F5F5F5;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin:0; padding:0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Inter", system-ui, sans-serif;
+    background:#222;
+    color:#fff;
+    padding:32px 24px;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1 { font-size:18px; font-weight:600; margin:0 0 24px; letter-spacing:-0.01em; }
+  h2 { font-size:12px; font-weight:600; margin:0 0 12px; color:#aaa; text-transform:uppercase; letter-spacing:0.08em; }
+  .grid {
+    display:grid;
+    grid-template-columns: repeat(4, 390px);
+    gap:32px;
+    justify-content:start;
+  }
+  @media (max-width: 1700px) {
+    .grid { grid-template-columns: repeat(2, 390px); }
+  }
+
+  /* iPhone frame */
+  .phone {
+    width:390px;
+    background: var(--background);
+    color: var(--foreground);
+    border-radius:32px;
+    border:1px solid #333;
+    overflow:hidden;
+    height:780px;
+    display:flex;
+    flex-direction:column;
+  }
+
+  /* status bar */
+  .statusbar {
+    height:44px;
+    padding:0 24px;
+    display:flex; align-items:center; justify-content:space-between;
+    font-size:15px; font-weight:600;
+    color: var(--foreground);
+  }
+
+  /* nav bar */
+  .navbar {
+    height:44px;
+    padding:0 12px;
+    display:flex; align-items:center; justify-content:space-between;
+    border-bottom: 0.5px solid var(--border);
+    background: var(--background);
+    backdrop-filter: blur(20px);
+  }
+  .navbar .title { font-size:17px; font-weight:600; letter-spacing:-0.01em; }
+  .nav-btn {
+    background:transparent; border:0; color: var(--foreground);
+    font-size:17px; font-weight:400; cursor:pointer;
+    padding:6px 8px;
+  }
+  .nav-btn.bold { font-weight:600; }
+  .nav-btn.muted { color: var(--muted-foreground); }
+  .nav-btn:disabled { opacity:0.4; }
+
+  /* scroll content */
+  .content {
+    flex:1;
+    overflow-y:auto;
+    padding:16px;
+  }
+
+  /* card */
+  .card {
+    background: var(--card);
+    color: var(--card-foreground);
+    border:1px solid var(--border);
+    border-radius: var(--radius);
+    padding:14px 16px;
+  }
+  .card + .card { margin-top:12px; }
+  .card-section { padding:16px; }
+  .card-header { padding:16px 16px 0; }
+  .card-title { font-size:15px; font-weight:600; letter-spacing:-0.005em; margin:0; }
+  .card-desc { font-size:13px; color: var(--muted-foreground); margin:4px 0 0; line-height:1.4; }
+  .card-divider { height:1px; background: var(--border); margin: 14px -16px; border:0; }
+
+  /* host row */
+  .host-row {
+    display:flex; align-items:center; gap:12px;
+  }
+  .host-row .body { flex:1; min-width:0; }
+  .host-row .label { font-size:15px; font-weight:500; line-height:1.3; }
+  .host-row .subtitle { font-size:13px; color: var(--muted-foreground); margin-top:2px; line-height:1.3; }
+  .host-row .actions { display:flex; align-items:center; gap:8px; }
+
+  /* badges & pills */
+  .badge {
+    display:inline-flex; align-items:center; justify-content:center;
+    height:24px; padding:0 8px;
+    border:1px solid var(--border);
+    border-radius:6px;
+    font-size:11px; font-weight:500;
+    color: var(--muted-foreground);
+    background: var(--card);
+    gap:4px;
+  }
+  .badge.icon { padding:0; width:28px; }
+
+  /* buttons */
+  .btn {
+    display:inline-flex; align-items:center; justify-content:center; gap:6px;
+    height:32px; padding:0 12px;
+    border-radius:8px;
+    font-size:13px; font-weight:500;
+    border:1px solid transparent;
+    cursor:pointer;
+    transition: 0.15s;
+  }
+  .btn-primary {
+    background: var(--primary);
+    color: var(--primary-foreground);
+    border-color: var(--primary);
+  }
+  .btn-ghost {
+    background: transparent;
+    color: var(--foreground);
+    border-color: var(--border);
+  }
+  .btn-ghost.muted { color: var(--muted-foreground); }
+  .btn-destructive {
+    background: var(--destructive);
+    color: #fff;
+    border-color: var(--destructive);
+  }
+  .btn-icon { width:32px; padding:0; }
+  .btn-sm { height:28px; font-size:12px; padding:0 10px; }
+  .btn-block { width:100%; }
+
+  /* form field */
+  .field { margin-top:14px; }
+  .field:first-of-type { margin-top:0; }
+  .field-label { font-size:13px; font-weight:500; margin-bottom:6px; display:block; color: var(--foreground); }
+  .input {
+    width:100%;
+    height:36px;
+    padding:0 12px;
+    border:1px solid var(--input);
+    background: transparent;
+    border-radius:8px;
+    color: var(--foreground);
+    font-size:14px;
+    font-family: inherit;
+    outline:none;
+  }
+  .input:focus { border-color: var(--ring); box-shadow:0 0 0 3px rgba(11,11,11,0.08); }
+  .dark .input:focus { box-shadow:0 0 0 3px rgba(245,245,245,0.12); }
+  .input::placeholder { color: var(--muted-foreground); }
+
+  /* segmented (tabs) */
+  .seg {
+    display:flex; padding:3px;
+    background: var(--secondary);
+    border-radius:8px;
+    height:34px;
+  }
+  .seg button {
+    flex:1; border:0; background:transparent;
+    color: var(--muted-foreground);
+    font-size:13px; font-weight:500;
+    border-radius:6px;
+    cursor:pointer;
+  }
+  .seg button.active {
+    background: var(--card);
+    color: var(--foreground);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  }
+  .dark .seg button.active { box-shadow: none; }
+
+  /* alert */
+  .alert {
+    border:1px solid var(--border);
+    border-radius:8px;
+    padding:10px 12px;
+    font-size:12px;
+    color: var(--muted-foreground);
+    display:flex; gap:8px; align-items:flex-start;
+    background: var(--muted);
+  }
+  .alert-destructive {
+    border-color: rgba(223,34,37,0.3);
+    background: rgba(223,34,37,0.06);
+    color: var(--destructive);
+  }
+  .dark .alert-destructive {
+    border-color: rgba(255,101,104,0.25);
+    background: rgba(255,101,104,0.08);
+  }
+  .alert .alert-title { font-weight:600; color: var(--foreground); font-size:13px; }
+  .alert-destructive .alert-title { color: var(--destructive); }
+  .alert .alert-body { font-size:12px; line-height:1.4; }
+
+  /* spinner */
+  .spinner {
+    width:14px; height:14px;
+    border:2px solid currentColor;
+    border-right-color:transparent;
+    border-radius:50%;
+    animation:spin 0.7s linear infinite;
+    opacity:0.6;
+  }
+  @keyframes spin { to { transform:rotate(360deg); } }
+
+  /* sonner toast */
+  .toaster {
+    position:absolute; top:88px; left:0; right:0;
+    display:flex; flex-direction:column; align-items:center;
+    gap:8px;
+    pointer-events:none;
+    padding:0 16px;
+  }
+  .toast {
+    width:100%; max-width:360px;
+    background: var(--card);
+    color: var(--card-foreground);
+    border:1px solid var(--border);
+    border-radius: var(--radius);
+    padding:12px 14px;
+    box-shadow: 0 8px 20px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
+    pointer-events:auto;
+    display:flex; gap:10px; align-items:flex-start;
+    transform-origin: top center;
+  }
+  .dark .toast {
+    box-shadow: 0 8px 20px rgba(0,0,0,0.5), 0 2px 4px rgba(0,0,0,0.3);
+  }
+  /* stack: behind toasts scaled + nudged up */
+  .stack-2 { transform: translateY(-6px) scale(0.96); opacity:0.92; }
+  .stack-3 { transform: translateY(-12px) scale(0.92); opacity:0.78; }
+
+  .toast .toast-icon {
+    width:18px; height:18px; flex-shrink:0;
+    border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    font-size:11px; font-weight:700;
+  }
+  .toast .toast-body { flex:1; min-width:0; }
+  .toast .toast-title { font-size:13px; font-weight:600; line-height:1.3; }
+  .toast .toast-desc { font-size:12px; color: var(--muted-foreground); margin-top:2px; line-height:1.4; }
+  .toast .toast-actions { display:flex; gap:6px; margin-top:10px; }
+  .toast .close { color: var(--muted-foreground); cursor:pointer; font-size:14px; padding:0 4px; background:none; border:0; }
+
+  /* success toast - icon green */
+  .toast.success .toast-icon { background:#16a34a; color:#fff; }
+  /* error toast - icon destructive */
+  .toast.error .toast-icon { background: var(--destructive); color:#fff; }
+  /* warning - amber */
+  .toast.warning .toast-icon { background:#d97706; color:#fff; }
+  /* info - subtle */
+  .toast.info .toast-icon { background: var(--secondary); color: var(--foreground); }
+
+  /* link row (Add Host floating button area) */
+  .empty-state {
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    text-align:center; padding:60px 20px;
+    color: var(--muted-foreground);
+  }
+  .empty-state .icon {
+    width:48px; height:48px; border-radius:12px;
+    background: var(--secondary);
+    display:flex; align-items:center; justify-content:center;
+    margin-bottom:16px;
+    color: var(--muted-foreground);
+  }
+  .empty-state .title { color: var(--foreground); font-size:16px; font-weight:600; margin-bottom:4px; }
+  .empty-state .desc { font-size:13px; margin-bottom:20px; }
+
+  /* SF Symbols-like glyphs (unicode approximations) */
+  .icon-sm { font-size:13px; }
+  .glyph { font-family:"SF Pro", system-ui; line-height:1; }
+</style>
+</head>
+<body>
+
+<h1>Saved Connections — shadcn “Gray” default · light + dark</h1>
+
+<div class="grid">
+
+  <!-- ============ Hosts List · LIGHT ============ -->
+  <div>
+    <h2>Hosts list · light</h2>
+    <div class="phone">
+      <div class="statusbar"><span>9:41</span><span>● ●●</span></div>
+      <div class="navbar">
+        <button class="nav-btn">&lt; Back</button>
+        <div class="title">Hosts</div>
+        <button class="nav-btn bold">+</button>
+      </div>
+      <div class="content">
+
+        <div class="card">
+          <div class="host-row">
+            <div class="body">
+              <div class="label">bedroom-pi</div>
+              <div class="subtitle">yi@10.0.0.42</div>
+            </div>
+            <div class="actions">
+              <span class="badge icon" title="key auth">⌨</span>
+
+              <button class="btn btn-primary btn-sm">▶ Connect</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="host-row">
+            <div class="body">
+              <div class="label">prod-bastion</div>
+              <div class="subtitle">deploy@bastion.example.com:2222</div>
+            </div>
+            <div class="actions">
+              <span class="badge icon" title="password">🔒</span>
+
+              <button class="btn btn-primary btn-sm"><span class="spinner"></span></button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="host-row">
+            <div class="body">
+              <div class="label">media-nas</div>
+              <div class="subtitle">root@nas.lan</div>
+            </div>
+            <div class="actions">
+              <span class="badge icon">⌨</span>
+
+              <button class="btn btn-primary btn-sm">▶ Connect</button>
+            </div>
+          </div>
+          <div class="alert alert-destructive" style="margin-top:12px;">
+            <div>
+              <div class="alert-title">Connection failed</div>
+              <div class="alert-body">Permission denied (publickey). Verify the key is loaded on the remote.</div>
+              <div style="display:flex; gap:8px; margin-top:10px;">
+                <button class="btn btn-ghost btn-sm">Open Settings</button>
+                <button class="btn btn-primary btn-sm">Retry</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ Hosts List · DARK ============ -->
+  <div class="dark">
+    <h2 style="color:#aaa;">Hosts list · dark</h2>
+    <div class="phone">
+      <div class="statusbar"><span>9:41</span><span>● ●●</span></div>
+      <div class="navbar">
+        <button class="nav-btn">&lt; Back</button>
+        <div class="title">Hosts</div>
+        <button class="nav-btn bold">+</button>
+      </div>
+      <div class="content">
+
+        <div class="card">
+          <div class="host-row">
+            <div class="body">
+              <div class="label">bedroom-pi</div>
+              <div class="subtitle">yi@10.0.0.42</div>
+            </div>
+            <div class="actions">
+              <span class="badge icon">⌨</span>
+
+              <button class="btn btn-primary btn-sm">▶ Connect</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="host-row">
+            <div class="body">
+              <div class="label">prod-bastion</div>
+              <div class="subtitle">deploy@bastion.example.com:2222</div>
+            </div>
+            <div class="actions">
+              <span class="badge icon">🔒</span>
+
+              <button class="btn btn-primary btn-sm"><span class="spinner"></span></button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="host-row">
+            <div class="body">
+              <div class="label">media-nas</div>
+              <div class="subtitle">root@nas.lan</div>
+            </div>
+            <div class="actions">
+              <span class="badge icon">⌨</span>
+
+              <button class="btn btn-primary btn-sm">▶ Connect</button>
+            </div>
+          </div>
+          <div class="alert alert-destructive" style="margin-top:12px;">
+            <div>
+              <div class="alert-title">Connection failed</div>
+              <div class="alert-body">Permission denied (publickey). Verify the key is loaded on the remote.</div>
+              <div style="display:flex; gap:8px; margin-top:10px;">
+                <button class="btn btn-ghost btn-sm">Open Settings</button>
+                <button class="btn btn-primary btn-sm">Retry</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ Connection Form · LIGHT ============ -->
+  <div>
+    <h2>Edit host · light</h2>
+    <div class="phone">
+      <div class="statusbar"><span>9:41</span><span>● ●●</span></div>
+      <div class="navbar">
+        <button class="nav-btn">Cancel</button>
+        <div class="title">Edit Host</div>
+        <button class="nav-btn bold">Save</button>
+      </div>
+      <div class="content">
+
+        <div class="card" style="padding:0;">
+          <div class="card-header">
+            <h3 class="card-title">Connection</h3>
+            <p class="card-desc">Where to reach the server. Host can be an IP or hostname.</p>
+          </div>
+          <div class="card-section">
+            <div class="field">
+              <label class="field-label">Label</label>
+              <input class="input" value="prod-bastion" />
+            </div>
+            <div class="field">
+              <label class="field-label">Host</label>
+              <input class="input" value="bastion.example.com" />
+            </div>
+            <div class="field">
+              <label class="field-label">Port</label>
+              <input class="input" value="2222" inputmode="numeric" />
+            </div>
+            <div class="field">
+              <label class="field-label">Username</label>
+              <input class="input" value="deploy" />
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="padding:0;">
+          <div class="card-header">
+            <h3 class="card-title">Authentication</h3>
+            <p class="card-desc">Choose how to prove identity to the server.</p>
+          </div>
+          <div class="card-section">
+            <div class="seg" role="tablist">
+              <button class="active">Password</button>
+              <button>Key</button>
+            </div>
+            <div class="field">
+              <label class="field-label">Password</label>
+              <input class="input" type="password" placeholder="Stored — replace?" />
+            </div>
+          </div>
+        </div>
+
+        <div class="alert" style="margin-top:12px;">
+          <div>
+            <div class="alert-title">Duplicate host</div>
+            <div class="alert-body">You already have a saved host for this user@host:port (“bastion-old”). Save anyway?</div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ Connection Form · DARK ============ -->
+  <div class="dark">
+    <h2 style="color:#aaa;">Edit host · dark</h2>
+    <div class="phone">
+      <div class="statusbar"><span>9:41</span><span>● ●●</span></div>
+      <div class="navbar">
+        <button class="nav-btn">Cancel</button>
+        <div class="title">Edit Host</div>
+        <button class="nav-btn bold">Save</button>
+      </div>
+      <div class="content">
+
+        <div class="card" style="padding:0;">
+          <div class="card-header">
+            <h3 class="card-title">Connection</h3>
+            <p class="card-desc">Where to reach the server. Host can be an IP or hostname.</p>
+          </div>
+          <div class="card-section">
+            <div class="field">
+              <label class="field-label">Label</label>
+              <input class="input" value="prod-bastion" />
+            </div>
+            <div class="field">
+              <label class="field-label">Host</label>
+              <input class="input" value="bastion.example.com" />
+            </div>
+            <div class="field">
+              <label class="field-label">Port</label>
+              <input class="input" value="2222" />
+            </div>
+            <div class="field">
+              <label class="field-label">Username</label>
+              <input class="input" value="deploy" />
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="padding:0;">
+          <div class="card-header">
+            <h3 class="card-title">Authentication</h3>
+            <p class="card-desc">Choose how to prove identity to the server.</p>
+          </div>
+          <div class="card-section">
+            <div class="seg">
+              <button>Password</button>
+              <button class="active">Key</button>
+            </div>
+            <div class="field">
+              <label class="field-label">Private key</label>
+              <button class="btn btn-ghost btn-block" style="justify-content:space-between; height:36px;">
+                <span>Stored — replace?</span>
+                <span style="color: var(--muted-foreground);">›</span>
+              </button>
+            </div>
+            <div class="field">
+              <label class="field-label">Passphrase (optional)</label>
+              <input class="input" type="password" placeholder="Stored — replace?" />
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ Toasts: stack + save success · LIGHT ============ -->
+  <div>
+    <h2>Sonner stack · light · multi-error + success</h2>
+    <div class="phone" style="position:relative;">
+      <div class="statusbar"><span>9:41</span><span>● ●●</span></div>
+      <div class="navbar">
+        <button class="nav-btn">&lt; Back</button>
+        <div class="title">Hosts</div>
+        <button class="nav-btn bold">+</button>
+      </div>
+      <!-- toaster overlay positioned absolutely under nav -->
+      <div class="toaster">
+        <div class="toast success" style="position:relative; z-index:3;">
+          <div class="toast-icon">✓</div>
+          <div class="toast-body">
+            <div class="toast-title">Host saved</div>
+            <div class="toast-desc">prod-bastion was added to your hosts.</div>
+          </div>
+          <button class="close">×</button>
+        </div>
+        <div class="toast error stack-2" style="position:absolute; top:96px; left:16px; right:16px; z-index:2; max-width:none;">
+          <div class="toast-icon">!</div>
+          <div class="toast-body">
+            <div class="toast-title">Connection failed · media-nas</div>
+            <div class="toast-desc">Permission denied (publickey).</div>
+            <div class="toast-actions">
+              <button class="btn btn-ghost btn-sm">Open Settings</button>
+              <button class="btn btn-primary btn-sm">Retry</button>
+            </div>
+          </div>
+          <button class="close">×</button>
+        </div>
+        <div class="toast error stack-3" style="position:absolute; top:108px; left:16px; right:16px; z-index:1; max-width:none;">
+          <div class="toast-icon">!</div>
+          <div class="toast-body">
+            <div class="toast-title">Connection failed · prod-bastion</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="content">
+        <div class="card">
+          <div class="host-row">
+            <div class="body"><div class="label">bedroom-pi</div><div class="subtitle">yi@10.0.0.42</div></div>
+            <div class="actions"><span class="badge icon">⌨</span><button class="btn btn-primary btn-sm">▶ Connect</button></div>
+          </div>
+        </div>
+        <div class="card"><div class="host-row">
+          <div class="body"><div class="label">prod-bastion</div><div class="subtitle">deploy@bastion.example.com:2222</div></div>
+          <div class="actions"><span class="badge icon">🔒</span><button class="btn btn-primary btn-sm">▶ Connect</button></div>
+        </div></div>
+        <div class="card"><div class="host-row">
+          <div class="body"><div class="label">media-nas</div><div class="subtitle">root@nas.lan</div></div>
+          <div class="actions"><span class="badge icon">⌨</span><button class="btn btn-primary btn-sm">▶ Connect</button></div>
+        </div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ Host-key mismatch · sub-option (i) compact ============ -->
+  <div class="dark">
+    <h2 style="color:#aaa;">Host-key mismatch · (i) compact toast (no fingerprints)</h2>
+    <div class="phone" style="position:relative;">
+      <div class="statusbar"><span>9:41</span><span>● ●●</span></div>
+      <div class="navbar">
+        <button class="nav-btn">&lt; Back</button>
+        <div class="title">Hosts</div>
+        <button class="nav-btn bold">+</button>
+      </div>
+      <div class="toaster">
+        <div class="toast warning">
+          <div class="toast-icon">⚠</div>
+          <div class="toast-body">
+            <div class="toast-title">Host key changed · prod-bastion</div>
+            <div class="toast-desc">The remote server's key differs from what was saved. This could be a man-in-the-middle attack.</div>
+            <div class="toast-actions">
+              <button class="btn btn-ghost btn-sm" style="border-color: var(--destructive); color: var(--destructive);">Reject</button>
+              <button class="btn btn-primary btn-sm">Trust New Key</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="content"></div>
+    </div>
+  </div>
+
+  <!-- ============ Host-key mismatch · sub-option (ii) expanded ============ -->
+  <div class="dark">
+    <h2 style="color:#aaa;">Host-key mismatch · (ii) expanded toast (fingerprints inline)</h2>
+    <div class="phone" style="position:relative;">
+      <div class="statusbar"><span>9:41</span><span>● ●●</span></div>
+      <div class="navbar">
+        <button class="nav-btn">&lt; Back</button>
+        <div class="title">Hosts</div>
+        <button class="nav-btn bold">+</button>
+      </div>
+      <div class="toaster">
+        <div class="toast warning">
+          <div class="toast-icon">⚠</div>
+          <div class="toast-body">
+            <div class="toast-title">Host key changed · prod-bastion</div>
+            <div class="toast-desc">The server's SSH key doesn't match what was saved. This could be a MITM.</div>
+            <div style="margin-top:8px; padding:8px; background: var(--muted); border-radius:6px; font-size:11px;">
+              <div style="color: var(--muted-foreground); margin-bottom:2px;">Saved:</div>
+              <div style="font-family:ui-monospace,Menlo,monospace; word-break:break-all;">SHA256:abc…3f9</div>
+              <div style="color: var(--muted-foreground); margin-top:6px; margin-bottom:2px;">Remote:</div>
+              <div style="font-family:ui-monospace,Menlo,monospace; word-break:break-all;">SHA256:xyz…77a</div>
+            </div>
+            <div class="toast-actions">
+              <button class="btn btn-ghost btn-sm" style="border-color: var(--destructive); color: var(--destructive);">Reject</button>
+              <button class="btn btn-primary btn-sm">Trust New Key</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="content"></div>
+    </div>
+  </div>
+
+  <!-- ============ Host-key mismatch · sub-option (iii) toast + sheet ============ -->
+  <div class="dark">
+    <h2 style="color:#aaa;">Host-key mismatch · (iii) toast → opens sheet</h2>
+    <div class="phone" style="position:relative;">
+      <div class="statusbar"><span>9:41</span><span>● ●●</span></div>
+      <div class="navbar">
+        <button class="nav-btn">&lt; Back</button>
+        <div class="title">Hosts</div>
+        <button class="nav-btn bold">+</button>
+      </div>
+      <div class="toaster">
+        <div class="toast warning">
+          <div class="toast-icon">⚠</div>
+          <div class="toast-body">
+            <div class="toast-title">Host key changed · prod-bastion</div>
+            <div class="toast-desc">Tap to review and accept or reject.</div>
+            <div class="toast-actions">
+              <button class="btn btn-primary btn-sm" style="height:26px;">Review →</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- bottom sheet (modal) -->
+      <div style="position:absolute; left:0; right:0; bottom:0; top:50%;
+                  background: var(--card); border-top:1px solid var(--border);
+                  border-top-left-radius:16px; border-top-right-radius:16px;
+                  padding:20px; box-shadow: 0 -8px 24px rgba(0,0,0,0.4);">
+        <div style="width:36px; height:4px; background: var(--border); border-radius:2px; margin:0 auto 16px;"></div>
+        <div style="font-size:17px; font-weight:600; margin-bottom:4px;">Host key changed</div>
+        <div style="font-size:13px; color: var(--muted-foreground); margin-bottom:16px;">
+          prod-bastion · The server's key doesn't match what's saved. Trust only if you expect this.
+        </div>
+        <div style="padding:12px; background: var(--muted); border-radius:8px; font-size:12px;">
+          <div style="color: var(--muted-foreground); margin-bottom:4px;">Saved fingerprint</div>
+          <div style="font-family:ui-monospace,Menlo,monospace; word-break:break-all; margin-bottom:10px;">SHA256:abc123def456...3f9</div>
+          <div style="color: var(--muted-foreground); margin-bottom:4px;">Remote fingerprint</div>
+          <div style="font-family:ui-monospace,Menlo,monospace; word-break:break-all;">SHA256:xyz987uvw321...77a</div>
+        </div>
+        <div style="display:flex; gap:8px; margin-top:16px;">
+          <button class="btn btn-ghost" style="flex:1; border-color: var(--destructive); color: var(--destructive);">Reject</button>
+          <button class="btn btn-primary" style="flex:1;">Trust New Key</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ Device-locked persistent toast · LIGHT ============ -->
+  <div>
+    <h2>Device-locked · persistent toast</h2>
+    <div class="phone" style="position:relative;">
+      <div class="statusbar"><span>9:41</span><span>● ●●</span></div>
+      <div class="navbar">
+        <div></div><div class="title">Hosts</div><button class="nav-btn bold">+</button>
+      </div>
+      <div class="toaster">
+        <div class="toast warning">
+          <div class="toast-icon">🔒</div>
+          <div class="toast-body">
+            <div class="toast-title">Saved hosts unavailable</div>
+            <div class="toast-desc">Unlock your device to access stored credentials.</div>
+            <div class="toast-actions">
+              <button class="btn btn-primary btn-sm">Retry</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="content" style="opacity:0.5; pointer-events:none;">
+        <div class="card"><div class="host-row">
+          <div class="body"><div class="label" style="background: var(--muted); color:transparent; border-radius:4px; height:14px; width:120px;">.</div>
+          <div class="subtitle" style="background: var(--muted); color:transparent; border-radius:4px; height:11px; width:180px; margin-top:6px;">.</div></div>
+        </div></div>
+        <div class="card"><div class="host-row">
+          <div class="body"><div class="label" style="background: var(--muted); color:transparent; border-radius:4px; height:14px; width:90px;">.</div>
+          <div class="subtitle" style="background: var(--muted); color:transparent; border-radius:4px; height:11px; width:160px; margin-top:6px;">.</div></div>
+        </div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ Session ended transient · DARK ============ -->
+  <div class="dark">
+    <h2 style="color:#aaa;">Session ended · info toast (auto-dismiss 4s)</h2>
+    <div class="phone" style="position:relative;">
+      <div class="statusbar"><span>9:41</span><span>● ●●</span></div>
+      <div class="navbar">
+        <button class="nav-btn">&lt; Back</button>
+        <div class="title">Hosts</div>
+        <button class="nav-btn bold">+</button>
+      </div>
+      <div class="toaster">
+        <div class="toast info">
+          <div class="toast-icon">i</div>
+          <div class="toast-body">
+            <div class="toast-title">Session ended</div>
+            <div class="toast-desc">Disconnected from prod-bastion.</div>
+          </div>
+          <button class="close">×</button>
+        </div>
+      </div>
+      <div class="content">
+        <div class="card"><div class="host-row">
+          <div class="body"><div class="label">bedroom-pi</div><div class="subtitle">yi@10.0.0.42</div></div>
+          <div class="actions"><span class="badge icon">⌨</span><button class="btn btn-primary btn-sm">▶ Connect</button></div>
+        </div></div>
+        <div class="card"><div class="host-row">
+          <div class="body"><div class="label">prod-bastion</div><div class="subtitle">deploy@bastion.example.com:2222</div></div>
+          <div class="actions"><span class="badge icon">🔒</span><button class="btn btn-primary btn-sm">▶ Connect</button></div>
+        </div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ Empty state · LIGHT ============ -->
+  <div>
+    <h2>Empty state · light</h2>
+    <div class="phone">
+      <div class="statusbar"><span>9:41</span><span>● ●●</span></div>
+      <div class="navbar">
+        <div></div>
+        <div class="title">Hosts</div>
+        <button class="nav-btn bold">+</button>
+      </div>
+      <div class="content" style="display:flex; align-items:center; justify-content:center;">
+        <div class="empty-state">
+          <div class="icon">⌥</div>
+          <div class="title">No hosts yet</div>
+          <div class="desc">Add a server to connect from your bed.</div>
+          <button class="btn btn-primary">Add Host</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ Empty state · DARK ============ -->
+  <div class="dark">
+    <h2 style="color:#aaa;">Empty state · dark</h2>
+    <div class="phone">
+      <div class="statusbar"><span>9:41</span><span>● ●●</span></div>
+      <div class="navbar">
+        <div></div>
+        <div class="title">Hosts</div>
+        <button class="nav-btn bold">+</button>
+      </div>
+      <div class="content" style="display:flex; align-items:center; justify-content:center;">
+        <div class="empty-state">
+          <div class="icon">⌥</div>
+          <div class="title">No hosts yet</div>
+          <div class="desc">Add a server to connect from your bed.</div>
+          <button class="btn btn-primary">Add Host</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>
