@@ -20,6 +20,8 @@
 		C1C1C1C100000000000000A1 /* ConnectionSmokeUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1C1C1C100000000000000F1 /* ConnectionSmokeUITests.swift */; };
 		D1D1D1D100000000000000A1 /* BedTermKit in Frameworks */ = {isa = PBXBuildFile; productRef = D1D1D1D100000000000000B1 /* BedTermKit */; };
 		A55E70AC0000000000000B01 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A55E70AC0000000000000A01 /* Assets.xcassets */; };
+		A55E70AC0000000000000B02 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = A55E70AC0000000000000A02 /* Localizable.xcstrings */; };
+		A55E70AC0000000000000B03 /* InfoPlist.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = A55E70AC0000000000000A03 /* InfoPlist.xcstrings */; };
 		D1D1D1D100000000000000A2 /* LookinServer in Frameworks */ = {isa = PBXBuildFile; productRef = D1D1D1D100000000000000B2 /* LookinServer */; };
 /* End PBXBuildFile section */
 
@@ -57,6 +59,8 @@
 		C1C1C1C100000000000000F1 /* ConnectionSmokeUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionSmokeUITests.swift; sourceTree = "<group>"; };
 		D1D1D1D100000000000000C1 /* BedTermKit */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = BedTermKit; path = BedTermKit; sourceTree = "<group>"; };
 		A55E70AC0000000000000A01 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		A55E70AC0000000000000A02 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
+		A55E70AC0000000000000A03 /* InfoPlist.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = InfoPlist.xcstrings; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -77,6 +81,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				A55E70AC0000000000000B01 /* Assets.xcassets in Resources */,
+				A55E70AC0000000000000B02 /* Localizable.xcstrings in Resources */,
+				A55E70AC0000000000000B03 /* InfoPlist.xcstrings in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -122,6 +128,8 @@
 			children = (
 				402702E3152E5ACED7511228 /* App */,
 				A55E70AC0000000000000A01 /* Assets.xcassets */,
+				A55E70AC0000000000000A02 /* Localizable.xcstrings */,
+				A55E70AC0000000000000A03 /* InfoPlist.xcstrings */,
 			);
 			path = BedTerm;
 			sourceTree = "<group>";
@@ -234,6 +242,11 @@
 			knownRegions = (
 				Base,
 				en,
+				"zh-Hans",
+				"zh-Hant",
+				ja,
+				ko,
+				ru,
 			);
 			mainGroup = CCCC4AAEB9C7F71DB36017F5;
 			minimizedProjectReferenceProxies = 1;

@@ -58,7 +58,7 @@ final class ConnectionViewModel {
 
     func buildCredential() -> HostCredential? {
         guard let portValue = Int(port), portValue > 0, !host.isEmpty, !username.isEmpty else {
-            errorMessage = "Host, port and username are required."
+            errorMessage = String(localized: "Host, port and username are required.")
             return nil
         }
         let authMethod: HostCredential.AuthMethod
@@ -67,7 +67,7 @@ final class ConnectionViewModel {
             authMethod = .password(password)
         case .privateKey:
             guard let key = privateKey else {
-                errorMessage = "Please import a private key file."
+                errorMessage = String(localized: "Please import a private key file.")
                 return nil
             }
             authMethod = .privateKey(key, passphrase: passphrase.isEmpty ? nil : passphrase)
@@ -95,8 +95,10 @@ final class ConnectionViewModel {
             isPrewarming = false
             if outcome == .denied {
                 permissionDenied = true
-                errorMessage =
-                    "Local network access is required to reach \(credential.host). Open Settings to enable it."
+                errorMessage = String(
+                    localized:
+                        "Local network access is required to reach \(credential.host). Open Settings to enable it."
+                )
                 return nil
             }
             // .unknown (timed out without a clear signal) — fall through and let the
@@ -113,11 +115,10 @@ final class ConnectionViewModel {
             return session
         case .closed(reason: let reason):
             // Surface host-key mismatch as a structured prompt; everything else is a flat error.
-            if reason.hasPrefix("Host key changed.") {
-                let parsed = Self.parseMismatch(reason)
+            if case .hostKeyMismatch(let stored, let remote) = session.lastError {
                 pendingMismatch = PendingMismatch(
-                    stored: parsed.stored,
-                    remote: parsed.remote,
+                    stored: stored,
+                    remote: remote,
                     host: credential.host,
                     port: credential.port
                 )
@@ -126,15 +127,8 @@ final class ConnectionViewModel {
             }
             return nil
         default:
-            errorMessage = "Unknown error."
+            errorMessage = String(localized: "Unknown error.")
             return nil
         }
-    }
-
-    private static func parseMismatch(_ reason: String) -> (stored: String, remote: String) {
-        let lines = reason.components(separatedBy: "\n")
-        let stored = lines.first(where: { $0.hasPrefix("Stored: ") })?.dropFirst("Stored: ".count) ?? ""
-        let remote = lines.first(where: { $0.hasPrefix("Remote: ") })?.dropFirst("Remote: ".count) ?? ""
-        return (String(stored), String(remote))
     }
 }

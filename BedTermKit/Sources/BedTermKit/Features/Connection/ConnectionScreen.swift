@@ -75,7 +75,7 @@ public struct ConnectionScreen: View {
                     if viewModel.isPrewarming {
                         HStack {
                             ProgressView()
-                            Text("Waiting for local network permission…")
+                            Text("Waiting for permission…")
                         }
                         .frame(maxWidth: .infinity)
                     } else if viewModel.isConnecting {
@@ -91,7 +91,7 @@ public struct ConnectionScreen: View {
                 .accessibilityIdentifier("connection.connect")
             }
         }
-        .navigationTitle("BedTerm")
+        .navigationTitle("New Connection")
         .navigationDestination(for: AppRoute.self) { route in
             switch route {
             case .terminal:

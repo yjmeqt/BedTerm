@@ -81,7 +81,7 @@ private struct HostKindStep: View {
                     onNext()
                 } label: {
                     OnboardingChoiceLabel(
-                        title: "Other",
+                        title: "Linux / other",
                         subtitle: "Linux box, VM, Raspberry Pi, cloud server"
                     )
                 }
@@ -179,12 +179,6 @@ private struct MacTutorialStep: View {
                         """
                 )
 
-                Text(
-                    "Tutorial content is still being written. The buttons above already work — you can continue and connect manually."
-                )
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-                .padding(.top)
             }
             .padding()
         }
@@ -229,8 +223,14 @@ private struct LocalPermissionStep: View {
             Image(systemName: "wifi")
                 .font(.system(size: 56))
                 .foregroundStyle(.tint)
-            Text(viewModel.location == .sameWifi ? "Local Network Access" : "All set")
-                .font(.title.bold())
+            Group {
+                if viewModel.location == .sameWifi {
+                    Text("Local Network Access")
+                } else {
+                    Text("All set")
+                }
+            }
+            .font(.title.bold())
             Text(detailText)
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
@@ -265,24 +265,31 @@ private struct LocalPermissionStep: View {
             .padding(.bottom)
             .accessibilityIdentifier("onboarding.localPermission.action")
         }
-        .navigationTitle(viewModel.location == .sameWifi ? "Permission" : "Done")
+        .navigationTitle(viewModel.location == .sameWifi
+            ? String(localized: "Permission")
+            : String(localized: "Done"))
         .navigationBarTitleDisplayMode(.inline)
     }
 
     private var detailText: String {
         if viewModel.location == .sameWifi {
-            return
-                "BedTerm needs Local Network access to reach your Mac on the same Wi-Fi. Tap Allow when iOS prompts you."
+            return String(
+                localized:
+                    "BedTerm needs Local Network access to reach your Mac on the same Wi-Fi. Tap Allow when iOS prompts you."
+            )
         }
-        return "You're ready to connect to a remote host. Tap Continue to enter the connection details."
+        return String(
+            localized:
+                "You're ready to connect to a remote host. Tap Continue to enter the connection details."
+        )
     }
 
     private var buttonTitle: String {
-        if viewModel.location != .sameWifi { return "Continue" }
+        if viewModel.location != .sameWifi { return String(localized: "Continue") }
         switch viewModel.permissionResult {
-        case .none: return "Request Permission"
-        case .granted, .unknown: return "Continue"
-        case .denied: return "Continue Anyway"
+        case .none: return String(localized: "Request Permission")
+        case .granted, .unknown: return String(localized: "Continue")
+        case .denied: return String(localized: "Continue Anyway")
         }
     }
 

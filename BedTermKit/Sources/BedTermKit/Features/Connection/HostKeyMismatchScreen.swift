@@ -17,11 +17,9 @@ struct HostKeyMismatchScreen: View {
                 .font(.title2)
                 .foregroundStyle(.orange)
 
-            Text(
-                "\(host):\(port) presented a different host key than we trusted last time. "
-                    + "This could mean the server was reinstalled — or that someone is intercepting the connection."
-            )
-            .font(.callout)
+            // swiftlint:disable:next line_length
+            Text("\(host):\(port) presented a different host key than we trusted last time. This could mean the server was reinstalled — or that someone is intercepting the connection.")
+                .font(.callout)
 
             VStack(alignment: .leading, spacing: 8) {
                 Text("Stored fingerprint").font(.caption).foregroundStyle(.secondary)
@@ -34,14 +32,14 @@ struct HostKeyMismatchScreen: View {
 
             Spacer()
 
-            Button("Reject and go back") { onReject() }
+            Button("Don't connect") { onReject() }
                 .buttonStyle(.bordered)
                 .frame(maxWidth: .infinity)
 
             Button(role: .destructive) {
                 confirmTrust = true
             } label: {
-                Text("Trust the new key").frame(maxWidth: .infinity)
+                Text("Trust new key").frame(maxWidth: .infinity)
             }
             .buttonStyle(.borderedProminent)
             .accessibilityIdentifier("mismatch.trust")
