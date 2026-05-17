@@ -9,13 +9,16 @@ public final class ComposerController {
 
     private let send: (Data) -> Void
     private let isBracketedPasteActive: () -> Bool
+    private let returnFocusToTerminal: () -> Void
 
     public init(
         send: @escaping (Data) -> Void,
-        isBracketedPasteActive: @escaping () -> Bool
+        isBracketedPasteActive: @escaping () -> Bool,
+        returnFocusToTerminal: @escaping () -> Void = {}
     ) {
         self.send = send
         self.isBracketedPasteActive = isBracketedPasteActive
+        self.returnFocusToTerminal = returnFocusToTerminal
     }
 
     public func open() {
@@ -23,6 +26,9 @@ public final class ComposerController {
     }
 
     public func cancel() {
+        // Hand first-responder back to the terminal *before* flipping isOpen, so
+        // the system keyboard sees a same-tick responder handoff (no dismiss).
+        returnFocusToTerminal()
         text = ""
         isOpen = false
     }
@@ -39,7 +45,8 @@ public final class ComposerController {
             bytes = Data(text.replacingOccurrences(of: "\n", with: "\r").utf8) + trailingReturn
         }
         send(bytes)
+        // Send keeps the composer open so the user can draft another message
+        // (R13.send_keeps_composer_open). Only ✕ Cancel closes the composer.
         text = ""
-        isOpen = false
     }
 }

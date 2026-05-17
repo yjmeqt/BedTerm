@@ -1,0 +1,118 @@
+<prd name="Design">
+
+<overview>
+The shared design system for BedTerm's app chrome — colour tokens for Light/Dark adaptiveness and the shipped app icon. Each requirement below is a self-contained slice of the design system referenced by the MVP and feature PRDs.
+</overview>
+<implementation platform="iOS" spec="bedterm/docs/specs/design.md" />
+
+<requirement id="R1" name="Colour Tokens">
+  <description>
+    <p>Every user-visible app-chrome surface, text, icon, border, and accent colour resolves to one of the named tokens below. Each token has both a Light value and a Dark value; SwiftUI/UIKit resolve them automatically as the iOS system appearance changes. Tokens are referenced by semantic name (e.g. <code>surface.elevated</code>) — never by palette name. The terminal viewport's own palette is tracked separately under <a href="prd:bedterm/mvp#R9">MVP R9</a> and is currently deferred.</p>
+    <table style="border-collapse:collapse;font-family:-apple-system,system-ui,sans-serif;font-size:13px;">
+    <thead>
+    <tr style="border-bottom:1px solid #888;">
+    <th style="text-align:left;padding:6px 12px;">Token</th>
+    <th style="text-align:left;padding:6px 12px;">Light</th>
+    <th style="text-align:left;padding:6px 12px;">Dark</th>
+    <th style="text-align:left;padding:6px 12px;">Used for</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td style="padding:6px 12px;"><code>surface.background</code></td>
+    <td style="padding:6px 12px;"><span style="display:inline-block;width:18px;height:18px;background:#FFFFFF;border:1px solid #ccc;vertical-align:middle;border-radius:3px;"/> <code>#FFFFFF</code></td>
+    <td style="padding:6px 12px;"><span style="display:inline-block;width:18px;height:18px;background:#000000;border:1px solid #444;vertical-align:middle;border-radius:3px;"/> <code>#000000</code></td>
+    <td style="padding:6px 12px;">Root screen background behind every view.</td>
+    </tr>
+    <tr>
+    <td style="padding:6px 12px;"><code>surface.elevated</code></td>
+    <td style="padding:6px 12px;"><span style="display:inline-block;width:18px;height:18px;background:#F2F2F7;border:1px solid #ccc;vertical-align:middle;border-radius:3px;"/> <code>#F2F2F7</code></td>
+    <td style="padding:6px 12px;"><span style="display:inline-block;width:18px;height:18px;background:#1C1C1E;border:1px solid #444;vertical-align:middle;border-radius:3px;"/> <code>#1C1C1E</code></td>
+    <td style="padding:6px 12px;">Cards, list rows, tutorial blocks.</td>
+    </tr>
+    <tr>
+    <td style="padding:6px 12px;"><code>text.primary</code></td>
+    <td style="padding:6px 12px;"><span style="display:inline-block;width:18px;height:18px;background:#000000;border:1px solid #ccc;vertical-align:middle;border-radius:3px;"/> <code>#000000</code></td>
+    <td style="padding:6px 12px;"><span style="display:inline-block;width:18px;height:18px;background:#FFFFFF;border:1px solid #444;vertical-align:middle;border-radius:3px;"/> <code>#FFFFFF</code></td>
+    <td style="padding:6px 12px;">Body copy, key labels, headlines.</td>
+    </tr>
+    <tr>
+    <td style="padding:6px 12px;"><code>text.muted</code></td>
+    <td style="padding:6px 12px;"><span style="display:inline-block;width:18px;height:18px;background:#3C3C43;border:1px solid #ccc;vertical-align:middle;border-radius:3px;"/> <code>#3C3C43 60%</code></td>
+    <td style="padding:6px 12px;"><span style="display:inline-block;width:18px;height:18px;background:#EBEBF5;border:1px solid #444;vertical-align:middle;border-radius:3px;"/> <code>#EBEBF5 60%</code></td>
+    <td style="padding:6px 12px;">Secondary labels, subtitles, captions.</td>
+    </tr>
+    <tr>
+    <td style="padding:6px 12px;"><code>accent</code></td>
+    <td style="padding:6px 12px;"><span style="display:inline-block;width:18px;height:18px;background:#007AFF;border:1px solid #ccc;vertical-align:middle;border-radius:3px;"/> <code>#007AFF</code></td>
+    <td style="padding:6px 12px;"><span style="display:inline-block;width:18px;height:18px;background:#0A84FF;border:1px solid #444;vertical-align:middle;border-radius:3px;"/> <code>#0A84FF</code></td>
+    <td style="padding:6px 12px;">Tint colour, Send button, active CTRL fill, onboarding glyph.</td>
+    </tr>
+    <tr>
+    <td style="padding:6px 12px;"><code>accent.label</code></td>
+    <td style="padding:6px 12px;"><span style="display:inline-block;width:18px;height:18px;background:#FFFFFF;border:1px solid #ccc;vertical-align:middle;border-radius:3px;"/> <code>#FFFFFF</code></td>
+    <td style="padding:6px 12px;"><span style="display:inline-block;width:18px;height:18px;background:#FFFFFF;border:1px solid #444;vertical-align:middle;border-radius:3px;"/> <code>#FFFFFF</code></td>
+    <td style="padding:6px 12px;">Text/glyphs that sit on top of an <code>accent</code> fill.</td>
+    </tr>
+    <tr>
+    <td style="padding:6px 12px;"><code>error</code></td>
+    <td style="padding:6px 12px;"><span style="display:inline-block;width:18px;height:18px;background:#FF3B30;border:1px solid #ccc;vertical-align:middle;border-radius:3px;"/> <code>#FF3B30</code></td>
+    <td style="padding:6px 12px;"><span style="display:inline-block;width:18px;height:18px;background:#FF453A;border:1px solid #444;vertical-align:middle;border-radius:3px;"/> <code>#FF453A</code></td>
+    <td style="padding:6px 12px;">Inline error text, host-key mismatch warnings, disconnect banner.</td>
+    </tr>
+    <tr>
+    <td style="padding:6px 12px;"><code>keybar.background</code></td>
+    <td style="padding:6px 12px;"><span style="display:inline-block;width:18px;height:18px;background:rgba(0,0,0,0.08);border:1px solid #ccc;vertical-align:middle;border-radius:3px;"/> Liquid Glass tint</td>
+    <td style="padding:6px 12px;"><span style="display:inline-block;width:18px;height:18px;background:rgba(255,255,255,0.10);border:1px solid #444;vertical-align:middle;border-radius:3px;"/> Liquid Glass tint</td>
+    <td style="padding:6px 12px;">Tint layered over the Liquid Glass material on the R3 capsule and compose pill.</td>
+    </tr>
+    </tbody>
+    </table>
+  </description>
+  <rule id="token_set" status="✅">The catalogue defines exactly these eight tokens: <code>surface.background</code>, <code>surface.elevated</code>, <code>text.primary</code>, <code>text.muted</code>, <code>accent</code>, <code>accent.label</code>, <code>error</code>, <code>keybar.background</code>.</rule>
+  <rule id="light_dark_variants" status="✅">Every token has both a Light value and a Dark value. Switching system appearance resolves each token to its Dark or Light variant automatically.</rule>
+  <rule id="semantic_naming" status="✅">Tokens use semantic names that describe their role (<code>surface.elevated</code>, <code>text.muted</code>) — not palette names (<code>gray800</code>, <code>blue500</code>).</rule>
+  <rule id="no_literals" status="✅">No literal colour values appear in code or views: no <code>Color(red:green:blue:)</code>, no <code>UIColor(red:green:blue:)</code>, no hex strings, no <code>Color.black</code> / <code>.white</code> / <code>.gray</code> / other static <code>Color.&lt;name&gt;</code> constants on user-visible surfaces.</rule>
+  <rule id="symbolic_allowed" status="✅" context="when no brand-specific token applies">Adaptive SwiftUI symbolic colours — <code>Color.primary</code>, <code>Color.secondary</code>, <code>Color.accentColor</code>, <code>.tint</code>, materials such as <code>.regularMaterial</code> — are acceptable. They are already system-adaptive and do not need a custom token.</rule>
+  <rule id="terminal_exception" status="✅">SwiftTerm's terminal palette is the one bridge exception — its ANSI colour map is rebuilt from tokens inside a <code>TerminalTheme</code> when the system appearance changes. Terminal palette tokens themselves are tracked under <a href="prd:bedterm/mvp#R9">MVP R9</a> (deferred).</rule>
+</requirement>
+
+<requirement id="R2" name="App Icon">
+  <description>
+    <p>BedTerm ships with a final designed app icon — not the Xcode placeholder — so it has a recognisable identity on the Home Screen, in Spotlight, in Settings, and in the App Switcher. The shipped icon set covers every iOS-required size and every Home Screen appearance mode introduced in iOS 18: Light, Dark, and Tinted.</p>
+    <table style="border-collapse:collapse;font-family:-apple-system,system-ui,sans-serif;font-size:13px;">
+    <thead>
+    <tr style="border-bottom:1px solid #888;">
+    <th style="text-align:center;padding:6px 12px;">Light</th>
+    <th style="text-align:center;padding:6px 12px;">Dark</th>
+    <th style="text-align:center;padding:6px 12px;">Tinted</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr>
+    <td style="padding:8px 12px;text-align:center;background:#F2F2F7;border-radius:8px;"><img src="screenshots/AppIcon-Light.png" alt="App icon — Light variant" style="width:120px;height:120px;border-radius:27px;box-shadow:0 1px 4px rgba(0,0,0,0.15);"/></td>
+    <td style="padding:8px 12px;text-align:center;background:#000000;border-radius:8px;"><img src="screenshots/AppIcon-Dark.png" alt="App icon — Dark variant" style="width:120px;height:120px;border-radius:27px;box-shadow:0 1px 4px rgba(0,0,0,0.5);"/></td>
+    <td style="padding:8px 12px;text-align:center;background:#1C1C1E;border-radius:8px;"><img src="screenshots/AppIcon-Tinted.png" alt="App icon — Tinted variant" style="width:120px;height:120px;border-radius:27px;box-shadow:0 1px 4px rgba(0,0,0,0.5);"/></td>
+    </tr>
+    </tbody>
+    </table>
+  </description>
+  <rule id="icon_designed" status="✅">A final app icon design exists and is shipped at all iOS-required sizes (Home Screen, Spotlight, Settings, Notifications, App Store marketing).</rule>
+  <rule id="icon_dark_tinted" status="✅">The icon ships variants for iOS 18+ Dark and Tinted Home Screen appearances in addition to the default Light variant.</rule>
+</requirement>
+
+<bug id="app_icon_missing" status="Fixed" date="2026-05-16" rule="R2.icon_designed">
+  <current>
+    The project has no AppIcon asset — the app launches with the default white/blank iOS placeholder icon on the Home Screen, in Spotlight, and in the App Switcher. No icon design has been produced yet.
+  </current>
+  <expected>
+    A final app icon design is produced and added as an AppIcon asset catalog entry covering every iOS-required size, including Dark and Tinted variants for iOS 18+.
+  </expected>
+  <steps>
+    1. Build and install the app on a device or simulator.
+    2. Go to the Home Screen.
+    3. Observe: the app appears with the generic placeholder icon instead of a designed icon.
+  </steps>
+</bug>
+
+</prd>
