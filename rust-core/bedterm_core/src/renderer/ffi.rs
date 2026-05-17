@@ -47,17 +47,27 @@ pub unsafe extern "C" fn bt_renderer_set_font(
     (*r).inner.set_font(pixel_size, device_pixel_ratio);
 }
 
-/// Stub — Task 4 wires the real draw call.
 /// # Safety
-/// `r`, `term`, `drawable_texture` must all be live.
+/// `r` must be a live `BtRenderer`. `term` must be a live `BtTerm` or null
+/// (null is treated as "no terminal yet"). `drawable_texture` must be a
+/// live `id<MTLTexture>`.
 #[no_mangle]
 pub unsafe extern "C" fn bt_renderer_draw(
-    _r: *mut BtRenderer,
-    _term: *const BtTerm,
-    _drawable_texture: *const std::ffi::c_void,
-    _viewport_width_px: u32,
-    _viewport_height_px: u32,
-    _time_seconds: f64,
+    r: *mut BtRenderer,
+    term: *const BtTerm,
+    drawable_texture: *const std::ffi::c_void,
+    viewport_width_px: u32,
+    viewport_height_px: u32,
+    time_seconds: f64,
 ) -> c_int {
-    0
+    if r.is_null() {
+        return -1;
+    }
+    (*r).inner.draw(
+        term,
+        drawable_texture,
+        viewport_width_px,
+        viewport_height_px,
+        time_seconds,
+    )
 }
