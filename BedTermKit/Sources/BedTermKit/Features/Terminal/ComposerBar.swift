@@ -14,7 +14,6 @@ struct ComposerBar: View {
                     .scrollContentBackground(.hidden)
                     .autocorrectionDisabled(true)
                     .textInputAutocapitalization(.never)
-                    .keyboardType(.asciiCapable)
                     .padding(.leading, 4)
                     .padding(.top, -6)
                     .padding(.bottom, 0)

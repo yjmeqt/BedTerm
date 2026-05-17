@@ -1,5 +1,4 @@
 import SwiftUI
-import UIKit
 
 struct TerminalScreen: View {
     @State var session: TerminalSession
@@ -60,20 +59,6 @@ struct TerminalScreen: View {
             }
         }
         .animation(.smooth(duration: 0.22), value: composer.isOpen)
-        .animation(.smooth(duration: 0.22), value: keyboardHidden)
-        .onReceive(
-            NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)
-        ) { _ in
-            // Interactive scroll-to-dismiss completed (or any other dismissal):
-            // reflect that in our state so the toggle glyph and `yieldFirstResponder`
-            // stay in sync. Ignore while the composer owns the keyboard.
-            if !composer.isOpen { keyboardHidden = true }
-        }
-        .onReceive(
-            NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)
-        ) { _ in
-            if !composer.isOpen { keyboardHidden = false }
-        }
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 Button("Disconnect") {

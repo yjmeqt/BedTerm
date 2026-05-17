@@ -196,6 +196,7 @@ An iOS terminal app designed for coding on iPhone. Users SSH into a Mac mini or 
   <rule id="open_affordance" status="✅">When the composer is not presented, a floating compose pill is anchored on the trailing side of the bottom row, sharing that row with the special-keys toolbar (R3) on the leading side — the iOS 26 Notes-style pairing of a leading multi-action capsule and a trailing single-action capsule. Tapping the pill opens the composer. The pill uses the iOS 26 Liquid Glass capsule style and a compose / pencil glyph; it does <em>not</em> live inside the special-keys toolbar, and R3's three keys ([ESC], [CTRL], [TAB]) are unchanged.</rule>
   <rule id="keybar_hidden_while_open" status="✅" context="composer presented">While the composer is presented, the special-keys toolbar (R3) and the floating compose pill are both hidden. The composer occupies the bottom input slot on its own.</rule>
   <rule id="composer_editor" status="✅" context="composer presented">An editable multi-line text area sits directly above the system keyboard. It uses a monospace font matching the terminal, supports the standard iOS text-editing affordances (caret movement, selection, copy/paste), and disables autocorrect, autocapitalisation, and smart punctuation so typed bytes survive verbatim.</rule>
+  <rule id="multilingual_input" status="❌" context="composer presented">The composer accepts input in any iOS-supported language and script (English, Simplified / Traditional Chinese, Japanese, Korean, Russian, emoji, etc.). The system keyboard's globe key remains active so the user can switch input languages while drafting — the composer must not restrict the keyboard to ASCII-only. UTF-8 bytes from the composed buffer are sent verbatim to the PTY on Send, matching how a paste of the same characters would behave in macOS Terminal.</rule>
   <rule id="composer_height" status="✅" context="composer presented">The composer's outer rounded-rect container is a fixed 112pt tall. The text area occupies the upper portion; the control row sits inside the container along the bottom edge.</rule>
   <rule id="extensible_chip_rail" status="✅" context="composer presented">The control row inside the composer container hosts Cancel and Send today, with Send as a small circular up-arrow button on the trailing side. The row is designed to accept additional chips in later iterations (e.g. voice dictation, attachments, mode toggles) without re-layout.</rule>
   <rule id="send_button" status="✅" context="composer presented">A small circular Send button (up-arrow glyph, ~30pt diameter, tinted accent) sits in the control row inside the composer container on the trailing side. Tapping Send writes the entire buffer to the PTY in one operation, clears the buffer, and collapses the composer back to the default state. Send is disabled while the buffer is empty.</rule>
@@ -238,13 +239,44 @@ An iOS terminal app designed for coding on iPhone. Users SSH into a Mac mini or 
   <rule id="capsule_does_not_collide" status="❌">On every supported width, the four-key KeyBar capsule and the trailing R13 ComposePill maintain visible breathing room and never overlap. On narrow widths the dismiss key may be sized smaller than the other three keys (no smaller than a 44pt hit target) to preserve that breathing room.</rule>
   <rule id="keybar_persists_on_dismiss" status="❌" context="keyboard dismissed via toggle">After the toggle hides the keyboard, the KeyBar, ComposePill, and direction pad (R11) all remain visible — anchored above the bottom safe-area inset per R3.floats_when_keyboard_hidden — so the user can still send [⎋] / [⌃] / [⇥], open the composer, or navigate without summoning the keyboard.</rule>
   <rule id="terminal_reflows_on_dismiss" status="❌" context="keyboard dismissed">The terminal viewport grows into the space the keyboard vacated, the remote PTY is resized to the new row count, and the active prompt line re-anchors to the new bottom edge per R5.prompt_anchored_bottom. A TUI program already drawing its own UI on the alternate screen continues to fill the new viewport with no visual gap.</rule>
-  <rule id="interactive_scroll_dismiss" status="❌" context="keyboard shown">Dragging the terminal scrollback downward puts the keyboard away interactively: the top edge of the keyboard tracks the user's finger frame-for-frame, and the KeyBar / ComposePill ride down with it. If the user releases after the keyboard has crossed roughly half its height (or with a downward velocity), the dismiss completes; otherwise the keyboard snaps back up.</rule>
+  <rule id="interactive_scroll_dismiss" status="❌" context="deferred">Dragging the terminal scrollback downward puts the keyboard away interactively: the top edge of the keyboard tracks the user's finger frame-for-frame, and the KeyBar / ComposePill ride down with it. Deferred from this iteration — UIScrollView's interactive dismiss gesture requires an <code>inputAccessoryView</code> to anchor against, and the toolbar is currently a SwiftUI <code>safeAreaInset</code> sibling rather than an accessory view. Revisit by installing a thin invisible accessory view solely as a gesture anchor.</rule>
   <rule id="no_tap_dismiss_on_viewport" status="❌">A single tap on the terminal viewport while the keyboard is shown does <em>not</em> dismiss the keyboard — that gesture is reserved for cursor positioning, text selection, and TUI mouse mode (vim, htop). The keyboard is dismissed only via the KeyBar toggle and the interactive scroll-down gesture.</rule>
   <rule id="composer_unaffected" status="❌" context="R13 composer open">While the composer is open, the KeyBar (and therefore the dismiss toggle) is hidden per R13.keybar_hidden_while_open. The composer keeps its own ✕ Cancel and ↑ Send controls; keyboard dismissal during composition is intentionally out of scope to keep focus on the draft.</rule>
   <rule id="hardware_keyboard_hides_toggle" status="❌" context="external keyboard attached">When a hardware keyboard is connected and the software keyboard is therefore not presented, the dismiss toggle is hidden from the KeyBar (the capsule reverts to its three R3 keys). Re-attaching / detaching the hardware keyboard updates the capsule live.</rule>
   <rule id="reduce_motion" status="❌" context="Reduce Motion enabled">The interactive drag-to-dismiss still tracks the finger (it is direct manipulation, not decorative motion), but the snap-back-up animation when the gesture is released short of threshold is replaced by an instant state change.</rule>
   <rule id="orientation_persistence" status="❌">If the keyboard is in the hidden state, rotating the device or backgrounding/foregrounding the app preserves that state — the keyboard does not auto-present on layout change. Opening a new SSH session starts with the keyboard shown.</rule>
 </requirement>
+
+<bug id="composer_blocks_language_switch" status="Open" date="2026-05-17" rule="R13.multilingual_input">
+  <current>
+    When the multiline composer is opened, the system keyboard is forced into ASCII-only mode. The globe key on the keyboard does nothing useful — input methods for Simplified Chinese, Traditional Chinese, Japanese, Korean, Russian, emoji, and any other non-ASCII keyboard installed on the device are unavailable. The user cannot draft a message in their native language inside the composer; only English / ASCII characters can be typed.
+  </current>
+  <expected>
+    The composer keyboard behaves like any normal iOS text field: the globe key cycles through every input keyboard the user has installed (Pinyin, Zhuyin, Kana, Hangul, Russian, emoji, etc.), and characters typed in those keyboards are inserted into the composer buffer as UTF-8 and sent verbatim to the PTY on Send. Autocorrect / autocapitalisation / smart punctuation remain disabled per R13.composer_editor, but language switching is not blocked.
+  </expected>
+  <steps>
+    1. Install at least one non-Latin keyboard on the device (Settings → General → Keyboard → Keyboards → Add New Keyboard…, e.g. Simplified Chinese — Pinyin).
+    2. Launch the app, connect to any host, and tap the compose pill to open the multiline composer.
+    3. Tap the globe key on the system keyboard to cycle to the Chinese (or any non-Latin) keyboard.
+    4. Observe: the keyboard does not switch — it stays on an ASCII-only English layout, and the installed non-Latin keyboards are not reachable from inside the composer.
+  </steps>
+</bug>
+
+<bug id="toolbar_stuck_midscreen_after_dismiss" status="Open" date="2026-05-17" rule="R15.keybar_persists_on_dismiss">
+  <current>
+    After the keyboard is dismissed (either via the R15 KeyBar toggle or the interactive scroll-down gesture), the KeyBar capsule and ComposePill do <em>not</em> ride down to the bottom safe-area inset. Instead they stay roughly where the top edge of the keyboard <em>was</em>, leaving a large empty band of background between the toolbar row and the actual bottom of the screen. The terminal viewport also stops at this old keyboard edge rather than growing into the freed space — so the bottom ~third of the screen is unused.
+    <img src="screenshots/r15_toolbar_stuck_midscreen.png" alt="KeyBar and ComposePill anchored mid-screen with empty space below"/>
+  </current>
+  <expected>
+    When the keyboard hides, the KeyBar capsule, ComposePill, and the terminal viewport's bottom edge all drop to the bottom safe-area inset (just above the home indicator), per R15.keybar_persists_on_dismiss and R15.terminal_reflows_on_dismiss. The empty band below the toolbar must disappear; the prompt re-anchors to the new bottom per R5.prompt_anchored_bottom.
+  </expected>
+  <steps>
+    1. Launch the app and connect to any host.
+    2. Tap the terminal viewport to bring up the system keyboard.
+    3. Tap the keyboard-dismiss key on the right side of the KeyBar (or drag the terminal scrollback downward).
+    4. Observe: the keyboard hides, but the KeyBar and ComposePill stay anchored where the top of the keyboard used to be — there is a large empty area below them.
+  </steps>
+</bug>
 
 <bug id="duplicate_input_accessory" status="Open" date="2026-05-16" rule="R3.only_toolbar">
   <current>
