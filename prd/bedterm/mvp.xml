@@ -168,7 +168,31 @@ An iOS terminal app designed for coding on iPhone. Users SSH into a Mac mini or 
 
 <requirement id="R13" name="Multiline Input Composer">
   <description>
-    A user-invoked composer that lets the user draft a multi-line message off the wire and then send it to the terminal as one block. Default behaviour is unchanged: keystrokes from the system keyboard go straight to the PTY. The composer is opened from a dedicated floating affordance, and exited by sending or by an explicit Cancel control inside the composer.
+    <p>A user-invoked composer that lets the user draft a multi-line message off the wire and then send it to the terminal as one block. Default behaviour is unchanged: keystrokes from the system keyboard go straight to the PTY. The composer is opened from a dedicated floating affordance, and exited by sending or by an explicit Cancel control inside the composer.</p>
+    <p><strong>Closed state</strong> — leading 3-key capsule (R3) + trailing compose pill, Notes-style:</p>
+    <pre>
+    ┌─────────────────────────────────────────────┐
+    │             Terminal output                 │
+    │                                             │
+    │ ╭──────────────╮              ╭─────╮       │
+    │ │  ⎋   ⌃   ⇥   │              │  ✏  │       │
+    │ ╰──────────────╯              ╰─────╯       │
+    └─────────────────────────────────────────────┘
+    </pre>
+    <p><strong>Open state</strong> — leading capsule slides off; trailing pill morphs into a full-width composer with a chip rail below:</p>
+    <pre>
+    ┌─────────────────────────────────┐
+    │       Terminal output           │
+    ├─────────────────────────────────┤
+    │ ╭───────────────────────────╮   │
+    │ │ Compose your message…     │   │
+    │ │                           │   │
+    │ ╰───────────────────────────╯   │
+    │ [✕]                  [➤ Send]  │
+    ├─────────────────────────────────┤
+    │        System keyboard          │
+    └─────────────────────────────────┘
+    </pre>
   </description>
   <rule id="default_passthrough" status="❌">When the composer is not presented, the system keyboard sends keystrokes directly to the PTY (today's behaviour is preserved).</rule>
   <rule id="open_affordance" status="❌">When the composer is not presented, a floating compose pill is anchored on the trailing side of the bottom row, sharing that row with the special-keys toolbar (R3) on the leading side — the iOS 26 Notes-style pairing of a leading multi-action capsule and a trailing single-action capsule. Tapping the pill opens the composer. The pill uses the iOS 26 Liquid Glass capsule style and a compose / pencil glyph; it does <em>not</em> live inside the special-keys toolbar, and R3's three keys ([ESC], [CTRL], [TAB]) are unchanged.</rule>
