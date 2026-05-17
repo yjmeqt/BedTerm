@@ -13,10 +13,11 @@ struct TerminalScreen: View {
         _keyBar = State(initialValue: KeyBarController { [weak session] data in session?.send(data) })
         let probe = TerminalHostView.BracketedPasteProbe()
         _bracketedPasteProbe = State(initialValue: probe)
-        _composer = State(initialValue: ComposerController(
-            send: { [weak session] data in session?.send(data) },
-            isBracketedPasteActive: { MainActor.assumeIsolated { probe.isActive() } }
-        ))
+        _composer = State(
+            initialValue: ComposerController(
+                send: { [weak session] data in session?.send(data) },
+                isBracketedPasteActive: { MainActor.assumeIsolated { probe.isActive() } }
+            ))
         self.credential = credential
         self.onExit = onExit
     }
