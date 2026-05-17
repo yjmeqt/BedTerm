@@ -111,7 +111,8 @@ public final class CitadelSSHClient: BedTermKit.SSHClient, @unchecked Sendable {
                 port: credential.port,
                 authenticationMethod: authMethod,
                 hostKeyValidator: hostKeyValidator,
-                reconnect: .never
+                reconnect: .never,
+                channelHandlers: [TCPKeepaliveHandler()]
             )
         } catch let mismatch as TOFUHostKeyDelegate.Mismatch {
             throw SSHError.hostKeyMismatch(stored: mismatch.stored, remote: mismatch.remote)

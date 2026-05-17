@@ -19,6 +19,9 @@ public struct ConnectionFormScreen: View {
     @State private var viewModel: ConnectionFormViewModel
     @State private var keyImporter = false
     @State private var duplicateLabel: String?
+    #if DEBUG
+        @AppStorage("debug.useMetalRenderer") private var useMetalRenderer: Bool = false
+    #endif
 
     let connectOnSave: Bool
     let onFinish: (Outcome) -> Void
@@ -102,6 +105,11 @@ public struct ConnectionFormScreen: View {
                         .accessibilityIdentifier("connection.error")
                 }
             }
+            #if DEBUG
+                Section("Debug") {
+                    Toggle("Metal renderer (experimental)", isOn: $useMetalRenderer)
+                }
+            #endif
         }
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)

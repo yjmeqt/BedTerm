@@ -58,6 +58,25 @@ jobs:
         # flaky download doesn't block CI. If Metal is genuinely missing, the build
         # step below will fail loudly with the actual error.
         run: sudo xcodebuild -downloadComponent MetalToolchain || true
+      - name: Install Rust toolchain & targets
+        # The BedTerm.app scheme has a pre-action that runs
+        # scripts/build-rust-xcframework.sh, which needs the iOS/macOS targets
+        # installed. rust-toolchain.toml pins the channel; `rustup show` is the
+        # canonical way to materialize it.
+        run: |
+          rustup show
+          rustup target add aarch64-apple-ios aarch64-apple-ios-sim aarch64-apple-darwin
+      - name: Cache cargo build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            rust-core/target
+          key: cargo-${{ runner.os }}-${{ hashFiles('rust-core/Cargo.lock', 'rust-core/rust-toolchain.toml') }}-${{ hashFiles('rust-core/**/*.rs') }}
+          restore-keys: |
+            cargo-${{ runner.os }}-${{ hashFiles('rust-core/Cargo.lock', 'rust-core/rust-toolchain.toml') }}-
+            cargo-${{ runner.os }}-
       - name: Cache SwiftPM
         uses: actions/cache@v4
         with:
