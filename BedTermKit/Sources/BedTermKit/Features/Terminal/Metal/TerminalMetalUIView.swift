@@ -63,6 +63,19 @@ final class TerminalMetalUIView: MTKView {
 
         refreshFontMetrics()
 
+        // Dynamic Type: re-rasterise atlas + recompute cell size when the
+        // user's preferred content size category changes. Uses the iOS 17+
+        // trait-observation API (the legacy traitCollectionDidChange override
+        // is deprecated on iOS 26). The closure form takes `self` as its first
+        // argument, which avoids creating a retain cycle.
+        registerForTraitChanges(
+            [UITraitPreferredContentSizeCategory.self]
+        ) { (self: TerminalMetalUIView, _: UITraitCollection) in
+            self.refreshFontMetrics()
+            self.setNeedsLayout()
+            self.setNeedsDisplay()
+        }
+
         consumeTask = Task { @MainActor [weak self] in
             for await chunk in feed {
                 guard let self else { return }
