@@ -15,6 +15,9 @@ final class TerminalMetalUIView: MTKView {
     private var lastRows: Int = 0
     private(set) var cellSize = CGSize(width: 8, height: 16)
     private let cursorLayer = MetalCursorLayer()
+    private let selectionLayer = MetalSelectionLayer()
+    private let selectionGR = MetalSelectionGesture(target: nil, action: nil)
+    private var currentCols: Int = 80
 
     init(feed: AsyncStream<Data>,
          onSend: @escaping (Data) -> Void,
@@ -45,6 +48,18 @@ final class TerminalMetalUIView: MTKView {
         self.backgroundColor = .black
 
         layer.addSublayer(cursorLayer)
+        layer.addSublayer(selectionLayer)
+        selectionGR.cellSize = cellSize
+        selectionGR.onSelectionChange = { [weak self] sel in
+            guard let self else { return }
+            self.selectionLayer.update(sel, cellSize: self.cellSize, cols: self.currentCols)
+        }
+        selectionGR.onCopy = { [weak self] sel in
+            guard let self else { return }
+            let text = self.extractSelectedText(sel)
+            UIPasteboard.general.string = text
+        }
+        addGestureRecognizer(selectionGR)
 
         refreshFontMetrics()
 
@@ -98,6 +113,32 @@ final class TerminalMetalUIView: MTKView {
             lastRows = rows
             setNeedsDisplay()
         }
+        currentCols = cols
+        selectionGR.cellSize = cellSize
+    }
+
+    private func extractSelectedText(_ sel: SelectionRange) -> String {
+        let snapshot = terminalCore.snapshot()
+        let n = sel.normalised
+        let rowsCount = Int(snapshot.rows)
+        let colsCount = Int(snapshot.cols)
+        var out = ""
+        let lastRow = min(n.endRow, rowsCount - 1)
+        guard n.startRow <= lastRow else { return "" }
+        for r in n.startRow...lastRow {
+            let from = (r == n.startRow) ? n.startCol : 0
+            let to   = (r == n.endRow)   ? n.endCol   : colsCount
+            for c in from..<min(to, colsCount) {
+                if let cell = snapshot.cell(col: c, row: r), cell.ch != 0,
+                   let scalar = Unicode.Scalar(cell.ch) {
+                    out.append(Character(scalar))
+                } else {
+                    out.append(" ")
+                }
+            }
+            if r != lastRow { out.append("\n") }
+        }
+        return out
     }
 
     private func refreshFontMetrics() {

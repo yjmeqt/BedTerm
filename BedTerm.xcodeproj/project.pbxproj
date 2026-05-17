@@ -21,6 +21,7 @@
 		E2E2E2E200000000000000A1 /* TerminalCoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2E2E2E200000000000000F1 /* TerminalCoreTests.swift */; };
 		F3F3F3F300000000000000A1 /* TerminalCoreShadowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3F3F3F300000000000000F1 /* TerminalCoreShadowTests.swift */; };
 		B2B2B2B200000000000000A1 /* MetalRendererBridgeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2B2B2B200000000000000F1 /* MetalRendererBridgeTests.swift */; };
+		B3B3B3B300000000000000A1 /* SelectionGeometryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3B3B3B300000000000000F1 /* SelectionGeometryTests.swift */; };
 		F3F3F3F300000000000000A2 /* Fixtures in Resources */ = {isa = PBXBuildFile; fileRef = F3F3F3F300000000000000F2 /* Fixtures */; };
 		C1C1C1C100000000000000A1 /* ConnectionSmokeUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1C1C1C100000000000000F1 /* ConnectionSmokeUITests.swift */; };
 		D1D1D1D100000000000000A1 /* BedTermKit in Frameworks */ = {isa = PBXBuildFile; productRef = D1D1D1D100000000000000B1 /* BedTermKit */; };
@@ -64,6 +65,7 @@
 		E2E2E2E200000000000000F1 /* TerminalCoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalCoreTests.swift; sourceTree = "<group>"; };
 		F3F3F3F300000000000000F1 /* TerminalCoreShadowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalCoreShadowTests.swift; sourceTree = "<group>"; };
 		B2B2B2B200000000000000F1 /* MetalRendererBridgeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetalRendererBridgeTests.swift; sourceTree = "<group>"; };
+		B3B3B3B300000000000000F1 /* SelectionGeometryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectionGeometryTests.swift; sourceTree = "<group>"; };
 		F3F3F3F300000000000000F2 /* Fixtures */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Fixtures; sourceTree = "<group>"; };
 		C1C1C1C100000000000000E1 /* BedTermUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = BedTermUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		C1C1C1C100000000000000F1 /* ConnectionSmokeUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionSmokeUITests.swift; sourceTree = "<group>"; };
@@ -124,6 +126,7 @@
 				F3F3F3F300000000000000F1 /* TerminalCoreShadowTests.swift */,
 				F3F3F3F300000000000000F2 /* Fixtures */,
 				B2B2B2B200000000000000F1 /* MetalRendererBridgeTests.swift */,
+				B3B3B3B300000000000000F1 /* SelectionGeometryTests.swift */,
 			);
 			path = BedTermTests;
 			sourceTree = "<group>";
@@ -309,6 +312,7 @@
 				E2E2E2E200000000000000A1 /* TerminalCoreTests.swift in Sources */,
 				F3F3F3F300000000000000A1 /* TerminalCoreShadowTests.swift in Sources */,
 				B2B2B2B200000000000000A1 /* MetalRendererBridgeTests.swift in Sources */,
+				B3B3B3B300000000000000A1 /* SelectionGeometryTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
