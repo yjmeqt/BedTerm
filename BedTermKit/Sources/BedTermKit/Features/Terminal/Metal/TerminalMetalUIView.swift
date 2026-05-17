@@ -6,7 +6,7 @@ import UIKit
 final class TerminalMetalUIView: MTKView {
     let terminalCore: TerminalCore
     let bridge: RendererBridge
-    private let onSend: (Data) -> Void
+    let onSend: (Data) -> Void
     private let onResize: (Int, Int) -> Void
 
     private var startTime = CACurrentMediaTime()
@@ -60,6 +60,13 @@ final class TerminalMetalUIView: MTKView {
             UIPasteboard.general.string = text
         }
         addGestureRecognizer(selectionGR)
+
+        // Single-tap brings up the system keyboard by making this view first
+        // responder. The long-press selection recogniser fires later (0.4 s
+        // minimumPressDuration) so the two don't conflict.
+        let focusTap = UITapGestureRecognizer(target: self, action: #selector(handleFocusTap))
+        focusTap.cancelsTouchesInView = false
+        addGestureRecognizer(focusTap)
 
         refreshFontMetrics()
 
@@ -154,6 +161,10 @@ final class TerminalMetalUIView: MTKView {
         return out
     }
 
+    @objc private func handleFocusTap() {
+        if !isFirstResponder { _ = becomeFirstResponder() }
+    }
+
     private func refreshFontMetrics() {
         let body = UIFontMetrics.default.scaledFont(
             for: .monospacedSystemFont(ofSize: 14, weight: .regular)
@@ -161,5 +172,68 @@ final class TerminalMetalUIView: MTKView {
         bridge.setFont(pointSize: body.pointSize, scale: UIScreen.main.scale)
         let charSize = ("M" as NSString).size(withAttributes: [.font: body])
         cellSize = charSize
+    }
+
+    // MARK: First responder + keyboard input
+
+    override var canBecomeFirstResponder: Bool { true }
+
+    /// Hardware-key handling for keys UIKeyInput cannot deliver: arrows,
+    /// escape, function keys, and Ctrl-combinations. Each maps to the
+    /// canonical xterm/VT byte sequence and is sent straight to the PTY.
+    override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+        var handled = false
+        for press in presses {
+            guard let key = press.key else { continue }
+            if let bytes = Self.encode(key: key) {
+                onSend(bytes)
+                handled = true
+            }
+        }
+        if !handled { super.pressesBegan(presses, with: event) }
+    }
+
+    private static func encode(key: UIKey) -> Data? {
+        let esc: UInt8 = 0x1B
+        // Ctrl-letter: produce the 0x01..0x1A control byte for A..Z.
+        if key.modifierFlags.contains(.control), key.characters.count == 1,
+           let ascii = key.characters.uppercased().unicodeScalars.first?.value,
+           ascii >= 0x40, ascii <= 0x5F {
+            return Data([UInt8(ascii - 0x40)])
+        }
+        switch key.keyCode {
+        case .keyboardUpArrow:    return Data([esc, 0x5B, 0x41])
+        case .keyboardDownArrow:  return Data([esc, 0x5B, 0x42])
+        case .keyboardRightArrow: return Data([esc, 0x5B, 0x43])
+        case .keyboardLeftArrow:  return Data([esc, 0x5B, 0x44])
+        case .keyboardHome:       return Data([esc, 0x5B, 0x48])
+        case .keyboardEnd:        return Data([esc, 0x5B, 0x46])
+        case .keyboardPageUp:     return Data([esc, 0x5B, 0x35, 0x7E])
+        case .keyboardPageDown:   return Data([esc, 0x5B, 0x36, 0x7E])
+        case .keyboardEscape:     return Data([esc])
+        case .keyboardTab:        return Data([0x09])
+        case .keyboardReturnOrEnter: return Data([0x0D])
+        case .keyboardDeleteOrBackspace: return Data([0x7F])
+        default: return nil
+        }
+    }
+}
+
+extension TerminalMetalUIView: UIKeyInput {
+    /// `UIKeyInput` requires this property; we never echo locally — the
+    /// remote shell handles all echo, so there's no "text" we own.
+    var hasText: Bool { false }
+
+    func insertText(_ text: String) {
+        // Translate a soft-keyboard Return into CR; everything else is UTF-8.
+        if text == "\n" {
+            onSend(Data([0x0D]))
+        } else {
+            onSend(Data(text.utf8))
+        }
+    }
+
+    func deleteBackward() {
+        onSend(Data([0x7F]))  // DEL — xterm-256color expects 0x7F, not 0x08
     }
 }
