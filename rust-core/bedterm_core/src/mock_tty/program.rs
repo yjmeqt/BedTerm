@@ -1,12 +1,7 @@
 //! Mock-TTY program trait. Each program is a self-contained byte source.
 
 pub trait Program: Send + std::any::Any {
-    fn as_any(&self) -> &dyn std::any::Any
-    where
-        Self: Sized,
-    {
-        self
-    }
+    fn as_any(&self) -> &dyn std::any::Any;
 
     fn on_byte(&mut self, _byte: u8, _out: &mut Vec<u8>) {}
 

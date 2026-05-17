@@ -40,7 +40,8 @@ impl MockTty {
 
     pub fn write_input(&mut self, bytes: &[u8]) {
         for &b in bytes {
-            self.termios.input_byte(b, &mut self.program, &mut self.output);
+            self.termios
+                .input_byte(b, &mut self.program, &mut self.output);
         }
         self.flush();
     }
@@ -63,19 +64,22 @@ impl MockTty {
         if self.output.is_empty() {
             return;
         }
-        if let Some(cb) = self.callback {
-            #[cfg(debug_assertions)]
-            {
-                assert!(
-                    !self.in_callback.get(),
-                    "bt_mock_tty: reentered handle from inside output callback"
-                );
-                self.in_callback.set(true);
-            }
-            unsafe { (cb.func)(self.output.as_ptr(), self.output.len(), cb.user_data); }
-            #[cfg(debug_assertions)]
-            self.in_callback.set(false);
+        let Some(cb) = self.callback else {
+            return;
+        };
+        #[cfg(debug_assertions)]
+        {
+            assert!(
+                !self.in_callback.get(),
+                "bt_mock_tty: reentered handle from inside output callback"
+            );
+            self.in_callback.set(true);
         }
+        unsafe {
+            (cb.func)(self.output.as_ptr(), self.output.len(), cb.user_data);
+        }
+        #[cfg(debug_assertions)]
+        self.in_callback.set(false);
         self.output.clear();
     }
 }

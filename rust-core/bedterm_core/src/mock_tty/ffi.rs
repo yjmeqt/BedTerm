@@ -10,21 +10,22 @@ pub struct BtMockTty {
     inner: MockTty,
 }
 
-pub type BtMockTtyOutputCallback =
-    unsafe extern "C" fn(*const u8, usize, *mut c_void);
+pub type BtMockTtyOutputCallback = unsafe extern "C" fn(*const u8, usize, *mut c_void);
 
+/// # Safety
+/// `opts_json` must be either null or point to a NUL-terminated UTF-8 string
+/// owned by the caller for the duration of this call.
 #[no_mangle]
-pub extern "C" fn bt_mock_tty_create(
+pub unsafe extern "C" fn bt_mock_tty_create(
     program: u32,
     _opts_json: *const c_char,
 ) -> *mut BtMockTty {
+    #[allow(clippy::match_single_binding)] // expanded by tasks 5–7
     let prog: Box<dyn crate::mock_tty::program::Program> = match program {
         _ => Box::new(RawSink::new()),
     };
     let mut inner = MockTty::new(prog);
-    let mut boot_buf = Vec::new();
-    inner.program.boot(&mut boot_buf);
-    inner.output.extend_from_slice(&boot_buf);
+    inner.program.boot(&mut inner.output);
     Box::into_raw(Box::new(BtMockTty { inner }))
 }
 
@@ -60,11 +61,7 @@ pub unsafe extern "C" fn bt_mock_tty_set_output_callback(
 /// # Safety
 /// `h` must be valid; `bytes` must point to at least `len` bytes (or be null when len == 0).
 #[no_mangle]
-pub unsafe extern "C" fn bt_mock_tty_write(
-    h: *mut BtMockTty,
-    bytes: *const u8,
-    len: usize,
-) -> i32 {
+pub unsafe extern "C" fn bt_mock_tty_write(h: *mut BtMockTty, bytes: *const u8, len: usize) -> i32 {
     if h.is_null() {
         return -1;
     }

@@ -15,6 +15,9 @@ impl Default for RawSink {
 }
 
 impl Program for RawSink {
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
     fn on_byte(&mut self, byte: u8, out: &mut Vec<u8>) {
         out.push(byte);
     }

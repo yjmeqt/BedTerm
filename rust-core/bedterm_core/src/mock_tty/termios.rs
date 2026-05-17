@@ -11,12 +11,7 @@ impl Termios {
         Self { raw: false }
     }
 
-    pub fn input_byte(
-        &mut self,
-        b: u8,
-        program: &mut Box<dyn Program>,
-        out: &mut Vec<u8>,
-    ) {
+    pub fn input_byte(&mut self, b: u8, program: &mut Box<dyn Program>, out: &mut Vec<u8>) {
         program.on_byte(b, out);
         let _ = self.raw;
     }
