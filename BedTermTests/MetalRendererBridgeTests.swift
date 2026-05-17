@@ -1,5 +1,6 @@
-import XCTest
 import Metal
+import XCTest
+
 @testable import BedTermKit
 
 final class MetalRendererBridgeTests: XCTestCase {
@@ -16,7 +17,7 @@ final class MetalRendererBridgeTests: XCTestCase {
         }
         bridge.setFont(pointSize: 14, scale: 3)
         // No assertion — verifying no crash on init/setFont/dealloc.
-        _ = bridge // keep alive
+        _ = bridge  // keep alive
     }
 
     func testDrawIntoOffscreenTexture() throws {

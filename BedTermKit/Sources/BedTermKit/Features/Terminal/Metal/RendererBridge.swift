@@ -12,7 +12,7 @@ final class RendererBridge {
         // `passRetained` so the retain count is balanced when Rust drops
         // the wrappers. `passUnretained` would underflow the retain count.
         let devPtr = Unmanaged.passRetained(device as AnyObject).toOpaque()
-        let qPtr   = Unmanaged.passRetained(queue  as AnyObject).toOpaque()
+        let qPtr = Unmanaged.passRetained(queue as AnyObject).toOpaque()
         guard let ptr = bt_renderer_new(devPtr, qPtr) else {
             // bt_renderer_new returned null: it never took ownership, so we
             // must release our retains explicitly.
@@ -39,11 +39,11 @@ final class RendererBridge {
     /// with the rendered glyphs — UIFont's text-size metrics can drift by
     /// fractions of a pt per row and accumulate visually over the viewport.
     func cellSizeInPoints(scale: CGFloat) -> CGSize {
-        var w: UInt32 = 0
-        var h: UInt32 = 0
-        bt_renderer_cell_pixel_size(handle, &w, &h)
-        guard w > 0, h > 0, scale > 0 else { return .zero }
-        return CGSize(width: CGFloat(w) / scale, height: CGFloat(h) / scale)
+        var width: UInt32 = 0
+        var height: UInt32 = 0
+        bt_renderer_cell_pixel_size(handle, &width, &height)
+        guard width > 0, height > 0, scale > 0 else { return .zero }
+        return CGSize(width: CGFloat(width) / scale, height: CGFloat(height) / scale)
     }
 
     /// Encode one draw of `term` into `texture`. Returns 0 on success,

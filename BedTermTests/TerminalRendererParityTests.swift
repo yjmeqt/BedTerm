@@ -1,5 +1,6 @@
-import XCTest
 import Metal
+import XCTest
+
 @testable import BedTermKit
 
 /// Renders each Plan A fixture through the Metal renderer into an offscreen
@@ -15,7 +16,7 @@ final class TerminalRendererParityTests: XCTestCase {
         "01_ls_color_always",
         "02_clear_then_prompt",
         "03_cursor_addressing",
-        "04_utf8_mixed",
+        "04_utf8_mixed"
     ]
 
     func testFixturesProduceNonEmptyRender() throws {
@@ -39,55 +40,65 @@ final class TerminalRendererParityTests: XCTestCase {
         desc.usage = [.shaderRead, .renderTarget]
 
         for name in fixtures {
-            guard let url = Self.fixtureURL(named: name) else {
-                XCTFail("missing fixture \(name).bin in test bundle")
-                continue
-            }
-            let payload = try Data(contentsOf: url)
-
-            let term = TerminalCore(cols: 80, rows: 24)
-            term.feed(payload)
-
-            guard let tex = device.makeTexture(descriptor: desc) else {
-                XCTFail("texture allocation failed for \(name)")
-                continue
-            }
-            let rc = bridge.draw(
-                term: term,
-                into: tex,
-                viewport: CGSize(width: 1024, height: 512),
-                time: 0
-            )
-            XCTAssertEqual(rc, 0, "metal draw failed on \(name) (rc=\(rc))")
-
-            // Drain GPU work before reading back pixels.
-            let drain = queue.makeCommandBuffer()
-            drain?.commit()
-            drain?.waitUntilCompleted()
-
-            let bytesPerRow = 1024 * 4
-            var bytes = [UInt8](repeating: 0, count: bytesPerRow * 512)
-            tex.getBytes(
-                &bytes,
-                bytesPerRow: bytesPerRow,
-                from: MTLRegionMake2D(0, 0, 1024, 512),
-                mipmapLevel: 0
-            )
-
-            // Count non-zero R/G/B bytes (skip alpha lane — clear colour sets
-            // alpha=255 which would make any cleared texture trivially pass).
-            var nonZeroRGB = 0
-            for i in stride(from: 0, to: bytes.count, by: 4) {
-                if bytes[i] != 0 || bytes[i + 1] != 0 || bytes[i + 2] != 0 {
-                    nonZeroRGB += 1
-                }
-            }
-            print("[ParitySweep] \(name): nonZeroRGB=\(nonZeroRGB)")
-            XCTAssertGreaterThan(
-                nonZeroRGB, 100,
-                "renderer produced empty image for \(name) (nonZeroRGB=\(nonZeroRGB))"
-            )
+            try renderFixtureAndAssert(name: name, device: device, queue: queue, bridge: bridge, desc: desc)
         }
+    }
+
+    private func renderFixtureAndAssert(
+        name: String,
+        device: MTLDevice,
+        queue: MTLCommandQueue,
+        bridge: RendererBridge,
+        desc: MTLTextureDescriptor
+    ) throws {
+        guard let url = Self.fixtureURL(named: name) else {
+            XCTFail("missing fixture \(name).bin in test bundle")
+            return
+        }
+        let payload = try Data(contentsOf: url)
+
+        let term = TerminalCore(cols: 80, rows: 24)
+        term.feed(payload)
+
+        guard let tex = device.makeTexture(descriptor: desc) else {
+            XCTFail("texture allocation failed for \(name)")
+            return
+        }
+        let rc = bridge.draw(
+            term: term,
+            into: tex,
+            viewport: CGSize(width: 1024, height: 512),
+            time: 0
+        )
+        XCTAssertEqual(rc, 0, "metal draw failed on \(name) (rc=\(rc))")
+
+        // Drain GPU work before reading back pixels.
+        let drain = queue.makeCommandBuffer()
+        drain?.commit()
+        drain?.waitUntilCompleted()
+
+        let bytesPerRow = 1024 * 4
+        var bytes = [UInt8](repeating: 0, count: bytesPerRow * 512)
+        tex.getBytes(
+            &bytes,
+            bytesPerRow: bytesPerRow,
+            from: MTLRegionMake2D(0, 0, 1024, 512),
+            mipmapLevel: 0
+        )
+
+        // Count non-zero R/G/B bytes (skip alpha lane — clear colour sets
+        // alpha=255 which would make any cleared texture trivially pass).
+        var nonZeroRGB = 0
+        for pixel in stride(from: 0, to: bytes.count, by: 4) {
+            if bytes[pixel] != 0 || bytes[pixel + 1] != 0 || bytes[pixel + 2] != 0 {
+                nonZeroRGB += 1
+            }
+        }
+        print("[ParitySweep] \(name): nonZeroRGB=\(nonZeroRGB)")
+        XCTAssertGreaterThan(
+            nonZeroRGB, 100,
+            "renderer produced empty image for \(name) (nonZeroRGB=\(nonZeroRGB))"
+        )
     }
 
     /// Resolve fixture URL using the same pattern as `TerminalCoreShadowTests`:

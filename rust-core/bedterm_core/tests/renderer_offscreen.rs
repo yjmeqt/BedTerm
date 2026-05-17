@@ -42,16 +42,7 @@ fn renders_hello_world_into_offscreen_texture() {
     desc.set_usage(MTLTextureUsage::ShaderRead | MTLTextureUsage::RenderTarget);
     let tex = device.new_texture(&desc);
 
-    let rc = unsafe {
-        bt_renderer_draw(
-            renderer,
-            term,
-            tex.as_ptr() as *const _,
-            1024,
-            768,
-            0.0,
-        )
-    };
+    let rc = unsafe { bt_renderer_draw(renderer, term, tex.as_ptr() as *const _, 1024, 768, 0.0) };
     assert_eq!(rc, 0, "bt_renderer_draw returned {rc}");
 
     // Wait for the GPU work to actually finish before reading back.

@@ -15,9 +15,9 @@ final class MetalSelectionGesture: UILongPressGestureRecognizer {
 
     @objc private func handle(_ gr: UIGestureRecognizer) {
         guard let view = gr.view, cellSize.width > 0, cellSize.height > 0 else { return }
-        let p = gr.location(in: view)
-        let col = max(0, Int(p.x / cellSize.width))
-        let row = max(0, Int(p.y / cellSize.height))
+        let point = gr.location(in: view)
+        let col = max(0, Int(point.x / cellSize.width))
+        let row = max(0, Int(point.y / cellSize.height))
 
         switch gr.state {
         case .began:

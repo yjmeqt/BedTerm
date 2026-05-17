@@ -6,7 +6,7 @@ public struct ConnectionScreen: View {
     @State private var viewModel = ConnectionViewModel(clientFactory: { CitadelSSHClient() })
     @State private var keyImporter = false
     #if DEBUG
-    @AppStorage("debug.useMetalRenderer") private var useMetalRenderer: Bool = false
+        @AppStorage("debug.useMetalRenderer") private var useMetalRenderer: Bool = false
     #endif
 
     public init(path: Binding<NavigationPath>) {
@@ -72,9 +72,9 @@ public struct ConnectionScreen: View {
             }
 
             #if DEBUG
-            Section("Debug") {
-                Toggle("Metal renderer (experimental)", isOn: $useMetalRenderer)
-            }
+                Section("Debug") {
+                    Toggle("Metal renderer (experimental)", isOn: $useMetalRenderer)
+                }
             #endif
 
             Section {

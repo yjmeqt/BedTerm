@@ -167,7 +167,7 @@ impl Renderer {
         att.set_clear_color(MTLClearColor::new(0.0, 0.0, 0.0, 1.0));
 
         let cmd = self.queue.new_command_buffer();
-        let enc = cmd.new_render_command_encoder(&pass);
+        let enc = cmd.new_render_command_encoder(pass);
         enc.set_render_pipeline_state(&self.pipelines.cell_pso);
         if let Some(ref b) = vbuf {
             enc.set_vertex_buffer(0, Some(b), 0);

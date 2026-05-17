@@ -1,6 +1,7 @@
-import XCTest
-@testable import BedTermKit
 import SwiftTerm
+import XCTest
+
+@testable import BedTermKit
 
 /// For each fixture: feed identical bytes to SwiftTerm and TerminalCore at the
 /// same grid size, then compare the rendered character grid cell-by-cell.
@@ -65,9 +66,11 @@ final class TerminalCoreShadowTests: XCTestCase {
                     let stIsBlank = stChar == " " || stChar == "\0"
                     let rsIsBlank = rsScalar == " " || rsCell?.ch == 0
                     if stIsBlank && rsIsBlank { continue }
+                    let stDesc = String(stChar).debugDescription
+                    let rsDesc = String(rsScalar).debugDescription
                     XCTAssertEqual(
                         stChar, rsScalar,
-                        "[\(url.lastPathComponent)] mismatch at (\(col),\(row)): SwiftTerm=\(String(stChar).debugDescription) Core=\(String(rsScalar).debugDescription)"
+                        "[\(url.lastPathComponent)] mismatch at (\(col),\(row)): SwiftTerm=\(stDesc) Core=\(rsDesc)"
                     )
                 }
             }

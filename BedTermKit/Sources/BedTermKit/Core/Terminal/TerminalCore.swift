@@ -52,6 +52,7 @@ public final class TerminalCore {
             cells.append(GridSnapshot.Cell(ch: raw.ch, fgRGBA: raw.fg_rgba, bgRGBA: raw.bg_rgba, flags: raw.flags))
         }
         bt_term_snapshot_release(handle)
-        return GridSnapshot(cols: view.cols, rows: view.rows, cursorCol: view.cursor_col, cursorRow: view.cursor_row, cells: cells)
+        return GridSnapshot(
+            cols: view.cols, rows: view.rows, cursorCol: view.cursor_col, cursorRow: view.cursor_row, cells: cells)
     }
 }

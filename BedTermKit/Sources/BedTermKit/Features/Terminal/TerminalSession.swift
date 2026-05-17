@@ -68,6 +68,11 @@ final class TerminalSession {
     }
 
     nonisolated static func describe(_ error: SSHError) -> String {
+        if let simple = describeSimple(error) { return simple }
+        return describeWithDetails(error)
+    }
+
+    private nonisolated static func describeSimple(_ error: SSHError) -> String? {
         switch error {
         case .dnsResolution:
             return String(localized: "Cannot resolve host.")
@@ -75,22 +80,32 @@ final class TerminalSession {
             return String(localized: "Connection refused — check host and port.")
         case .timeout:
             return String(localized: "Connection timed out.")
-        case .handshakeFailed(let reason):
-            return String(localized: "SSH handshake failed: \(reason)")
         case .authenticationFailed:
             return String(localized: "Authentication failed.")
         case .privateKeyParse:
             return String(localized: "Cannot parse private key.")
         case .privateKeyPassphraseRequired:
             return String(localized: "Private key requires a passphrase.")
+        case .peerReset:
+            return String(
+                localized: "Connection reset by the remote host (network change or idle timeout). Tap to reconnect.")
+        default:
+            return nil
+        }
+    }
+
+    private nonisolated static func describeWithDetails(_ error: SSHError) -> String {
+        switch error {
+        case .handshakeFailed(let reason):
+            return String(localized: "SSH handshake failed: \(reason)")
         case .hostKeyMismatch(let stored, let remote):
             return String(localized: "Host key changed.\nStored: \(stored)\nRemote: \(remote)")
         case .disconnected(let reason):
             return String(localized: "Disconnected: \(reason)")
-        case .peerReset:
-            return String(localized: "Connection reset by the remote host (network change or idle timeout). Tap to reconnect.")
         case .shellExited(let code):
             return String(localized: "Shell exited (\(code)).")
+        default:
+            return ""
         }
     }
 }

@@ -20,12 +20,15 @@ final class TerminalMetalUIView: MTKView {
     private let selectionGR = MetalSelectionGesture(target: nil, action: nil)
     private var currentCols: Int = 80
 
-    init(feed: AsyncStream<Data>,
-         onSend: @escaping (Data) -> Void,
-         onResize: @escaping (Int, Int) -> Void) {
+    init(
+        feed: AsyncStream<Data>,
+        onSend: @escaping (Data) -> Void,
+        onResize: @escaping (Int, Int) -> Void
+    ) {
         guard let device = MTLCreateSystemDefaultDevice(),
-              let queue = device.makeCommandQueue(),
-              let bridge = RendererBridge(device: device, queue: queue) else {
+            let queue = device.makeCommandQueue(),
+            let bridge = RendererBridge(device: device, queue: queue)
+        else {
             preconditionFailure("Metal initialisation failed")
         }
         self.terminalCore = TerminalCore(cols: 80, rows: 24)
@@ -50,25 +53,7 @@ final class TerminalMetalUIView: MTKView {
 
         layer.addSublayer(cursorLayer)
         layer.addSublayer(selectionLayer)
-        selectionGR.cellSize = cellSize
-        selectionGR.onSelectionChange = { [weak self] sel in
-            guard let self else { return }
-            self.selectionLayer.update(sel, cellSize: self.cellSize, cols: self.currentCols)
-        }
-        selectionGR.onCopy = { [weak self] sel in
-            guard let self else { return }
-            let text = self.extractSelectedText(sel)
-            UIPasteboard.general.string = text
-        }
-        addGestureRecognizer(selectionGR)
-
-        // Single-tap brings up the system keyboard by making this view first
-        // responder. The long-press selection recogniser fires later (0.4 s
-        // minimumPressDuration) so the two don't conflict.
-        let focusTap = UITapGestureRecognizer(target: self, action: #selector(handleFocusTap))
-        focusTap.cancelsTouchesInView = false
-        addGestureRecognizer(focusTap)
-
+        installGestureRecognizers()
         refreshFontMetrics()
 
         // Dynamic Type: re-rasterise atlas + recompute cell size when the
@@ -97,6 +82,26 @@ final class TerminalMetalUIView: MTKView {
 
     @available(*, unavailable)
     required init(coder: NSCoder) { fatalError("not used") }
+
+    private func installGestureRecognizers() {
+        selectionGR.cellSize = cellSize
+        selectionGR.onSelectionChange = { [weak self] sel in
+            guard let self else { return }
+            self.selectionLayer.update(sel, cellSize: self.cellSize, cols: self.currentCols)
+        }
+        selectionGR.onCopy = { [weak self] sel in
+            guard let self else { return }
+            UIPasteboard.general.string = self.extractSelectedText(sel)
+        }
+        addGestureRecognizer(selectionGR)
+
+        // Single-tap brings up the system keyboard by making this view first
+        // responder. The long-press selection recogniser fires later (0.4 s
+        // minimumPressDuration) so the two don't conflict.
+        let focusTap = UITapGestureRecognizer(target: self, action: #selector(handleFocusTap))
+        focusTap.cancelsTouchesInView = false
+        addGestureRecognizer(focusTap)
+    }
 
     deinit {
         consumeTask?.cancel()
@@ -133,8 +138,9 @@ final class TerminalMetalUIView: MTKView {
         // belongs on the Metal-renderer side of the FFI.
         let pointSize = bounds.size
         guard cellSize.width > 0, cellSize.height > 0,
-              pointSize.width > 0, pointSize.height > 0 else { return }
-        let cols = max(1, Int(pointSize.width  / cellSize.width))
+            pointSize.width > 0, pointSize.height > 0
+        else { return }
+        let cols = max(1, Int(pointSize.width / cellSize.width))
         let rows = max(1, Int(pointSize.height / cellSize.height))
         if cols != lastCols || rows != lastRows {
             let didGrow = rows > lastRows
@@ -157,24 +163,22 @@ final class TerminalMetalUIView: MTKView {
 
     private func extractSelectedText(_ sel: SelectionRange) -> String {
         let snapshot = terminalCore.snapshot()
-        let n = sel.normalised
+        let norm = sel.normalised
         let rowsCount = Int(snapshot.rows)
         let colsCount = Int(snapshot.cols)
         var out = ""
-        let lastRow = min(n.endRow, rowsCount - 1)
-        guard n.startRow <= lastRow else { return "" }
-        for r in n.startRow...lastRow {
-            let from = (r == n.startRow) ? n.startCol : 0
-            let to   = (r == n.endRow)   ? n.endCol   : colsCount
-            for c in from..<min(to, colsCount) {
-                if let cell = snapshot.cell(col: c, row: r), cell.ch != 0,
-                   let scalar = Unicode.Scalar(cell.ch) {
-                    out.append(Character(scalar))
-                } else {
-                    out.append(" ")
+        let lastRow = min(norm.endRow, rowsCount - 1)
+        guard norm.startRow <= lastRow else { return "" }
+        for row in norm.startRow...lastRow {
+            let from = (row == norm.startRow) ? norm.startCol : 0
+            let to = (row == norm.endRow) ? norm.endCol : colsCount
+            for col in from..<min(to, colsCount) {
+                let scalar = snapshot.cell(col: col, row: row).flatMap { cell in
+                    cell.ch != 0 ? Unicode.Scalar(cell.ch) : nil
                 }
+                out.append(scalar.map(Character.init) ?? " ")
             }
-            if r != lastRow { out.append("\n") }
+            if row != lastRow { out.append("\n") }
         }
         return out
     }
@@ -211,28 +215,35 @@ final class TerminalMetalUIView: MTKView {
         if !handled { super.pressesBegan(presses, with: event) }
     }
 
+    private static let esc: UInt8 = 0x1B
+
+    /// Static map from UIKey.keyCode to the canonical xterm/VT byte sequence.
+    private static let keyCodeBytes: [UIKeyboardHIDUsage: [UInt8]] = [
+        .keyboardUpArrow: [esc, 0x5B, 0x41],
+        .keyboardDownArrow: [esc, 0x5B, 0x42],
+        .keyboardRightArrow: [esc, 0x5B, 0x43],
+        .keyboardLeftArrow: [esc, 0x5B, 0x44],
+        .keyboardHome: [esc, 0x5B, 0x48],
+        .keyboardEnd: [esc, 0x5B, 0x46],
+        .keyboardPageUp: [esc, 0x5B, 0x35, 0x7E],
+        .keyboardPageDown: [esc, 0x5B, 0x36, 0x7E],
+        .keyboardEscape: [esc],
+        .keyboardTab: [0x09],
+        .keyboardReturnOrEnter: [0x0D],
+        .keyboardDeleteOrBackspace: [0x7F]
+    ]
+
     private static func encode(key: UIKey) -> Data? {
-        let esc: UInt8 = 0x1B
-        if key.modifierFlags.contains(.control), key.characters.count == 1,
-           let ascii = key.characters.uppercased().unicodeScalars.first?.value,
-           ascii >= 0x40, ascii <= 0x5F {
-            return Data([UInt8(ascii - 0x40)])
-        }
-        switch key.keyCode {
-        case .keyboardUpArrow:    return Data([esc, 0x5B, 0x41])
-        case .keyboardDownArrow:  return Data([esc, 0x5B, 0x42])
-        case .keyboardRightArrow: return Data([esc, 0x5B, 0x43])
-        case .keyboardLeftArrow:  return Data([esc, 0x5B, 0x44])
-        case .keyboardHome:       return Data([esc, 0x5B, 0x48])
-        case .keyboardEnd:        return Data([esc, 0x5B, 0x46])
-        case .keyboardPageUp:     return Data([esc, 0x5B, 0x35, 0x7E])
-        case .keyboardPageDown:   return Data([esc, 0x5B, 0x36, 0x7E])
-        case .keyboardEscape:     return Data([esc])
-        case .keyboardTab:        return Data([0x09])
-        case .keyboardReturnOrEnter: return Data([0x0D])
-        case .keyboardDeleteOrBackspace: return Data([0x7F])
-        default: return nil
-        }
+        if let ctrlByte = encodeControl(key: key) { return Data([ctrlByte]) }
+        return keyCodeBytes[key.keyCode].map { Data($0) }
+    }
+
+    private static func encodeControl(key: UIKey) -> UInt8? {
+        guard key.modifierFlags.contains(.control), key.characters.count == 1,
+            let ascii = key.characters.uppercased().unicodeScalars.first?.value,
+            ascii >= 0x40, ascii <= 0x5F
+        else { return nil }
+        return UInt8(ascii - 0x40)
     }
 
     private func refreshFontMetrics() {
@@ -306,8 +317,8 @@ final class TerminalMetalUIView: MTKView {
         guard rows > 3, row >= 0, row < rows / 2 else { return }
         // Only anchor when every visible row strictly below the cursor is blank.
         for rowIndex in (row + 1)..<rows {
-            for c in 0..<cols {
-                if let cell = snapshot.cell(col: c, row: rowIndex), cell.ch != 0 {
+            for col in 0..<cols {
+                if let cell = snapshot.cell(col: col, row: rowIndex), cell.ch != 0 {
                     return
                 }
             }
@@ -342,33 +353,43 @@ extension TerminalMetalUIView: UIKeyInput, UITextInputTraits {
     // system may refuse to present a soft keyboard for a custom UIKeyInput
     // view, or may apply IME corrections that mangle commands.
     var autocorrectionType: UITextAutocorrectionType {
-        get { .no } set { _ = newValue }
+        get { .no }
+        set { _ = newValue }
     }
     var autocapitalizationType: UITextAutocapitalizationType {
-        get { .none } set { _ = newValue }
+        get { .none }
+        set { _ = newValue }
     }
     var spellCheckingType: UITextSpellCheckingType {
-        get { .no } set { _ = newValue }
+        get { .no }
+        set { _ = newValue }
     }
     var smartQuotesType: UITextSmartQuotesType {
-        get { .no } set { _ = newValue }
+        get { .no }
+        set { _ = newValue }
     }
     var smartDashesType: UITextSmartDashesType {
-        get { .no } set { _ = newValue }
+        get { .no }
+        set { _ = newValue }
     }
     var smartInsertDeleteType: UITextSmartInsertDeleteType {
-        get { .no } set { _ = newValue }
+        get { .no }
+        set { _ = newValue }
     }
     var keyboardType: UIKeyboardType {
-        get { .asciiCapable } set { _ = newValue }
+        get { .asciiCapable }
+        set { _ = newValue }
     }
     var keyboardAppearance: UIKeyboardAppearance {
-        get { .dark } set { _ = newValue }
+        get { .dark }
+        set { _ = newValue }
     }
     var returnKeyType: UIReturnKeyType {
-        get { .default } set { _ = newValue }
+        get { .default }
+        set { _ = newValue }
     }
     var enablesReturnKeyAutomatically: Bool {
-        get { false } set { _ = newValue }
+        get { false }
+        set { _ = newValue }
     }
 }

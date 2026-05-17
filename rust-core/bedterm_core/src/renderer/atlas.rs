@@ -13,9 +13,7 @@ use core_graphics::context::{CGContext, CGTextDrawingMode};
 use core_graphics::geometry::{CGPoint, CGSize};
 use core_text::font::{self as ctfont, CTFont};
 use core_text::font_descriptor::kCTFontOrientationHorizontal;
-use metal::{
-    Device, MTLPixelFormat, MTLRegion, MTLTextureUsage, Texture, TextureDescriptor,
-};
+use metal::{Device, MTLPixelFormat, MTLRegion, MTLTextureUsage, Texture, TextureDescriptor};
 
 const ATLAS_PX: u32 = 2048;
 
@@ -188,4 +186,3 @@ impl GlyphAtlas {
         })
     }
 }
-

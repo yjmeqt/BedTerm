@@ -1,6 +1,5 @@
 use metal::{
-    CompileOptions, Device, Library, MTLPixelFormat, RenderPipelineDescriptor,
-    RenderPipelineState,
+    CompileOptions, Device, Library, MTLPixelFormat, RenderPipelineDescriptor, RenderPipelineState,
 };
 
 use super::shaders::TERMINAL_METAL_SOURCE;

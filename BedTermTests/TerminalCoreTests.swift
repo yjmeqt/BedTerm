@@ -1,4 +1,5 @@
 import XCTest
+
 @testable import BedTermKit
 
 final class TerminalCoreTests: XCTestCase {
@@ -20,8 +21,8 @@ final class TerminalCoreFFITests: XCTestCase {
         let snap = core.snapshot()
         XCTAssertEqual(snap.cols, 20)
         XCTAssertEqual(snap.rows, 5)
-        XCTAssertEqual(snap.cell(col: 0, row: 0)?.ch, UInt32(Character("h").asciiValue!))
-        XCTAssertEqual(snap.cell(col: 1, row: 0)?.ch, UInt32(Character("i").asciiValue!))
+        XCTAssertEqual(snap.cell(col: 0, row: 0)?.ch, UInt32(0x68))  // 'h'
+        XCTAssertEqual(snap.cell(col: 1, row: 0)?.ch, UInt32(0x69))  // 'i'
         XCTAssertEqual(snap.cursorCol, 2)
         XCTAssertEqual(snap.cursorRow, 0)
     }
@@ -33,16 +34,16 @@ final class TerminalCoreFFITests: XCTestCase {
         XCTAssertEqual(core.snapshot().rows, 10)
     }
 
-    func testANSIRedAppliesToFg() {
+    func testANSIRedAppliesToFg() throws {
         let core = TerminalCore(cols: 20, rows: 5)
         core.feed(Data("\u{1B}[31mR\u{1B}[0m".utf8))
-        let cell = core.snapshot().cell(col: 0, row: 0)!
-        XCTAssertEqual(cell.ch, UInt32(Character("R").asciiValue!))
-        let r = (cell.fgRGBA >> 24) & 0xff
-        let g = (cell.fgRGBA >> 16) & 0xff
-        let b = (cell.fgRGBA >> 8) & 0xff
-        XCTAssertGreaterThan(r, 0x80)
-        XCTAssertLessThan(g, 0x40)
-        XCTAssertLessThan(b, 0x40)
+        let cell = try XCTUnwrap(core.snapshot().cell(col: 0, row: 0))
+        XCTAssertEqual(cell.ch, UInt32(0x52))  // 'R'
+        let red = (cell.fgRGBA >> 24) & 0xff
+        let green = (cell.fgRGBA >> 16) & 0xff
+        let blue = (cell.fgRGBA >> 8) & 0xff
+        XCTAssertGreaterThan(red, 0x80)
+        XCTAssertLessThan(green, 0x40)
+        XCTAssertLessThan(blue, 0x40)
     }
 }
