@@ -6,4 +6,16 @@ enum AppRoute: Hashable {
     /// from `HostsStore`).
     case hostForm(SavedHost.ID?)
     case terminal
+    #if DEBUG
+        case debugTerminal(DebugTTYProgramSelection)
+    #endif
 }
+
+#if DEBUG
+    enum DebugTTYProgramSelection: Hashable {
+        case echoShell
+        case vimLite
+        case rawSink
+        case replay(fixture: String)
+    }
+#endif
