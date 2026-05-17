@@ -10,7 +10,7 @@ fn palette_overrides_default_foreground_and_background() {
     palette.default_bg = Rgb24 { r: 0x44, g: 0x55, b: 0x66 };
     t.set_palette(palette);
 
-    // "AB" then end-of-screen. Default fg/bg cells should adopt new defaults.
+    // "AB" — every glyph cell whose fg/bg resolves to the Foreground/Background named colour should adopt the configured defaults.
     t.feed(b"AB");
     let snap = t.snapshot();
 

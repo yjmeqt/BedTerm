@@ -26,6 +26,7 @@ pub struct Rgb24 {
 /// The host (Swift) recomputes this from design tokens when the iOS
 /// appearance changes, and pushes it through `Terminal::set_palette`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(C)]
 pub struct Palette {
     pub default_fg: Rgb24,
     pub default_bg: Rgb24,
@@ -234,6 +235,7 @@ fn color_to_rgba(c: alacritty_terminal::vte::ansi::Color, palette: &Palette) -> 
             if (i as usize) < 16 {
                 palette.ansi[i as usize]
             } else {
+                // 16..=255 — colour cube and greyscale ramp, not palette-controlled.
                 let rgb = default_indexed(i);
                 Rgb24 { r: rgb.r, g: rgb.g, b: rgb.b }
             }
@@ -266,7 +268,9 @@ fn named_from_palette(
         BrightMagenta          => p.ansi[13],
         BrightCyan             => p.ansi[14],
         BrightWhite            => p.ansi[15],
-        // Cursor and anything else — use default foreground.
+        // Cursor and anything else — use default foreground. Note: BrightForeground
+        // and DimForeground are matched explicitly above because the palette has no
+        // distinct slot for them; they intentionally collapse onto default_fg.
         _ => p.default_fg,
     }
 }
