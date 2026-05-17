@@ -29,6 +29,15 @@ public final class ComposerController {
 
     public func submit() {
         guard !text.isEmpty else { return }
+        let bytes: Data
+        if isBracketedPasteActive() {
+            let prefix = Data([0x1B, 0x5B, 0x32, 0x30, 0x30, 0x7E]) // ESC [ 200~
+            let suffix = Data([0x1B, 0x5B, 0x32, 0x30, 0x31, 0x7E]) // ESC [ 201~
+            bytes = prefix + Data(text.utf8) + suffix
+        } else {
+            bytes = Data(text.replacingOccurrences(of: "\n", with: "\r").utf8)
+        }
+        send(bytes)
         text = ""
         isOpen = false
     }
