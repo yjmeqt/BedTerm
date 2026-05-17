@@ -71,8 +71,9 @@ pub unsafe extern "C" fn bt_renderer_cell_pixel_size(
 }
 
 /// # Safety
-/// `r` must be a live `BtRenderer`. Components are clamped to `[0, 1]`
-/// downstream by Metal; values outside that range are tolerated.
+/// `r` must be a live `BtRenderer` pointer, or null (null is a no-op).
+/// Components are clamped to `[0, 1]` downstream by Metal; values outside
+/// that range are tolerated.
 #[no_mangle]
 pub unsafe extern "C" fn bt_renderer_set_clear_color(
     r: *mut BtRenderer,
