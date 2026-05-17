@@ -13,6 +13,10 @@ struct TerminalHostView: UIViewRepresentable {
     /// Bound on `makeUIView`. Callers can ask whether the remote has enabled
     /// bracketed paste mode (CSI ? 2004 h). Returns `false` until the view exists.
     let bracketedPasteProbe: BracketedPasteProbe
+    /// When true, the host yields first-responder so a SwiftUI `TextEditor`
+    /// can capture the system keyboard. When false, the host claims first-
+    /// responder so keystrokes pass through to the PTY.
+    var yieldFirstResponder: Bool = false
 
     final class BracketedPasteProbe {
         private weak var view: SwiftTerm.TerminalView?
@@ -41,12 +45,18 @@ struct TerminalHostView: UIViewRepresentable {
         // terminal beats a colourful but garbled one.
         try? view.setUseMetal(true)
         context.coordinator.start(consuming: feed, view: view)
-        _ = view.becomeFirstResponder()
+        if !yieldFirstResponder {
+            _ = view.becomeFirstResponder()
+        }
         return view
     }
 
     func updateUIView(_ uiView: SwiftTerm.TerminalView, context: Context) {
-        // SwiftTerm handles its own layout; nothing to push on update.
+        if yieldFirstResponder {
+            if uiView.isFirstResponder { _ = uiView.resignFirstResponder() }
+        } else {
+            if !uiView.isFirstResponder { _ = uiView.becomeFirstResponder() }
+        }
     }
 
     final class Coordinator: NSObject, TerminalViewDelegate {

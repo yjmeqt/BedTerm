@@ -28,7 +28,8 @@ struct TerminalScreen: View {
                 feed: session.feed,
                 onSend: { session.send($0) },
                 onResize: { cols, rows in session.resize(cols: cols, rows: rows) },
-                bracketedPasteProbe: bracketedPasteProbe
+                bracketedPasteProbe: bracketedPasteProbe,
+                yieldFirstResponder: composer.isOpen
             )
             .ignoresSafeArea(edges: [.top, .horizontal])
 
