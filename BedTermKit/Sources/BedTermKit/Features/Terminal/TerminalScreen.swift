@@ -108,8 +108,9 @@ struct TerminalScreen: View {
         // height and stranding the bar mid-screen.
         .padding(.bottom, keyboard.overlap)
         .ignoresSafeArea(.keyboard, edges: .bottom)
+        // `keyboard.overlap` is already animated inside KeyboardLayoutObserver using
+        // the system keyboard's own duration — do NOT layer another .animation on it.
         .animation(.smooth(duration: 0.22), value: composer.isOpen)
-        .animation(.smooth(duration: 0.22), value: keyboard.overlap)
         .animation(.smooth(duration: 0.22), value: dpadOpen)
         .onChange(of: composer.isOpen) { _, isOpen in
             if isOpen { dpadOpen = false }

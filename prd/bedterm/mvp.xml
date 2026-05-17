@@ -692,4 +692,42 @@ An iOS terminal app designed for coding on iPhone. Users SSH into a Mac mini or 
   </steps>
 </bug>
 
+<bug id="composer_open_attributegraph_cycle" status="Fixed" date="2026-05-17" rule="R13.open_close_morph">
+  <current>
+    Tapping the floating compose pill to open the composer immediately spams the Xcode console with an unbounded stream of <code>=== AttributeGraph: cycle detected through attribute 531208 ===</code> messages. The cycle never settles — the log repeats continuously for as long as the composer is presented. The user reports this as an endless loop triggered by clicking the compose input entry.
+  </current>
+  <expected>
+    Opening the composer via the pill should complete in one render pass: the morph animation runs, the text view takes first responder, the keyboard slides up, and SwiftUI's attribute graph settles with no cycle warnings. Suspected sources are the focus / height feedback path in <code>ComposerTextView</code> (which writes to <code>contentHeight</code> and toggles first-responder during <code>updateUIView</code>) and the <code>containerHeight</code>-driven <code>.glassEffect</code> shape inside <code>GlassEffectContainer</code> — both will need to be confirmed against a running build.
+  </expected>
+  <steps>
+    1. Launch the app in a debug build attached to Xcode.
+    2. Connect to any SSH host.
+    3. Tap the floating compose pill (trailing side of the bottom row).
+    4. Observe: the Xcode console fills with repeating <code>AttributeGraph: cycle detected through attribute 531208</code> lines that do not stop.
+  </steps>
+</bug>
+
+<bug id="composer_focus_drops_on_open" status="Fix Pending" date="2026-05-17" rule="R13.composer_editor">
+  <current>
+    Tapping the floating compose pill produced two coupled defects on first open:
+    <ul>
+    <li><strong>Layout (fix landed):</strong> the opened composer container did <em>not</em> stretch to the full row width. It sat as a narrow capsule occupying roughly the trailing third of the row with empty space to its leading side, and the ✕ / ↑ controls were crammed against the text. Root cause: <code>GeometryReader</code> + <code>.position()</code> inside an <code>HStack</code> with a sibling <code>glassEffectID</code> morph was inheriting the source pill's compact frame; <code>.frame(maxWidth: .infinity)</code> on the parent did not propagate through. Fix: rewrote <code>ComposerBar</code> using a plain <code>ZStack</code> with alignment-based positioning (<code>.trailing</code>, <code>.topTrailing</code>, <code>.bottomTrailing</code>) so the container grows naturally to the row width.</li>
+    <li><strong>Focus drop (still open):</strong> on first open the keyboard slides up, then immediately slides back down (the bottom bar visibly "jumps up then returns"). After the dismiss, the placeholder "Compose your message…" stays visible, the ✕ / ↑ buttons remain on screen, but tapping inside the text area does nothing — no caret, no keyboard. The user has to cancel and reopen to retry.
+    <p><strong>Diagnosis:</strong> the GlassEffectContainer morph re-parents the UITextView mid-animation, briefly detaching it from its window. UIKit fires <code>textViewDidEndEditing</code>, the <code>onFocusChange(false)</code> callback in <code>ComposerTextView.Coordinator</code> writes <code>isFocused = false</code> back into <code>ComposerBar</code>'s <code>@State</code>, and the next <code>updateUIView</code> pass calls <code>resignFirstResponder()</code> based on that stale value. The keyboard descends and the field is now stuck "not wanting focus" — tapping it again does not re-trigger the focus path because nothing flips <code>isFocused</code> back to true.</p>
+    <p>The visible "jumps up then back" is downstream of this: <code>KeyboardLayoutObserver</code> faithfully animates the bottom-bar lift up when the keyboard rises and back down when it descends, so the focus ping-pong becomes a vertical-position ping-pong.</p>
+    </li>
+    </ul>
+  </current>
+  <expected>
+    Per R13.composer_editor and R13.open_close_morph: opening the composer hands first-responder from the terminal view to the composer's UITextView in a single UIKit tick. The keyboard rides up with the morph and stays up; the caret is visible; the next keystroke writes into the composer buffer. Subsequent taps inside the text area are a no-op when the field is already first responder. A transient <code>textViewDidEndEditing</code> caused by layout churn during the morph must not be allowed to permanently drop focus.
+  </expected>
+  <steps>
+    1. Connect to any SSH host (no other view has the keyboard up).
+    2. Tap the floating compose pill (trailing side of the bottom row).
+    3. Observe (focus drop, still open): the keyboard begins to slide up, then slides back down within ~200 ms without the user touching anything. The bottom bar visibly rises with the keyboard and then drops back.
+    4. Tap inside the "Compose your message…" placeholder.
+    5. Observe: nothing happens — no caret, no keyboard. Typing is impossible.
+  </steps>
+</bug>
+
 </prd>

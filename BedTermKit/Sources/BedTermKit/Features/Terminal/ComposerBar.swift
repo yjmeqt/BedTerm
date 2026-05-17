@@ -57,52 +57,49 @@ struct ComposerBar: View {
     }
 
     var body: some View {
-        GeometryReader { proxy in
-            let width = proxy.size.width
-            ZStack(alignment: .topLeading) {
-                // Text input (placeholder lives inside the UITextView so it
-                // disappears synchronously on the first keystroke).
-                ComposerTextView(
-                    text: $controller.text,
-                    contentHeight: $contentHeight,
-                    placeholder: String(localized: "Compose your message…"),
-                    isFocused: isFocused,
-                    onFocusChange: { isFocused = $0 }
+        ZStack(alignment: .topLeading) {
+            ComposerTextView(
+                text: $controller.text,
+                contentHeight: $contentHeight,
+                placeholder: String(localized: "Compose your message…"),
+                isFocused: isFocused,
+                onFocusChange: { isFocused = $0 }
+            )
+            .padding(.leading, horizontalPadding)
+            .padding(.trailing, trailingTextInset)
+            .padding(.vertical, verticalPadding)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+
+            // ✕ Cancel: trailing-row inline when collapsed, top-trailing corner when expanded.
+            cancelButton
+                .padding(
+                    .trailing,
+                    isExpanded ? edgeInset : edgeInset + sendDiameter + inlineGap
                 )
-                .padding(.leading, horizontalPadding)
-                .padding(.trailing, trailingTextInset)
-                .padding(.vertical, verticalPadding)
-                .frame(width: width, height: containerHeight, alignment: .topLeading)
+                .padding(.top, isExpanded ? edgeInset : 0)
+                .frame(
+                    maxWidth: .infinity,
+                    maxHeight: .infinity,
+                    alignment: isExpanded ? .topTrailing : .trailing
+                )
 
-                // ✕ Cancel: inline-right when collapsed, top-trailing corner when expanded.
-                cancelButton
-                    .position(
-                        x: width
-                            - (isExpanded
-                                ? edgeInset + cancelDiameter / 2
-                                : edgeInset + sendDiameter + inlineGap + cancelDiameter / 2),
-                        y: isExpanded
-                            ? edgeInset + cancelDiameter / 2
-                            : containerHeight / 2
-                    )
-
-                // ↑ Send: trailing-center when collapsed, bottom-trailing corner when expanded.
-                sendButton
-                    .position(
-                        x: width - edgeInset - sendDiameter / 2,
-                        y: isExpanded
-                            ? containerHeight - edgeInset - sendDiameter / 2
-                            : containerHeight / 2
-                    )
-            }
-            .frame(width: width, height: containerHeight, alignment: .top)
-            // Glass + morph ID applied to the container itself, so the Liquid
-            // Glass material sits *behind* the text and buttons rather than as
-            // a sibling layer that the GlassEffectContainer promotes in front.
-            .glassEffect(.regular, in: .rect(cornerRadius: cornerRadius))
-            .composerMorphID(in: morphNamespace)
+            // ↑ Send: trailing-row inline when collapsed, bottom-trailing corner when expanded.
+            sendButton
+                .padding(.trailing, edgeInset)
+                .padding(.bottom, isExpanded ? edgeInset : 0)
+                .frame(
+                    maxWidth: .infinity,
+                    maxHeight: .infinity,
+                    alignment: isExpanded ? .bottomTrailing : .trailing
+                )
         }
+        .frame(maxWidth: .infinity)
         .frame(height: containerHeight)
+        // Glass + morph ID applied to the container itself, so the Liquid
+        // Glass material sits *behind* the text and buttons rather than as
+        // a sibling layer that the GlassEffectContainer promotes in front.
+        .glassEffect(.regular, in: .rect(cornerRadius: cornerRadius))
+        .composerMorphID(in: morphNamespace)
         .animation(.smooth(duration: 0.22), value: containerHeight)
         .animation(.smooth(duration: 0.22), value: isExpanded)
         .onAppear {
