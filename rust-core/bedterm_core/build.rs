@@ -9,6 +9,8 @@ fn main() {
     std::fs::create_dir_all(out.parent().unwrap()).unwrap();
     println!("cargo:rerun-if-changed=src/ffi.rs");
     println!("cargo:rerun-if-changed=src/snapshot.rs");
+    println!("cargo:rerun-if-changed=src/mock_tty/ffi.rs");
+    println!("cargo:rerun-if-changed=src/mock_tty/mod.rs");
     println!("cargo:rerun-if-changed=cbindgen.toml");
     cbindgen::Builder::new()
         .with_crate(&crate_dir)
