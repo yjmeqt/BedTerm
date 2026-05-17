@@ -33,6 +33,19 @@ final class RendererBridge {
         bt_renderer_set_font(handle, Float(pointSize), Float(scale))
     }
 
+    /// Authoritative cell size in points, derived from the renderer's atlas
+    /// (CoreText `ascent + descent + leading` rasterised at `scale`).
+    /// CALayer overlays (cursor, selection) must use this to stay aligned
+    /// with the rendered glyphs — UIFont's text-size metrics can drift by
+    /// fractions of a pt per row and accumulate visually over the viewport.
+    func cellSizeInPoints(scale: CGFloat) -> CGSize {
+        var w: UInt32 = 0
+        var h: UInt32 = 0
+        bt_renderer_cell_pixel_size(handle, &w, &h)
+        guard w > 0, h > 0, scale > 0 else { return .zero }
+        return CGSize(width: CGFloat(w) / scale, height: CGFloat(h) / scale)
+    }
+
     /// Encode one draw of `term` into `texture`. Returns 0 on success,
     /// negative on FFI-side error.
     @discardableResult

@@ -239,9 +239,14 @@ final class TerminalMetalUIView: MTKView {
         let body = UIFontMetrics.default.scaledFont(
             for: .monospacedSystemFont(ofSize: 14, weight: .regular)
         )
-        bridge.setFont(pointSize: body.pointSize, scale: UIScreen.main.scale)
-        let charSize = ("M" as NSString).size(withAttributes: [.font: body])
-        cellSize = charSize
+        let scale = UIScreen.main.scale
+        bridge.setFont(pointSize: body.pointSize, scale: scale)
+        // Source the cell size from the renderer directly — anything else
+        // (UIFont.lineHeight, NSString.size(withAttributes:)) introduces
+        // ceiling-arithmetic drift between UIKit and CoreText that
+        // accumulates per row and misaligns the cursor + selection
+        // overlays from the rendered glyphs.
+        cellSize = bridge.cellSizeInPoints(scale: scale)
     }
 
     // MARK: Bottom anchoring (parity with TerminalHostView.Coordinator)

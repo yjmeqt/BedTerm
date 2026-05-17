@@ -47,6 +47,29 @@ pub unsafe extern "C" fn bt_renderer_set_font(
     (*r).inner.set_font(pixel_size, device_pixel_ratio);
 }
 
+/// Write the renderer's current cell size (in PIXELS, scaled by the dpr
+/// passed to `bt_renderer_set_font`) into `*out_w` and `*out_h`. Swift
+/// divides by its display scale to obtain the point-space cell size used
+/// for laying out CALayer overlays (cursor, selection) — keeping them
+/// pixel-aligned with the glyphs the renderer paints.
+///
+/// # Safety
+/// `r` must be a live `BtRenderer`. `out_w` and `out_h` must be valid
+/// pointers to `u32` slots the caller owns.
+#[no_mangle]
+pub unsafe extern "C" fn bt_renderer_cell_pixel_size(
+    r: *const BtRenderer,
+    out_w: *mut u32,
+    out_h: *mut u32,
+) {
+    if r.is_null() || out_w.is_null() || out_h.is_null() {
+        return;
+    }
+    let (w, h) = (*r).inner.atlas.cell_px;
+    *out_w = w;
+    *out_h = h;
+}
+
 /// # Safety
 /// `r` must be a live `BtRenderer`. `term` must be a live `BtTerm` or null
 /// (null is treated as "no terminal yet"). `drawable_texture` must be a
