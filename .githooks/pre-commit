@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Mirrors the `lint` job in .github/workflows/ci.yml so CI failures surface locally.
+
+if ! git diff --cached --name-only --diff-filter=ACM | grep -qE '\.swift$'; then
+    exit 0
+fi
+
+echo "→ swift-format lint"
+xcrun swift-format lint -r --strict BedTerm BedTermTests BedTermKit/Sources
+
+echo "→ SwiftLint"
+if command -v mint >/dev/null 2>&1; then
+    mint run swiftlint lint --strict --quiet
+elif command -v swiftlint >/dev/null 2>&1; then
+    swiftlint lint --strict --quiet
+else
+    echo "error: neither mint nor swiftlint found on PATH" >&2
+    exit 1
+fi
