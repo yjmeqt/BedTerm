@@ -87,6 +87,8 @@ final class TerminalSession {
             return String(localized: "Host key changed.\nStored: \(stored)\nRemote: \(remote)")
         case .disconnected(let reason):
             return String(localized: "Disconnected: \(reason)")
+        case .peerReset:
+            return String(localized: "Connection reset by the remote host (network change or idle timeout). Tap to reconnect.")
         case .shellExited(let code):
             return String(localized: "Shell exited (\(code)).")
         }

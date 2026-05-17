@@ -15,6 +15,8 @@ An iOS terminal app designed for coding on iPhone. Users SSH into a Mac mini or 
   <rule id="key_auth" status="✅">User can authenticate with an SSH private key.</rule>
   <rule id="connect_success" status="✅">A valid connection opens the terminal session and displays the remote shell prompt.</rule>
   <rule id="connect_failure" status="✅">A failed connection shows a descriptive error message without crashing.</rule>
+  <rule id="tcp_keepalive" status="✅">The TCP socket carrying the SSH session keeps itself alive against idle NAT and firewall timeouts by sending periodic keepalive probes (default idle ~30s). Long pauses without typing do not silently strand the session in a half-open state.</rule>
+  <rule id="peer_reset_message" status="✅" context="TCP connection reset by the remote peer or an intermediate gateway">The disconnect banner shows a human-readable reason — e.g. "Connection reset by the remote host (network change or idle timeout)" — rather than the raw <code>read(descriptor:pointer:size:)</code> / errno text.</rule>
 </requirement>
 
 <requirement id="R2" name="Terminal Display">
@@ -27,6 +29,7 @@ An iOS terminal app designed for coding on iPhone. Users SSH into a Mac mini or 
   <rule id="vim_display" status="✅">Running vim or nano displays the editor UI correctly, including status lines and cursor positioning.</rule>
   <rule id="top_display" status="✅">Running top or htop displays the process list with live updates.</rule>
   <rule id="text_wrap" status="✅">Long lines wrap correctly within the terminal width.</rule>
+  <rule id="glyph_completeness" status="❌">Every rendered character cell shows the complete glyph: descenders (g, j, p, q, y) are fully visible and no row is vertically clipped, regardless of scroll position, input timing, or row position in the viewport.</rule>
 </requirement>
 
 <requirement id="R3" name="Special Keys Toolbar">
@@ -483,6 +486,41 @@ An iOS terminal app designed for coding on iPhone. Users SSH into a Mac mini or 
   <rule id="orientation_persistence" status="❌">If the keyboard is in the hidden state, rotating the device or backgrounding/foregrounding the app preserves that state — the keyboard does not auto-present on layout change. Opening a new SSH session starts with the keyboard shown.</rule>
 </requirement>
 
+<requirement id="R16" name="Warp-Style Block Mode">
+  <description>
+    A Warp-inspired alternative terminal view where each shell prompt → command → output cycle is captured as a discrete "block" in a vertically scrolling list, with a persistent composer pinned at the bottom of the screen as the sole input surface. Block Mode replaces the inline cursor-and-prompt model with a chat-like UX better suited to a phone — input lives in one place and output is grouped by command. Block Mode is also the primary delivery vehicle for using the Claude Code CLI (`claude`) over SSH from a phone: the composer's multi-line / voice input (R13, R14) feeds long natural-language prompts into the remote `claude` process, and Block view's alt-screen handling keeps `claude`'s interactive TUI rendering correctly. Block Mode is an opt-in view toggle alongside the classic terminal view (R2), not a replacement; the user can switch between them per session.
+  </description>
+  <rule id="block_mode_toggle" status="❌">A control in the terminal screen toggles between Classic view (R2, inline prompt) and Block view (this requirement). The choice persists per host and across launches.</rule>
+  <rule id="block_per_command" status="❌" context="block view">Each shell prompt → command → output cycle renders as a distinct block in a top-to-bottom scrolling list. A new block begins on every prompt; the previous block is sealed and shows its command, output, exit code, and duration.</rule>
+  <rule id="block_header" status="❌" context="block view">Each block displays a header row with the command string, a coloured exit-code chip (green for 0, red for non-zero, neutral for still-running), and elapsed duration. Tapping the header collapses the block's output body.</rule>
+  <rule id="block_body_monospace" status="❌" context="block view">Each block's output body renders the captured grid rows in the same monospace font and ANSI palette as Classic view, preserving colours, cursor positioning, and wrapping for that block's row range.</rule>
+  <rule id="composer_is_only_input" status="❌" context="block view, normal screen">In Block view, the system keyboard's keystrokes route to the composer at the bottom of the screen — not to the PTY. The composer flushes its buffer to the PTY only when the user taps Send or presses Return inside it. This supersedes R13.default_passthrough while Block view is active.</rule>
+  <rule id="composer_bottom_pinned" status="❌" context="block view">The composer is pinned to the bottom of the screen above the R3 toolbar (and above the keyboard when shown), always visible, never scrolled with the block list.</rule>
+  <rule id="composer_typing_while_running" status="❌" context="block view, previous command still running">The user can begin typing the next command in the composer while the previous block's command is still producing output. Composer state is independent of PTY echo until Send.</rule>
+  <rule id="osc133_detection" status="❌">The terminal parser recognises OSC 133 shell-integration sequences (`A` prompt start, `B` command start, `C` output start, `D;&lt;exit&gt;` command end) and emits a block-boundary event on each, used by Block view to delimit blocks.</rule>
+  <rule id="shell_integration_install" status="❌">On first successful connect to a host, the app offers to install an OSC 133 shell-integration snippet for the remote user's detected shell (zsh, bash, fish) by appending to the appropriate rc file. The user can accept, decline, or "ask again later"; the choice is remembered per host.</rule>
+  <rule id="shell_integration_fallback" status="❌" context="OSC 133 not present">If the remote shell has not been instrumented with OSC 133, Block view falls back to a single rolling block that contains all output until the user opens a new session. No heuristic prompt detection is attempted in MVP.</rule>
+  <rule id="alt_screen_collapse" status="❌" context="block view, remote enters alt-screen (CSI ?1049h)">When the remote application enters alt-screen mode (vim, less, htop, fzf, ssh password prompts), Block view automatically collapses into a single fullscreen Classic-style grid and routes keystrokes directly to the PTY. On exit from alt-screen (`CSI ?1049l`), the view restores to Block mode and the alt-screen session is recorded as one block.</rule>
+  <rule id="block_scrollback_cap" status="❌" context="block view">The app caps in-memory block output: the most recent N blocks (target: 50) retain full output; older blocks retain only their command, exit code, duration, and an output byte count. Reopening an old block re-renders from a compressed copy on disk if available, otherwise shows a "truncated" placeholder.</rule>
+  <rule id="block_copy" status="❌" context="block view">Each block exposes a one-tap "Copy output" action that copies the block's full output (or full command + output) to the system clipboard. R5.copy continues to apply for arbitrary text selection within a block.</rule>
+  <rule id="claude_cli_is_remote" status="❌">"Claude support" in BedTerm means first-class support for the Claude Code CLI (`claude`) running as a remote process over SSH, not calling the Anthropic API from the app. BedTerm never holds an Anthropic API key, never makes network calls to `api.anthropic.com`, and never sends terminal contents to any AI service. All AI capability is whatever the user has installed on the remote host.</rule>
+  <rule id="claude_cli_detection" status="❌" context="block view">When the foreground process on the remote PTY is detected as `claude` (via OSC 133 command capture, or via a recognisable banner / title sequence emitted by Claude Code), the active block is tagged as a Claude session and rendered with a distinct accent so the user can tell at a glance that they are talking to Claude, not the shell.</rule>
+  <rule id="claude_cli_alt_screen" status="❌" context="claude session active">Because Claude Code's interactive TUI uses alt-screen, R15.alt_screen_collapse applies: Block view collapses to a single fullscreen grid for the duration of the Claude session and restores to Block mode on exit. The whole session is captured as one Claude-tagged block in the history.</rule>
+  <rule id="claude_cli_composer" status="❌" context="claude session active">The R13 composer (and its R14 voice input) is the recommended input path for sending long natural-language prompts to `claude`. Send uses bracketed paste when the remote advertises it so multi-line prompts arrive as a single message rather than per-keystroke input — preserving Claude Code's own input handling.</rule>
+  <rule id="claude_cli_quick_launch" status="❌" context="block view">Block view offers a quick-launch affordance (e.g. a "Start Claude" button surfaced when no Claude session is active) that sends `claude` (or a user-configured launch command) to the PTY. The launch command is editable per host so users with custom invocations (`claude --model …`, `npx @anthropic-ai/claude-code`, etc.) can override it.</rule>
+  <rule id="claude_cli_no_app_keys" status="❌">BedTerm never prompts for, stores, or transmits an Anthropic API key. Authentication for Claude Code lives entirely on the remote host (its own config / login flow). This is a security guarantee: the app has no AI credentials to leak.</rule>
+</requirement>
+
+<requirement id="R17" name="Settings">
+  <description>
+    A dedicated Settings screen, separate from the connection editor, that exposes user-tunable behaviours that today are hard-coded defaults. v1 focuses on connection resilience knobs; the screen is structured so additional categories (appearance, input, advanced) can land later without restructuring.
+  </description>
+  <rule id="settings_entry" status="❌">A settings affordance in the app's primary navigation (e.g. a gear icon in the connection screen toolbar) opens a Settings screen. The screen presents grouped sections; the first section is "Connection".</rule>
+  <rule id="keepalive_setting" status="❌" context="Settings → Connection">The user can choose the TCP keepalive idle interval used by every SSH session. Options include Off, 15s, 30s (default), 60s, 120s. The current selection is persisted across launches and applied to subsequent connections.</rule>
+  <rule id="autoreconnect_setting" status="❌" context="Settings → Connection">A toggle "Reconnect on resume" controls whether the app automatically retries the last session when it returns to the foreground and the session was previously dropped. Default off (so a stranded session shows the existing reconnect banner instead of reconnecting silently).</rule>
+  <rule id="defaults_when_unset" status="❌">If the user has never opened Settings, the app behaves as if the defaults above were chosen (keepalive 30s, auto-reconnect off). The user does not have to visit Settings to get sane behaviour.</rule>
+</requirement>
+
 <bug id="composer_blocks_language_switch" status="Fixed" date="2026-05-17" rule="R13.multilingual_input">
   <current>
     When the multiline composer is opened, the system keyboard is forced into ASCII-only mode. The globe key on the keyboard does nothing useful — input methods for Simplified Chinese, Traditional Chinese, Japanese, Korean, Russian, emoji, and any other non-ASCII keyboard installed on the device are unavailable. The user cannot draft a message in their native language inside the composer; only English / ASCII characters can be typed.
@@ -513,32 +551,6 @@ An iOS terminal app designed for coding on iPhone. Users SSH into a Mac mini or 
     4. Observe: the keyboard hides, but the KeyBar and ComposePill stay anchored where the top of the keyboard used to be — there is a large empty area below them.
   </steps>
 </bug>
-
-<requirement id="R16" name="Warp-Style Block Mode">
-  <description>
-    A Warp-inspired alternative terminal view where each shell prompt → command → output cycle is captured as a discrete "block" in a vertically scrolling list, with a persistent composer pinned at the bottom of the screen as the sole input surface. Block Mode replaces the inline cursor-and-prompt model with a chat-like UX better suited to a phone — input lives in one place and output is grouped by command. Block Mode is also the primary delivery vehicle for using the Claude Code CLI (`claude`) over SSH from a phone: the composer's multi-line / voice input (R13, R14) feeds long natural-language prompts into the remote `claude` process, and Block view's alt-screen handling keeps `claude`'s interactive TUI rendering correctly. Block Mode is an opt-in view toggle alongside the classic terminal view (R2), not a replacement; the user can switch between them per session.
-  </description>
-
-  <rule id="block_mode_toggle" status="❌">A control in the terminal screen toggles between Classic view (R2, inline prompt) and Block view (this requirement). The choice persists per host and across launches.</rule>
-  <rule id="block_per_command" status="❌" context="block view">Each shell prompt → command → output cycle renders as a distinct block in a top-to-bottom scrolling list. A new block begins on every prompt; the previous block is sealed and shows its command, output, exit code, and duration.</rule>
-  <rule id="block_header" status="❌" context="block view">Each block displays a header row with the command string, a coloured exit-code chip (green for 0, red for non-zero, neutral for still-running), and elapsed duration. Tapping the header collapses the block's output body.</rule>
-  <rule id="block_body_monospace" status="❌" context="block view">Each block's output body renders the captured grid rows in the same monospace font and ANSI palette as Classic view, preserving colours, cursor positioning, and wrapping for that block's row range.</rule>
-  <rule id="composer_is_only_input" status="❌" context="block view, normal screen">In Block view, the system keyboard's keystrokes route to the composer at the bottom of the screen — not to the PTY. The composer flushes its buffer to the PTY only when the user taps Send or presses Return inside it. This supersedes R13.default_passthrough while Block view is active.</rule>
-  <rule id="composer_bottom_pinned" status="❌" context="block view">The composer is pinned to the bottom of the screen above the R3 toolbar (and above the keyboard when shown), always visible, never scrolled with the block list.</rule>
-  <rule id="composer_typing_while_running" status="❌" context="block view, previous command still running">The user can begin typing the next command in the composer while the previous block's command is still producing output. Composer state is independent of PTY echo until Send.</rule>
-  <rule id="osc133_detection" status="❌">The terminal parser recognises OSC 133 shell-integration sequences (`A` prompt start, `B` command start, `C` output start, `D;<exit>` command end) and emits a block-boundary event on each, used by Block view to delimit blocks.</rule>
-  <rule id="shell_integration_install" status="❌">On first successful connect to a host, the app offers to install an OSC 133 shell-integration snippet for the remote user's detected shell (zsh, bash, fish) by appending to the appropriate rc file. The user can accept, decline, or "ask again later"; the choice is remembered per host.</rule>
-  <rule id="shell_integration_fallback" status="❌" context="OSC 133 not present">If the remote shell has not been instrumented with OSC 133, Block view falls back to a single rolling block that contains all output until the user opens a new session. No heuristic prompt detection is attempted in MVP.</rule>
-  <rule id="alt_screen_collapse" status="❌" context="block view, remote enters alt-screen (CSI ?1049h)">When the remote application enters alt-screen mode (vim, less, htop, fzf, ssh password prompts), Block view automatically collapses into a single fullscreen Classic-style grid and routes keystrokes directly to the PTY. On exit from alt-screen (`CSI ?1049l`), the view restores to Block mode and the alt-screen session is recorded as one block.</rule>
-  <rule id="block_scrollback_cap" status="❌" context="block view">The app caps in-memory block output: the most recent N blocks (target: 50) retain full output; older blocks retain only their command, exit code, duration, and an output byte count. Reopening an old block re-renders from a compressed copy on disk if available, otherwise shows a "truncated" placeholder.</rule>
-  <rule id="block_copy" status="❌" context="block view">Each block exposes a one-tap "Copy output" action that copies the block's full output (or full command + output) to the system clipboard. R5.copy continues to apply for arbitrary text selection within a block.</rule>
-  <rule id="claude_cli_is_remote" status="❌">"Claude support" in BedTerm means first-class support for the Claude Code CLI (`claude`) running as a remote process over SSH, not calling the Anthropic API from the app. BedTerm never holds an Anthropic API key, never makes network calls to `api.anthropic.com`, and never sends terminal contents to any AI service. All AI capability is whatever the user has installed on the remote host.</rule>
-  <rule id="claude_cli_detection" status="❌" context="block view">When the foreground process on the remote PTY is detected as `claude` (via OSC 133 command capture, or via a recognisable banner / title sequence emitted by Claude Code), the active block is tagged as a Claude session and rendered with a distinct accent so the user can tell at a glance that they are talking to Claude, not the shell.</rule>
-  <rule id="claude_cli_alt_screen" status="❌" context="claude session active">Because Claude Code's interactive TUI uses alt-screen, R15.alt_screen_collapse applies: Block view collapses to a single fullscreen grid for the duration of the Claude session and restores to Block mode on exit. The whole session is captured as one Claude-tagged block in the history.</rule>
-  <rule id="claude_cli_composer" status="❌" context="claude session active">The R13 composer (and its R14 voice input) is the recommended input path for sending long natural-language prompts to `claude`. Send uses bracketed paste when the remote advertises it so multi-line prompts arrive as a single message rather than per-keystroke input — preserving Claude Code's own input handling.</rule>
-  <rule id="claude_cli_quick_launch" status="❌" context="block view">Block view offers a quick-launch affordance (e.g. a "Start Claude" button surfaced when no Claude session is active) that sends `claude` (or a user-configured launch command) to the PTY. The launch command is editable per host so users with custom invocations (`claude --model …`, `npx @anthropic-ai/claude-code`, etc.) can override it.</rule>
-  <rule id="claude_cli_no_app_keys" status="❌">BedTerm never prompts for, stores, or transmits an Anthropic API key. Authentication for Claude Code lives entirely on the remote host (its own config / login flow). This is a security guarantee: the app has no AI credentials to leak.</rule>
-</requirement>
 
 <bug id="duplicate_input_accessory" status="Open" date="2026-05-16" rule="R3.only_toolbar">
   <current>
@@ -650,7 +662,7 @@ An iOS terminal app designed for coding on iPhone. Users SSH into a Mac mini or 
   </steps>
 </bug>
 
-<bug id="line_cut_after_input" status="Open" date="2026-05-17" rule="R2.terminal_display">
+<bug id="line_cut_after_input" status="Open" date="2026-05-17" rule="R2.glyph_completeness">
   <current>
     After typing input and pressing enter, the current line sometimes renders with the bottom portion of characters clipped off — descenders (g, j, p, q, y) are cut, and the bottom few pixels of every character on the affected row are missing. Other rows render correctly. The issue is intermittent, occurring after some inputs but not others.
     <img src="screenshots/line_cut_after_input.png" alt="Terminal text with bottom of characters clipped on a line"/>
@@ -662,6 +674,21 @@ An iOS terminal app designed for coding on iPhone. Users SSH into a Mac mini or 
     1. Connect to an SSH host and get a shell prompt.
     2. Type several commands and observe the terminal output after each press of enter.
     3. Notice: on some lines, the bottom portion of characters is visibly cut off.
+  </steps>
+</bug>
+
+<bug id="peer_reset_raw_errno" status="Fix Pending" date="2026-05-17" rule="R1.peer_reset_message">
+  <current>
+    On a physical device, after the session has been idle for a few minutes (or after the device switches network), the disconnect banner surfaces the raw SwiftNIO error string: <code>Disconnected: read(descriptor:pointer:size:) Connection reset by peer (errno: 54)</code>. The text is incomprehensible to a non-developer and gives no hint that the cause is usually network idle / NAT timeout / network change.
+  </current>
+  <expected>
+    When the underlying socket reports ECONNRESET (errno 54), the disconnect banner shows a plain-language reason such as "Connection reset by the remote host (network change or idle timeout)". The raw NIO description is not surfaced to the user.
+  </expected>
+  <steps>
+    1. Connect to an SSH host from a physical device.
+    2. Lock the device or switch networks; leave the session idle for several minutes.
+    3. Return to the foreground.
+    4. Observe: the disconnect banner shows the raw <code>read(descriptor:pointer:size:)</code> errno text.
   </steps>
 </bug>
 
