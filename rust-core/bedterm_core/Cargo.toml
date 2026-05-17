@@ -1,0 +1,16 @@
+[package]
+name = "bedterm_core"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lib]
+name = "bedterm_core"
+crate-type = ["staticlib", "rlib"]
+
+[dependencies]
+alacritty_terminal = "0.26"
+
+[build-dependencies]
+cbindgen = "0.27"

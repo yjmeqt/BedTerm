@@ -36,3 +36,8 @@ worktree-ios-dev/*
 
 # Superpowers planning artifacts (kept local, not tracked)
 docs/superpowers/
+
+# Rust core build artifacts
+rust-core/target/
+BedTermKit/BinaryFrameworks/BedTermCore.xcframework/*/
+!BedTermKit/BinaryFrameworks/BedTermCore.xcframework/Info.plist
