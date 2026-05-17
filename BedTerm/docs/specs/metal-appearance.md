@@ -1,6 +1,6 @@
 # Metal Terminal Appearance Pipeline
 
-> Linked from `prd/bedterm/mvp.xml` R9 (System Appearance).
+> Linked from `prd/bedterm/design.xml` R3 (System Appearance).
 
 ## Goal
 

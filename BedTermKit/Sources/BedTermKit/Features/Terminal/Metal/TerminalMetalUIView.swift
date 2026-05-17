@@ -236,10 +236,10 @@ final class TerminalMetalUIView: MTKView {
             lastCols = cols
             lastRows = rows
             setNeedsDisplay()
-            // Match SwiftTerm path: re-anchor the prompt on every viewport
-            // growth so the shell's initial banner + prompt land at the
-            // bottom of the new viewport instead of the top. The anchor
-            // pass is a no-op when a TUI app has drawn below the cursor.
+            // Re-anchor the prompt on every viewport growth so the shell's
+            // initial banner + prompt land at the bottom of the new viewport
+            // instead of the top. The anchor pass is a no-op when a TUI app
+            // has drawn below the cursor.
             if didGrow, rows > 3 {
                 scheduleBottomAnchorPass()
             }
@@ -303,7 +303,7 @@ final class TerminalMetalUIView: MTKView {
         cellSize = bridge.cellSizeInPoints(scale: scale)
     }
 
-    // MARK: Bottom anchoring (parity with TerminalHostView.Coordinator)
+    // MARK: Bottom anchoring
 
     // Standard "clear screen" CSI sequences emitted by `clear`, Ctrl+L,
     // `tput clear`, `reset`, and the `ESC c` RIS code. We bottom-anchor
@@ -368,9 +368,9 @@ final class TerminalMetalUIView: MTKView {
         }
         let linesToInsert = rows - 1 - row
         guard linesToInsert > 0 else { return }
-        // Same CSI dance as the SwiftTerm path: move to home, insert N blank
-        // lines (which pushes the existing prompt row down to the bottom),
-        // then re-park the cursor on the same column of the new bottom row.
+        // Move to home, insert N blank lines (which pushes the existing prompt
+        // row down to the bottom), then re-park the cursor on the same column
+        // of the new bottom row.
         let sequence = "\u{1B}[1;1H\u{1B}[\(linesToInsert)L\u{1B}[\(rows);\(col + 1)H"
         terminalCore.feed(Data(sequence.utf8))
         setNeedsDisplay()

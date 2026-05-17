@@ -21,7 +21,6 @@
 		B1B1B1B100000000000000AF /* HostsStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B1B1B100000000000000FF /* HostsStoreTests.swift */; };
 		B1B1B1B100000000000001AF /* ConnectionFormViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B1B1B100000000000001FF /* ConnectionFormViewModelTests.swift */; };
 		E2E2E2E200000000000000A1 /* TerminalCoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2E2E2E200000000000000F1 /* TerminalCoreTests.swift */; };
-		F3F3F3F300000000000000A1 /* TerminalCoreShadowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3F3F3F300000000000000F1 /* TerminalCoreShadowTests.swift */; };
 		B2B2B2B200000000000000A1 /* MetalRendererBridgeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2B2B2B200000000000000F1 /* MetalRendererBridgeTests.swift */; };
 		B3B3B3B300000000000000A1 /* SelectionGeometryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3B3B3B300000000000000F1 /* SelectionGeometryTests.swift */; };
 		B4B4B4B400000000000000A1 /* TerminalRendererParityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4B4B4B400000000000000F1 /* TerminalRendererParityTests.swift */; };
@@ -69,7 +68,6 @@
 		B1B1B1B100000000000000FF /* HostsStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HostsStoreTests.swift; sourceTree = "<group>"; };
 		B1B1B1B100000000000001FF /* ConnectionFormViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionFormViewModelTests.swift; sourceTree = "<group>"; };
 		E2E2E2E200000000000000F1 /* TerminalCoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalCoreTests.swift; sourceTree = "<group>"; };
-		F3F3F3F300000000000000F1 /* TerminalCoreShadowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalCoreShadowTests.swift; sourceTree = "<group>"; };
 		B2B2B2B200000000000000F1 /* MetalRendererBridgeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MetalRendererBridgeTests.swift; sourceTree = "<group>"; };
 		B3B3B3B300000000000000F1 /* SelectionGeometryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectionGeometryTests.swift; sourceTree = "<group>"; };
 		B4B4B4B400000000000000F1 /* TerminalRendererParityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalRendererParityTests.swift; sourceTree = "<group>"; };
@@ -133,7 +131,6 @@
 				B1B1B1B100000000000000FF /* HostsStoreTests.swift */,
 				B1B1B1B100000000000001FF /* ConnectionFormViewModelTests.swift */,
 				E2E2E2E200000000000000F1 /* TerminalCoreTests.swift */,
-				F3F3F3F300000000000000F1 /* TerminalCoreShadowTests.swift */,
 				F3F3F3F300000000000000F2 /* Fixtures */,
 				B2B2B2B200000000000000F1 /* MetalRendererBridgeTests.swift */,
 				B3B3B3B300000000000000F1 /* SelectionGeometryTests.swift */,
@@ -324,7 +321,6 @@
 				B1B1B1B100000000000000AF /* HostsStoreTests.swift in Sources */,
 				B1B1B1B100000000000001AF /* ConnectionFormViewModelTests.swift in Sources */,
 				E2E2E2E200000000000000A1 /* TerminalCoreTests.swift in Sources */,
-				F3F3F3F300000000000000A1 /* TerminalCoreShadowTests.swift in Sources */,
 				B2B2B2B200000000000000A1 /* MetalRendererBridgeTests.swift in Sources */,
 				B3B3B3B300000000000000A1 /* SelectionGeometryTests.swift in Sources */,
 				B4B4B4B400000000000000A1 /* TerminalRendererParityTests.swift in Sources */,

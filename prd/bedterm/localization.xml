@@ -30,7 +30,7 @@ BedTerm ships in multiple languages so users in Greater China, Japan, Korea, and
 
 <requirement id="R3" name="Localized Surfaces">
   <description>
-    Every piece of user-facing text rendered by the app — not by the remote shell — must be available in all supported languages. This covers the SwiftUI chrome surfaces inherited from <a href="prd:bedterm/mvp">the MVP</a>: onboarding, connection form, security warnings, terminal-level error messages, and iOS system permission prompts attributed to BedTerm.
+    Every piece of user-facing text rendered by the app — not by the remote shell — must be available in all supported languages. This covers the SwiftUI chrome surfaces across <a href="prd:bedterm/onboarding">onboarding</a>, <a href="prd:bedterm/connection">connection</a>, security warnings, terminal-level error messages, and iOS system permission prompts attributed to BedTerm.
   </description>
   <rule id="onboarding_localized" status="✅">All onboarding screens (welcome, host kind, location, macOS tutorial, permission step, completion) display in the user's language — titles, body copy, choice cards, button labels.</rule>
   <rule id="connection_form_localized" status="✅">The connection form displays in the user's language — section titles, field placeholders (Host, Port, Username, Password, Passphrase), auth-method picker, primary action button, and inline validation errors.</rule>
