@@ -6,19 +6,31 @@ struct KeyBar: View {
     var keyboardShown: Bool = true
     var onToggleKeyboard: (() -> Void)?
 
+    private var showsToggle: Bool {
+        // Hide the dismiss toggle while a hardware keyboard is attached —
+        // the software keyboard isn't presented, so the toggle would be a
+        // no-op. Per R15.hardware_keyboard_hides_toggle.
+        onToggleKeyboard != nil && !HardwareKeyboardObserver.shared.isAttached
+    }
+
     var body: some View {
         HStack(spacing: 0) {
-            keyButton("⎋", tap: .esc)
-            keyButton("⌃", tap: .ctrl, highlighted: controller.isPending)
-            keyButton("⇥", tap: .tab)
-            if let onToggleKeyboard {
-                Divider()
+            keyButton(.esc, system: "escape", id: "esc")
+            keyButton(
+                .ctrl,
+                system: "control",
+                id: "ctrl",
+                highlighted: controller.isPending
+            )
+            keyButton(.tab, system: "arrow.right.to.line.compact", id: "tab")
+            if showsToggle, let onToggleKeyboard {
+                Rectangle()
+                    .fill(Color.primary.opacity(0.18))
                     .frame(width: 1, height: 22)
-                    .background(Color.primary.opacity(0.18))
                 dismissKey(onToggle: onToggleKeyboard)
             }
         }
-        .frame(width: onToggleKeyboard == nil ? 168 : 220, height: 44)
+        .frame(width: showsToggle ? 220 : 168, height: 44)
         .glassEffect(.regular.interactive(), in: .capsule)
         .padding(.vertical, 6)
     }
@@ -41,13 +53,18 @@ struct KeyBar: View {
         .accessibilityLabel(keyboardShown ? "Hide keyboard" : "Show keyboard")
     }
 
-    private func keyButton(_ label: String, tap: KeyTap, highlighted: Bool = false) -> some View {
+    private func keyButton(
+        _ tap: KeyTap,
+        system symbolName: String,
+        id: String,
+        highlighted: Bool = false
+    ) -> some View {
         Button {
             UIImpactFeedbackGenerator(style: highlighted ? .medium : .light).impactOccurred()
             controller.handle(tap)
         } label: {
-            Text(label)
-                .font(.system(size: 20, weight: .medium, design: .monospaced))
+            Image(systemName: symbolName)
+                .font(.system(size: 18, weight: .medium))
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .foregroundStyle(highlighted ? Color.white : Color.primary)
                 .background {
@@ -61,6 +78,6 @@ struct KeyBar: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityIdentifier("keybar.\(label)")
+        .accessibilityIdentifier("keybar.\(id)")
     }
 }
