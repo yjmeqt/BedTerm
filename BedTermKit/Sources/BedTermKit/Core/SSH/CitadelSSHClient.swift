@@ -52,11 +52,11 @@
 //     Keychain calls there are cheap, but they are blocking; this matches
 //     how `SSHHostKeyValidator.trustedKeys` itself behaves.
 
-import Citadel
+@preconcurrency import Citadel
 import Crypto
 import Foundation
-import NIOCore
-import NIOSSH
+@preconcurrency import NIOCore
+@preconcurrency import NIOSSH
 
 // Disambiguate Citadel's `SSHClient` class from our `SSHClient` protocol.
 private typealias CitadelClient = Citadel.SSHClient
