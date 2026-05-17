@@ -116,24 +116,25 @@ impl Renderer {
                         continue;
                     }
                     let glyph = self.atlas.lookup(cell.ch).copied();
-                    let (uvo, uvs) = match glyph {
-                        Some(g) => (g.uv_origin, g.uv_size),
-                        None => ((0.0, 0.0), (0.0, 0.0)),
+                    let (uvo, uvs, glyph_wide, is_color) = match glyph {
+                        Some(g) => (g.uv_origin, g.uv_size, g.wide, g.is_color),
+                        None => ((0.0, 0.0), (0.0, 0.0), false, false),
                     };
                     // Wide (CJK) glyphs draw across two cell columns. A wide
                     // cell whose glyph couldn't be rasterised still claims
                     // both columns so the trailing spacer isn't drawn over by
-                    // a neighbour and the bg colour stays consistent.
-                    let span = if (cell.flags & FLAG_WIDE_LEADING) != 0 {
-                        2.0
-                    } else {
-                        1.0
-                    };
+                    // a neighbour and the bg colour stays consistent. Color
+                    // emoji glyphs are auto-promoted to wide by the atlas
+                    // even when the terminal didn't tag them WIDE_CHAR; honour
+                    // that so the bitmap renders at its natural aspect ratio.
+                    let wide = (cell.flags & FLAG_WIDE_LEADING) != 0 || glyph_wide;
+                    let span = if wide { 2.0 } else { 1.0 };
                     let cell_span_w = cell_wf * span;
                     let x = c as f32 * cell_wf;
                     let y = r as f32 * cell_hf;
                     let fg = rgba_to_float(cell.fg_rgba);
                     let bg = rgba_to_float(cell.bg_rgba);
+                    let is_color_f = if is_color { 1.0 } else { 0.0 };
                     let v = |dx: f32, dy: f32, du: f32, dv: f32| CellVertex {
                         pos_x: x + dx * cell_span_w,
                         pos_y: y + dy * cell_hf,
@@ -141,6 +142,8 @@ impl Renderer {
                         uv_y: uvo.1 + dv * uvs.1,
                         fg,
                         bg,
+                        is_color: is_color_f,
+                        _pad: [0.0; 3],
                     };
                     // Triangle 1: TL, TR, BL
                     verts.push(v(0.0, 0.0, 0.0, 0.0));

@@ -194,7 +194,7 @@ Replace SwiftTerm with a custom terminal engine: a Rust core (VT100/xterm emulat
   </steps>
 </bug>
 
-<bug id="metal_emoji_not_rendered" status="Open" date="2026-05-17" rule="R2M-R2.glyph_atlas">
+<bug id="metal_emoji_not_rendered" status="Fix Pending" date="2026-05-17" rule="R2M-R2.glyph_atlas">
   <current>
     With the Metal renderer toggle ON, emoji codepoints (e.g. 😀 🎉 🐱) do not render in the terminal viewport — cells appear blank, as tofu boxes, or as monochrome outlines of the wrong glyph. The Rust core delivers the codepoints correctly (SwiftTerm path renders them as Apple Color Emoji), so the issue is in the Metal glyph-atlas pipeline. Apple Color Emoji is a bitmap/SBIX color font, and the current atlas appears to be set up for monochrome glyph rasterisation only — the font-fallback path used for CJK doesn't pick up the emoji font, or it picks it up but rasterises into a single-channel mask that loses the color information.
   </current>
