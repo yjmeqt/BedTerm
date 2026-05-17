@@ -24,11 +24,12 @@ final class IMEPreeditOverlay: UIView {
         registerForTraitChanges(
             [UITraitUserInterfaceStyle.self]
         ) { (overlay: IMEPreeditOverlay, _: UITraitCollection) in
-            overlay.layer.borderColor = UIColor(
-                named: "ShadcnBorder",
-                in: .module,
-                compatibleWith: overlay.traitCollection
-            )?.cgColor
+            overlay.layer.borderColor =
+                UIColor(
+                    named: "ShadcnBorder",
+                    in: .module,
+                    compatibleWith: overlay.traitCollection
+                )?.cgColor
         }
     }
 

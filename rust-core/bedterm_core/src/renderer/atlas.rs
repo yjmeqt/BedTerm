@@ -287,7 +287,6 @@ impl GlyphAtlas {
         self.texture
             .replace_region(region, 0, pixels.as_ptr() as *const _, bytes_per_row as u64);
 
-
         let atlas_pxf = ATLAS_PX as f32;
         Some(GlyphInfo {
             uv_origin: (dst_x as f32 / atlas_pxf, dst_y as f32 / atlas_pxf),

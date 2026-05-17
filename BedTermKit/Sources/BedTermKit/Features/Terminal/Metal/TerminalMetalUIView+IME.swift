@@ -42,7 +42,7 @@ private final class IMEState {
     var overlay: IMEPreeditOverlay?
 }
 
-private var imeStateKey: UInt8 = 0
+nonisolated(unsafe) private var imeStateKey: UInt8 = 0
 
 extension TerminalMetalUIView {
     private var imeState: IMEState {
@@ -188,7 +188,7 @@ extension TerminalMetalUIView: UITextInput {
         let lo = max(0, min(textRange.startOffset, count))
         let hi = max(lo, min(textRange.endOffset, count))
         guard let startIdx = utf16.index(utf16.startIndex, offsetBy: lo, limitedBy: utf16.endIndex),
-              let endIdx = utf16.index(utf16.startIndex, offsetBy: hi, limitedBy: utf16.endIndex)
+            let endIdx = utf16.index(utf16.startIndex, offsetBy: hi, limitedBy: utf16.endIndex)
         else { return "" }
         return String(utf16[startIdx..<endIdx]) ?? ""
     }
