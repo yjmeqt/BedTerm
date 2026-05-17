@@ -9,15 +9,20 @@
 //! Non-"o" rows are skipped. The parser is hand-rolled because we don't want a
 //! `serde` dependency for one tiny format.
 
-use crate::mock_tty::program::Program;
+use crate::mock_tty::program::{Program, ProgramKind};
 
 pub struct Replay {
     events: Vec<(u64, Vec<u8>)>,
     next: usize,
+    return_to_echo: bool,
 }
 
 impl Replay {
     pub fn from_cast_text(text: &str) -> Self {
+        Self::from_cast_text_with_return(text, false)
+    }
+
+    pub fn from_cast_text_with_return(text: &str, return_to_echo: bool) -> Self {
         let mut events = Vec::new();
         for line in text.lines() {
             let line = line.trim();
@@ -28,7 +33,11 @@ impl Replay {
                 events.push(ev);
             }
         }
-        Self { events, next: 0 }
+        Self {
+            events,
+            next: 0,
+            return_to_echo,
+        }
     }
 }
 
@@ -55,6 +64,14 @@ impl Program for Replay {
             out.extend_from_slice(bytes);
             self.next += 1;
         }
+    }
+
+    fn pending_switch(&mut self) -> Option<ProgramKind> {
+        if self.return_to_echo && self.next >= self.events.len() {
+            self.return_to_echo = false;
+            return Some(ProgramKind::EchoShell);
+        }
+        None
     }
 }
 

@@ -27,6 +27,24 @@ pub trait Program: Send + std::any::Any {
     fn mode_request(&mut self) -> Option<TermiosMode> {
         None
     }
+
+    /// Returns a request to swap the active program. The controller polls this
+    /// after every dispatch (`on_byte`/`on_line`/`on_resize`/`on_tick`) and
+    /// rebuilds the program if `Some(_)`. Default: no switch requested.
+    fn pending_switch(&mut self) -> Option<ProgramKind> {
+        None
+    }
+}
+
+#[derive(Clone, Debug)]
+pub enum ProgramKind {
+    EchoShell,
+    VimLite,
+    Replay {
+        cast_text: String,
+        return_to_echo: bool,
+    },
+    RawSink,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

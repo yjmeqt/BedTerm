@@ -5,7 +5,7 @@ pub mod program;
 pub mod programs;
 pub mod termios;
 
-use crate::mock_tty::program::{Program, TermiosMode};
+use crate::mock_tty::program::{Program, ProgramKind, TermiosMode};
 use crate::mock_tty::termios::Termios;
 
 pub struct MockTty {
@@ -49,17 +49,23 @@ impl MockTty {
         }
         self.apply_mode_request();
         self.flush();
+        self.maybe_swap_program();
+        self.flush();
     }
 
     pub fn resize(&mut self, cols: u16, rows: u16) {
         self.program.on_resize(cols, rows, &mut self.output);
         self.apply_mode_request();
         self.flush();
+        self.maybe_swap_program();
+        self.flush();
     }
 
     pub fn tick(&mut self, now_ms: u64) {
         self.program.on_tick(now_ms, &mut self.output);
         self.apply_mode_request();
+        self.flush();
+        self.maybe_swap_program();
         self.flush();
     }
 
@@ -69,6 +75,38 @@ impl MockTty {
                 TermiosMode::Raw => self.termios.set_raw(),
                 TermiosMode::Cooked => self.termios.set_cooked(),
             }
+        }
+    }
+
+    fn maybe_swap_program(&mut self) {
+        if let Some(kind) = self.program.pending_switch() {
+            let new_prog: Box<dyn Program> = match kind {
+                ProgramKind::EchoShell => {
+                    Box::new(crate::mock_tty::programs::echo_shell::EchoShell::new())
+                }
+                ProgramKind::VimLite => {
+                    Box::new(crate::mock_tty::programs::vim_lite::VimLite::new())
+                }
+                ProgramKind::Replay {
+                    cast_text,
+                    return_to_echo,
+                } => Box::new(
+                    crate::mock_tty::programs::replay::Replay::from_cast_text_with_return(
+                        &cast_text,
+                        return_to_echo,
+                    ),
+                ),
+                ProgramKind::RawSink => {
+                    Box::new(crate::mock_tty::programs::raw_sink::RawSink::new())
+                }
+            };
+            if new_prog.wants_raw() {
+                self.termios.set_raw();
+            } else {
+                self.termios.set_cooked();
+            }
+            self.program = new_prog;
+            self.program.boot(&mut self.output);
         }
     }
 

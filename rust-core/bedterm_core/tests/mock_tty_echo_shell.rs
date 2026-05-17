@@ -143,3 +143,30 @@ fn echo_shell_keys_sub_mode_prints_hex_until_q() {
         bt_mock_tty_free(h);
     }
 }
+
+#[test]
+fn echo_shell_demo_vim_switches_to_replay() {
+    use bedterm_core::mock_tty::ffi::bt_mock_tty_tick;
+    let h = make();
+    drain();
+    let cmd = b"demo vim\r";
+    unsafe {
+        bt_mock_tty_write(h, cmd.as_ptr(), cmd.len());
+    }
+    drain();
+    unsafe {
+        bt_mock_tty_tick(h, 10_000);
+    }
+    let s = drain();
+    assert!(
+        !s.is_empty(),
+        "expected replay output after demo vim + tick"
+    );
+    assert!(
+        s.windows(8).any(|w| w == b"\x1B[?1049h"),
+        "expected alt-screen enter from vim cast: {s:?}"
+    );
+    unsafe {
+        bt_mock_tty_free(h);
+    }
+}

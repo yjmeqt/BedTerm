@@ -1,4 +1,4 @@
-use crate::mock_tty::program::{Program, Signal, TermiosMode};
+use crate::mock_tty::program::{Program, ProgramKind, Signal, TermiosMode};
 
 const PROMPT: &[u8] = b"bedterm-debug$ ";
 
@@ -8,6 +8,7 @@ pub struct EchoShell {
     stress_until_ms: Option<u64>,
     stress_rng: u32,
     pending_mode: Option<TermiosMode>,
+    pending: Option<ProgramKind>,
 }
 
 impl EchoShell {
@@ -18,6 +19,7 @@ impl EchoShell {
             stress_until_ms: None,
             stress_rng: 0x1234_5678,
             pending_mode: None,
+            pending: None,
         }
     }
 
@@ -132,6 +134,31 @@ impl Program for EchoShell {
                 out.extend_from_slice(b"[keys] press keys; 'q' to exit\r\n");
                 return;
             }
+            "vim" => {
+                self.pending = Some(ProgramKind::VimLite);
+                return;
+            }
+            cmd if cmd.starts_with("demo ") => {
+                let name = cmd.trim_start_matches("demo ").trim();
+                let cast_text: &str = match name {
+                    "vim" => include_str!("../../../fixtures/vim-edit.cast"),
+                    "codex" => include_str!("../../../fixtures/codex-tui.cast"),
+                    "claude" => include_str!("../../../fixtures/claude-code.cast"),
+                    _ => {
+                        let _ = std::io::Write::write_fmt(
+                            &mut *out,
+                            format_args!("demo: unknown fixture '{name}'\r\n"),
+                        );
+                        Self::prompt(out);
+                        return;
+                    }
+                };
+                self.pending = Some(ProgramKind::Replay {
+                    cast_text: cast_text.to_string(),
+                    return_to_echo: true,
+                });
+                return;
+            }
             other => {
                 let _ =
                     std::io::Write::write_fmt(&mut *out, format_args!("{other}: not found\r\n"));
@@ -185,6 +212,10 @@ impl Program for EchoShell {
 
     fn mode_request(&mut self) -> Option<TermiosMode> {
         self.pending_mode.take()
+    }
+
+    fn pending_switch(&mut self) -> Option<ProgramKind> {
+        self.pending.take()
     }
 }
 
