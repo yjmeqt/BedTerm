@@ -46,14 +46,35 @@ extern "C" {
 
 struct BtTerm *bt_term_new(uint16_t cols, uint16_t rows);
 
+/**
+ * # Safety
+ * `h` must be a pointer returned by `bt_term_new` that has not yet been freed.
+ */
 void bt_term_free(struct BtTerm *h);
 
+/**
+ * # Safety
+ * `h` must be a valid, non-freed handle. `bytes` must point to at least `len` bytes.
+ */
 void bt_term_feed(struct BtTerm *h, const uint8_t *bytes, uintptr_t len);
 
+/**
+ * # Safety
+ * `h` must be a valid, non-freed handle.
+ */
 void bt_term_resize(struct BtTerm *h, uint16_t cols, uint16_t rows);
 
+/**
+ * # Safety
+ * `h` must be a valid, non-freed handle. `out` must be a valid pointer to a `BtSnapshotView`.
+ * The cell pointer in `*out` is valid until the next mutating call or `bt_term_snapshot_release`.
+ */
 int bt_term_snapshot(struct BtTerm *h, struct BtSnapshotView *out);
 
+/**
+ * # Safety
+ * `h` must be a valid, non-freed handle.
+ */
 void bt_term_snapshot_release(struct BtTerm *h);
 
 #ifdef __cplusplus
