@@ -46,4 +46,19 @@ enum Keychain {
         ]
         SecItemDelete(query as CFDictionary)
     }
+
+    /// Returns every account name currently stored under the given service.
+    /// Used by `HostsStore` to reconcile its UserDefaults index against the Keychain.
+    static func allAccounts(service: String) -> [String] {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecReturnAttributes as String: true,
+            kSecMatchLimit as String: kSecMatchLimitAll
+        ]
+        var result: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        guard status == errSecSuccess, let items = result as? [[String: Any]] else { return [] }
+        return items.compactMap { $0[kSecAttrAccount as String] as? String }
+    }
 }

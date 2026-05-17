@@ -147,7 +147,7 @@ public final class CitadelSSHClient: BedTermKit.SSHClient, @unchecked Sendable {
                 do {
                     try await citadel.withPTY(ptyRequest) { inbound, outbound in
                         self.writer = outbound
-                        ready.resume(returning: ())
+                        self.maybeResume(ready, with: .success(()))
 
                         // Pump inbound stdout/stderr into our AsyncStream.
                         let pump = Task { [weak self] in
@@ -182,7 +182,7 @@ public final class CitadelSSHClient: BedTermKit.SSHClient, @unchecked Sendable {
                 } catch {
                     // If we have not resumed `ready` yet, surface the error
                     // through it; otherwise the session simply ends.
-                    self.maybeResume(ready, throwing: Self.classifyConnectError(error))
+                    self.maybeResume(ready, with: .failure(Self.classifyConnectError(error)))
                 }
                 self.outputContinuation.finish()
             }
@@ -190,16 +190,21 @@ public final class CitadelSSHClient: BedTermKit.SSHClient, @unchecked Sendable {
     }
 
     // `ready` may already have been resumed by the time withPTY throws. Guard
-    // against double-resume by tracking it via a one-shot lock.
+    // against double-resume by tracking it via a one-shot lock — both the
+    // success path (PTY ready) and the failure path (withPTY threw before/
+    // after ready) funnel through here so the continuation is only resumed once.
     private let readyLock = NSLock()
     private var readyResumed = false
-    private func maybeResume(_ cont: CheckedContinuation<Void, Error>, throwing error: Error) {
+    private func maybeResume(
+        _ cont: CheckedContinuation<Void, Error>,
+        with result: Result<Void, Error>
+    ) {
         self.readyLock.lock()
-        defer { self.readyLock.unlock() }
-        if !self.readyResumed {
-            self.readyResumed = true
-            cont.resume(throwing: error)
-        }
+        let already = self.readyResumed
+        self.readyResumed = true
+        self.readyLock.unlock()
+        if already { return }
+        cont.resume(with: result)
     }
 
     private func releaseDisconnectGate() {

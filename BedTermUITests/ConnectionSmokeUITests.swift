@@ -5,13 +5,19 @@ final class ConnectionSmokeUITests: XCTestCase {
         continueAfterFailure = false
     }
 
-    func test_launch_showsConnectionScreen() throws {
+    func test_launch_showsHostsThenFormFromAddButton() throws {
         let app = XCUIApplication()
         app.launchArguments.append("-uitest-skipOnboarding")
         app.launch()
-        XCTAssertTrue(app.textFields["connection.host"].waitForExistence(timeout: 5))
+
+        // First-run shortcut may push the form automatically; if not, the user
+        // taps + on the empty Hosts list.
+        if !app.textFields["connection.host"].waitForExistence(timeout: 3) {
+            app.buttons["hosts.add"].tap()
+            XCTAssertTrue(app.textFields["connection.host"].waitForExistence(timeout: 5))
+        }
         XCTAssertTrue(app.textFields["connection.port"].exists)
         XCTAssertTrue(app.textFields["connection.username"].exists)
-        XCTAssertTrue(app.buttons["connection.connect"].exists)
+        XCTAssertTrue(app.buttons["connection.save"].exists)
     }
 }
