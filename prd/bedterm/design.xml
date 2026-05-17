@@ -7,7 +7,7 @@ The shared design system for BedTerm's app chrome — colour tokens, the shipped
 
 <requirement id="R1" name="Colour Tokens">
   <description>
-    <p>Every user-visible app-chrome surface, text, icon, border, and accent colour resolves to one of the named tokens below. Each token has both a Light value and a Dark value; SwiftUI/UIKit resolve them automatically as the iOS system appearance changes. Tokens are referenced by semantic name (e.g. <code>surface.elevated</code>) — never by palette name. The terminal viewport's own palette is tracked separately under <a href="#R3">R3 — System Appearance</a> and is currently deferred.</p>
+    <p>Every user-visible app-chrome surface, text, icon, border, and accent colour resolves to one of the named tokens below. Each token has both a Light value and a Dark value; SwiftUI/UIKit resolve them automatically as the iOS system appearance changes. Tokens are referenced by semantic name (e.g. <code>surface.elevated</code>) — never by palette name. The terminal viewport's palette uses dedicated <code>Terminal*</code> tokens in the same catalogue and is tracked under <a href="#R3">R3 — System Appearance</a>.</p>
     <table style="border-collapse:collapse;font-family:-apple-system,system-ui,sans-serif;font-size:13px;">
     <thead>
     <tr style="border-bottom:1px solid #888;">
@@ -103,12 +103,13 @@ The shared design system for BedTerm's app chrome — colour tokens, the shipped
 <requirement id="R3" name="System Appearance">
   <description>
     <p>The app always follows the iOS system appearance — Light when the system is Light, Dark when the system is Dark — for both the SwiftUI chrome and the terminal palette. There is no in-app theme override.</p>
-    <p>The colour tokens that back this behaviour are defined under <a href="#R1">R1 — Colour Tokens</a>. App-chrome rules below are <em>implemented</em> against those tokens; the terminal palette rules remain deferred until the Metal renderer's ANSI colour map is bridged through the same tokens.</p>
+    <p>The colour tokens that back this behaviour are defined under <a href="#R1">R1 — Colour Tokens</a>. The terminal palette is sourced from the same token catalogue (eighteen <code>Terminal*</code> colorsets) and pushed to the Metal renderer on every appearance change.</p>
   </description>
+  <implementation spec="bedterm/docs/specs/metal-appearance.md" />
   <rule id="follow_system" status="✅" context="app chrome">On launch, the app chrome renders in Light or Dark to match the current iOS system appearance, without any in-app theme picker.</rule>
   <rule id="live_switch" status="✅" context="app chrome">Changing the system appearance while the app is open updates the app chrome without restart.</rule>
-  <rule id="terminal_palette_light" status="❌" context="deferred">When the system is in Light mode, the terminal uses a light background with dark foreground text and legible ANSI colour mappings.</rule>
-  <rule id="terminal_palette_dark" status="❌" context="deferred">When the system is in Dark mode, the terminal uses a dark background with light foreground text and legible ANSI colour mappings.</rule>
+  <rule id="terminal_palette_light" status="✅">When the system is in Light mode, the terminal uses a light background with dark foreground text and legible ANSI colour mappings.</rule>
+  <rule id="terminal_palette_dark" status="✅">When the system is in Dark mode, the terminal uses a dark background with light foreground text and legible ANSI colour mappings.</rule>
   <rule id="readable_contrast" status="✅" context="app chrome">In both appearances, the special-keys bar, Connect form, error text, and disconnect banner meet contrast standards against their background.</rule>
   <rule id="all_colors_adaptive" status="✅" context="app chrome">Every app-chrome surface, text, icon, border, and accent colour is sourced from a design-system token in the catalogue with both Light and Dark variants — no literal colour values in code. Switching system appearance changes the rendered colour of every coloured element.</rule>
 </requirement>

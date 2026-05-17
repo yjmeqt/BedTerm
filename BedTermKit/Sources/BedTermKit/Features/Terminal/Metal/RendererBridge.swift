@@ -33,6 +33,13 @@ final class RendererBridge {
         bt_renderer_set_font(handle, Float(pointSize), Float(scale))
     }
 
+    /// Update the Metal renderer's `MTLLoadAction::Clear` colour. Takes effect
+    /// on the next `draw(...)`. Components outside `[0, 1]` are tolerated by
+    /// Metal (clamped downstream).
+    func setClearColor(red: Float, green: Float, blue: Float, alpha: Float = 1.0) {
+        bt_renderer_set_clear_color(handle, red, green, blue, alpha)
+    }
+
     /// Authoritative cell size in points, derived from the renderer's atlas
     /// (CoreText `ascent + descent + leading` rasterised at `scale`).
     /// CALayer overlays (cursor, selection) must use this to stay aligned

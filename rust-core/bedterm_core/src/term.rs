@@ -22,6 +22,65 @@ pub const BT_MODE_APP_CURSOR: u32 = 1 << 3;
 pub const BT_MODE_APP_KEYPAD: u32 = 1 << 4;
 pub const BT_MODE_FOCUS_IN_OUT: u32 = 1 << 5;
 
+/// 8-bit-per-channel sRGB triple. The renderer-facing snapshot stores
+/// premultiplied RGBA u32s; this type only exists at the host-config boundary.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(C)]
+pub struct BtRgb24 {
+    pub r: u8,
+    pub g: u8,
+    pub b: u8,
+}
+
+/// 18-colour terminal palette: the 16 ANSI indices plus the two defaults.
+/// The host (Swift) recomputes this from design tokens when the iOS
+/// appearance changes, and pushes it through `Terminal::set_palette`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(C)]
+pub struct Palette {
+    pub default_fg: BtRgb24,
+    pub default_bg: BtRgb24,
+    pub ansi: [BtRgb24; 16],
+}
+
+impl Default for Palette {
+    fn default() -> Self {
+        // Matches the legacy hardcoded palette (the values that previously
+        // lived in `default_named`). Kept as the no-host-yet fallback.
+        use alacritty_terminal::vte::ansi::NamedColor;
+        let n = |c: NamedColor| -> BtRgb24 {
+            let rgb = legacy_default_named(c);
+            BtRgb24 {
+                r: rgb.r,
+                g: rgb.g,
+                b: rgb.b,
+            }
+        };
+        Self {
+            default_fg: n(NamedColor::Foreground),
+            default_bg: n(NamedColor::Background),
+            ansi: [
+                n(NamedColor::Black),
+                n(NamedColor::Red),
+                n(NamedColor::Green),
+                n(NamedColor::Yellow),
+                n(NamedColor::Blue),
+                n(NamedColor::Magenta),
+                n(NamedColor::Cyan),
+                n(NamedColor::White),
+                n(NamedColor::BrightBlack),
+                n(NamedColor::BrightRed),
+                n(NamedColor::BrightGreen),
+                n(NamedColor::BrightYellow),
+                n(NamedColor::BrightBlue),
+                n(NamedColor::BrightMagenta),
+                n(NamedColor::BrightCyan),
+                n(NamedColor::BrightWhite),
+            ],
+        }
+    }
+}
+
 /// Scrollback buffer size. 10 000 lines × 80 cols × ~16 B/cell ≈ 12 MB worst
 /// case, on par with the glyph atlas budget.
 const SCROLLBACK_LINES: u16 = 10_000;
@@ -53,6 +112,7 @@ pub struct Terminal {
     term: Term<VoidListener>,
     cols: u16,
     rows: u16,
+    palette: Palette,
 }
 
 impl Terminal {
@@ -67,6 +127,7 @@ impl Terminal {
             term,
             cols,
             rows,
+            palette: Palette::default(),
         }
     }
 
@@ -131,6 +192,10 @@ impl Terminal {
         out
     }
 
+    pub fn set_palette(&mut self, palette: Palette) {
+        self.palette = palette;
+    }
+
     pub fn snapshot(&self) -> GridSnapshot {
         let cols = self.cols;
         let rows = self.rows;
@@ -179,8 +244,8 @@ impl Terminal {
 
                 cells.push(CellSnapshot {
                     ch,
-                    fg_rgba: color_to_rgba(cell.fg, &self.term),
-                    bg_rgba: color_to_rgba(cell.bg, &self.term),
+                    fg_rgba: color_to_rgba(cell.fg, &self.palette),
+                    bg_rgba: color_to_rgba(cell.bg, &self.palette),
                     flags,
                 });
             }
@@ -209,17 +274,61 @@ impl Terminal {
     }
 }
 
-fn color_to_rgba(c: alacritty_terminal::vte::ansi::Color, term: &Term<VoidListener>) -> u32 {
+fn color_to_rgba(c: alacritty_terminal::vte::ansi::Color, palette: &Palette) -> u32 {
     use alacritty_terminal::vte::ansi::Color;
     let rgb = match c {
-        Color::Spec(rgb) => rgb,
-        Color::Named(named) => term.colors()[named].unwrap_or_else(|| default_named(named)),
-        Color::Indexed(i) => term.colors()[i as usize].unwrap_or_else(|| default_indexed(i)),
+        Color::Spec(rgb) => BtRgb24 {
+            r: rgb.r,
+            g: rgb.g,
+            b: rgb.b,
+        },
+        Color::Named(named) => named_from_palette(named, palette),
+        Color::Indexed(i) => {
+            if (i as usize) < 16 {
+                palette.ansi[i as usize]
+            } else {
+                // 16..=255 — colour cube and greyscale ramp, not palette-controlled.
+                let rgb = default_indexed(i);
+                BtRgb24 {
+                    r: rgb.r,
+                    g: rgb.g,
+                    b: rgb.b,
+                }
+            }
+        }
     };
     ((rgb.r as u32) << 24) | ((rgb.g as u32) << 16) | ((rgb.b as u32) << 8) | 0xFF
 }
 
-fn default_named(
+fn named_from_palette(n: alacritty_terminal::vte::ansi::NamedColor, p: &Palette) -> BtRgb24 {
+    use alacritty_terminal::vte::ansi::NamedColor::*;
+    match n {
+        Foreground | BrightForeground | DimForeground => p.default_fg,
+        Background => p.default_bg,
+        Black | DimBlack => p.ansi[0],
+        Red | DimRed => p.ansi[1],
+        Green | DimGreen => p.ansi[2],
+        Yellow | DimYellow => p.ansi[3],
+        Blue | DimBlue => p.ansi[4],
+        Magenta | DimMagenta => p.ansi[5],
+        Cyan | DimCyan => p.ansi[6],
+        White | DimWhite => p.ansi[7],
+        BrightBlack => p.ansi[8],
+        BrightRed => p.ansi[9],
+        BrightGreen => p.ansi[10],
+        BrightYellow => p.ansi[11],
+        BrightBlue => p.ansi[12],
+        BrightMagenta => p.ansi[13],
+        BrightCyan => p.ansi[14],
+        BrightWhite => p.ansi[15],
+        // Cursor and anything else — use default foreground. Note: BrightForeground
+        // and DimForeground are matched explicitly above because the palette has no
+        // distinct slot for them; they intentionally collapse onto default_fg.
+        _ => p.default_fg,
+    }
+}
+
+fn legacy_default_named(
     n: alacritty_terminal::vte::ansi::NamedColor,
 ) -> alacritty_terminal::vte::ansi::Rgb {
     use alacritty_terminal::vte::ansi::{NamedColor::*, Rgb};
@@ -349,7 +458,7 @@ fn default_indexed(i: u8) -> alacritty_terminal::vte::ansi::Rgb {
             14 => NamedColor::BrightCyan,
             _ => NamedColor::BrightWhite,
         };
-        return default_named(named);
+        return legacy_default_named(named);
     }
     if i < 232 {
         // 6×6×6 colour cube.

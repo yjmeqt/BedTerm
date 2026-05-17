@@ -15,10 +15,20 @@ struct SettingsScreen: View {
                     Toggle(isOn: $settings.reserveTopSafeAreaInAltScreen) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Keep first row visible in full-screen apps")
-                            // swiftlint:disable:next line_length
-                            Text("When vim, htop, claude or other full-screen tools run, reserve the top safe area so the Dynamic Island, notch, or status bar doesn't cover their first row.")
-                                .font(.footnote)
-                                .foregroundStyle(Color("ShadcnMutedForeground", bundle: .module))
+                            // Backslash continuations keep this a single
+                            // localizable literal — Swift folds the trailing
+                            // \-newline away, leaving a one-line string that
+                            // exactly matches the Localizable.xcstrings key.
+                            Text(
+                                """
+                                When vim, htop, claude or other full-screen tools \
+                                run, reserve the top safe area so the Dynamic \
+                                Island, notch, or status bar doesn't cover their \
+                                first row.
+                                """
+                            )
+                            .font(.footnote)
+                            .foregroundStyle(Color("ShadcnMutedForeground", bundle: .module))
                         }
                     }
                     .accessibilityIdentifier("settings.reserveTopSafeArea")

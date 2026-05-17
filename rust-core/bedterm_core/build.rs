@@ -9,6 +9,7 @@ fn main() {
     std::fs::create_dir_all(out.parent().unwrap()).unwrap();
     println!("cargo:rerun-if-changed=src/ffi.rs");
     println!("cargo:rerun-if-changed=src/lib.rs");
+    println!("cargo:rerun-if-changed=src/renderer/ffi.rs");
     println!("cargo:rerun-if-changed=src/snapshot.rs");
     println!("cargo:rerun-if-changed=src/term.rs");
     println!("cargo:rerun-if-changed=src/mock_tty/ffi.rs");

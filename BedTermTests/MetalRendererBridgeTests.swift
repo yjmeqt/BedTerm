@@ -39,4 +39,25 @@ final class MetalRendererBridgeTests: XCTestCase {
         let rc = bridge.draw(term: term, into: texture, viewport: CGSize(width: 512, height: 512), time: 0)
         XCTAssertEqual(rc, 0)
     }
+
+    func testSetClearColorThenDrawSucceeds() throws {
+        guard let device = MTLCreateSystemDefaultDevice() else { throw XCTSkip("no Metal device") }
+        guard let queue = device.makeCommandQueue() else { throw XCTSkip("no command queue") }
+        guard let bridge = RendererBridge(device: device, queue: queue) else {
+            XCTFail("bridge init returned nil"); return
+        }
+        bridge.setFont(pointSize: 14, scale: 2)
+        bridge.setClearColor(red: 1.0, green: 1.0, blue: 1.0, alpha: 1.0)
+
+        let term = TerminalCore(cols: 4, rows: 2)
+        let desc = MTLTextureDescriptor.texture2DDescriptor(
+            pixelFormat: .bgra8Unorm, width: 64, height: 32, mipmapped: false
+        )
+        desc.usage = [.renderTarget, .shaderRead]
+        guard let texture = device.makeTexture(descriptor: desc) else {
+            XCTFail("texture allocation failed"); return
+        }
+        let rc = bridge.draw(term: term, into: texture, viewport: CGSize(width: 64, height: 32), time: 0)
+        XCTAssertEqual(rc, 0, "draw must succeed after setClearColor")
+    }
 }
