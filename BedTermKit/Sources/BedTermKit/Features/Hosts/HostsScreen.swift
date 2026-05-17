@@ -20,13 +20,13 @@ public struct HostsScreen: View {
     }
 
     public var body: some View {
-        rootContent
-            .background(Color("ShadcnBackground", bundle: .module).ignoresSafeArea())
-            .navigationTitle(Text("Hosts"))
-            .toolbar { toolbarContent }
+        ZStack { rootContent }
             .navigationDestination(for: AppRoute.self) { route in
                 destination(for: route)
             }
+            .background(Color("ShadcnBackground", bundle: .module).ignoresSafeArea())
+            .navigationTitle(Text("Hosts"))
+            .toolbar { toolbarContent }
             .modifier(SwapDialogModifier(viewModel: viewModel))
             .modifier(DeleteDialogModifier(viewModel: viewModel))
             .sheet(isPresented: $showingMismatchReview) {
