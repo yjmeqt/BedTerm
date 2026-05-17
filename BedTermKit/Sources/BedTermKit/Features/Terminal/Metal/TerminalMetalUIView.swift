@@ -124,6 +124,7 @@ final class TerminalMetalUIView: MTKView {
             row: Int(snapshot.cursorRow),
             cellSize: cellSize
         )
+        updatePreeditOverlay()
         // presentsWithTransaction=true requires a synchronous present: wait
         // for the cell-pass command buffer to be scheduled, then present the
         // drawable in the current CATransaction. Using cmd.present(drawable)
@@ -335,66 +336,5 @@ final class TerminalMetalUIView: MTKView {
         let sequence = "\u{1B}[1;1H\u{1B}[\(linesToInsert)L\u{1B}[\(rows);\(col + 1)H"
         terminalCore.feed(Data(sequence.utf8))
         setNeedsDisplay()
-    }
-}
-
-extension TerminalMetalUIView: UIKeyInput, UITextInputTraits {
-    var hasText: Bool { false }
-
-    func insertText(_ text: String) {
-        if text == "\n" {
-            onSend(Data([0x0D]))
-        } else {
-            onSend(Data(text.utf8))
-        }
-    }
-
-    func deleteBackward() {
-        onSend(Data([0x7F]))  // DEL — xterm-256color expects 0x7F.
-    }
-
-    // UITextInputTraits — terminal-friendly defaults. Required for the
-    // soft keyboard, and to keep IME corrections from mangling commands.
-    var autocorrectionType: UITextAutocorrectionType {
-        get { .no }
-        set { _ = newValue }
-    }
-    var autocapitalizationType: UITextAutocapitalizationType {
-        get { .none }
-        set { _ = newValue }
-    }
-    var spellCheckingType: UITextSpellCheckingType {
-        get { .no }
-        set { _ = newValue }
-    }
-    var smartQuotesType: UITextSmartQuotesType {
-        get { .no }
-        set { _ = newValue }
-    }
-    var smartDashesType: UITextSmartDashesType {
-        get { .no }
-        set { _ = newValue }
-    }
-    var smartInsertDeleteType: UITextSmartInsertDeleteType {
-        get { .no }
-        set { _ = newValue }
-    }
-    // `.default`, not `.asciiCapable` — `.asciiCapable` hides every non-Latin
-    // keyboard, blocking the globe key from cycling to CJK IMEs.
-    var keyboardType: UIKeyboardType {
-        get { .default }
-        set { _ = newValue }
-    }
-    var keyboardAppearance: UIKeyboardAppearance {
-        get { .dark }
-        set { _ = newValue }
-    }
-    var returnKeyType: UIReturnKeyType {
-        get { .default }
-        set { _ = newValue }
-    }
-    var enablesReturnKeyAutomatically: Bool {
-        get { false }
-        set { _ = newValue }
     }
 }
