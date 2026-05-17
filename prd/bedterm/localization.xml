@@ -1,0 +1,79 @@
+<prd name="Localization">
+
+<overview>
+BedTerm ships in multiple languages so users in Greater China, Japan, Korea, and Russia see a native interface instead of English. The app's chrome — onboarding, connection form, security warnings, error messages, system permission prompts, and app-name — adapts to the user's iOS system language. The terminal viewport itself is not localized: every byte that arrives from the remote shell renders verbatim, because that content belongs to the server, not the app.
+</overview>
+<implementation platform="iOS" spec="bedterm/docs/specs/localization.md" />
+
+<requirement id="R1" name="Supported Languages">
+  <description>
+    The app ships translations for a fixed set of languages and falls back to English everywhere else. The supported set is chosen for the markets BedTerm is launching into and is the authoritative list — adding or removing a language is a product decision, not an implementation detail.
+  </description>
+  <rule id="english_base" status="✅">English (en) is the base language. All user-facing copy originates in English and every other locale is a translation of it.</rule>
+  <rule id="chinese_simplified" status="✅">Simplified Chinese (zh-Hans) ships for users in mainland China.</rule>
+  <rule id="chinese_traditional" status="✅">Traditional Chinese (zh-Hant) ships for users in Taiwan and Hong Kong.</rule>
+  <rule id="japanese" status="✅">Japanese (ja) ships for users in Japan.</rule>
+  <rule id="korean" status="✅">Korean (ko) ships for users in Korea.</rule>
+  <rule id="russian" status="✅">Russian (ru) ships for users in Russia.</rule>
+  <rule id="english_fallback" status="✅" context="user's system language is not in the supported set">The app shows English when the user's preferred system language is not one of the languages above.</rule>
+</requirement>
+
+<requirement id="R2" name="Language Selection">
+  <description>
+    The displayed language follows the iOS system. The user does not pick a language inside the app — they pick it once for the device (or per-app under Settings → BedTerm → Language, the standard iOS affordance) and BedTerm honors that choice. No in-app theme-style language picker.
+  </description>
+  <rule id="follow_system_language" status="✅">On launch, the app displays in the user's preferred iOS system language if that language is in the supported set; otherwise it displays in English.</rule>
+  <rule id="per_app_override" status="✅">If the user sets a per-app language under Settings → BedTerm → Language (the standard iOS affordance), the app honors that override on next launch.</rule>
+  <rule id="no_in_app_picker" status="✅">BedTerm does not include an in-app language picker. Language is changed only through iOS Settings.</rule>
+  <rule id="region_variants" status="✅" context="zh-Hant region">For Traditional Chinese, both Taiwan (zh-Hant-TW) and Hong Kong (zh-Hant-HK) system settings resolve to the same Traditional Chinese translation. Region-specific phrasing differences are not maintained as separate translations in this iteration.</rule>
+</requirement>
+
+<requirement id="R3" name="Localized Surfaces">
+  <description>
+    Every piece of user-facing text rendered by the app — not by the remote shell — must be available in all supported languages. This covers the SwiftUI chrome surfaces inherited from <a href="prd:bedterm/mvp">the MVP</a>: onboarding, connection form, security warnings, terminal-level error messages, and iOS system permission prompts attributed to BedTerm.
+  </description>
+  <rule id="onboarding_localized" status="✅">All onboarding screens (welcome, host kind, location, macOS tutorial, permission step, completion) display in the user's language — titles, body copy, choice cards, button labels.</rule>
+  <rule id="connection_form_localized" status="✅">The connection form displays in the user's language — section titles, field placeholders (Host, Port, Username, Password, Passphrase), auth-method picker, primary action button, and inline validation errors.</rule>
+  <rule id="security_warning_localized" status="✅">The host-key-mismatch warning screen displays in the user's language — title, explanatory copy, fingerprint labels (Stored / Remote), and the Reject / Trust-new-key actions including the destructive-action confirmation alert.</rule>
+  <rule id="terminal_errors_localized" status="✅">Terminal-level error and status messages presented to the user — connection refused, timeout, handshake failed, authentication failed, private key parse error, passphrase-required, disconnect banner — display in the user's language. The remote shell's own output (R2 of MVP) is untouched.</rule>
+  <rule id="permission_prompts_localized" status="✅">The text BedTerm contributes to iOS system permission prompts (Local Network usage description, and any other usage descriptions the app ships) displays in the user's language.</rule>
+  <rule id="accessibility_labels_localized" status="⚠️">VoiceOver labels and hints on interactive controls (toolbar keys, direction pad, composer mic affordance, custom buttons) display in the user's language.</rule>
+</requirement>
+
+<requirement id="R4" name="Non-Localized Surfaces">
+  <description>
+    Some surfaces are deliberately not translated, because they either are not text or do not belong to the app. Documenting them prevents future scope creep.
+  </description>
+  <rule id="terminal_output_passthrough" status="✅">Bytes received from the remote shell are rendered verbatim. The terminal view does not translate, transform, or interpret remote text in any locale-dependent way.</rule>
+  <rule id="brand_name_constant" status="✅">The product name "BedTerm" is a brand and appears in Latin script in every locale — no transliteration into other scripts.</rule>
+  <rule id="developer_strings_excluded" status="✅">Debug log lines, assertion messages, and crash-report strings remain in English. They are not user-facing.</rule>
+</requirement>
+
+<requirement id="R5" name="Locale Formatting">
+  <description>
+    Numbers, dates, and other locale-sensitive values that the app itself displays follow the user's locale conventions rather than English defaults.
+  </description>
+  <rule id="numbers_locale_formatted" status="✅">Numeric values shown in the chrome (port numbers excepted — they remain Arabic digits as required by the SSH protocol) use the user's locale's number formatting.</rule>
+  <rule id="dates_locale_formatted" status="✅">Any user-visible date or time (e.g. a "last connected" timestamp, if surfaced) uses the user's locale's date format and calendar.</rule>
+  <rule id="rtl_not_required" status="✅" context="deferred">Right-to-left layout support is not required, because no RTL language is in the supported set. Revisit if Arabic or Hebrew is added.</rule>
+</requirement>
+
+<requirement id="R6" name="Translation Quality">
+  <description>
+    Translations read as natural, idiomatic text written by a native speaker for the platform's tone, not as literal word-for-word machine output. Technical terms with established native conventions use those conventions.
+  </description>
+  <rule id="natural_tone" status="✅">Each translation reads as natural, contemporary copy in the target language — appropriate register for a developer tool, neither overly formal nor literal.</rule>
+  <rule id="native_technical_terms" status="✅">Technical terms (SSH, host, port, username, password, passphrase, private key, fingerprint, certificate) use the conventional native rendering for each language (transliterated or translated as that language's developer community customarily writes them).</rule>
+  <rule id="ui_strings_no_truncation" status="⚠️">Translated strings fit their UI containers without truncation or wrapping that breaks layout. Strings that are visibly longer in a target language (commonly Russian and German-style compounds) either fit, wrap cleanly, or are abbreviated by the translator into a shorter native phrasing.</rule>
+  <rule id="punctuation_native" status="✅">Punctuation follows the target language's conventions — full-width punctuation in Chinese and Japanese, the Korean spacing rules, and so on. Latin punctuation is not retained where it would look wrong to a native reader.</rule>
+</requirement>
+
+<requirement id="R7" name="Reset and Re-onboarding">
+  <description>
+    Changing the system language between launches re-renders the chrome in the new language without requiring an app reinstall, and onboarding (if shown again because the user reset it) appears in the new language.
+  </description>
+  <rule id="language_change_on_relaunch" status="✅">If the user changes the iOS system language (or the per-app override) and relaunches BedTerm, every chrome surface — onboarding, connection form, errors — renders in the new language on next display.</rule>
+  <rule id="persisted_data_locale_independent" status="✅">User-entered data (host, username, stored host-key fingerprints, private keys) is stored locale-independently and is not translated, garbled, or migrated when the language changes.</rule>
+</requirement>
+
+</prd>

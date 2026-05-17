@@ -1,5 +1,6 @@
 <prd_index>
   <module name="bedterm">
     <entry name="MVP" file="bedterm/mvp.xml" />
+    <entry name="Localization" file="bedterm/localization.xml" />
   </module>
 </prd_index>
