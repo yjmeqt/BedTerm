@@ -8,6 +8,7 @@ final class TerminalMetalUIView: MTKView {
     let bridge: RendererBridge
     let onSend: (Data) -> Void
     private let onResize: (Int, Int) -> Void
+    private weak var session: TerminalSession?
 
     private var startTime = CACurrentMediaTime()
     private var consumeTask: Task<Void, Never>?
@@ -20,7 +21,16 @@ final class TerminalMetalUIView: MTKView {
     private let selectionGR = MetalSelectionGesture(target: nil, action: nil)
     private var currentCols: Int = 80
 
+    // Scroll state. Source of truth lives in TerminalCore (Rust grid's
+    // display_offset). These fields only hold transient gesture math —
+    // internal access is needed by the +Scroll extension file.
+    var panGR: UIPanGestureRecognizer?
+    var dragAccumulator: CGFloat = 0  // sub-row remainder (points)
+    var displayLink: CADisplayLink?
+    var inertiaVelocity: CGFloat = 0  // points / sec, +toward-older-content
+
     init(
+        session: TerminalSession,
         feed: AsyncStream<Data>,
         onSend: @escaping (Data) -> Void,
         onResize: @escaping (Int, Int) -> Void
@@ -35,7 +45,22 @@ final class TerminalMetalUIView: MTKView {
         self.bridge = bridge
         self.onSend = onSend
         self.onResize = onResize
+        self.session = session
         super.init(frame: .zero, device: device)
+
+        // Snap-on-input (R5.scroll_snap_on_input): every PTY-bound byte
+        // funnels through TerminalSession.send, including KeyBar, Composer,
+        // hardware keys, and UIKeyInput. One hook on the session covers them
+        // all. Captures the core directly (the view is owned by the session's
+        // view tree, so it outlives the closure naturally) and uses a weak
+        // self so stopping inertia is safe across deallocation.
+        let core = self.terminalCore
+        session.onBeforeSend = { [weak self] in
+            guard core.scrollOffset > 0 else { return }
+            core.scrollToBottom()
+            self?.stopInertia()
+            self?.setNeedsDisplay()
+        }
 
         // framebufferOnly=false: we hand the drawable's texture across FFI as a
         // raw pointer, so the GPU pipeline must allow CPU-readable access.
@@ -96,16 +121,27 @@ final class TerminalMetalUIView: MTKView {
         addGestureRecognizer(selectionGR)
 
         // Single-tap brings up the system keyboard by making this view first
-        // responder. The long-press selection recogniser fires later (0.4 s
+        // responder, and also stops any in-flight scroll inertia.
+        // The long-press selection recogniser fires later (0.4 s
         // minimumPressDuration) so the two don't conflict.
         let focusTap = UITapGestureRecognizer(target: self, action: #selector(handleFocusTap))
         focusTap.cancelsTouchesInView = false
         addGestureRecognizer(focusTap)
+
+        // One-finger pan scrolls the terminal viewport into scrollback.
+        // Selection (long-press-then-drag) wins naturally because pan starts
+        // firing as soon as the finger moves, while selection waits 0.4 s.
+        let pan = UIPanGestureRecognizer(target: self, action: #selector(handlePan(_:)))
+        pan.maximumNumberOfTouches = 1
+        pan.delegate = self
+        addGestureRecognizer(pan)
+        self.panGR = pan
     }
 
-    deinit {
+    isolated deinit {
         consumeTask?.cancel()
         anchorTask?.cancel()
+        displayLink?.invalidate()
     }
 
     override func draw(_ rect: CGRect) {
@@ -119,11 +155,16 @@ final class TerminalMetalUIView: MTKView {
             time: elapsed
         )
         let snapshot = terminalCore.snapshot()
-        cursorLayer.update(
-            col: Int(snapshot.cursorCol),
-            row: Int(snapshot.cursorRow),
-            cellSize: cellSize
-        )
+        let cursorRow = Int(snapshot.cursorRow)
+        let cursorVisible = cursorRow < Int(snapshot.rows)
+        cursorLayer.isHidden = !cursorVisible
+        if cursorVisible {
+            cursorLayer.update(
+                col: Int(snapshot.cursorCol),
+                row: cursorRow,
+                cellSize: cellSize
+            )
+        }
         // presentsWithTransaction=true requires a synchronous present: wait
         // for the cell-pass command buffer to be scheduled, then present the
         // drawable in the current CATransaction. Using cmd.present(drawable)
@@ -188,6 +229,9 @@ final class TerminalMetalUIView: MTKView {
     }
 
     @objc private func handleFocusTap() {
+        // Tap during deceleration stops it immediately, even if the keyboard
+        // is already showing — gives the user a brake on a flick.
+        stopInertia()
         if !isFirstResponder {
             _ = becomeFirstResponder()
             reloadInputViews()
@@ -202,53 +246,6 @@ final class TerminalMetalUIView: MTKView {
     }
 
     override var canBecomeFirstResponder: Bool { true }
-
-    // MARK: Hardware-key handling
-
-    /// Hardware keys UIKeyInput cannot deliver: arrows, escape, function,
-    /// Ctrl-combos. Each maps to the canonical xterm/VT byte sequence.
-    override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
-        var handled = false
-        for press in presses {
-            guard let key = press.key else { continue }
-            if let bytes = Self.encode(key: key) {
-                onSend(bytes)
-                handled = true
-            }
-        }
-        if !handled { super.pressesBegan(presses, with: event) }
-    }
-
-    private static let esc: UInt8 = 0x1B
-
-    /// Static map from UIKey.keyCode to the canonical xterm/VT byte sequence.
-    private static let keyCodeBytes: [UIKeyboardHIDUsage: [UInt8]] = [
-        .keyboardUpArrow: [esc, 0x5B, 0x41],
-        .keyboardDownArrow: [esc, 0x5B, 0x42],
-        .keyboardRightArrow: [esc, 0x5B, 0x43],
-        .keyboardLeftArrow: [esc, 0x5B, 0x44],
-        .keyboardHome: [esc, 0x5B, 0x48],
-        .keyboardEnd: [esc, 0x5B, 0x46],
-        .keyboardPageUp: [esc, 0x5B, 0x35, 0x7E],
-        .keyboardPageDown: [esc, 0x5B, 0x36, 0x7E],
-        .keyboardEscape: [esc],
-        .keyboardTab: [0x09],
-        .keyboardReturnOrEnter: [0x0D],
-        .keyboardDeleteOrBackspace: [0x7F]
-    ]
-
-    private static func encode(key: UIKey) -> Data? {
-        if let ctrlByte = encodeControl(key: key) { return Data([ctrlByte]) }
-        return keyCodeBytes[key.keyCode].map { Data($0) }
-    }
-
-    private static func encodeControl(key: UIKey) -> UInt8? {
-        guard key.modifierFlags.contains(.control), key.characters.count == 1,
-            let ascii = key.characters.uppercased().unicodeScalars.first?.value,
-            ascii >= 0x40, ascii <= 0x5F
-        else { return nil }
-        return UInt8(ascii - 0x40)
-    }
 
     private func refreshFontMetrics() {
         let body = UIFontMetrics.default.scaledFont(
@@ -338,62 +335,15 @@ final class TerminalMetalUIView: MTKView {
     }
 }
 
-extension TerminalMetalUIView: UIKeyInput, UITextInputTraits {
-    var hasText: Bool { false }
-
-    func insertText(_ text: String) {
-        if text == "\n" {
-            onSend(Data([0x0D]))
-        } else {
-            onSend(Data(text.utf8))
-        }
-    }
-
-    func deleteBackward() {
-        onSend(Data([0x7F]))  // DEL — xterm-256color expects 0x7F.
-    }
-
-    // UITextInputTraits — terminal-friendly defaults. Without these the
-    // system may refuse to present a soft keyboard for a custom UIKeyInput
-    // view, or may apply IME corrections that mangle commands.
-    var autocorrectionType: UITextAutocorrectionType {
-        get { .no }
-        set { _ = newValue }
-    }
-    var autocapitalizationType: UITextAutocapitalizationType {
-        get { .none }
-        set { _ = newValue }
-    }
-    var spellCheckingType: UITextSpellCheckingType {
-        get { .no }
-        set { _ = newValue }
-    }
-    var smartQuotesType: UITextSmartQuotesType {
-        get { .no }
-        set { _ = newValue }
-    }
-    var smartDashesType: UITextSmartDashesType {
-        get { .no }
-        set { _ = newValue }
-    }
-    var smartInsertDeleteType: UITextSmartInsertDeleteType {
-        get { .no }
-        set { _ = newValue }
-    }
-    var keyboardType: UIKeyboardType {
-        get { .asciiCapable }
-        set { _ = newValue }
-    }
-    var keyboardAppearance: UIKeyboardAppearance {
-        get { .dark }
-        set { _ = newValue }
-    }
-    var returnKeyType: UIReturnKeyType {
-        get { .default }
-        set { _ = newValue }
-    }
-    var enablesReturnKeyAutomatically: Bool {
-        get { false }
-        set { _ = newValue }
+extension TerminalMetalUIView: UIGestureRecognizerDelegate {
+    func gestureRecognizer(
+        _ gestureRecognizer: UIGestureRecognizer,
+        shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer
+    ) -> Bool {
+        // Pan and selection are mutually exclusive: once selection starts
+        // (long-press-then-drag), it owns the gesture; once pan starts (drag
+        // immediately on touch), selection stays dormant. UIKit's natural
+        // arbitration produces this without any require(toFail:) wiring.
+        false
     }
 }

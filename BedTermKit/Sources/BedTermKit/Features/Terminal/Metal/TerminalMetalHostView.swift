@@ -2,13 +2,14 @@ import SwiftUI
 import UIKit
 
 struct TerminalMetalHostView: UIViewRepresentable {
+    let session: TerminalSession
     let feed: AsyncStream<Data>
     let onSend: (Data) -> Void
     let onResize: (Int, Int) -> Void
     let yieldFirstResponder: Bool
 
     func makeUIView(context: Context) -> TerminalMetalUIView {
-        TerminalMetalUIView(feed: feed, onSend: onSend, onResize: onResize)
+        TerminalMetalUIView(session: session, feed: feed, onSend: onSend, onResize: onResize)
     }
 
     func updateUIView(_ uiView: TerminalMetalUIView, context: Context) {

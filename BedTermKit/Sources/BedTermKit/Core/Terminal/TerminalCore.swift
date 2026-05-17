@@ -41,7 +41,9 @@ public final class TerminalCore {
     }
 
     public func snapshot() -> GridSnapshot {
-        var view = BtSnapshotView(cols: 0, rows: 0, cursor_col: 0, cursor_row: 0, cells: nil, cell_count: 0)
+        var view = BtSnapshotView(
+            cols: 0, rows: 0, cursor_col: 0, cursor_row: 0,
+            display_offset: 0, cells: nil, cell_count: 0)
         guard bt_term_snapshot(handle, &view) == 0, let cellsPtr = view.cells else {
             return GridSnapshot(cols: 0, rows: 0, cursorCol: 0, cursorRow: 0, cells: [])
         }
@@ -53,6 +55,28 @@ public final class TerminalCore {
         }
         bt_term_snapshot_release(handle)
         return GridSnapshot(
-            cols: view.cols, rows: view.rows, cursorCol: view.cursor_col, cursorRow: view.cursor_row, cells: cells)
+            cols: view.cols, rows: view.rows,
+            cursorCol: view.cursor_col, cursorRow: view.cursor_row,
+            displayOffset: view.display_offset, cells: cells)
+    }
+
+    /// Scroll the display by `delta` rows. Positive = into history (up),
+    /// negative = toward live bottom (down). Clamped internally to
+    /// `[0, scrollbackLines]`.
+    public func scrollBy(_ delta: Int) {
+        let clamped = Int32(max(min(delta, Int(Int32.max)), Int(Int32.min)))
+        bt_term_scroll_by(handle, clamped)
+    }
+
+    public func scrollToBottom() {
+        bt_term_scroll_to_bottom(handle)
+    }
+
+    public var scrollOffset: Int {
+        Int(bt_term_scroll_offset(handle))
+    }
+
+    public var scrollbackLines: Int {
+        Int(bt_term_scrollback_lines(handle))
     }
 }

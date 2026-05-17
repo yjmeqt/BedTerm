@@ -29,28 +29,33 @@ final class KeyboardLayoutObserver {
             object: nil,
             queue: .main
         ) { [weak self] note in
+            // Pull Sendable values off the notification before the actor hop —
+            // Notification itself isn't Sendable under Swift 6, and passing
+            // it to a helper function counts as "sending" across isolation.
             let endFrame = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect
-            MainActor.assumeIsolated { self?.update(endFrame: endFrame) }
+            let duration =
+                (note.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double) ?? 0.25
+            MainActor.assumeIsolated { self?.update(endFrame: endFrame, duration: duration) }
         }
         center.addObserver(
             forName: UIResponder.keyboardWillHideNotification,
             object: nil,
             queue: .main
         ) { [weak self] note in
-            MainActor.assumeIsolated { self?.write(0, using: note) }
+            let duration =
+                (note.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double) ?? 0.25
+            MainActor.assumeIsolated { self?.write(0, duration: duration) }
         }
     }
 
-    private func update(endFrame: CGRect?) {
+    private func update(endFrame: CGRect?, duration: Double) {
         guard let endFrame, let window = Self.keyWindow else { return }
         let intersection = window.bounds.intersection(endFrame)
         let value = max(0, intersection.height - window.safeAreaInsets.bottom)
-        write(value, using: note)
+        write(value, duration: duration)
     }
 
-    private func write(_ value: CGFloat, using note: Notification) {
-        let duration =
-            (note.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double) ?? 0.25
+    private func write(_ value: CGFloat, duration: Double) {
         withAnimation(.smooth(duration: duration)) {
             overlap = value
         }

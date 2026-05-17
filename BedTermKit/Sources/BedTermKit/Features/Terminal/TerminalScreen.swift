@@ -41,6 +41,7 @@ struct TerminalScreen: View {
                 #if DEBUG
                     if useMetalRenderer {
                         TerminalMetalHostView(
+                            session: session,
                             feed: session.feed,
                             onSend: { session.send($0) },
                             onResize: { cols, rows in session.resize(cols: cols, rows: rows) },
