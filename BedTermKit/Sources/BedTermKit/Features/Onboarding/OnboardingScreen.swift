@@ -196,7 +196,7 @@ private struct MacTutorialStep: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 
-    private func tutorialSection(number: String, title: String, body: String) -> some View {
+    private func tutorialSection(number: String, title: LocalizedStringKey, body: LocalizedStringKey) -> some View {
         HStack(alignment: .top, spacing: 12) {
             Text(number)
                 .font(.title2.bold())
@@ -307,8 +307,8 @@ private struct LocalPermissionStep: View {
 // MARK: - Shared
 
 private struct OnboardingChoiceLabel: View {
-    let title: String
-    let subtitle: String
+    let title: LocalizedStringKey
+    let subtitle: LocalizedStringKey
 
     var body: some View {
         HStack {
