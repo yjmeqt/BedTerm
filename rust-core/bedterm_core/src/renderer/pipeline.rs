@@ -1,10 +1,13 @@
-use metal::{CompileOptions, Device, Library, MTLPixelFormat, RenderPipelineDescriptor, RenderPipelineState};
+use metal::{
+    CompileOptions, Device, Library, MTLPixelFormat, RenderPipelineDescriptor,
+    RenderPipelineState,
+};
 
 use super::shaders::TERMINAL_METAL_SOURCE;
 
 pub struct Pipelines {
     pub library: Library,
-    pub clear_pso: RenderPipelineState,
+    pub cell_pso: RenderPipelineState,
 }
 
 impl Pipelines {
@@ -14,8 +17,8 @@ impl Pipelines {
             .new_library_with_source(TERMINAL_METAL_SOURCE, &options)
             .map_err(|e| format!("shader compile failed: {e}"))?;
 
-        let vfn = library.get_function("clear_vertex", None)?;
-        let ffn = library.get_function("clear_fragment", None)?;
+        let vfn = library.get_function("cell_vertex", None)?;
+        let ffn = library.get_function("cell_fragment", None)?;
 
         let desc = RenderPipelineDescriptor::new();
         desc.set_vertex_function(Some(&vfn));
@@ -25,10 +28,10 @@ impl Pipelines {
             .unwrap()
             .set_pixel_format(MTLPixelFormat::BGRA8Unorm);
 
-        let clear_pso = device
+        let cell_pso = device
             .new_render_pipeline_state(&desc)
             .map_err(|e| format!("pipeline build failed: {e}"))?;
 
-        Ok(Self { library, clear_pso })
+        Ok(Self { library, cell_pso })
     }
 }

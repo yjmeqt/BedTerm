@@ -27,6 +27,16 @@ pub struct BtTerm {
     cached: Option<GridSnapshot>,
 }
 
+impl BtTerm {
+    /// Internal helper for the renderer module — produces a fresh snapshot
+    /// without going through the cached-pointer FFI ceremony.
+    pub(crate) fn snapshot_for_renderer(&mut self) -> &GridSnapshot {
+        let snap = self.inner.snapshot();
+        self.cached = Some(snap);
+        self.cached.as_ref().unwrap()
+    }
+}
+
 #[no_mangle]
 pub extern "C" fn bt_term_new(cols: u16, rows: u16) -> *mut BtTerm {
     let cols = cols.max(1);

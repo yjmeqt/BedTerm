@@ -10,6 +10,11 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+/**
+ * Two triangles per cell.
+ */
+#define VERTICES_PER_CELL 6
+
 typedef struct BtRenderer BtRenderer;
 
 typedef struct BtTerm BtTerm;
@@ -100,16 +105,17 @@ void bt_renderer_free(struct BtRenderer *r);
 void bt_renderer_set_font(struct BtRenderer *r, float pixel_size, float device_pixel_ratio);
 
 /**
- * Stub — Task 4 wires the real draw call.
  * # Safety
- * `r`, `term`, `drawable_texture` must all be live.
+ * `r` must be a live `BtRenderer`. `term` must be a live `BtTerm` or null
+ * (null is treated as "no terminal yet"). `drawable_texture` must be a
+ * live `id<MTLTexture>`.
  */
-int bt_renderer_draw(struct BtRenderer *_r,
-                     const struct BtTerm *_term,
-                     const void *_drawable_texture,
-                     uint32_t _viewport_width_px,
-                     uint32_t _viewport_height_px,
-                     double _time_seconds);
+int bt_renderer_draw(struct BtRenderer *r,
+                     const struct BtTerm *term,
+                     const void *drawable_texture,
+                     uint32_t viewport_width_px,
+                     uint32_t viewport_height_px,
+                     double time_seconds);
 
 #ifdef __cplusplus
 }  // extern "C"

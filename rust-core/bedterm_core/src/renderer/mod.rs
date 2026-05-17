@@ -1,15 +1,17 @@
 //! Metal renderer.
 
 pub mod atlas;
+pub mod cells;
 pub mod ffi;
 pub mod pipeline;
 pub mod shaders;
 
 use atlas::GlyphAtlas;
+use cells::{CellVertex, VERTICES_PER_CELL};
 use metal::foreign_types::ForeignType;
 use metal::{
-    CommandQueue, Device, MTLClearColor, MTLLoadAction, MTLPrimitiveType, MTLStoreAction,
-    RenderPassDescriptor, Texture,
+    CommandQueue, Device, MTLClearColor, MTLLoadAction, MTLPrimitiveType, MTLResourceOptions,
+    MTLStoreAction, RenderPassDescriptor, Texture,
 };
 use pipeline::Pipelines;
 
@@ -60,19 +62,96 @@ impl Renderer {
     }
 
     /// # Safety
-    /// `texture_ptr` must be a live `id<MTLTexture>`. The pointer is borrowed
-    /// for the duration of this call only — Rust does not retain it.
+    /// `texture_ptr` must be a live `id<MTLTexture>` borrowed for the
+    /// duration of this call. `term_ptr` may be null (empty draw).
     pub unsafe fn draw(
         &mut self,
-        _term: *const crate::ffi::BtTerm,
+        term_ptr: *const crate::ffi::BtTerm,
         texture_ptr: *const std::ffi::c_void,
-        _viewport_w: u32,
-        _viewport_h: u32,
+        viewport_w: u32,
+        viewport_h: u32,
         _time: f64,
     ) -> i32 {
         if texture_ptr.is_null() {
             return -1;
         }
+
+        // Take a fresh snapshot. The cast from *const to *mut is safe
+        // because BtTerm internally needs mutable access for snapshot
+        // caching, and the renderer holds the only reference at this point.
+        let snapshot = if term_ptr.is_null() {
+            None
+        } else {
+            let term = &mut *(term_ptr as *mut crate::ffi::BtTerm);
+            Some(term.snapshot_for_renderer().clone())
+        };
+
+        // Build vertex buffer (empty if no term).
+        let mut verts: Vec<CellVertex> = Vec::new();
+        if let Some(ref snap) = snapshot {
+            let (cell_w, cell_h) = self.atlas.cell_px;
+            let cell_wf = cell_w as f32;
+            let cell_hf = cell_h as f32;
+            let cols = snap.cols as usize;
+            let rows = snap.rows as usize;
+            verts.reserve(cols * rows * VERTICES_PER_CELL);
+            // Pre-ensure all needed glyphs (one-pass; the HashMap dedups).
+            for cell in &snap.cells {
+                if cell.ch != 0 {
+                    self.atlas.ensure(cell.ch);
+                }
+            }
+            for r in 0..rows {
+                for c in 0..cols {
+                    let cell = snap.cells[r * cols + c];
+                    let glyph = self.atlas.lookup(cell.ch).copied();
+                    let (uvo, uvs) = match glyph {
+                        Some(g) => (g.uv_origin, g.uv_size),
+                        None => ((0.0, 0.0), (0.0, 0.0)),
+                    };
+                    let x = c as f32 * cell_wf;
+                    let y = r as f32 * cell_hf;
+                    let fg = rgba_to_float(cell.fg_rgba);
+                    let bg = rgba_to_float(cell.bg_rgba);
+                    let v = |dx: f32, dy: f32, du: f32, dv: f32| CellVertex {
+                        pos_x: x + dx * cell_wf,
+                        pos_y: y + dy * cell_hf,
+                        uv_x: uvo.0 + du * uvs.0,
+                        uv_y: uvo.1 + dv * uvs.1,
+                        fg,
+                        bg,
+                    };
+                    // Triangle 1: TL, TR, BL
+                    verts.push(v(0.0, 0.0, 0.0, 0.0));
+                    verts.push(v(1.0, 0.0, 1.0, 0.0));
+                    verts.push(v(0.0, 1.0, 0.0, 1.0));
+                    // Triangle 2: TR, BR, BL
+                    verts.push(v(1.0, 0.0, 1.0, 0.0));
+                    verts.push(v(1.0, 1.0, 1.0, 1.0));
+                    verts.push(v(0.0, 1.0, 0.0, 1.0));
+                }
+            }
+        }
+
+        let vbuf = if verts.is_empty() {
+            None
+        } else {
+            Some(self.device.new_buffer_with_data(
+                verts.as_ptr() as *const _,
+                (verts.len() * std::mem::size_of::<CellVertex>()) as u64,
+                MTLResourceOptions::StorageModeShared,
+            ))
+        };
+
+        #[repr(C)]
+        struct Uniforms {
+            vp_x: f32,
+            vp_y: f32,
+        }
+        let uniforms = Uniforms {
+            vp_x: viewport_w as f32,
+            vp_y: viewport_h as f32,
+        };
 
         // Texture is borrowed — wrap in ManuallyDrop to suppress the
         // release-on-drop behaviour of the owned Texture. Swift owns the
@@ -81,21 +160,38 @@ impl Renderer {
         let texture = std::mem::ManuallyDrop::new(texture);
 
         let pass = RenderPassDescriptor::new();
-        let attachment = pass.color_attachments().object_at(0).unwrap();
-        attachment.set_texture(Some(&*texture));
-        attachment.set_load_action(MTLLoadAction::Clear);
-        attachment.set_store_action(MTLStoreAction::Store);
-        attachment.set_clear_color(MTLClearColor::new(0.05, 0.05, 0.08, 1.0));
+        let att = pass.color_attachments().object_at(0).unwrap();
+        att.set_texture(Some(&*texture));
+        att.set_load_action(MTLLoadAction::Clear);
+        att.set_store_action(MTLStoreAction::Store);
+        att.set_clear_color(MTLClearColor::new(0.0, 0.0, 0.0, 1.0));
 
         let cmd = self.queue.new_command_buffer();
         let enc = cmd.new_render_command_encoder(&pass);
-        enc.set_render_pipeline_state(&self.pipelines.clear_pso);
-        // Single full-screen triangle.
-        enc.draw_primitives(MTLPrimitiveType::Triangle, 0, 3);
+        enc.set_render_pipeline_state(&self.pipelines.cell_pso);
+        if let Some(ref b) = vbuf {
+            enc.set_vertex_buffer(0, Some(b), 0);
+            enc.set_vertex_bytes(
+                1,
+                std::mem::size_of::<Uniforms>() as u64,
+                &uniforms as *const Uniforms as *const _,
+            );
+            enc.set_fragment_texture(0, Some(&self.atlas.texture));
+            enc.draw_primitives(MTLPrimitiveType::Triangle, 0, verts.len() as u64);
+        }
         enc.end_encoding();
         cmd.commit();
         // NOT cmd.wait_until_completed — Swift's MTKView present happens on
         // its own schedule after this returns.
         0
     }
+}
+
+fn rgba_to_float(rgba: u32) -> [f32; 4] {
+    [
+        ((rgba >> 24) & 0xFF) as f32 / 255.0,
+        ((rgba >> 16) & 0xFF) as f32 / 255.0,
+        ((rgba >> 8) & 0xFF) as f32 / 255.0,
+        (rgba & 0xFF) as f32 / 255.0,
+    ]
 }
