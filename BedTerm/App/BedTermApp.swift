@@ -21,7 +21,6 @@ struct BedTermApp: App {
                     }
                 }
             }
-            .preferredColorScheme(.dark)
         }
     }
 }

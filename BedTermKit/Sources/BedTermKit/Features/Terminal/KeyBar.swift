@@ -49,7 +49,7 @@ struct KeyBar: View {
             Text(label)
                 .font(.system(size: 20, weight: .medium, design: .monospaced))
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .foregroundStyle(highlighted ? Color.white : Color.primary)
+                .foregroundStyle(highlighted ? Color.accentLabel : Color.primary)
                 .background {
                     if highlighted {
                         Capsule()
