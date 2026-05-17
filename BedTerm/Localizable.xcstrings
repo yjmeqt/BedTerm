@@ -2,7 +2,7 @@
   "sourceLanguage" : "en",
   "strings" : {
     "%@:%lld presented a different host key than we trusted last time. " : {
-      "extractionState" : "manual",
+      "extractionState" : "stale",
       "localizations" : {
         "ja" : {
           "stringUnit" : {
@@ -32,6 +32,40 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$@:%2$lld 提供的主機金鑰與上次信任的不一致。"
+          }
+        }
+      }
+    },
+    "%@:%lld presented a different host key than we trusted last time. This could mean the server was reinstalled — or that someone is intercepting the connection." : {
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$@:%2$lld は前回信頼したホストキーとは異なるホストキーを提示しました。サーバーが再インストールされた可能性、または通信が傍受されている可能性があります。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$@:%2$lld 호스트가 이전에 신뢰한 호스트 키와 다른 키를 제시했습니다. 서버가 재설치되었거나 누군가 연결을 가로채고 있을 수 있습니다."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$@:%2$lld предъявил ключ хоста, отличный от того, которому мы доверяли в прошлый раз. Это может означать, что сервер был переустановлен — или что кто-то перехватывает соединение."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$@:%2$lld 提供的主机密钥与上次信任的不一致。可能是服务器被重装，也可能有人正在拦截连接。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "%1$@:%2$lld 提供的主機金鑰與上次信任的不一致。可能是伺服器已重新安裝，也可能有人正在攔截連線。"
           }
         }
       }
