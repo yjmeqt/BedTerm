@@ -10,6 +10,21 @@ struct TerminalHostView: UIViewRepresentable {
     let feed: AsyncStream<Data>
     let onSend: (Data) -> Void
     let onResize: (Int, Int) -> Void
+    /// Bound on `makeUIView`. Callers can ask whether the remote has enabled
+    /// bracketed paste mode (CSI ? 2004 h). Returns `false` until the view exists.
+    let bracketedPasteProbe: BracketedPasteProbe
+    /// When true, the host yields first-responder so a SwiftUI `TextEditor`
+    /// can capture the system keyboard. When false, the host claims first-
+    /// responder so keystrokes pass through to the PTY.
+    var yieldFirstResponder: Bool = false
+
+    final class BracketedPasteProbe {
+        private weak var view: SwiftTerm.TerminalView?
+        func bind(_ view: SwiftTerm.TerminalView) { self.view = view }
+        @MainActor func isActive() -> Bool {
+            view?.getTerminal().bracketedPasteMode ?? false
+        }
+    }
 
     func makeCoordinator() -> Coordinator {
         Coordinator(onSend: onSend, onResize: onResize)
@@ -17,8 +32,12 @@ struct TerminalHostView: UIViewRepresentable {
 
     func makeUIView(context: Context) -> SwiftTerm.TerminalView {
         let view = SwiftTerm.TerminalView()
+        bracketedPasteProbe.bind(view)
         view.terminalDelegate = context.coordinator
         view.inputAccessoryView = nil
+        // TerminalView is itself a UIScrollView — let it ride the system
+        // keyboard down interactively (Messages / ChatGPT idiom, R15).
+        view.keyboardDismissMode = .interactive
         // SwiftTerm's default CoreGraphics renderer ignores contentOffset when the
         // scrollback buffer exceeds the viewport, which leaves stale glyphs in the
         // backing store as the user scrolls (see prd:bedterm/mvp#bug.scroll_drawing_ghosting).
@@ -29,12 +48,18 @@ struct TerminalHostView: UIViewRepresentable {
         // terminal beats a colourful but garbled one.
         try? view.setUseMetal(true)
         context.coordinator.start(consuming: feed, view: view)
-        _ = view.becomeFirstResponder()
+        if !yieldFirstResponder {
+            _ = view.becomeFirstResponder()
+        }
         return view
     }
 
     func updateUIView(_ uiView: SwiftTerm.TerminalView, context: Context) {
-        // SwiftTerm handles its own layout; nothing to push on update.
+        if yieldFirstResponder {
+            if uiView.isFirstResponder { _ = uiView.resignFirstResponder() }
+        } else {
+            if !uiView.isFirstResponder { _ = uiView.becomeFirstResponder() }
+        }
     }
 
     final class Coordinator: NSObject, TerminalViewDelegate {
@@ -42,7 +67,7 @@ struct TerminalHostView: UIViewRepresentable {
         private let onResize: (Int, Int) -> Void
         private var consumeTask: Task<Void, Never>?
         private var anchorTimer: Task<Void, Never>?
-        private var didRequestInitialAnchor = false
+        private var lastKnownRows: Int = 0
 
         init(onSend: @escaping (Data) -> Void, onResize: @escaping (Int, Int) -> Void) {
             self.onSend = onSend
@@ -71,13 +96,16 @@ struct TerminalHostView: UIViewRepresentable {
 
         func sizeChanged(source: SwiftTerm.TerminalView, newCols: Int, newRows: Int) {
             onResize(newCols, newRows)
-            // The first time SwiftTerm reports a real row count, schedule a bottom-anchor
-            // pass so the shell's initial banner + prompt land at the bottom of the
-            // viewport instead of the top.
-            if !didRequestInitialAnchor, newRows > 3 {
-                didRequestInitialAnchor = true
+            // Re-anchor the prompt to the new bottom on every size growth — the
+            // initial layout pass, and any later growth when the system keyboard
+            // dismisses while the composer stays open. The anchor pass is a no-op
+            // when a TUI program has drawn content below the cursor, so vim/top/
+            // less etc. are not disrupted.
+            guard newRows > 3 else { return }
+            if newRows > lastKnownRows {
                 scheduleBottomAnchorPass(view: source)
             }
+            lastKnownRows = newRows
         }
 
         func scrolled(source: SwiftTerm.TerminalView, position: Double) {}

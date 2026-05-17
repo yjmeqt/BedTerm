@@ -17,6 +17,7 @@
 		B1B1B1B100000000000000AE /* SSHErrorMappingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B1B1B100000000000000FE /* SSHErrorMappingTests.swift */; };
 		B1B1B1B1000000000000A300 /* TerminalSessionDescribeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B1B1B1000000000000F300 /* TerminalSessionDescribeTests.swift */; };
 		B1B1B1B1000000000000A401 /* KeyBarControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B1B1B1000000000000F401 /* KeyBarControllerTests.swift */; };
+		B1B1B1B1000000000000A501 /* ComposerControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B1B1B1000000000000F501 /* ComposerControllerTests.swift */; };
 		C1C1C1C100000000000000A1 /* ConnectionSmokeUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1C1C1C100000000000000F1 /* ConnectionSmokeUITests.swift */; };
 		D1D1D1D100000000000000A1 /* BedTermKit in Frameworks */ = {isa = PBXBuildFile; productRef = D1D1D1D100000000000000B1 /* BedTermKit */; };
 		A55E70AC0000000000000B01 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A55E70AC0000000000000A01 /* Assets.xcassets */; };
@@ -55,6 +56,7 @@
 		B1B1B1B100000000000000FE /* SSHErrorMappingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSHErrorMappingTests.swift; sourceTree = "<group>"; };
 		B1B1B1B1000000000000F300 /* TerminalSessionDescribeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalSessionDescribeTests.swift; sourceTree = "<group>"; };
 		B1B1B1B1000000000000F401 /* KeyBarControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyBarControllerTests.swift; sourceTree = "<group>"; };
+		B1B1B1B1000000000000F501 /* ComposerControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerControllerTests.swift; sourceTree = "<group>"; };
 		C1C1C1C100000000000000E1 /* BedTermUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = BedTermUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		C1C1C1C100000000000000F1 /* ConnectionSmokeUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionSmokeUITests.swift; sourceTree = "<group>"; };
 		D1D1D1D100000000000000C1 /* BedTermKit */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = BedTermKit; path = BedTermKit; sourceTree = "<group>"; };
@@ -101,6 +103,7 @@
 				B1B1B1B100000000000000FE /* SSHErrorMappingTests.swift */,
 				B1B1B1B1000000000000F300 /* TerminalSessionDescribeTests.swift */,
 				B1B1B1B1000000000000F401 /* KeyBarControllerTests.swift */,
+				B1B1B1B1000000000000F501 /* ComposerControllerTests.swift */,
 			);
 			path = BedTermTests;
 			sourceTree = "<group>";
@@ -281,6 +284,7 @@
 				B1B1B1B100000000000000AE /* SSHErrorMappingTests.swift in Sources */,
 				B1B1B1B1000000000000A300 /* TerminalSessionDescribeTests.swift in Sources */,
 				B1B1B1B1000000000000A401 /* KeyBarControllerTests.swift in Sources */,
+				B1B1B1B1000000000000A501 /* ComposerControllerTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

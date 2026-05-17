@@ -3,18 +3,42 @@ import UIKit
 
 struct KeyBar: View {
     @Bindable var controller: KeyBarController
+    var keyboardShown: Bool = true
+    var onToggleKeyboard: (() -> Void)?
 
     var body: some View {
         HStack(spacing: 0) {
             keyButton("⎋", tap: .esc)
             keyButton("⌃", tap: .ctrl, highlighted: controller.isPending)
             keyButton("⇥", tap: .tab)
+            if let onToggleKeyboard {
+                Divider()
+                    .frame(width: 1, height: 22)
+                    .background(Color.primary.opacity(0.18))
+                dismissKey(onToggle: onToggleKeyboard)
+            }
         }
-        .frame(maxWidth: .infinity)
-        .frame(height: 44)
+        .frame(width: onToggleKeyboard == nil ? 168 : 220, height: 44)
         .glassEffect(.regular.interactive(), in: .capsule)
-        .padding(.horizontal, 16)
         .padding(.vertical, 6)
+    }
+
+    private func dismissKey(onToggle: @escaping () -> Void) -> some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            onToggle()
+        } label: {
+            Image(systemName: "keyboard.chevron.compact.down")
+                .font(.system(size: 16, weight: .medium))
+                .scaleEffect(y: keyboardShown ? 1 : -1)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .foregroundStyle(Color.primary)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .frame(width: 48)
+        .accessibilityIdentifier("keybar.kbtoggle")
+        .accessibilityLabel(keyboardShown ? "Hide keyboard" : "Show keyboard")
     }
 
     private func keyButton(_ label: String, tap: KeyTap, highlighted: Bool = false) -> some View {
