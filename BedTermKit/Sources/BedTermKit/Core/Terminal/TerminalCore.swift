@@ -23,6 +23,9 @@ public final class TerminalCore {
         bt_term_free(handle)
     }
 
+    /// Internal handle for renderer-side FFI. Not for general use.
+    var unsafeHandle: OpaquePointer { handle }
+
     public func feed(_ data: Data) {
         guard !data.isEmpty else { return }
         data.withUnsafeBytes { raw in
