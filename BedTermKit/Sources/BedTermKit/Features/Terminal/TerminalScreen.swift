@@ -8,6 +8,7 @@ struct TerminalScreen: View {
     @State private var focusHandle: TerminalHostView.FocusHandle
     @State private var keyboard = KeyboardLayoutObserver()
     @State private var keyboardHidden = false
+    @State private var dpadOpen = false
     @Namespace private var composerMorph
     let credential: HostCredential
     let onExit: () -> Void
@@ -50,6 +51,25 @@ struct TerminalScreen: View {
                     }
                     .padding(.top, 8)
                 }
+
+                if dpadOpen {
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .onTapGesture { dpadOpen = false }
+                        .accessibilityIdentifier("dpad.scrim")
+                        .accessibilityLabel("Hide direction pad")
+                        .transition(.opacity)
+
+                    VStack {
+                        Spacer(minLength: 0)
+                        DirectionPad(
+                            onDirection: { tap in keyBar.handle(tap) },
+                            onClose: { dpadOpen = false }
+                        )
+                        .padding(.bottom, 12)
+                    }
+                    .transition(.scale(scale: 0.85, anchor: .bottom).combined(with: .opacity))
+                }
             }
             .frame(maxHeight: .infinity)
 
@@ -65,6 +85,10 @@ struct TerminalScreen: View {
         .ignoresSafeArea(.keyboard, edges: .bottom)
         .animation(.smooth(duration: 0.22), value: composer.isOpen)
         .animation(.smooth(duration: 0.22), value: keyboard.overlap)
+        .animation(.smooth(duration: 0.22), value: dpadOpen)
+        .onChange(of: composer.isOpen) { _, isOpen in
+            if isOpen { dpadOpen = false }
+        }
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 Button("Disconnect") {
@@ -97,7 +121,9 @@ struct TerminalScreen: View {
                     KeyBar(
                         controller: keyBar,
                         keyboardShown: !keyboardHidden,
-                        onToggleKeyboard: { keyboardHidden.toggle() }
+                        dpadOpen: dpadOpen,
+                        onToggleKeyboard: { keyboardHidden.toggle() },
+                        onToggleDpad: { dpadOpen.toggle() }
                     )
                     .transition(.move(edge: .leading).combined(with: .opacity))
                     Spacer(minLength: 0)
