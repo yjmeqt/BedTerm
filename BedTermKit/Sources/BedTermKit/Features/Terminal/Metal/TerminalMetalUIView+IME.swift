@@ -144,9 +144,13 @@ extension TerminalMetalUIView: UITextInput {
 
     func unmarkText() {
         let state = imeState
+        let pending = state.markedText
         state.markedText = ""
         state.selectedRange = NSRange(location: 0, length: 0)
         updatePreeditOverlay()
+        if !pending.isEmpty {
+            onSend(Data(pending.utf8))
+        }
     }
 
     // MARK: Document model — backed by the marked-text string only.

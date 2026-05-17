@@ -160,6 +160,22 @@ Replace SwiftTerm with a custom terminal engine: a Rust core (VT100/xterm emulat
   </steps>
 </bug>
 
+<bug id="metal_ime_candidate_commit_dropped" status="Fix Pending" date="2026-05-17" rule="R2M-R4.r5_ux">
+  <current>
+    With the Metal renderer toggle ON and a Pinyin (or other CJK) keyboard active, the preedit overlay correctly shows the typed romanisation (e.g. "ls"). When the user taps a candidate (e.g. 老师) in the candidate bar above the system keyboard, the candidate text is NOT sent to the terminal — the preedit overlay clears but no bytes arrive at the PTY. The shell sees nothing. Typing the same characters one-by-one (i.e. confirming via spacebar in some IMEs, or selecting via hardware Return) may behave differently. The romanisation in the overlay disappears, confirming that <code>unmarkText</code> or <code>setMarkedText(nil, ...)</code> is being called by iOS, but the committed string is dropped on the floor.
+  </current>
+  <expected>
+    Tapping a candidate in the IME candidate bar must commit that candidate's text to the PTY as UTF-8 bytes — same behaviour as if the user typed it via <code>insertText</code>. The likely missing piece in <code>TerminalMetalUIView+IME.swift</code>: when iOS calls <code>unmarkText()</code> (or <code>setMarkedText(text, _)</code> followed by <code>unmarkText</code>) at commit time, our implementation should look at the final marked-text contents and send those bytes through the existing <code>onSend</code> path before clearing internal state — mirroring SwiftTerm's <code>iOSTextInput.swift:269-286</code> which calls <code>insertText(previouslyMarkedText)</code> from inside <code>unmarkText()</code>.
+  </expected>
+  <steps>
+    1. Add a Pinyin keyboard in iOS Settings.
+    2. Build and run with Metal toggle ON. Connect to a host.
+    3. Switch to Pinyin, type "ls" in the terminal viewport. The preedit overlay shows "ls".
+    4. Tap the candidate 老师 in the candidate bar above the keyboard.
+    5. Observe: the overlay clears, but 老师 does not appear in the terminal and no bytes are sent to the shell. Expected: 老师 is sent to the PTY and (depending on shell echo) renders in the grid.
+  </steps>
+</bug>
+
 <bug id="metal_terminal_ime_no_preedit" status="Fix Pending" date="2026-05-17" rule="R2M-R4.r5_ux">
   <current>
     When composing CJK input (Pinyin, Japanese Romaji, Korean 2-set) directly in the Metal terminal viewport, no preedit / marked-text appears while the IME is composing. The user types Pinyin keystrokes but sees nothing on screen; only after they confirm a candidate does the committed text appear in the terminal in one burst (via the composer's Send path or via direct <code>insertText</code>). Composing in the composer field works correctly — the preedit shows there — so the issue is specific to the terminal viewport's text input surface.
