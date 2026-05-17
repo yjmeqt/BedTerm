@@ -103,7 +103,7 @@ struct ComposerBar: View {
         .animation(.smooth(duration: 0.22), value: containerHeight)
         .animation(.smooth(duration: 0.22), value: isExpanded)
         .onAppear {
-            // SwiftTerm already yielded first-responder via TerminalHostView's
+            // The terminal host already yielded first-responder via its
             // `yieldFirstResponder` binding before this view was inserted, so
             // we can grab focus immediately for a same-tick keyboard handoff.
             isFocused = true

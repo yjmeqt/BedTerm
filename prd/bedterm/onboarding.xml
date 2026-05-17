@@ -1,0 +1,22 @@
+<prd name="Onboarding">
+
+<overview>
+On first launch, guide the user through a short flow that captures (a) what kind of host they will connect to and (b) whether that host is on the same Wi-Fi or remote. The answers tailor the next screen — a setup tutorial for macOS, or an immediate local-network permission request for same-Wi-Fi targets. Onboarding does not appear again unless the user resets it.
+</overview>
+
+<requirement id="R1" name="First Launch Onboarding">
+  <description>
+    On first launch, before the Connection form, the app guides the user through a short onboarding that captures (a) what kind of host they will connect to and (b) whether that host is on the same Wi-Fi or remote. The answers tailor the next screen — a setup tutorial for macOS, or an immediate local-network permission request for same-Wi-Fi targets. After completion, onboarding does not appear again unless the user resets it.
+  </description>
+  <rule id="shown_on_first_launch" status="✅">On the very first launch (no prior completion), the app shows the onboarding flow instead of the Connection form.</rule>
+  <rule id="skipped_after_completion" status="✅">Once the user has completed onboarding, subsequent launches go directly to the Connection form.</rule>
+  <rule id="host_kind_choice" status="✅">Step 1 asks the user to pick the host kind: "macOS" or "Other (Linux / dev box / VM)".</rule>
+  <rule id="location_choice" status="✅">Step 2 asks where the host lives: "Same Wi-Fi as my phone" or "Remote (over the internet)".</rule>
+  <rule id="macos_tutorial" status="⚠️" context="host_kind=macOS">When the user picks macOS, the next screen is a tutorial covering how to enable Remote Login on the Mac and how to find the Mac's IP address. Tutorial content is to be authored — placeholder copy is acceptable for the MVP shell.</rule>
+  <rule id="local_permission_request" status="✅" context="location=same_wifi">When the user picks "Same Wi-Fi", the onboarding immediately triggers the iOS Local Network permission prompt (rather than waiting until the first connect attempt).</rule>
+  <rule id="remote_skip_permission" status="✅" context="location=remote">When the user picks "Remote", the onboarding does not trigger the Local Network prompt — that permission is unnecessary for public hosts.</rule>
+  <rule id="continue_to_connection" status="✅">After the final onboarding step, the user lands on the Connection form, with the host kind / location choice persisted for future reference.</rule>
+  <rule id="back_navigation" status="✅">The user can go back to the previous onboarding step at any point before finishing, without losing the earlier choice.</rule>
+</requirement>
+
+</prd>

@@ -1,13 +1,13 @@
 <prd name="Design">
 
 <overview>
-The shared design system for BedTerm's app chrome — colour tokens for Light/Dark adaptiveness and the shipped app icon. Each requirement below is a self-contained slice of the design system referenced by the MVP and feature PRDs.
+The shared design system for BedTerm's app chrome — colour tokens, the shipped app icon, and the system-appearance rules that bind both to iOS Light / Dark mode. Each requirement below is a self-contained slice of the design system referenced by the feature PRDs.
 </overview>
 <implementation platform="iOS" spec="bedterm/docs/specs/design.md" />
 
 <requirement id="R1" name="Colour Tokens">
   <description>
-    <p>Every user-visible app-chrome surface, text, icon, border, and accent colour resolves to one of the named tokens below. Each token has both a Light value and a Dark value; SwiftUI/UIKit resolve them automatically as the iOS system appearance changes. Tokens are referenced by semantic name (e.g. <code>surface.elevated</code>) — never by palette name. The terminal viewport's own palette is tracked separately under <a href="prd:bedterm/mvp#R9">MVP R9</a> and is currently deferred.</p>
+    <p>Every user-visible app-chrome surface, text, icon, border, and accent colour resolves to one of the named tokens below. Each token has both a Light value and a Dark value; SwiftUI/UIKit resolve them automatically as the iOS system appearance changes. Tokens are referenced by semantic name (e.g. <code>surface.elevated</code>) — never by palette name. The terminal viewport's own palette is tracked separately under <a href="#R3">R3 — System Appearance</a> and is currently deferred.</p>
     <table style="border-collapse:collapse;font-family:-apple-system,system-ui,sans-serif;font-size:13px;">
     <thead>
     <tr style="border-bottom:1px solid #888;">
@@ -74,7 +74,6 @@ The shared design system for BedTerm's app chrome — colour tokens for Light/Da
   <rule id="semantic_naming" status="✅">Tokens use semantic names that describe their role (<code>surface.elevated</code>, <code>text.muted</code>) — not palette names (<code>gray800</code>, <code>blue500</code>).</rule>
   <rule id="no_literals" status="✅">No literal colour values appear in code or views: no <code>Color(red:green:blue:)</code>, no <code>UIColor(red:green:blue:)</code>, no hex strings, no <code>Color.black</code> / <code>.white</code> / <code>.gray</code> / other static <code>Color.&lt;name&gt;</code> constants on user-visible surfaces.</rule>
   <rule id="symbolic_allowed" status="✅" context="when no brand-specific token applies">Adaptive SwiftUI symbolic colours — <code>Color.primary</code>, <code>Color.secondary</code>, <code>Color.accentColor</code>, <code>.tint</code>, materials such as <code>.regularMaterial</code> — are acceptable. They are already system-adaptive and do not need a custom token.</rule>
-  <rule id="terminal_exception" status="✅">SwiftTerm's terminal palette is the one bridge exception — its ANSI colour map is rebuilt from tokens inside a <code>TerminalTheme</code> when the system appearance changes. Terminal palette tokens themselves are tracked under <a href="prd:bedterm/mvp#R9">MVP R9</a> (deferred).</rule>
 </requirement>
 
 <requirement id="R2" name="App Icon">
@@ -101,6 +100,19 @@ The shared design system for BedTerm's app chrome — colour tokens for Light/Da
   <rule id="icon_dark_tinted" status="✅">The icon ships variants for iOS 18+ Dark and Tinted Home Screen appearances in addition to the default Light variant.</rule>
 </requirement>
 
+<requirement id="R3" name="System Appearance">
+  <description>
+    <p>The app always follows the iOS system appearance — Light when the system is Light, Dark when the system is Dark — for both the SwiftUI chrome and the terminal palette. There is no in-app theme override.</p>
+    <p>The colour tokens that back this behaviour are defined under <a href="#R1">R1 — Colour Tokens</a>. App-chrome rules below are <em>implemented</em> against those tokens; the terminal palette rules remain deferred until the Metal renderer's ANSI colour map is bridged through the same tokens.</p>
+  </description>
+  <rule id="follow_system" status="✅" context="app chrome">On launch, the app chrome renders in Light or Dark to match the current iOS system appearance, without any in-app theme picker.</rule>
+  <rule id="live_switch" status="✅" context="app chrome">Changing the system appearance while the app is open updates the app chrome without restart.</rule>
+  <rule id="terminal_palette_light" status="❌" context="deferred">When the system is in Light mode, the terminal uses a light background with dark foreground text and legible ANSI colour mappings.</rule>
+  <rule id="terminal_palette_dark" status="❌" context="deferred">When the system is in Dark mode, the terminal uses a dark background with light foreground text and legible ANSI colour mappings.</rule>
+  <rule id="readable_contrast" status="✅" context="app chrome">In both appearances, the special-keys bar, Connect form, error text, and disconnect banner meet contrast standards against their background.</rule>
+  <rule id="all_colors_adaptive" status="✅" context="app chrome">Every app-chrome surface, text, icon, border, and accent colour is sourced from a design-system token in the catalogue with both Light and Dark variants — no literal colour values in code. Switching system appearance changes the rendered colour of every coloured element.</rule>
+</requirement>
+
 <bug id="app_icon_missing" status="Fixed" date="2026-05-16" rule="R2.icon_designed">
   <current>
     The project has no AppIcon asset — the app launches with the default white/blank iOS placeholder icon on the Home Screen, in Spotlight, and in the App Switcher. No icon design has been produced yet.
@@ -112,6 +124,22 @@ The shared design system for BedTerm's app chrome — colour tokens for Light/Da
     1. Build and install the app on a device or simulator.
     2. Go to the Home Screen.
     3. Observe: the app appears with the generic placeholder icon instead of a designed icon.
+  </steps>
+</bug>
+
+<bug id="theme_forced_dark" status="Open" date="2026-05-16" rule="R3.follow_system">
+  <current>
+    The app forces Dark appearance at the root, so it renders dark even when the iOS system is in Light mode. The terminal also stays on a dark palette regardless of system setting.
+  </current>
+  <expected>
+    The app and terminal mirror the iOS system appearance — Light in Light, Dark in Dark — with no in-app override. Toggling system appearance while the app is open swaps both the SwiftUI chrome and the terminal palette live.
+  </expected>
+  <steps>
+    1. Set the iOS system appearance to Light (Settings → Display &amp; Brightness → Light).
+    2. Launch the app.
+    3. Observe: the app and terminal render in Dark instead of Light.
+    4. With the app open, switch the system appearance to Dark and back to Light.
+    5. Observe: the app does not react to the system change.
   </steps>
 </bug>
 

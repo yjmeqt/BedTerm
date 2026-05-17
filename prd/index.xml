@@ -1,8 +1,12 @@
 <prd_index>
   <module name="bedterm">
-    <entry name="MVP" file="bedterm/mvp.xml" />
-    <entry name="Localization" file="bedterm/localization.xml" />
-    <entry name="Design" file="bedterm/design.xml" />
+    <entry name="Onboarding" file="bedterm/onboarding.xml" />
+    <entry name="Connection" file="bedterm/connection.xml" />
     <entry name="Hosts" file="bedterm/saved-connections.xml" />
+    <entry name="Terminal View" file="bedterm/terminal-view.xml" />
+    <entry name="Input Bar" file="bedterm/input-bar.xml" />
+    <entry name="Settings" file="bedterm/settings.xml" />
+    <entry name="Design" file="bedterm/design.xml" />
+    <entry name="Localization" file="bedterm/localization.xml" />
   </module>
 </prd_index>
