@@ -64,7 +64,7 @@ struct TerminalHostView: UIViewRepresentable {
         private let onResize: (Int, Int) -> Void
         private var consumeTask: Task<Void, Never>?
         private var anchorTimer: Task<Void, Never>?
-        private var didRequestInitialAnchor = false
+        private var lastKnownRows: Int = 0
 
         init(onSend: @escaping (Data) -> Void, onResize: @escaping (Int, Int) -> Void) {
             self.onSend = onSend
@@ -93,13 +93,16 @@ struct TerminalHostView: UIViewRepresentable {
 
         func sizeChanged(source: SwiftTerm.TerminalView, newCols: Int, newRows: Int) {
             onResize(newCols, newRows)
-            // The first time SwiftTerm reports a real row count, schedule a bottom-anchor
-            // pass so the shell's initial banner + prompt land at the bottom of the
-            // viewport instead of the top.
-            if !didRequestInitialAnchor, newRows > 3 {
-                didRequestInitialAnchor = true
+            // Re-anchor the prompt to the new bottom on every size growth — the
+            // initial layout pass, and any later growth when the system keyboard
+            // dismisses while the composer stays open. The anchor pass is a no-op
+            // when a TUI program has drawn content below the cursor, so vim/top/
+            // less etc. are not disrupted.
+            guard newRows > 3 else { return }
+            if newRows > lastKnownRows {
                 scheduleBottomAnchorPass(view: source)
             }
+            lastKnownRows = newRows
         }
 
         func scrolled(source: SwiftTerm.TerminalView, position: Double) {}
