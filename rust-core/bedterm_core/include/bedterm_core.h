@@ -177,6 +177,17 @@ void bt_renderer_cell_pixel_size(const struct BtRenderer *r, uint32_t *out_w, ui
 
 /**
  * # Safety
+ * `r` must be a live `BtRenderer`. Components are clamped to `[0, 1]`
+ * downstream by Metal; values outside that range are tolerated.
+ */
+void bt_renderer_set_clear_color(struct BtRenderer *r,
+                                 float red,
+                                 float green,
+                                 float blue,
+                                 float alpha);
+
+/**
+ * # Safety
  * `r` must be a live `BtRenderer`. `term` must be a live `BtTerm` or null
  * (null is treated as "no terminal yet"). `drawable_texture` must be a
  * live `id<MTLTexture>`.

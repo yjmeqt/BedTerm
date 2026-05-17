@@ -71,6 +71,23 @@ pub unsafe extern "C" fn bt_renderer_cell_pixel_size(
 }
 
 /// # Safety
+/// `r` must be a live `BtRenderer`. Components are clamped to `[0, 1]`
+/// downstream by Metal; values outside that range are tolerated.
+#[no_mangle]
+pub unsafe extern "C" fn bt_renderer_set_clear_color(
+    r: *mut BtRenderer,
+    red: f32,
+    green: f32,
+    blue: f32,
+    alpha: f32,
+) {
+    if r.is_null() {
+        return;
+    }
+    (*r).inner.set_clear_color(red, green, blue, alpha);
+}
+
+/// # Safety
 /// `r` must be a live `BtRenderer`. `term` must be a live `BtTerm` or null
 /// (null is treated as "no terminal yet"). `drawable_texture` must be a
 /// live `id<MTLTexture>`.
