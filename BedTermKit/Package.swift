@@ -17,10 +17,18 @@ let package = Package(
             name: "BedTermCore",
             path: "BinaryFrameworks/BedTermCore.xcframework"
         ),
+        // C header wrapper so Swift targets can `import BedTermCoreC`.
+        // The actual symbols live in BedTermCore (the .a xcframework).
+        .target(
+            name: "BedTermCoreC",
+            dependencies: ["BedTermCore"],
+            path: "Sources/BedTermCoreC",
+            publicHeadersPath: "include"
+        ),
         .target(
             name: "BedTermKit",
             dependencies: [
-                "BedTermCore",
+                "BedTermCoreC",
                 .product(name: "SwiftTerm", package: "SwiftTerm"),
                 .product(name: "Citadel", package: "Citadel")
             ],

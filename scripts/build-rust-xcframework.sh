@@ -41,12 +41,8 @@ for t in "${TARGETS[@]}"; do
   mkdir -p "$slice_dir/Headers"
   cp "$RUST_DIR/target/$t/$PROFILE_DIR/$LIB_NAME" "$slice_dir/"
   cp "$HEADER" "$slice_dir/Headers/"
-  cat > "$slice_dir/Headers/module.modulemap" <<EOF
-module BedTermCoreC {
-    header "bedterm_core.h"
-    export *
-}
-EOF
+  # No module.modulemap in the xcframework: the BedTermCoreC SwiftPM C target
+  # in Sources/BedTermCoreC/include/ provides the module for Swift importers.
 done
 
 rm -rf "$OUT_DIR/$FW_NAME.xcframework"
@@ -58,5 +54,11 @@ for t in "${TARGETS[@]}"; do
 done
 
 xcodebuild -create-xcframework "${XCFW_ARGS[@]}" -output "$OUT_DIR/$FW_NAME.xcframework"
+
+# Keep the tracked header copy in sync so `import BedTermCoreC` stays correct.
+SWIFT_INCLUDE="$REPO_ROOT/BedTermKit/Sources/BedTermCoreC/include"
+mkdir -p "$SWIFT_INCLUDE"
+cp "$HEADER" "$SWIFT_INCLUDE/bedterm_core.h"
+echo "==> updated $SWIFT_INCLUDE/bedterm_core.h"
 
 echo "==> built $OUT_DIR/$FW_NAME.xcframework"

@@ -1,4 +1,0 @@
-module BedTermCoreC {
-    header "shim.h"
-    export *
-}
