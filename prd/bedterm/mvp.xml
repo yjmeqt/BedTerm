@@ -323,4 +323,19 @@ An iOS terminal app designed for coding on iPhone. Users SSH into a Mac mini or 
   </steps>
 </bug>
 
+<bug id="line_cut_after_input" status="Open" date="2026-05-17" rule="R2.terminal_display">
+  <current>
+    After typing input and pressing enter, the current line sometimes renders with the bottom portion of characters clipped off — descenders (g, j, p, q, y) are cut, and the bottom few pixels of every character on the affected row are missing. Other rows render correctly. The issue is intermittent, occurring after some inputs but not others.
+    <img src="screenshots/line_cut_after_input.png" alt="Terminal text with bottom of characters clipped on a line"/>
+  </current>
+  <expected>
+    Every character cell renders in full — descenders are fully visible, no row is vertically clipped. All rows in the viewport display complete glyphs regardless of scroll position or input timing.
+  </expected>
+  <steps>
+    1. Connect to an SSH host and get a shell prompt.
+    2. Type several commands and observe the terminal output after each press of enter.
+    3. Notice: on some lines, the bottom portion of characters is visibly cut off.
+  </steps>
+</bug>
+
 </prd>
