@@ -13,7 +13,11 @@ struct TerminalHostView: UIViewRepresentable {
     /// Bound on `makeUIView`. Callers can ask whether the remote has enabled
     /// bracketed paste mode (CSI ? 2004 h). Returns `false` until the view exists.
     let bracketedPasteProbe: BracketedPasteProbe
-    /// When true, the host yields first-responder so a SwiftUI `TextEditor`
+    /// Lets callers outside the SwiftUI view tree (e.g. the composer) hand
+    /// first-responder back to the terminal *before* their own view is torn
+    /// down — keeping the system keyboard up across the handoff.
+    let focusHandle: FocusHandle
+    /// When true, the host yields first-responder so the composer's text view
     /// can capture the system keyboard. When false, the host claims first-
     /// responder so keystrokes pass through to the PTY.
     var yieldFirstResponder: Bool = false
@@ -26,6 +30,15 @@ struct TerminalHostView: UIViewRepresentable {
         }
     }
 
+    public final class FocusHandle {
+        private weak var view: UIView?
+        func bind(_ view: UIView) { self.view = view }
+        @MainActor public func claimFirstResponder() {
+            guard let view, !view.isFirstResponder else { return }
+            _ = view.becomeFirstResponder()
+        }
+    }
+
     func makeCoordinator() -> Coordinator {
         Coordinator(onSend: onSend, onResize: onResize)
     }
@@ -33,6 +46,7 @@ struct TerminalHostView: UIViewRepresentable {
     func makeUIView(context: Context) -> SwiftTerm.TerminalView {
         let view = SwiftTerm.TerminalView()
         bracketedPasteProbe.bind(view)
+        focusHandle.bind(view)
         view.terminalDelegate = context.coordinator
         view.inputAccessoryView = nil
         // Let the SwiftTerm UIScrollView dismiss the keyboard interactively —
@@ -57,7 +71,12 @@ struct TerminalHostView: UIViewRepresentable {
 
     func updateUIView(_ uiView: SwiftTerm.TerminalView, context: Context) {
         if yieldFirstResponder {
-            if uiView.isFirstResponder { _ = uiView.resignFirstResponder() }
+            // Do *not* proactively resign — if we did, UIKit would briefly see
+            // "no first responder" between this call and the composer's
+            // UITextView becoming FR on insertion, which dismisses the
+            // keyboard and snaps the whole bottom row down before it pops back
+            // up. Whoever calls becomeFirstResponder next displaces us
+            // automatically, in the same UIKit tick.
         } else {
             if !uiView.isFirstResponder { _ = uiView.becomeFirstResponder() }
         }

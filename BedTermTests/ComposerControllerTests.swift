@@ -19,18 +19,20 @@ struct ComposerControllerTests {
         #expect(controller.isOpen == true)
     }
 
-    @Test("submit without bracketed paste writes raw UTF-8 with CR line breaks and trailing CR")
+    @Test("submit without bracketed paste writes raw UTF-8 with CR line breaks and trailing CR; composer stays open")
     func submitRaw() async {
         var captured: [Data] = []
         let controller = ComposerController(
             send: { captured.append($0) },
             isBracketedPasteActive: { false }
         )
+        controller.open()
         controller.text = "echo hi\necho bye"
         controller.submit()
         #expect(captured == [Data("echo hi\recho bye\r".utf8)])
         #expect(controller.text == "")
-        #expect(controller.isOpen == false)
+        // R13.send_keeps_composer_open — Send clears the buffer but the composer stays open.
+        #expect(controller.isOpen == true)
     }
 
     @Test("submit appends a trailing CR so the last line auto-executes")
