@@ -14,6 +14,12 @@ set -euo pipefail
 # rustup/cargo are reachable from the standard install location and Homebrew.
 export PATH="$HOME/.cargo/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
 
+# TODO: remove once rustup stops warning about Xcode-set env vars it doesn't
+# recognize. Xcode 26 exports SWIFT_DEBUG_INFORMATION_{FORMAT,VERSION}; rustup's
+# proxy shim (>=1.28) prints "Warning: unknown environment variable …" once per
+# rustc invocation, producing dozens of duplicate lines. Cosmetic only.
+unset SWIFT_DEBUG_INFORMATION_FORMAT SWIFT_DEBUG_INFORMATION_VERSION
+
 # Accept Debug/Release (Xcode `$CONFIGURATION`) and debug/release.
 PROFILE_RAW="${1:-release}"
 PROFILE_RAW="${PROFILE_RAW#--}"
