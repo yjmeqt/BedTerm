@@ -13,6 +13,10 @@ final class TerminalSession {
 
     private(set) var state: State = .idle
     private(set) var lastError: SSHError?
+    /// Current terminal mode flags, mirrored from the Rust core after each
+    /// feed by `TerminalMetalUIView`. Composer / overlays observe this to
+    /// hide themselves when full-screen TUIs (vim, claude, htop) take over.
+    private(set) var mode: BedTermMode = []
     private(set) var feed: AsyncStream<Data>
     private let feedContinuation: AsyncStream<Data>.Continuation
     private let client: any SSHClient
@@ -66,6 +70,12 @@ final class TerminalSession {
     func resize(cols: Int, rows: Int) {
         guard case .open = state else { return }
         Task { try? await client.resize(.init(cols: cols, rows: rows)) }
+    }
+
+    /// Pushes a fresh mode snapshot from the renderer view. Only emits when
+    /// the value actually changes so SwiftUI doesn't churn on identical reads.
+    func updateMode(_ next: BedTermMode) {
+        if mode != next { mode = next }
     }
 
     func disconnect() {

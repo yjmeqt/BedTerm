@@ -7,6 +7,7 @@ public struct HostsScreen: View {
     @State private var viewModel = HostsViewModel()
     @State private var didFirstAppear = false
     @State private var showingMismatchReview = false
+    @State private var showingSettings = false
     @State private var deviceLockedToastID: UUID?
     @State private var mismatchToastID: UUID?
     /// Set true while the first-run shortcut form is on-screen, so the form's
@@ -29,6 +30,9 @@ public struct HostsScreen: View {
             .toolbar { toolbarContent }
             .modifier(SwapDialogModifier(viewModel: viewModel))
             .modifier(DeleteDialogModifier(viewModel: viewModel))
+            .sheet(isPresented: $showingSettings) {
+                SettingsScreen()
+            }
             .sheet(isPresented: $showingMismatchReview) {
                 if let mismatch = viewModel.pendingMismatch {
                     HostKeyMismatchReviewSheet(
@@ -61,6 +65,15 @@ public struct HostsScreen: View {
 
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .topBarLeading) {
+            Button {
+                showingSettings = true
+            } label: {
+                Image(systemName: "gearshape")
+            }
+            .accessibilityLabel(Text("Settings"))
+            .accessibilityIdentifier("hosts.settings")
+        }
         ToolbarItem(placement: .topBarTrailing) {
             Button {
                 path.append(AppRoute.hostForm(nil))

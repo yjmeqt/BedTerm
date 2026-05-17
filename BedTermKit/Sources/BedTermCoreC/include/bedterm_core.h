@@ -15,6 +15,18 @@
  */
 #define VERTICES_PER_CELL 6
 
+#define BT_MODE_ALT_SCREEN (1 << 0)
+
+#define BT_MODE_BRACKETED_PASTE (1 << 1)
+
+#define BT_MODE_MOUSE_REPORT (1 << 2)
+
+#define BT_MODE_APP_CURSOR (1 << 3)
+
+#define BT_MODE_APP_KEYPAD (1 << 4)
+
+#define BT_MODE_FOCUS_IN_OUT (1 << 5)
+
 typedef struct BtRenderer BtRenderer;
 
 typedef struct BtTerm BtTerm;
@@ -108,6 +120,15 @@ uint32_t bt_term_scroll_offset(const struct BtTerm *h);
  * `h` must be a valid, non-freed handle.
  */
 uint32_t bt_term_scrollback_lines(const struct BtTerm *h);
+
+/**
+ * Return the terminal's current mode flags, packed as `BT_MODE_*` bits
+ * defined in `term.rs`. Swift mirrors the layout in `BedTermMode`.
+ *
+ * # Safety
+ * `h` must be a valid, non-freed handle.
+ */
+uint32_t bt_term_mode(const struct BtTerm *h);
 
 /**
  * # Safety

@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct TerminalScreen: View {
+    @Environment(BedTermSettings.self) private var settings
     @State var session: TerminalSession
     @State private var keyBar: KeyBarController
     @State private var composer: ComposerController
@@ -12,6 +13,14 @@ struct TerminalScreen: View {
     let credential: HostCredential
     let onExit: () -> Void
 
+    /// Composer/key-bar is hidden when a full-screen TUI (vim, claude, htop)
+    /// is on the remote side AND the user has the auto-hide preference on.
+    /// In that state the terminal grid fills the bottom area and key events
+    /// flow straight to the PTY.
+    private var hideBottomBar: Bool {
+        settings.autoHideComposerInAltScreen && session.mode.contains(.altScreen)
+    }
+
     init(session: TerminalSession, credential: HostCredential, onExit: @escaping () -> Void) {
         _session = State(initialValue: session)
         _keyBar = State(initialValue: KeyBarController { [weak session] data in session?.send(data) })
@@ -20,7 +29,9 @@ struct TerminalScreen: View {
         _composer = State(
             initialValue: ComposerController(
                 send: { [weak session] data in session?.send(data) },
-                isBracketedPasteActive: { false },
+                isBracketedPasteActive: { [weak session] in
+                    session?.mode.contains(.bracketedPaste) ?? false
+                },
                 returnFocusToTerminal: {
                     MainActor.assumeIsolated { focusHandle.claimFirstResponder() }
                 }
@@ -38,7 +49,7 @@ struct TerminalScreen: View {
                     onSend: { session.send($0) },
                     onResize: { cols, rows in session.resize(cols: cols, rows: rows) },
                     focusHandle: focusHandle,
-                    yieldFirstResponder: composer.isOpen || keyboardHidden
+                    yieldFirstResponder: !hideBottomBar && (composer.isOpen || keyboardHidden)
                 )
                 .ignoresSafeArea(edges: [.top, .horizontal])
 
@@ -70,7 +81,10 @@ struct TerminalScreen: View {
             }
             .frame(maxHeight: .infinity)
 
-            bottomBar
+            if !hideBottomBar {
+                bottomBar
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
         }
         // Manage keyboard avoidance ourselves: pad by the observed keyboard
         // overlap, then ignore SwiftUI's auto-applied keyboard safe area on
@@ -84,6 +98,7 @@ struct TerminalScreen: View {
         // the system keyboard's own duration — do NOT layer another .animation on it.
         .animation(.smooth(duration: 0.22), value: composer.isOpen)
         .animation(.smooth(duration: 0.22), value: dpadOpen)
+        .animation(.smooth(duration: 0.22), value: hideBottomBar)
         .onChange(of: composer.isOpen) { _, isOpen in
             if isOpen { dpadOpen = false }
         }

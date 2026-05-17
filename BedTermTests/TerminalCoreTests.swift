@@ -27,6 +27,25 @@ final class TerminalCoreFFITests: XCTestCase {
         XCTAssertEqual(snap.cursorRow, 0)
     }
 
+    func testAltScreenModeBit() {
+        let core = TerminalCore(cols: 80, rows: 24)
+        XCTAssertFalse(core.mode.contains(.altScreen))
+        // ESC[?1049h enters alt-screen (DEC mode 1049, used by vim/htop/etc).
+        core.feed(Data([0x1B, 0x5B, 0x3F, 0x31, 0x30, 0x34, 0x39, 0x68]))
+        XCTAssertTrue(core.mode.contains(.altScreen))
+        // ESC[?1049l leaves it.
+        core.feed(Data([0x1B, 0x5B, 0x3F, 0x31, 0x30, 0x34, 0x39, 0x6C]))
+        XCTAssertFalse(core.mode.contains(.altScreen))
+    }
+
+    func testBracketedPasteModeBit() {
+        let core = TerminalCore(cols: 80, rows: 24)
+        XCTAssertFalse(core.mode.contains(.bracketedPaste))
+        // ESC[?2004h enables bracketed paste.
+        core.feed(Data([0x1B, 0x5B, 0x3F, 0x32, 0x30, 0x30, 0x34, 0x68]))
+        XCTAssertTrue(core.mode.contains(.bracketedPaste))
+    }
+
     func testResizeUpdatesDimensions() {
         let core = TerminalCore(cols: 20, rows: 5)
         core.resize(cols: 40, rows: 10)
