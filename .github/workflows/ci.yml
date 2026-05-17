@@ -6,7 +6,7 @@ on:
 
 jobs:
   lint:
-    runs-on: macos-26
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
       - name: Select Xcode
@@ -30,11 +30,11 @@ jobs:
         run: mint run swiftlint lint --strict
 
   build-test:
-    runs-on: macos-26
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
       - name: Select Xcode
-        # macos-26 runner ships multiple Xcode versions; pick the latest 26.x present,
+        # macos-latest runner ships multiple Xcode versions; pick the latest 26.x present,
         # falling back to whatever Xcode is available if 26.x is not yet on the image.
         run: |
           XCODE=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
