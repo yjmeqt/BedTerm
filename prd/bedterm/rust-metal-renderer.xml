@@ -99,6 +99,50 @@ Replace SwiftTerm with a custom terminal engine: a Rust core (VT100/xterm emulat
   <description>When a block is committed, the local echo inserts the command text into the terminal grid immediately. If the remote shell echoes the same text (common in canonical/cooked mode), the command text appears twice. Mitigation: set the PTY to raw mode (-echo) on connect, or suppress remote echo for the first N bytes after commit.</description>
 </issue>
 
+<bug id="metal_soft_keyboard_no_show_on_tap" status="Open" date="2026-05-17" rule="R2M-R4.r3_toolbar">
+  <current>
+    With the Metal renderer toggle ON, tapping on the terminal viewport does NOT bring up the system soft keyboard. The view conforms to <code>UIKeyInput</code> and a tap-gesture recogniser calls <code>becomeFirstResponder()</code>, but the iOS keyboard never appears. Input from a hardware/simulator keyboard still flows through (UIKeyInput.insertText receives the bytes), but a real iPhone user with no hardware keyboard has no way to type into the terminal.
+  </current>
+  <expected>
+    A single tap on the terminal viewport in the Metal path should present the iOS system keyboard, the same way it does on the SwiftTerm path. Either <code>canBecomeFirstResponder</code> isn't being honoured by MTKView, or another responder (the long-press selection recogniser, the focus-tap recogniser itself) is consuming the tap before the keyboard presents, or MTKView refuses to present a keyboard without an explicit <code>inputView</code>.
+  </expected>
+  <steps>
+    1. Build and run with Metal toggle ON. Connect to a host.
+    2. Tap once on the terminal viewport.
+    3. Observe: nothing happens — the toolbar stays at the bottom, no soft keyboard slides in. Compared to SwiftTerm toggle OFF, where the same tap presents the keyboard above the toolbar.
+  </steps>
+</bug>
+
+<bug id="metal_typed_echo_glyph_drop_on_first_paint" status="Open" date="2026-05-17" rule="R2M-R2.cell_shader">
+  <current>
+    On the first command typed after connecting via the Metal renderer, the typed echo line renders with several characters missing or visibly corrupted (e.g. typing "echo metal_input_test" renders as roughly "ec'           _test", with large gaps between fragments). The shell receives every byte correctly — running the command works, and its output ("metal_input_test") renders cleanly on the next line. Subsequent commands typed in the same session render their echo lines correctly.
+  </current>
+  <expected>
+    Every cell that <code>TerminalCore.snapshot()</code> reports as non-blank must appear on screen, regardless of whether it's the first or hundredth line in the session. The first-paint of a freshly-echoed line should render the same as any later paint.
+  </expected>
+  <steps>
+    1. Build and run with Metal toggle ON. Connect to a host.
+    2. With a hardware/simulator keyboard attached, type "echo metal_input_test".
+    3. Press Return.
+    4. Observe: the typed command line ("yi.jiang:~/ $ echo metal_input_test") renders with gaps — many characters missing visually even though the shell echoed them. The output line ("metal_input_test") renders cleanly, and subsequent commands typed in the same session render their echo lines correctly.
+  </steps>
+</bug>
+
+<bug id="metal_prompt_floats_at_top" status="Open" date="2026-05-17" rule="R2M-R4.r5_ux">
+  <current>
+    With the Metal renderer toggle ON, the shell's first prompt and any short transcript renders pinned to the top of the terminal viewport while the rest of the viewport stays black. After connecting to an SSH host, the screen shows "Last login: …" on row 0 and "yi.jiang:~/ $" on row 1, then a large black gap down to the toolbar — instead of the prompt sitting on the row just above the toolbar with empty space above it.
+  </current>
+  <expected>
+    Per R5.prompt_anchored_bottom: when the transcript is shorter than the viewport, the active prompt line is anchored to the bottom edge of the terminal viewport (just above the special-keys toolbar) and any empty space sits above it. The Metal renderer must apply the same bottom-anchor behaviour the SwiftTerm path does via TerminalHostView.Coordinator.scheduleBottomAnchorPass — pad the visible grid with blank lines above the prompt so the cursor lands on the bottom row of the viewport.
+  </expected>
+  <steps>
+    1. Launch the app, enable the Debug → Metal renderer (experimental) toggle.
+    2. Tap Connect to open an SSH session.
+    3. Wait for the shell prompt to appear.
+    4. Observe: the "Last login" line and the prompt sit on rows 0–1 of the viewport; the bottom ~90% of the terminal area is empty black. The cursor is at top, not above the toolbar.
+  </steps>
+</bug>
+
 <bug id="metal_renderer_no_keyboard_input" status="Fix Pending" date="2026-05-17" rule="R2M-R4.r5_ux">
   <current>
     With the debug toggle <code>useMetalRenderer</code> turned ON, the terminal view is rendered by <code>TerminalMetalUIView</code> but the system keyboard's keystrokes never reach the remote PTY. Typing produces no echo and no command execution; only the special-keys toolbar (ESC/CTRL/TAB, dpad) and the composer can send bytes to the host.
