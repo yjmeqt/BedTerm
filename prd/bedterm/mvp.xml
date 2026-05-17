@@ -118,12 +118,13 @@ An iOS terminal app designed for coding on iPhone. Users SSH into a Mac mini or 
 <requirement id="R9" name="System Appearance">
   <description>
     <p>The app always follows the iOS system appearance — Light when the system is Light, Dark when the system is Dark — for both the SwiftUI chrome and the terminal palette. There is no in-app theme override.</p>
-    <p>The colour tokens that back this behaviour are defined under <a href="prd:bedterm/design#R1">Design R1 — Colour Tokens</a>. App-chrome rules below are <em>implemented</em> against those tokens; the terminal palette rules remain deferred until SwiftTerm's <code>TerminalTheme</code> is bridged through the same tokens.</p>
+    <p>The colour tokens that back this behaviour are defined under <a href="prd:bedterm/design#R1">Design R1 — Colour Tokens</a>. The terminal palette is sourced from the same token catalogue (eighteen <code>Terminal*</code> colorsets) and pushed to the Metal renderer on every appearance change.</p>
   </description>
+  <implementation spec="bedterm/docs/specs/metal-appearance.md" />
   <rule id="follow_system" status="✅" context="app chrome">On launch, the app chrome renders in Light or Dark to match the current iOS system appearance, without any in-app theme picker.</rule>
   <rule id="live_switch" status="✅" context="app chrome">Changing the system appearance while the app is open updates the app chrome without restart.</rule>
-  <rule id="terminal_palette_light" status="❌" context="deferred">When the system is in Light mode, the terminal uses a light background with dark foreground text and legible ANSI colour mappings.</rule>
-  <rule id="terminal_palette_dark" status="❌" context="deferred">When the system is in Dark mode, the terminal uses a dark background with light foreground text and legible ANSI colour mappings.</rule>
+  <rule id="terminal_palette_light" status="✅">When the system is in Light mode, the terminal uses a light background with dark foreground text and legible ANSI colour mappings.</rule>
+  <rule id="terminal_palette_dark" status="✅">When the system is in Dark mode, the terminal uses a dark background with light foreground text and legible ANSI colour mappings.</rule>
   <rule id="readable_contrast" status="✅" context="app chrome">In both appearances, the special-keys bar, Connect form, error text, and disconnect banner meet contrast standards against their background.</rule>
   <rule id="all_colors_adaptive" status="✅" context="app chrome">Every app-chrome surface, text, icon, border, and accent colour is sourced from a design-system token in the catalogue with both Light and Dark variants — no literal colour values in code. Switching system appearance changes the rendered colour of every coloured element.</rule>
 </requirement>
