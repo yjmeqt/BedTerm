@@ -8,7 +8,7 @@ jobs:
   lint:
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Select Xcode
         run: |
           XCODE=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
@@ -17,7 +17,7 @@ jobs:
       - name: Install Mint
         run: brew install mint
       - name: Cache Mint
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.mint
           key: mint-${{ runner.os }}-${{ hashFiles('Mintfile') }}
@@ -32,7 +32,7 @@ jobs:
   build-test:
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Select Xcode
         # macos-latest runner ships multiple Xcode versions; pick the latest 26.x present,
         # falling back to whatever Xcode is available if 26.x is not yet on the image.
@@ -45,7 +45,7 @@ jobs:
       - name: Install Mint
         run: brew install mint
       - name: Cache Mint
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.mint
           key: mint-${{ runner.os }}-${{ hashFiles('Mintfile') }}
@@ -67,18 +67,21 @@ jobs:
           rustup show
           rustup target add aarch64-apple-ios aarch64-apple-ios-sim aarch64-apple-darwin
       - name: Cache cargo build
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
             rust-core/target
-          key: cargo-${{ runner.os }}-${{ hashFiles('rust-core/Cargo.lock', 'rust-core/rust-toolchain.toml') }}-${{ hashFiles('rust-core/**/*.rs') }}
+          # Bump the `v2` segment to invalidate caches that captured stale build-script
+          # stderr (e.g. the rustup SWIFT_DEBUG_INFORMATION_* warnings). The build
+          # script's hash is part of the key too so changes to it bust the cache.
+          key: cargo-v2-${{ runner.os }}-${{ hashFiles('rust-core/Cargo.lock', 'rust-core/rust-toolchain.toml', 'scripts/build-rust-xcframework.sh') }}-${{ hashFiles('rust-core/**/*.rs') }}
           restore-keys: |
-            cargo-${{ runner.os }}-${{ hashFiles('rust-core/Cargo.lock', 'rust-core/rust-toolchain.toml') }}-
-            cargo-${{ runner.os }}-
+            cargo-v2-${{ runner.os }}-${{ hashFiles('rust-core/Cargo.lock', 'rust-core/rust-toolchain.toml', 'scripts/build-rust-xcframework.sh') }}-
+            cargo-v2-${{ runner.os }}-
       - name: Cache SwiftPM
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/Library/Developer/Xcode/DerivedData/**/SourcePackages
