@@ -11,4 +11,4 @@ configuration = "Debug"
 simulator_prefix = "BedTerm"
 
 [extras]
-xcodebuild_flags = []
+xcodebuild_flags = ["-skipPackagePluginValidation"]
