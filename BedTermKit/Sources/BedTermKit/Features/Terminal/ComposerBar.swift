@@ -6,8 +6,8 @@ struct ComposerBar: View {
     @FocusState private var focused: Bool
 
     var body: some View {
-        VStack(spacing: 8) {
-            ZStack(alignment: .topLeading) {
+        ZStack(alignment: .topLeading) {
+            VStack(spacing: 0) {
                 TextEditor(text: $controller.text)
                     .focused($focused)
                     .font(.system(.body, design: .monospaced))
@@ -15,66 +15,79 @@ struct ComposerBar: View {
                     .autocorrectionDisabled(true)
                     .textInputAutocapitalization(.never)
                     .keyboardType(.asciiCapable)
-                    .frame(minHeight: 44, maxHeight: 240)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                if controller.text.isEmpty {
-                    Text("Compose your message…")
-                        .font(.system(.body, design: .monospaced))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 16)
-                        .allowsHitTesting(false)
-                }
-            }
-            .background {
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(.clear)
-                    .glassEffect(.regular, in: .rect(cornerRadius: 18))
-            }
+                    .padding(.leading, 4)
+                    .padding(.top, -6)
+                    .padding(.bottom, 0)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            HStack(spacing: 8) {
-                Button {
-                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                    controller.cancel()
-                } label: {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 14, weight: .semibold))
-                        .frame(width: 36, height: 36)
-                        .foregroundStyle(Color.primary)
-                }
-                .buttonStyle(.plain)
-                .glassEffect(.regular.interactive(), in: .capsule)
-                .accessibilityIdentifier("composer.cancel")
-                .accessibilityLabel("Discard draft")
-
-                Spacer()
-
-                Button {
-                    UINotificationFeedbackGenerator().notificationOccurred(.success)
-                    controller.submit()
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "paperplane.fill")
-                        Text("Send").font(.system(size: 14, weight: .semibold))
+                HStack {
+                    Button {
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        controller.cancel()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 11, weight: .semibold))
+                            .frame(width: 28, height: 28)
+                            .foregroundStyle(Color.primary)
                     }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 8)
-                    .foregroundStyle(.white)
+                    .buttonStyle(.plain)
+                    .glassEffect(.regular.interactive(), in: .capsule)
+                    .accessibilityIdentifier("composer.cancel")
+                    .accessibilityLabel("Discard draft")
+
+                    Spacer()
+
+                    Button {
+                        UINotificationFeedbackGenerator().notificationOccurred(.success)
+                        controller.submit()
+                    } label: {
+                        Image(systemName: "arrow.up")
+                            .font(.system(size: 14, weight: .bold))
+                            .frame(width: 30, height: 30)
+                            .foregroundStyle(.white)
+                    }
+                    .buttonStyle(.plain)
+                    .background(
+                        Circle().fill(
+                            controller.text.isEmpty
+                                ? Color.accentColor.opacity(0.35)
+                                : Color.accentColor
+                        )
+                    )
+                    .clipShape(Circle())
+                    .disabled(controller.text.isEmpty)
+                    .accessibilityIdentifier("composer.send")
+                    .accessibilityLabel("Send to terminal")
                 }
-                .buttonStyle(.plain)
-                .glassEffect(
-                    .regular.tint(.accentColor).interactive(),
-                    in: .capsule
-                )
-                .disabled(controller.text.isEmpty)
-                .opacity(controller.text.isEmpty ? 0.5 : 1.0)
-                .accessibilityIdentifier("composer.send")
-                .accessibilityLabel("Send to terminal")
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+
+            if controller.text.isEmpty {
+                Text("Compose your message…")
+                    .font(.system(.body, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .padding(.leading, 22)
+                    .padding(.top, 14)
+                    .allowsHitTesting(false)
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 8)
-        .onAppear { focused = true }
+        .frame(height: 112)
+        .background {
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(.clear)
+                .glassEffect(.regular, in: .rect(cornerRadius: 22))
+        }
+        .padding(.horizontal, 12)
+        .padding(.bottom, 6)
+        .onAppear {
+            UIApplication.shared.sendAction(
+                #selector(UIResponder.resignFirstResponder),
+                to: nil, from: nil, for: nil
+            )
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                focused = true
+            }
+        }
     }
 }
