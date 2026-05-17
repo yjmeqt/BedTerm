@@ -1,9 +1,11 @@
 //! Metal renderer.
 
+pub mod atlas;
 pub mod ffi;
 pub mod pipeline;
 pub mod shaders;
 
+use atlas::GlyphAtlas;
 use metal::foreign_types::ForeignType;
 use metal::{
     CommandQueue, Device, MTLClearColor, MTLLoadAction, MTLPrimitiveType, MTLStoreAction,
@@ -15,6 +17,7 @@ pub struct Renderer {
     pub(crate) device: Device,
     pub(crate) queue: CommandQueue,
     pub(crate) pipelines: Pipelines,
+    pub(crate) atlas: GlyphAtlas,
     pub(crate) pixel_size: f32,
     pub(crate) dpr: f32,
 }
@@ -37,10 +40,12 @@ impl Renderer {
         let device = Device::from_ptr(device_ptr as *mut _);
         let queue = CommandQueue::from_ptr(queue_ptr as *mut _);
         let pipelines = Pipelines::build(&device).ok()?;
+        let atlas = GlyphAtlas::new(&device, 14.0, 3.0);
         Some(Self {
             device,
             queue,
             pipelines,
+            atlas,
             pixel_size: 14.0,
             dpr: 3.0,
         })
@@ -49,7 +54,9 @@ impl Renderer {
     pub fn set_font(&mut self, pixel_size: f32, dpr: f32) {
         self.pixel_size = pixel_size.max(1.0);
         self.dpr = dpr.max(1.0);
-        // Real atlas invalidation lands in Task 5.
+        // Rebuild the atlas at the new scale. The old `Texture` and `CTFont`
+        // drop here, releasing their underlying ObjC / CF objects.
+        self.atlas = GlyphAtlas::new(&self.device, self.pixel_size, self.dpr);
     }
 
     /// # Safety
