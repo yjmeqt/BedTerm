@@ -27,7 +27,10 @@ unsafe impl Send for OutputCallback {}
 
 impl MockTty {
     pub fn new(program: Box<dyn Program>) -> Self {
-        let termios = Termios::default_cooked();
+        let mut termios = Termios::default_cooked();
+        if program.wants_raw() {
+            termios.set_raw();
+        }
         Self {
             program,
             termios,
