@@ -9,6 +9,9 @@ struct TerminalScreen: View {
     @State private var keyboard = KeyboardLayoutObserver()
     @State private var keyboardHidden = false
     @Namespace private var composerMorph
+    #if DEBUG
+    @AppStorage("debug.useMetalRenderer") private var useMetalRenderer: Bool = false
+    #endif
     let credential: HostCredential
     let onExit: () -> Void
 
@@ -34,6 +37,27 @@ struct TerminalScreen: View {
     var body: some View {
         VStack(spacing: 0) {
             ZStack(alignment: .top) {
+                #if DEBUG
+                if useMetalRenderer {
+                    TerminalMetalHostView(
+                        feed: session.feed,
+                        onSend: { session.send($0) },
+                        onResize: { cols, rows in session.resize(cols: cols, rows: rows) },
+                        yieldFirstResponder: composer.isOpen || keyboardHidden
+                    )
+                    .ignoresSafeArea(edges: [.top, .horizontal])
+                } else {
+                    TerminalHostView(
+                        feed: session.feed,
+                        onSend: { session.send($0) },
+                        onResize: { cols, rows in session.resize(cols: cols, rows: rows) },
+                        bracketedPasteProbe: bracketedPasteProbe,
+                        focusHandle: focusHandle,
+                        yieldFirstResponder: composer.isOpen || keyboardHidden
+                    )
+                    .ignoresSafeArea(edges: [.top, .horizontal])
+                }
+                #else
                 TerminalHostView(
                     feed: session.feed,
                     onSend: { session.send($0) },
@@ -43,6 +67,7 @@ struct TerminalScreen: View {
                     yieldFirstResponder: composer.isOpen || keyboardHidden
                 )
                 .ignoresSafeArea(edges: [.top, .horizontal])
+                #endif
 
                 if case .closed(let reason) = session.state {
                     DisconnectBanner(reason: reason) {
