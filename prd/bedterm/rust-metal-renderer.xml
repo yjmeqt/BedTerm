@@ -160,7 +160,7 @@ Replace SwiftTerm with a custom terminal engine: a Rust core (VT100/xterm emulat
   </steps>
 </bug>
 
-<bug id="metal_ime_candidate_commit_dropped" status="Fix Pending" date="2026-05-17" rule="R2M-R4.r5_ux">
+<bug id="metal_ime_candidate_commit_dropped" status="Fixed" date="2026-05-17" rule="R2M-R4.r5_ux">
   <current>
     With the Metal renderer toggle ON and a Pinyin (or other CJK) keyboard active, the preedit overlay correctly shows the typed romanisation (e.g. "ls"). When the user taps a candidate (e.g. 老师) in the candidate bar above the system keyboard, the candidate text is NOT sent to the terminal — the preedit overlay clears but no bytes arrive at the PTY. The shell sees nothing. Typing the same characters one-by-one (i.e. confirming via spacebar in some IMEs, or selecting via hardware Return) may behave differently. The romanisation in the overlay disappears, confirming that <code>unmarkText</code> or <code>setMarkedText(nil, ...)</code> is being called by iOS, but the committed string is dropped on the floor.
   </current>
