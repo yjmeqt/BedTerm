@@ -11,6 +11,12 @@ import UIKit
 /// `.padding(.bottom, overlap)` with `.ignoresSafeArea(.keyboard, edges: .bottom)`
 /// — in that order — to ride above the keyboard when shown and snap back to
 /// the safe-area bottom when hidden.
+///
+/// Writes to `overlap` are wrapped in `withAnimation` using the keyboard's
+/// own animation duration (carried in the notification's userInfo). Callers
+/// must NOT add a separate `.animation(value: overlap)` modifier — doing so
+/// would run a second, mismatched curve on top of the keyboard's own and
+/// cause a visible jump as the two timings drift apart.
 @MainActor
 @Observable
 final class KeyboardLayoutObserver {
@@ -23,22 +29,36 @@ final class KeyboardLayoutObserver {
             object: nil,
             queue: .main
         ) { [weak self] note in
+            // Pull Sendable values off the notification before the actor hop —
+            // Notification itself isn't Sendable under Swift 6, and passing
+            // it to a helper function counts as "sending" across isolation.
             let endFrame = note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect
-            MainActor.assumeIsolated { self?.update(endFrame: endFrame) }
+            let duration =
+                (note.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double) ?? 0.25
+            MainActor.assumeIsolated { self?.update(endFrame: endFrame, duration: duration) }
         }
         center.addObserver(
             forName: UIResponder.keyboardWillHideNotification,
             object: nil,
             queue: .main
-        ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.overlap = 0 }
+        ) { [weak self] note in
+            let duration =
+                (note.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double) ?? 0.25
+            MainActor.assumeIsolated { self?.write(0, duration: duration) }
         }
     }
 
-    private func update(endFrame: CGRect?) {
+    private func update(endFrame: CGRect?, duration: Double) {
         guard let endFrame, let window = Self.keyWindow else { return }
         let intersection = window.bounds.intersection(endFrame)
-        overlap = max(0, intersection.height - window.safeAreaInsets.bottom)
+        let value = max(0, intersection.height - window.safeAreaInsets.bottom)
+        write(value, duration: duration)
+    }
+
+    private func write(_ value: CGFloat, duration: Double) {
+        withAnimation(.smooth(duration: duration)) {
+            overlap = value
+        }
     }
 
     private static var keyWindow: UIWindow? {

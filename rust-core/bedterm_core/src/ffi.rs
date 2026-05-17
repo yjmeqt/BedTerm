@@ -17,7 +17,10 @@ pub struct BtSnapshotView {
     pub cols: u16,
     pub rows: u16,
     pub cursor_col: u16,
+    /// Equals `rows` when the cursor is scrolled off-screen.
     pub cursor_row: u16,
+    /// 0 = at live bottom; positive = N rows into scrollback.
+    pub display_offset: u32,
     pub cells: *const CellSnapshot,
     pub cell_count: usize,
 }
@@ -97,12 +100,57 @@ pub unsafe extern "C" fn bt_term_snapshot(h: *mut BtTerm, out: *mut BtSnapshotVi
         rows: snap.rows,
         cursor_col: snap.cursor_col,
         cursor_row: snap.cursor_row,
+        display_offset: snap.display_offset,
         cells: snap.cells.as_ptr(),
         cell_count: snap.cells.len(),
     };
     term.cached = Some(snap);
     *out = view;
     0
+}
+
+/// # Safety
+/// `h` must be a valid, non-freed handle.
+#[no_mangle]
+pub unsafe extern "C" fn bt_term_scroll_by(h: *mut BtTerm, delta: i32) {
+    if h.is_null() {
+        return;
+    }
+    let term = &mut *h;
+    term.cached = None;
+    term.inner.scroll_by(delta);
+}
+
+/// # Safety
+/// `h` must be a valid, non-freed handle.
+#[no_mangle]
+pub unsafe extern "C" fn bt_term_scroll_to_bottom(h: *mut BtTerm) {
+    if h.is_null() {
+        return;
+    }
+    let term = &mut *h;
+    term.cached = None;
+    term.inner.scroll_to_bottom();
+}
+
+/// # Safety
+/// `h` must be a valid, non-freed handle.
+#[no_mangle]
+pub unsafe extern "C" fn bt_term_scroll_offset(h: *const BtTerm) -> u32 {
+    if h.is_null() {
+        return 0;
+    }
+    (*h).inner.scroll_offset()
+}
+
+/// # Safety
+/// `h` must be a valid, non-freed handle.
+#[no_mangle]
+pub unsafe extern "C" fn bt_term_scrollback_lines(h: *const BtTerm) -> u32 {
+    if h.is_null() {
+        return 0;
+    }
+    (*h).inner.scrollback_lines()
 }
 
 /// # Safety

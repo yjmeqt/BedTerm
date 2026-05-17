@@ -18,7 +18,13 @@ pub struct GridSnapshot {
     pub cols: u16,
     pub rows: u16,
     pub cursor_col: u16,
+    /// Visible row of the cursor. Equals `rows` (one past last viewport row)
+    /// when the cursor is outside the visible viewport because the user
+    /// scrolled into history — Swift uses this as a "hide cursor" sentinel.
     pub cursor_row: u16,
+    /// Current scroll position. 0 = at live bottom; positive = N rows up
+    /// into the scrollback. Bounded by alacritty's history depth.
+    pub display_offset: u32,
     pub cells: Vec<CellSnapshot>,
 }
 

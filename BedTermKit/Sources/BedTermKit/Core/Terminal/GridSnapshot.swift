@@ -19,15 +19,23 @@ public struct GridSnapshot: Sendable, Equatable {
     public let cols: UInt16
     public let rows: UInt16
     public let cursorCol: UInt16
+    /// Equals `rows` when the cursor is scrolled off-screen — callers should
+    /// hide the cursor overlay in that case.
     public let cursorRow: UInt16
+    /// 0 = at live bottom; positive = N rows into scrollback.
+    public let displayOffset: UInt32
     public let cells: [Cell]
 
-    public init(cols: UInt16, rows: UInt16, cursorCol: UInt16, cursorRow: UInt16, cells: [Cell]) {
+    public init(
+        cols: UInt16, rows: UInt16, cursorCol: UInt16, cursorRow: UInt16,
+        displayOffset: UInt32 = 0, cells: [Cell]
+    ) {
         precondition(cells.count == Int(cols) * Int(rows), "cell count must equal cols*rows")
         self.cols = cols
         self.rows = rows
         self.cursorCol = cursorCol
         self.cursorRow = cursorRow
+        self.displayOffset = displayOffset
         self.cells = cells
     }
 

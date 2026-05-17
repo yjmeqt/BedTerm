@@ -160,6 +160,21 @@ Replace SwiftTerm with a custom terminal engine: a Rust core (VT100/xterm emulat
   </steps>
 </bug>
 
+<bug id="metal_viewport_cannot_scroll" status="Open" date="2026-05-17" rule="R2M-R4.r5_ux">
+  <current>
+    With the Metal renderer toggle ON, the terminal viewport does not respond to scroll gestures. Dragging up or down on the terminal area produces no movement: the visible grid stays pinned to the current frame, and scrollback history above the viewport cannot be revealed. The SwiftTerm path (toggle OFF) scrolls correctly with the same gesture.
+  </current>
+  <expected>
+    Per R5.scroll and R5.scroll_sync: touch-scrolling the terminal must reveal scrollback history line-by-line; scrolling pauses auto-follow, and returning to the bottom resumes auto-follow on new output. The Metal renderer must expose the Rust core's scroll offset to a pan/scroll gesture and repaint the viewport from the offset row on each frame.
+  </expected>
+  <steps>
+    1. Build and run with the Metal renderer toggle ON. Connect to a host.
+    2. Generate enough output to exceed one viewport (e.g. <code>ls -la /usr/bin</code>).
+    3. Drag a finger upward on the terminal viewport.
+    4. Observe: the viewport does not move — no scrollback rows appear, no inertia, no bounce. Compared to the SwiftTerm path where the same gesture scrolls history into view.
+  </steps>
+</bug>
+
 <bug id="metal_ime_candidate_commit_dropped" status="Fixed" date="2026-05-17" rule="R2M-R4.r5_ux">
   <current>
     With the Metal renderer toggle ON and a Pinyin (or other CJK) keyboard active, the preedit overlay correctly shows the typed romanisation (e.g. "ls"). When the user taps a candidate (e.g. 老师) in the candidate bar above the system keyboard, the candidate text is NOT sent to the terminal — the preedit overlay clears but no bytes arrive at the PTY. The shell sees nothing. Typing the same characters one-by-one (i.e. confirming via spacebar in some IMEs, or selecting via hardware Return) may behave differently. The romanisation in the overlay disappears, confirming that <code>unmarkText</code> or <code>setMarkedText(nil, ...)</code> is being called by iOS, but the committed string is dropped on the floor.
