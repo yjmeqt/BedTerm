@@ -7,6 +7,7 @@ fn empty_grid_has_zero_cells() {
         rows: 0,
         cursor_col: 0,
         cursor_row: 0,
+        display_offset: 0,
         cells: Vec::new(),
     };
     assert_eq!(snap.cells.len(), 0);
