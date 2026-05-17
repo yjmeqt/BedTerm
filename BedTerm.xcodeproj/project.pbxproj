@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		3BA0EC8B2788B75A6BCFD1FD /* BedTermTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43021D79E9E48C17C8DE52A7 /* BedTermTests.swift */; };
+		D5D5D5D500000000000000A1 /* RustMockTTYClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5D5D5D500000000000000F1 /* RustMockTTYClientTests.swift */; };
 		89E7D796F5E95867BF23555D /* BedTermApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79DC149F8161013AB2412CF9 /* BedTermApp.swift */; };
 		B1B1B1B100000000000000A3 /* KeyBarStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B1B1B100000000000000F3 /* KeyBarStateTests.swift */; };
 		B1B1B1B100000000000000A4 /* ByteSequenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B1B1B100000000000000F4 /* ByteSequenceTests.swift */; };
@@ -72,6 +73,7 @@
 		B3B3B3B300000000000000F1 /* SelectionGeometryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectionGeometryTests.swift; sourceTree = "<group>"; };
 		B4B4B4B400000000000000F1 /* TerminalRendererParityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalRendererParityTests.swift; sourceTree = "<group>"; };
 		B5B5B5B500000000000000F1 /* TerminalPaletteTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalPaletteTests.swift; sourceTree = "<group>"; };
+		D5D5D5D500000000000000F1 /* RustMockTTYClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RustMockTTYClientTests.swift; sourceTree = "<group>"; };
 		F3F3F3F300000000000000F2 /* Fixtures */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Fixtures; sourceTree = "<group>"; };
 		C1C1C1C100000000000000E1 /* BedTermUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = BedTermUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		C1C1C1C100000000000000F1 /* ConnectionSmokeUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionSmokeUITests.swift; sourceTree = "<group>"; };
@@ -114,6 +116,28 @@
 		};
 /* End PBXResourcesBuildPhase section */
 
+/* Begin PBXShellScriptBuildPhase section */
+		D8D8D8D800000000000000B1 /* Copy DebugFixtures (Debug only) */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Copy DebugFixtures (Debug only)";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/bash;
+			shellScript = "\"${SRCROOT}/scripts/copy-debug-fixtures.sh\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
+
 /* Begin PBXGroup section */
 		17D135F5F3C2D922AD89D6B5 /* BedTermTests */ = {
 			isa = PBXGroup;
@@ -136,6 +160,7 @@
 				B3B3B3B300000000000000F1 /* SelectionGeometryTests.swift */,
 				B4B4B4B400000000000000F1 /* TerminalRendererParityTests.swift */,
 				B5B5B5B500000000000000F1 /* TerminalPaletteTests.swift */,
+				D5D5D5D500000000000000F1 /* RustMockTTYClientTests.swift */,
 			);
 			path = BedTermTests;
 			sourceTree = "<group>";
@@ -217,6 +242,7 @@
 				E8CF050B86F74AE226BAC291 /* Sources */,
 				A1B2C3D400000000000000F1 /* Frameworks */,
 				A55E70AC0000000000000C01 /* Resources */,
+				D8D8D8D800000000000000B1 /* Copy DebugFixtures (Debug only) */,
 			);
 			buildRules = (
 			);
@@ -325,6 +351,7 @@
 				B3B3B3B300000000000000A1 /* SelectionGeometryTests.swift in Sources */,
 				B4B4B4B400000000000000A1 /* TerminalRendererParityTests.swift in Sources */,
 				B5B5B5B500000000000000A1 /* TerminalPaletteTests.swift in Sources */,
+				D5D5D5D500000000000000A1 /* RustMockTTYClientTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

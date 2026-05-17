@@ -15,9 +15,19 @@
  */
 #define VERTICES_PER_CELL 6
 
+#define VINTR 3
+
+#define VEOF 4
+
+#define VERASE 127
+
+typedef struct BtMockTty BtMockTty;
+
 typedef struct BtRenderer BtRenderer;
 
 typedef struct BtTerm BtTerm;
+
+typedef struct Flags Flags;
 
 typedef struct CellSnapshot {
   /**
@@ -73,6 +83,10 @@ typedef struct BtPaletteView {
   struct BtRgb24 default_bg;
   struct BtRgb24 ansi[16];
 } BtPaletteView;
+
+
+
+
 
 #ifdef __cplusplus
 extern "C" {
@@ -199,6 +213,45 @@ int bt_renderer_draw(struct BtRenderer *r,
                      uint32_t viewport_width_px,
                      uint32_t viewport_height_px,
                      double time_seconds);
+
+/**
+ * # Safety
+ * `opts_json` must be either null or point to a NUL-terminated UTF-8 string
+ * owned by the caller for the duration of this call.
+ */
+struct BtMockTty *bt_mock_tty_create(uint32_t program, const char *opts_json);
+
+/**
+ * # Safety
+ * `h` must be a pointer returned by `bt_mock_tty_create` that has not been freed.
+ */
+void bt_mock_tty_free(struct BtMockTty *h);
+
+/**
+ * # Safety
+ * `h` must be a valid, non-freed handle.
+ */
+void bt_mock_tty_set_output_callback(struct BtMockTty *h, void (*cb)(const uint8_t*,
+                                                                     uintptr_t,
+                                                                     void*), void *user_data);
+
+/**
+ * # Safety
+ * `h` must be valid; `bytes` must point to at least `len` bytes (or be null when len == 0).
+ */
+int32_t bt_mock_tty_write(struct BtMockTty *h, const uint8_t *bytes, uintptr_t len);
+
+/**
+ * # Safety
+ * `h` must be valid.
+ */
+void bt_mock_tty_resize(struct BtMockTty *h, uint16_t cols, uint16_t rows);
+
+/**
+ * # Safety
+ * `h` must be valid.
+ */
+void bt_mock_tty_tick(struct BtMockTty *h, uint64_t now_ms);
 
 #ifdef __cplusplus
 }  // extern "C"

@@ -4,3 +4,6 @@ pub mod ffi;
 pub mod renderer;
 pub mod snapshot;
 pub mod term;
+
+#[cfg(feature = "mock-tty")]
+pub mod mock_tty;
