@@ -40,20 +40,32 @@ impl Default for Palette {
         use alacritty_terminal::vte::ansi::NamedColor;
         let n = |c: NamedColor| -> BtRgb24 {
             let rgb = legacy_default_named(c);
-            BtRgb24 { r: rgb.r, g: rgb.g, b: rgb.b }
+            BtRgb24 {
+                r: rgb.r,
+                g: rgb.g,
+                b: rgb.b,
+            }
         };
         Self {
             default_fg: n(NamedColor::Foreground),
             default_bg: n(NamedColor::Background),
             ansi: [
-                n(NamedColor::Black),       n(NamedColor::Red),
-                n(NamedColor::Green),       n(NamedColor::Yellow),
-                n(NamedColor::Blue),        n(NamedColor::Magenta),
-                n(NamedColor::Cyan),        n(NamedColor::White),
-                n(NamedColor::BrightBlack), n(NamedColor::BrightRed),
-                n(NamedColor::BrightGreen), n(NamedColor::BrightYellow),
-                n(NamedColor::BrightBlue),  n(NamedColor::BrightMagenta),
-                n(NamedColor::BrightCyan),  n(NamedColor::BrightWhite),
+                n(NamedColor::Black),
+                n(NamedColor::Red),
+                n(NamedColor::Green),
+                n(NamedColor::Yellow),
+                n(NamedColor::Blue),
+                n(NamedColor::Magenta),
+                n(NamedColor::Cyan),
+                n(NamedColor::White),
+                n(NamedColor::BrightBlack),
+                n(NamedColor::BrightRed),
+                n(NamedColor::BrightGreen),
+                n(NamedColor::BrightYellow),
+                n(NamedColor::BrightBlue),
+                n(NamedColor::BrightMagenta),
+                n(NamedColor::BrightCyan),
+                n(NamedColor::BrightWhite),
             ],
         }
     }
@@ -229,7 +241,11 @@ impl Terminal {
 fn color_to_rgba(c: alacritty_terminal::vte::ansi::Color, palette: &Palette) -> u32 {
     use alacritty_terminal::vte::ansi::Color;
     let rgb = match c {
-        Color::Spec(rgb) => BtRgb24 { r: rgb.r, g: rgb.g, b: rgb.b },
+        Color::Spec(rgb) => BtRgb24 {
+            r: rgb.r,
+            g: rgb.g,
+            b: rgb.b,
+        },
         Color::Named(named) => named_from_palette(named, palette),
         Color::Indexed(i) => {
             if (i as usize) < 16 {
@@ -237,37 +253,38 @@ fn color_to_rgba(c: alacritty_terminal::vte::ansi::Color, palette: &Palette) -> 
             } else {
                 // 16..=255 — colour cube and greyscale ramp, not palette-controlled.
                 let rgb = default_indexed(i);
-                BtRgb24 { r: rgb.r, g: rgb.g, b: rgb.b }
+                BtRgb24 {
+                    r: rgb.r,
+                    g: rgb.g,
+                    b: rgb.b,
+                }
             }
         }
     };
     ((rgb.r as u32) << 24) | ((rgb.g as u32) << 16) | ((rgb.b as u32) << 8) | 0xFF
 }
 
-fn named_from_palette(
-    n: alacritty_terminal::vte::ansi::NamedColor,
-    p: &Palette,
-) -> BtRgb24 {
+fn named_from_palette(n: alacritty_terminal::vte::ansi::NamedColor, p: &Palette) -> BtRgb24 {
     use alacritty_terminal::vte::ansi::NamedColor::*;
     match n {
         Foreground | BrightForeground | DimForeground => p.default_fg,
         Background => p.default_bg,
-        Black | DimBlack       => p.ansi[0],
-        Red | DimRed           => p.ansi[1],
-        Green | DimGreen       => p.ansi[2],
-        Yellow | DimYellow     => p.ansi[3],
-        Blue | DimBlue         => p.ansi[4],
-        Magenta | DimMagenta   => p.ansi[5],
-        Cyan | DimCyan         => p.ansi[6],
-        White | DimWhite       => p.ansi[7],
-        BrightBlack            => p.ansi[8],
-        BrightRed              => p.ansi[9],
-        BrightGreen            => p.ansi[10],
-        BrightYellow           => p.ansi[11],
-        BrightBlue             => p.ansi[12],
-        BrightMagenta          => p.ansi[13],
-        BrightCyan             => p.ansi[14],
-        BrightWhite            => p.ansi[15],
+        Black | DimBlack => p.ansi[0],
+        Red | DimRed => p.ansi[1],
+        Green | DimGreen => p.ansi[2],
+        Yellow | DimYellow => p.ansi[3],
+        Blue | DimBlue => p.ansi[4],
+        Magenta | DimMagenta => p.ansi[5],
+        Cyan | DimCyan => p.ansi[6],
+        White | DimWhite => p.ansi[7],
+        BrightBlack => p.ansi[8],
+        BrightRed => p.ansi[9],
+        BrightGreen => p.ansi[10],
+        BrightYellow => p.ansi[11],
+        BrightBlue => p.ansi[12],
+        BrightMagenta => p.ansi[13],
+        BrightCyan => p.ansi[14],
+        BrightWhite => p.ansi[15],
         // Cursor and anything else — use default foreground. Note: BrightForeground
         // and DimForeground are matched explicitly above because the palette has no
         // distinct slot for them; they intentionally collapse onto default_fg.

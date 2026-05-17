@@ -195,7 +195,9 @@ impl Renderer {
         att.set_load_action(MTLLoadAction::Clear);
         att.set_store_action(MTLStoreAction::Store);
         let [cr, cg, cb, ca] = self.clear_color;
-        att.set_clear_color(MTLClearColor::new(cr as f64, cg as f64, cb as f64, ca as f64));
+        att.set_clear_color(MTLClearColor::new(
+            cr as f64, cg as f64, cb as f64, ca as f64,
+        ));
 
         let cmd = self.queue.new_command_buffer();
         let enc = cmd.new_render_command_encoder(pass);
