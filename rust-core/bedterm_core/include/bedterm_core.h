@@ -10,6 +10,8 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+typedef struct BtRenderer BtRenderer;
+
 typedef struct BtTerm BtTerm;
 
 typedef struct CellSnapshot {
@@ -76,6 +78,38 @@ int bt_term_snapshot(struct BtTerm *h, struct BtSnapshotView *out);
  * `h` must be a valid, non-freed handle.
  */
 void bt_term_snapshot_release(struct BtTerm *h);
+
+/**
+ * # Safety
+ * `mtl_device` and `mtl_queue` must be non-null `id<MTLDevice>` /
+ * `id<MTLCommandQueue>` pointers. They are borrowed for the renderer's
+ * lifetime; the caller (Swift) retains them.
+ */
+struct BtRenderer *bt_renderer_new(const void *mtl_device, const void *mtl_queue);
+
+/**
+ * # Safety
+ * `r` must be a pointer returned by `bt_renderer_new` not yet freed.
+ */
+void bt_renderer_free(struct BtRenderer *r);
+
+/**
+ * # Safety
+ * `r` must be a live `BtRenderer` pointer.
+ */
+void bt_renderer_set_font(struct BtRenderer *r, float pixel_size, float device_pixel_ratio);
+
+/**
+ * Stub — Task 4 wires the real draw call.
+ * # Safety
+ * `r`, `term`, `drawable_texture` must all be live.
+ */
+int bt_renderer_draw(struct BtRenderer *_r,
+                     const struct BtTerm *_term,
+                     const void *_drawable_texture,
+                     uint32_t _viewport_width_px,
+                     uint32_t _viewport_height_px,
+                     double _time_seconds);
 
 #ifdef __cplusplus
 }  // extern "C"
