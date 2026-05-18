@@ -18,7 +18,7 @@ static FONT_SYSTEM: OnceLock<Mutex<FontSystem>> = OnceLock::new();
 pub(crate) fn with_font_system<R, F: FnOnce(&mut FontSystem) -> R>(f: F) -> R {
     let lock = FONT_SYSTEM.get_or_init(|| Mutex::new(FontSystem::new()));
     let mut guard = lock.lock().expect("FontSystem mutex poisoned");
-    f(&mut *guard)
+    f(&mut guard)
 }
 
 #[cfg(test)]
