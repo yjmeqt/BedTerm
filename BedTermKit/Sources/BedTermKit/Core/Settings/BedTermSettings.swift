@@ -69,5 +69,11 @@ public final class BedTermSettings {
             defaults.object(forKey: Key.installShellIntegrationOnConnect) as? Bool ?? false
         self.showCommandBlocks =
             defaults.object(forKey: Key.showCommandBlocks) as? Bool ?? false
+        // Sweep obsolete debug-toggle keys from earlier builds so they don't
+        // linger in users' Defaults. Add new entries to `obsoleteKeys` when
+        // a setting is removed; never remove from this list.
+        for key in ["debug.useMetalRenderer"] {
+            defaults.removeObject(forKey: key)
+        }
     }
 }

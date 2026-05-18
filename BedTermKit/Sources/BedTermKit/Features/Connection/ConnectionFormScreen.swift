@@ -19,9 +19,6 @@ public struct ConnectionFormScreen: View {
     @State private var viewModel: ConnectionFormViewModel
     @State private var keyImporter = false
     @State private var duplicateLabel: String?
-    #if DEBUG
-        @AppStorage("debug.useMetalRenderer") private var useMetalRenderer: Bool = false
-    #endif
 
     let connectOnSave: Bool
     let onFinish: (Outcome) -> Void
@@ -54,9 +51,6 @@ public struct ConnectionFormScreen: View {
                 if let error = viewModel.errorMessage {
                     errorAlert(message: error)
                 }
-                #if DEBUG
-                    debugCard
-                #endif
             }
             .padding(16)
         }
@@ -142,15 +136,6 @@ public struct ConnectionFormScreen: View {
             }
         }
     }
-
-    #if DEBUG
-        private var debugCard: some View {
-            ShadcnCard(title: String(localized: "Debug"), description: nil) {
-                Toggle("Metal renderer (experimental)", isOn: $useMetalRenderer)
-                    .toggleStyle(.switch)
-            }
-        }
-    #endif
 
     @ViewBuilder
     private var passwordField: some View {
