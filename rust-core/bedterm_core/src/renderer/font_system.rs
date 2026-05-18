@@ -5,12 +5,17 @@
 use cosmic_text::FontSystem;
 use std::sync::{Mutex, OnceLock};
 
+// CT-2 (glyph raster migration) will wire this into the atlas; until then it
+// is exercised only by the tests below, so silence the dead-code lint that
+// `pub(crate)` would otherwise trigger.
+#[allow(dead_code)]
 static FONT_SYSTEM: OnceLock<Mutex<FontSystem>> = OnceLock::new();
 
 /// Run `f` against the shared FontSystem. Blocks if another caller is
 /// rasterising. Don't hold the guard across rasterization that itself
 /// might recurse into the FontSystem — currently no such code path exists.
-pub fn with_font_system<R, F: FnOnce(&mut FontSystem) -> R>(f: F) -> R {
+#[allow(dead_code)]
+pub(crate) fn with_font_system<R, F: FnOnce(&mut FontSystem) -> R>(f: F) -> R {
     let lock = FONT_SYSTEM.get_or_init(|| Mutex::new(FontSystem::new()));
     let mut guard = lock.lock().expect("FontSystem mutex poisoned");
     f(&mut *guard)
@@ -28,21 +33,24 @@ mod tests {
 
     #[test]
     fn at_least_one_monospace_face_is_discoverable() {
-        let found = with_font_system(|fs| {
-            fs.db().faces().any(|f| {
-                let names = f
-                    .families
-                    .iter()
-                    .map(|(n, _)| n.as_str())
-                    .collect::<Vec<_>>();
-                names.iter().any(|n| {
-                    n.contains("Menlo")
-                        || n.contains("Monaco")
-                        || n.contains("Courier")
-                        || n.contains("SF Mono")
-                })
-            })
-        });
+        // fontdb sets `monospaced` from the OS/2 panose + post table — the
+        // authoritative signal. Substring matching family names is unreliable
+        // (a face named "Courier New Decorative" can be proportional).
+        let found = with_font_system(|fs| fs.db().faces().any(|f| f.monospaced));
         assert!(found, "no system monospace font discoverable via fontdb");
+    }
+
+    #[test]
+    fn font_system_is_a_singleton_across_calls() {
+        let (len1, ptr1) = with_font_system(|fs| (fs.db().len(), fs.db() as *const _ as usize));
+        let (len2, ptr2) = with_font_system(|fs| (fs.db().len(), fs.db() as *const _ as usize));
+        assert_eq!(
+            len1, len2,
+            "fontdb length changed between calls — was the FontSystem rebuilt?"
+        );
+        assert_eq!(
+            ptr1, ptr2,
+            "db() pointer changed between calls — singleton not honoured"
+        );
     }
 }
