@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct TerminalScreen: View {
+    @Environment(BedTermSettings.self) private var settings
     @State var session: TerminalSession
     @State private var keyBar: KeyBarController
     @State private var composer: ComposerController
@@ -12,6 +13,25 @@ struct TerminalScreen: View {
     let credential: HostCredential
     let onExit: () -> Void
 
+    /// True when a full-screen TUI (vim, htop, claude) is on the remote side
+    /// AND the user has the "Keep first row visible in full-screen apps"
+    /// setting on. In that state the terminal viewport's top edge clamps to
+    /// the top safe-area inset so the Dynamic Island / notch / status bar
+    /// stops covering the TUI's first row (terminal-view
+    /// R1.alt_screen_top_inset). The bottom toolbar (KeyBar + ComposePill)
+    /// stays visible regardless — the user still needs Esc / Ctrl inside vim.
+    private var reserveTopSafeArea: Bool {
+        settings.reserveTopSafeAreaInAltScreen && session.mode.contains(.altScreen)
+    }
+
+    /// Safe-area edges the Metal terminal view should ignore. `.horizontal`
+    /// always — the grid runs edge-to-edge. `.top` only when no TUI is in
+    /// alt-screen; once a TUI takes over we surrender the inset back to the
+    /// system so the Dynamic Island doesn't overlap meaningful content.
+    private var ignoredTerminalEdges: Edge.Set {
+        reserveTopSafeArea ? .horizontal : [.top, .horizontal]
+    }
+
     init(session: TerminalSession, credential: HostCredential, onExit: @escaping () -> Void) {
         _session = State(initialValue: session)
         _keyBar = State(initialValue: KeyBarController { [weak session] data in session?.send(data) })
@@ -20,7 +40,9 @@ struct TerminalScreen: View {
         _composer = State(
             initialValue: ComposerController(
                 send: { [weak session] data in session?.send(data) },
-                isBracketedPasteActive: { false },
+                isBracketedPasteActive: { [weak session] in
+                    session?.mode.contains(.bracketedPaste) ?? false
+                },
                 returnFocusToTerminal: {
                     MainActor.assumeIsolated { focusHandle.claimFirstResponder() }
                 }
@@ -40,7 +62,13 @@ struct TerminalScreen: View {
                     focusHandle: focusHandle,
                     yieldFirstResponder: composer.isOpen || keyboardHidden
                 )
-                .ignoresSafeArea(edges: [.top, .horizontal])
+                .ignoresSafeArea(edges: ignoredTerminalEdges)
+                // Top-inset toggle must be instant (terminal-view
+                // R1.alt_screen_top_inset). Animating a mid-frame PTY reflow
+                // tears vim/htop's UI; suppress any animation that the
+                // surrounding view tree might otherwise carry into the
+                // safe-area change.
+                .transaction(value: reserveTopSafeArea) { $0.animation = nil }
 
                 if case .closed(let reason) = session.state {
                     DisconnectBanner(reason: reason) {

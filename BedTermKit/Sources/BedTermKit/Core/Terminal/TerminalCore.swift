@@ -109,4 +109,10 @@ public final class TerminalCore {
     public var scrollbackLines: Int {
         Int(bt_term_scrollback_lines(handle))
     }
+
+    /// Current terminal mode flags. Cheap to read (one pointer deref in Rust);
+    /// safe to poll after every `feed(_:)`.
+    public var mode: BedTermMode {
+        BedTermMode(rawValue: bt_term_mode(handle))
+    }
 }

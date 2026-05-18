@@ -6,11 +6,21 @@ use alacritty_terminal::event::VoidListener;
 use alacritty_terminal::grid::{Dimensions, Scroll};
 use alacritty_terminal::index::{Column, Line};
 use alacritty_terminal::term::cell::Flags as CellFlags;
-use alacritty_terminal::term::Config;
+use alacritty_terminal::term::{Config, TermMode};
 use alacritty_terminal::vte::ansi::Processor;
 use alacritty_terminal::Term;
 
 use crate::snapshot::{CellSnapshot, GridSnapshot};
+
+// Stable BedTerm-side mode bits exposed across FFI. Decoupled from alacritty's
+// internal TermMode positions so an upstream upgrade can't silently shift the
+// values Swift observes. Keep in sync with `BedTermMode` in Swift.
+pub const BT_MODE_ALT_SCREEN: u32 = 1 << 0;
+pub const BT_MODE_BRACKETED_PASTE: u32 = 1 << 1;
+pub const BT_MODE_MOUSE_REPORT: u32 = 1 << 2;
+pub const BT_MODE_APP_CURSOR: u32 = 1 << 3;
+pub const BT_MODE_APP_KEYPAD: u32 = 1 << 4;
+pub const BT_MODE_FOCUS_IN_OUT: u32 = 1 << 5;
 
 /// 8-bit-per-channel sRGB triple. The renderer-facing snapshot stores
 /// premultiplied RGBA u32s; this type only exists at the host-config boundary.
@@ -154,6 +164,32 @@ impl Terminal {
 
     pub fn scrollback_lines(&self) -> u32 {
         self.term.grid().history_size() as u32
+    }
+
+    /// Encode the terminal's current mode flags into BedTerm-stable bits.
+    /// Returns a `u32` bitmask of `BT_MODE_*` constants.
+    pub fn mode(&self) -> u32 {
+        let m = *self.term.mode();
+        let mut out: u32 = 0;
+        if m.contains(TermMode::ALT_SCREEN) {
+            out |= BT_MODE_ALT_SCREEN;
+        }
+        if m.contains(TermMode::BRACKETED_PASTE) {
+            out |= BT_MODE_BRACKETED_PASTE;
+        }
+        if m.intersects(TermMode::MOUSE_MODE) {
+            out |= BT_MODE_MOUSE_REPORT;
+        }
+        if m.contains(TermMode::APP_CURSOR) {
+            out |= BT_MODE_APP_CURSOR;
+        }
+        if m.contains(TermMode::APP_KEYPAD) {
+            out |= BT_MODE_APP_KEYPAD;
+        }
+        if m.contains(TermMode::FOCUS_IN_OUT) {
+            out |= BT_MODE_FOCUS_IN_OUT;
+        }
+        out
     }
 
     pub fn set_palette(&mut self, palette: Palette) {

@@ -153,6 +153,19 @@ pub unsafe extern "C" fn bt_term_scrollback_lines(h: *const BtTerm) -> u32 {
     (*h).inner.scrollback_lines()
 }
 
+/// Return the terminal's current mode flags, packed as `BT_MODE_*` bits
+/// defined in `term.rs`. Swift mirrors the layout in `BedTermMode`.
+///
+/// # Safety
+/// `h` must be a valid, non-freed handle.
+#[no_mangle]
+pub unsafe extern "C" fn bt_term_mode(h: *const BtTerm) -> u32 {
+    if h.is_null() {
+        return 0;
+    }
+    (*h).inner.mode()
+}
+
 /// # Safety
 /// `h` must be a valid, non-freed handle.
 #[no_mangle]

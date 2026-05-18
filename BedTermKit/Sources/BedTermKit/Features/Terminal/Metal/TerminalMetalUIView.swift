@@ -86,6 +86,10 @@ final class TerminalMetalUIView: MTKView {
                 guard let self else { return }
                 let hadScreenClear = Self.containsScreenClear(chunk)
                 self.terminalCore.feed(chunk)
+                // Mode flags can shift mid-stream (vim entering alt-screen,
+                // bash leaving bracketed paste, etc). Push to the session so
+                // SwiftUI observers react in the same frame as the redraw.
+                self.session?.updateMode(self.terminalCore.mode)
                 self.setNeedsDisplay()
                 if hadScreenClear { self.scheduleBottomAnchorPass() }
             }
