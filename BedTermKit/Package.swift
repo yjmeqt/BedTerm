@@ -32,7 +32,11 @@ let package = Package(
             ],
             path: "Sources/BedTermKit",
             resources: [
-                .process("Resources")
+                .process("Resources"),
+                // Shell-integration scripts ship as opaque resources — SPM's
+                // `.process` ignores `.sh` so `Bundle.module` wouldn't find
+                // them. Keep them out of `Resources/` and copy verbatim.
+                .copy("ShellIntegrationResources")
             ],
             plugins: [
                 .plugin(name: "SwiftLintBuildToolPlugin", package: "SwiftLint")

@@ -1,14 +1,11 @@
 //
-// CitadelSSHClient.swift
+// CitadelSSHClient.swift — Production SSH client on Citadel 0.12.1 + NIOSSH.
 //
-// Production SSH client built on Citadel 0.12.1 + SwiftNIO SSH (Wellz26 fork).
+// API notes verified against Citadel 0.12.1 / NIOSSH (2026-05-16, sources
+// under DerivedData/.../SourcePackages/checkouts/{Citadel,swift-nio-ssh}):
 //
-// API notes — verified against Citadel 0.12.1 / NIOSSH on 2026-05-16
-// (sources under DerivedData/.../SourcePackages/checkouts/{Citadel,swift-nio-ssh}):
-//
-//   - Citadel exposes its own `SSHClient` final class
-//     (`Sources/Citadel/Client.swift`). We disambiguate from our own
-//     `BedTerm.SSHClient` protocol with a private typealias `CitadelClient`.
+//   - Citadel's own `SSHClient` final class is aliased to `CitadelClient`
+//     to disambiguate from `BedTerm.SSHClient` protocol.
 //   - Connect entry point used here:
 //         Citadel.SSHClient.connect(
 //             host:port:authenticationMethod:hostKeyValidator:reconnect:
@@ -38,19 +35,16 @@
 //     closure return; we also call `Citadel.SSHClient.close()` afterwards.
 //
 // Limitations / caveats:
-//   - Citadel 0.12.1 only ships ed25519 + RSA OpenSSH private-key parsers.
-//     P256/P384/P521 OpenSSH keys are NOT supported here; we map those to
-//     `.privateKeyParse`. Plain-text password auth and the two supported key
-//     types cover MVP.
+//   - Citadel 0.12.1 only ships ed25519 + RSA OpenSSH parsers; P256/P384/
+//     P521 map to `.privateKeyParse`. Password + the two key types cover MVP.
 //   - Citadel's `InvalidOpenSSHKey` does not distinguish "wrong passphrase"
 //     from "garbage input". We surface `.privateKeyPassphraseRequired` only
 //     when the caller supplied no passphrase and the key parser fails; if the
 //     caller supplied a passphrase and parsing still fails we surface
 //     `.privateKeyParse` (could be wrong passphrase or malformed key — Citadel
 //     does not tell us which).
-//   - Host-key TOFU runs synchronously inside the validation callback. The
-//     Keychain calls there are cheap, but they are blocking; this matches
-//     how `SSHHostKeyValidator.trustedKeys` itself behaves.
+//   - Host-key TOFU is synchronous inside the validation callback (cheap
+//     Keychain calls, matches `SSHHostKeyValidator.trustedKeys`).
 
 @preconcurrency import Citadel
 import Crypto
@@ -147,6 +141,16 @@ public final class CitadelSSHClient: BedTermKit.SSHClient, @unchecked Sendable {
                 do {
                     try await citadel.withPTY(ptyRequest) { inbound, outbound in
                         self.writer = outbound
+                        // Push the optional bootstrap payload (e.g. our OSC
+                        // 133 shell-integration heredoc) before resuming the
+                        // caller. Failing here is non-fatal — the session
+                        // works without integration, just without block
+                        // markers. We `try?` and move on.
+                        // Push the optional bootstrap payload before yielding
+                        // control to the caller / inbound pump.
+                        await Self.pushBootstrap(
+                            payload: request.bootstrapPayload,
+                            writer: outbound)
                         self.maybeResume(ready, with: .success(()))
 
                         // Pump inbound stdout/stderr into our AsyncStream.
@@ -325,6 +329,7 @@ public final class CitadelSSHClient: BedTermKit.SSHClient, @unchecked Sendable {
         }
         return SSHErrorMapping.map(error)
     }
+
 }
 
 // MARK: - TOFU host-key delegate

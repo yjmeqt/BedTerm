@@ -5,6 +5,10 @@ public final class MockSSHClient: SSHClient, @unchecked Sendable {
     public private(set) var lastResize: PTYDimensions?
     public private(set) var connectCalls = 0
     public private(set) var disconnectCalls = 0
+    /// The most recent connect request, captured so tests can assert on
+    /// fields the real client uses internally (bootstrap payload, initial
+    /// PTY dimensions, credential type).
+    public private(set) var lastConnectRequest: SSHConnectionRequest?
 
     private var scriptedOutput: [Data] = []
     private var scriptedConnectError: SSHError?
@@ -24,6 +28,7 @@ public final class MockSSHClient: SSHClient, @unchecked Sendable {
 
     public func connect(_ request: SSHConnectionRequest) async throws {
         self.connectCalls += 1
+        self.lastConnectRequest = request
         if let err = scriptedConnectError { throw err }
         for chunk in self.scriptedOutput {
             self.continuation?.yield(chunk)

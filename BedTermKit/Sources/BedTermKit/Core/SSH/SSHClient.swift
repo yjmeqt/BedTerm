@@ -26,9 +26,22 @@ public enum SSHError: Error, Equatable, Sendable {
 public struct SSHConnectionRequest: Sendable {
     public let credential: HostCredential
     public let initialPTY: PTYDimensions
-    public init(credential: HostCredential, initialPTY: PTYDimensions) {
+    /// Optional bootstrap payload — usually a heredoc-wrapped `eval` that
+    /// sources the bundled OSC 133 shell-integration script. When non-nil
+    /// and non-empty, the client writes these bytes into the channel as
+    /// soon as the PTY is ready, before yielding any user input. The
+    /// payload should end with a newline so the remote shell executes it
+    /// immediately. `nil` keeps the channel pristine — the default.
+    public let bootstrapPayload: String?
+
+    public init(
+        credential: HostCredential,
+        initialPTY: PTYDimensions,
+        bootstrapPayload: String? = nil
+    ) {
         self.credential = credential
         self.initialPTY = initialPTY
+        self.bootstrapPayload = bootstrapPayload
     }
 }
 

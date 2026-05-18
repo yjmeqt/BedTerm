@@ -28,6 +28,11 @@ pub struct BtSnapshotView {
 pub struct BtTerm {
     inner: Terminal,
     cached: Option<GridSnapshot>,
+    /// Scratch buffer for the most recently popped OSC 133 event's `attrs`.
+    /// The pointer handed across FFI in `BtOsc133Event::attrs` aims here and
+    /// is only valid until the next mutating call (next pop / feed / resize /
+    /// free) — same lifetime contract as `bt_term_snapshot`'s cell pointer.
+    osc133_attrs_scratch: Vec<u8>,
 }
 
 impl BtTerm {
@@ -47,6 +52,7 @@ pub extern "C" fn bt_term_new(cols: u16, rows: u16) -> *mut BtTerm {
     Box::into_raw(Box::new(BtTerm {
         inner: Terminal::new(cols, rows),
         cached: None,
+        osc133_attrs_scratch: Vec::new(),
     }))
 }
 
@@ -164,6 +170,91 @@ pub unsafe extern "C" fn bt_term_mode(h: *const BtTerm) -> u32 {
         return 0;
     }
     (*h).inner.mode()
+}
+
+/// Discriminator values for `BtOsc133Event::kind`. Swift mirrors these in
+/// `BedTermOsc133Event`.
+pub const BT_OSC133_PROMPT_START: u8 = 0;
+pub const BT_OSC133_COMMAND_START: u8 = 1;
+pub const BT_OSC133_OUTPUT_START: u8 = 2;
+pub const BT_OSC133_COMMAND_END: u8 = 3;
+
+/// One OSC 133 (FinalTerm) shell-integration event. Tagged union with a
+/// single-payload field (`exit_code`) that's only meaningful when
+/// `kind == COMMAND_END`, plus a borrowed `attrs` slice carrying the raw
+/// `key=value;key=value` extension tail.
+#[repr(C)]
+pub struct BtOsc133Event {
+    /// One of the `BT_OSC133_*` constants.
+    pub kind: u8,
+    /// `1` when the remote shell shipped an exit code; `0` otherwise.
+    /// Only meaningful when `kind == BT_OSC133_COMMAND_END`.
+    pub has_exit_code: u8,
+    /// Padding so `exit_code` is naturally aligned. Caller must ignore.
+    pub _reserved: [u8; 2],
+    /// Command exit code. Only meaningful when `kind == BT_OSC133_COMMAND_END`
+    /// and `has_exit_code != 0`.
+    pub exit_code: i32,
+    /// UTF-8 bytes of the extension attribute tail — `key=value` pairs
+    /// joined by `;`, exactly as the integration emitted them. Null when
+    /// no attrs. Borrowed from a scratch buffer inside the `BtTerm`; valid
+    /// only until the next mutating call. Caller copies before drainin
+    /// further events.
+    pub attrs: *const u8,
+    pub attrs_len: usize,
+}
+
+/// Pop one queued OSC 133 event, if any. Writes into `*out` and returns `1`
+/// when an event was popped, `0` when the queue is empty. Drain in a loop
+/// after each call to `bt_term_feed`.
+///
+/// `attrs` in the returned event points into a scratch buffer that the next
+/// mutating call overwrites — copy out the bytes before calling pop again.
+///
+/// # Safety
+/// `h` must be a valid, non-freed handle; `out` must point to a writable
+/// `BtOsc133Event`.
+#[no_mangle]
+pub unsafe extern "C" fn bt_term_pop_osc133(h: *mut BtTerm, out: *mut BtOsc133Event) -> u8 {
+    if h.is_null() || out.is_null() {
+        return 0;
+    }
+    let term = &mut *h;
+    let Some(event) = term.inner.pop_osc133() else {
+        return 0;
+    };
+    use crate::osc133::Osc133Event;
+    let (kind, has, code, attrs) = match event {
+        Osc133Event::PromptStart { attrs } => (BT_OSC133_PROMPT_START, 0u8, 0, attrs),
+        Osc133Event::CommandStart { attrs } => (BT_OSC133_COMMAND_START, 0u8, 0, attrs),
+        Osc133Event::OutputStart { attrs } => (BT_OSC133_OUTPUT_START, 0u8, 0, attrs),
+        Osc133Event::CommandEnd {
+            exit_code: Some(code),
+            attrs,
+        } => (BT_OSC133_COMMAND_END, 1u8, code, attrs),
+        Osc133Event::CommandEnd {
+            exit_code: None,
+            attrs,
+        } => (BT_OSC133_COMMAND_END, 0u8, 0, attrs),
+    };
+    term.osc133_attrs_scratch = attrs;
+    let (attrs_ptr, attrs_len) = if term.osc133_attrs_scratch.is_empty() {
+        (std::ptr::null(), 0)
+    } else {
+        (
+            term.osc133_attrs_scratch.as_ptr(),
+            term.osc133_attrs_scratch.len(),
+        )
+    };
+    *out = BtOsc133Event {
+        kind,
+        has_exit_code: has,
+        _reserved: [0; 2],
+        exit_code: code,
+        attrs: attrs_ptr,
+        attrs_len,
+    };
+    1
 }
 
 /// # Safety

@@ -90,6 +90,10 @@ final class TerminalMetalUIView: MTKView {
                 // bash leaving bracketed paste, etc). Push to the session so
                 // SwiftUI observers react in the same frame as the redraw.
                 self.session?.updateMode(self.terminalCore.mode)
+                // Drain OSC 133 events for Block-view consumers.
+                while let event = self.terminalCore.popOsc133Event() {
+                    self.session?.emitOsc133Event(event)
+                }
                 self.setNeedsDisplay()
                 if hadScreenClear { self.scheduleBottomAnchorPass() }
             }

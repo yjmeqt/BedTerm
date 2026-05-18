@@ -11,6 +11,7 @@ import Observation
 public final class BedTermSettings {
     private enum Key {
         static let reserveTopSafeAreaInAltScreen = "settings.reserveTopSafeAreaInAltScreen"
+        static let installShellIntegrationOnConnect = "settings.installShellIntegrationOnConnect"
         static let showCommandBlocks = "settings.showCommandBlocks"
     }
 
@@ -26,6 +27,22 @@ public final class BedTermSettings {
             if reserveTopSafeAreaInAltScreen != oldValue {
                 defaults.set(
                     reserveTopSafeAreaInAltScreen, forKey: Key.reserveTopSafeAreaInAltScreen)
+            }
+        }
+    }
+
+    /// Push the bundled OSC 133 shell-integration snippet into every new SSH
+    /// session immediately after the channel opens. The snippet adds prompt
+    /// + command markers (and a few extension attrs like `cmd`, `dur`, `cwd`)
+    /// that future Block-style views consume. Off by default — opt-in,
+    /// because writing bytes into the user's shell at connect time is a
+    /// surprising side effect.
+    public var installShellIntegrationOnConnect: Bool {
+        didSet {
+            if installShellIntegrationOnConnect != oldValue {
+                defaults.set(
+                    installShellIntegrationOnConnect,
+                    forKey: Key.installShellIntegrationOnConnect)
             }
         }
     }
@@ -48,6 +65,8 @@ public final class BedTermSettings {
         // documented default of `true` on first launch.
         self.reserveTopSafeAreaInAltScreen =
             defaults.object(forKey: Key.reserveTopSafeAreaInAltScreen) as? Bool ?? true
+        self.installShellIntegrationOnConnect =
+            defaults.object(forKey: Key.installShellIntegrationOnConnect) as? Bool ?? false
         self.showCommandBlocks =
             defaults.object(forKey: Key.showCommandBlocks) as? Bool ?? false
     }

@@ -19,6 +19,12 @@ final class TerminalSession {
     private(set) var mode: BedTermMode = []
     private(set) var feed: AsyncStream<Data>
     private let feedContinuation: AsyncStream<Data>.Continuation
+    /// Stream of OSC 133 (FinalTerm) shell-integration events. The renderer
+    /// view drains the Rust event queue after every `feed` and yields here.
+    /// Consumers (e.g. an upcoming Block view model) build command lifecycles
+    /// from this; nobody else needs to subscribe.
+    private(set) var osc133Events: AsyncStream<Osc133Event>
+    private let osc133Continuation: AsyncStream<Osc133Event>.Continuation
     private let client: any SSHClient
     private var pumpTask: Task<Void, Never>?
 
@@ -31,16 +37,27 @@ final class TerminalSession {
 
     init(client: any SSHClient) {
         self.client = client
-        var continuation: AsyncStream<Data>.Continuation!
-        self.feed = AsyncStream<Data> { continuation = $0 }
-        self.feedContinuation = continuation
+        var feedCont: AsyncStream<Data>.Continuation!
+        self.feed = AsyncStream<Data> { feedCont = $0 }
+        self.feedContinuation = feedCont
+        var oscCont: AsyncStream<Osc133Event>.Continuation!
+        self.osc133Events = AsyncStream<Osc133Event> { oscCont = $0 }
+        self.osc133Continuation = oscCont
     }
 
-    func connect(credential: HostCredential, initialPTY: PTYDimensions) async {
+    func connect(
+        credential: HostCredential,
+        initialPTY: PTYDimensions,
+        bootstrapPayload: String? = nil
+    ) async {
         state = .connecting
         lastError = nil
         do {
-            try await client.connect(.init(credential: credential, initialPTY: initialPTY))
+            try await client.connect(
+                .init(
+                    credential: credential,
+                    initialPTY: initialPTY,
+                    bootstrapPayload: bootstrapPayload))
             state = .open
             pumpTask = Task { [feedContinuation, client] in
                 for await chunk in client.output {
@@ -76,6 +93,12 @@ final class TerminalSession {
     /// the value actually changes so SwiftUI doesn't churn on identical reads.
     func updateMode(_ next: BedTermMode) {
         if mode != next { mode = next }
+    }
+
+    /// Forward an OSC 133 event drained by the renderer view into the
+    /// session-level stream. Subscribers reconstruct command lifecycles.
+    func emitOsc133Event(_ event: Osc133Event) {
+        osc133Continuation.yield(event)
     }
 
     func disconnect() {

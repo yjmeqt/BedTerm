@@ -115,4 +115,32 @@ public final class TerminalCore {
     public var mode: BedTermMode {
         BedTermMode(rawValue: bt_term_mode(handle))
     }
+
+    /// Pop the next pending OSC 133 (FinalTerm) shell-integration event, or
+    /// `nil` if the queue is empty. Drain in a loop after each `feed(_:)` to
+    /// reconstruct command lifecycles. The event's `attrs` are copied out
+    /// inside this call, so the Rust-side scratch buffer is safe to
+    /// invalidate on the next pop.
+    public func popOsc133Event() -> Osc133Event? {
+        var raw = BtOsc133Event(
+            kind: 0,
+            has_exit_code: 0,
+            _reserved: (0, 0),
+            exit_code: 0,
+            attrs: nil,
+            attrs_len: 0
+        )
+        guard bt_term_pop_osc133(handle, &raw) == 1 else { return nil }
+        return Osc133Event(raw: raw)
+    }
+
+    /// Drain every pending OSC 133 event into an array. Equivalent to calling
+    /// `popOsc133Event()` until it returns `nil`.
+    public func drainOsc133Events() -> [Osc133Event] {
+        var events: [Osc133Event] = []
+        while let event = popOsc133Event() {
+            events.append(event)
+        }
+        return events
+    }
 }
