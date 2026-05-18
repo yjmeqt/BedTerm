@@ -5,16 +5,11 @@
 use cosmic_text::FontSystem;
 use std::sync::{Mutex, OnceLock};
 
-// CT-2 (glyph raster migration) will wire this into the atlas; until then it
-// is exercised only by the tests below, so silence the dead-code lint that
-// `pub(crate)` would otherwise trigger.
-#[allow(dead_code)]
 static FONT_SYSTEM: OnceLock<Mutex<FontSystem>> = OnceLock::new();
 
 /// Run `f` against the shared FontSystem. Blocks if another caller is
 /// rasterising. Don't hold the guard across rasterization that itself
 /// might recurse into the FontSystem — currently no such code path exists.
-#[allow(dead_code)]
 pub(crate) fn with_font_system<R, F: FnOnce(&mut FontSystem) -> R>(f: F) -> R {
     let lock = FONT_SYSTEM.get_or_init(|| Mutex::new(FontSystem::new()));
     let mut guard = lock.lock().expect("FontSystem mutex poisoned");

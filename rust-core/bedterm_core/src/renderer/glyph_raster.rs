@@ -34,11 +34,6 @@ use super::font_system::with_font_system;
 
 /// Output of [`rasterize`]. The pixel buffer is BGRA8 premultiplied and laid
 /// out in row-major top-down order (`y * width + x` indexing).
-//
-// CT-4 wires this into the atlas; until then the only consumer is the test
-// module below, which would otherwise trip dead-code lints on the struct
-// and function despite the `pub` visibility.
-#[allow(dead_code)]
 #[derive(Debug)]
 pub struct RasterizedGlyph {
     /// BGRA8 premultiplied bytes, `width * height * 4` long.
@@ -46,6 +41,9 @@ pub struct RasterizedGlyph {
     pub width: u32,
     pub height: u32,
     /// Horizontal offset (px) from cell origin to glyph's left edge.
+    /// The atlas centers glyphs by `width` rather than honouring `left`, so
+    /// this is kept for diagnostics / future advance-aware layout.
+    #[allow(dead_code)]
     pub left: i32,
     /// Vertical offset (px) from cell baseline to glyph's top edge. Positive
     /// y goes up in swash, so this is normally a positive number for glyphs
@@ -57,14 +55,15 @@ pub struct RasterizedGlyph {
     pub is_color: bool,
     /// Resolved font id from cosmic-text's font cascade. Useful as part
     /// of an atlas cache key — same codepoint may rasterise from different
-    /// fonts when the primary lacks coverage.
+    /// fonts when the primary lacks coverage. Read by tests; the atlas
+    /// keys on codepoint alone today.
+    #[allow(dead_code)]
     pub font_id: cosmic_text::fontdb::ID,
 }
 
 /// Rasterize a single codepoint at the given pixel size. Returns `None` when
 /// no font in cosmic-text's fallback cascade actually covers the codepoint
 /// (private-use scalars, lone surrogates, malformed input).
-#[allow(dead_code)]
 pub fn rasterize(ch: char, font_size_px: f32) -> Option<RasterizedGlyph> {
     with_font_system(|fs| {
         // Shape a single-glyph line so cosmic-text gets to walk its font
@@ -162,9 +161,6 @@ pub fn rasterize(ch: char, font_size_px: f32) -> Option<RasterizedGlyph> {
 }
 
 /// Monospace cell metrics derived from the resolved primary font.
-//
-// CT-4 swaps `atlas.rs` over to this; until then it's unused outside tests.
-#[allow(dead_code)]
 #[derive(Debug, Clone, Copy)]
 pub struct CellMetrics {
     pub cell_width: u32,
@@ -176,7 +172,6 @@ pub struct CellMetrics {
 /// leading from the resolved font's swash metrics; cell_width from the
 /// advance of 'M' in the laid-out line. Returns None only if cosmic-text
 /// can't shape 'M' or there are no usable fonts.
-#[allow(dead_code)]
 pub fn measure_cell(font_size_px: f32) -> Option<CellMetrics> {
     with_font_system(|fs| {
         // Shape a single 'M' the same way `rasterize` does — same primary

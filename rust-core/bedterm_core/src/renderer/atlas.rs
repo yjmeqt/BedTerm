@@ -1,69 +1,38 @@
-//! Glyph atlas — rasterise codepoints via CoreText into a BGRA8 MTLTexture.
+//! Glyph atlas — rasterise codepoints via cosmic-text/swash into a BGRA8
+//! MTLTexture.
 //!
-//! Layout: a single 2048×2048 BGRA8Unorm texture. Each glyph occupies a quad of
-//! `cell_px` (narrow) or `2 * cell_px.0` (wide / CJK) wide. Bin-packing is a
-//! row-stride flat advance: glyphs march left-to-right across a row at the
-//! atlas row-stride (the row height equals `cell_px.1`), wrap when the row is
-//! full, fail safe (no eviction) when the whole atlas is full.
+//! Layout: a single 2048×2048 BGRA8Unorm texture. Each glyph occupies a quad
+//! of `cell_px` (narrow) or `2 * cell_px.0` (wide / CJK / emoji) wide. The
+//! row-stride bin-packer marches left-to-right at row height `cell_px.1`,
+//! wraps when full, fails safe (no eviction) when the atlas is exhausted.
 //!
-//! Pixel format: BGRA8Unorm premultiplied. Monochrome glyphs are drawn white
-//! on transparent → bytes become `(a, a, a, a)`, so the shader can either
-//! tint by foreground (`mix(bg, fg, sample.a)`) or composite directly. Color
-//! glyphs (Apple Color Emoji — SBIX/CBDT bitmap fonts) are drawn straight
-//! into the BGRA context and stored as full RGBA; the shader composites them
-//! over the background untinted.
+//! Pixel format: BGRA8Unorm premultiplied. Monochrome glyphs from swash's
+//! `Content::Mask` are expanded to (a,a,a,a) so the shader can tint by
+//! foreground. Color glyphs (Apple Color Emoji via sbix, COLR/CPAL OpenType
+//! color fonts) are stored as full RGBA (premultiplied, byte-swapped to BGRA)
+//! and composited untinted.
 //!
-//! CJK / non-ASCII handling: the primary font (Menlo) only covers Latin +
-//! a handful of other scripts. When `CTFontGetGlyphsForCharacters` reports a
-//! missing glyph (returns false or yields glyph id 0) we fall back to
-//! `CTFontCreateForString`, which asks CoreText to substitute a font with
-//! coverage for the requested codepoint (PingFang for Chinese, Hiragino for
-//! Japanese, Apple SD Gothic for Korean, Apple Color Emoji for emoji, etc.).
-//! Wide East Asian / emoji glyphs are rasterised into a `2 * cell_w` buffer
-//! so they don't get clipped, and the renderer draws their quad spanning two
-//! cells.
+//! Font fallback: handled by cosmic-text's `FontSystem` — when the primary
+//! face (Menlo) lacks a codepoint, cosmic-text walks the `fontdb` cascade and
+//! the rasterizer transparently switches to PingFang / Hiragino / Apple
+//! Color Emoji as needed.
 
 use std::collections::HashMap;
 
-use core_foundation::base::TCFType;
-use core_foundation::string::{CFString, CFStringRef};
-use core_graphics::base::{kCGBitmapByteOrder32Little, kCGImageAlphaPremultipliedFirst, CGFloat};
-use core_graphics::color_space::CGColorSpace;
-use core_graphics::context::{CGContext, CGTextDrawingMode};
-use core_graphics::geometry::{CGPoint, CGSize};
-use core_text::font::{self as ctfont, CTFont, CTFontRef};
-use core_text::font_descriptor::{kCTFontColorGlyphsTrait, kCTFontOrientationHorizontal};
 use metal::{Device, MTLPixelFormat, MTLRegion, MTLTextureUsage, Texture, TextureDescriptor};
 
+use crate::renderer::glyph_raster::{measure_cell, rasterize, CellMetrics};
+
 const ATLAS_PX: u32 = 2048;
-
-#[link(name = "CoreText", kind = "framework")]
-extern "C" {
-    // CTFontCreateForString returns a font with coverage for the substring
-    // [range.location, range.location+range.length). It substitutes a system
-    // fallback when the receiver lacks the glyphs (CJK, Emoji, etc.). Caller
-    // owns the returned CTFontRef (+1 retain).
-    fn CTFontCreateForString(
-        currentFont: CTFontRef,
-        string: CFStringRef,
-        range: CFRange,
-    ) -> CTFontRef;
-}
-
-#[repr(C)]
-struct CFRange {
-    location: isize,
-    length: isize,
-}
 
 #[derive(Clone, Copy, Debug)]
 pub struct GlyphInfo {
     pub uv_origin: (f32, f32),
     pub uv_size: (f32, f32),
     pub pixel_size: (u32, u32),
-    /// True if this glyph occupies two columns (CJK wide character).
+    /// True if this glyph occupies two columns (CJK wide character / emoji).
     pub wide: bool,
-    /// True if this glyph is a color bitmap glyph (Apple Color Emoji).
+    /// True if this glyph is a color bitmap glyph (Apple Color Emoji, COLR).
     /// The shader composites color glyphs over the cell background instead
     /// of tinting an alpha mask by the foreground colour.
     pub is_color: bool,
@@ -77,44 +46,21 @@ pub struct GlyphAtlas {
     glyphs: HashMap<u32, GlyphInfo>,
     cursor_x: u32,
     cursor_y: u32,
-    font: CTFont,
+    font_size_px: f32,
 }
 
 impl GlyphAtlas {
     pub fn new(device: &Device, pixel_size: f32, dpr: f32) -> Self {
-        let scaled = (pixel_size.max(1.0) * dpr.max(1.0)) as f64;
-
-        // Prefer Menlo; fall back to Courier, then to a UI monospace font.
-        let font = ctfont::new_from_name("Menlo", scaled)
-            .or_else(|_| ctfont::new_from_name("Courier", scaled))
-            .unwrap_or_else(|_| {
-                // kCTFontUIFontUserFixedPitch == 5 (CTFontUIFontType).
-                ctfont::new_ui_font_for_language(5, scaled, None)
-            });
-
-        let ascent = font.ascent().ceil() as u32;
-        let descent = font.descent().ceil() as u32;
-        let leading = font.leading().ceil() as u32;
-
-        // Measure cell width via the advance of 'M'.
-        let cell_w = {
-            let chars: [u16; 1] = ['M' as u16];
-            let mut glyphs: [u16; 1] = [0];
-            unsafe {
-                font.get_glyphs_for_characters(chars.as_ptr(), glyphs.as_mut_ptr(), 1);
-            }
-            let mut advances: [CGSize; 1] = [CGSize::new(0.0, 0.0)];
-            let adv = unsafe {
-                font.get_advances_for_glyphs(
-                    kCTFontOrientationHorizontal,
-                    glyphs.as_ptr(),
-                    advances.as_mut_ptr(),
-                    1,
-                )
-            };
-            (adv.ceil() as u32).max(1)
-        };
-        let cell_h = (ascent + descent + leading).max(1);
+        let scaled = (pixel_size.max(1.0) * dpr.max(1.0)).max(1.0);
+        // Defensive fallback: fontdb scan failed (malformed iOS install,
+        // sandboxed font directory). Coarse approximations so the atlas
+        // still builds and the renderer draws *something* until the
+        // FontSystem is recoverable.
+        let metrics = measure_cell(scaled).unwrap_or(CellMetrics {
+            cell_width: (scaled * 0.6) as u32,
+            cell_height: scaled as u32,
+            ascent: (scaled * 0.8) as u32,
+        });
 
         let desc = TextureDescriptor::new();
         desc.set_pixel_format(MTLPixelFormat::BGRA8Unorm);
@@ -125,12 +71,12 @@ impl GlyphAtlas {
 
         let mut me = Self {
             texture,
-            cell_px: (cell_w, cell_h),
-            ascent_px: ascent,
+            cell_px: (metrics.cell_width.max(1), metrics.cell_height.max(1)),
+            ascent_px: metrics.ascent,
             glyphs: HashMap::new(),
             cursor_x: 0,
             cursor_y: 0,
-            font,
+            font_size_px: scaled,
         };
         me.preload_ascii();
         me
@@ -157,143 +103,69 @@ impl GlyphAtlas {
         self.glyphs.get(&codepoint)
     }
 
-    /// Pick a font that has coverage for `ch`. Returns `(font, glyph_id)`.
-    /// Falls back through `CTFontCreateForString` when the primary font lacks
-    /// the glyph (typical for CJK / Emoji / extended scripts).
-    fn resolve_glyph(&self, ch: char) -> Option<(CTFont, u16)> {
-        // UTF-16 encode the codepoint.
-        let mut utf16 = [0u16; 2];
-        let utf16_len = ch.encode_utf16(&mut utf16).len();
-
-        let mut glyphs: [u16; 2] = [0, 0];
-        let ok = unsafe {
-            self.font.get_glyphs_for_characters(
-                utf16.as_ptr(),
-                glyphs.as_mut_ptr(),
-                utf16_len as isize,
-            )
-        };
-        if ok && glyphs[0] != 0 {
-            return Some((self.font.clone(), glyphs[0]));
-        }
-
-        // Ask CoreText for a fallback font that covers this string. The
-        // primary font's `pt_size` is preserved so the fallback rasterises
-        // at the same metrics.
-        let cf_str = CFString::new(&ch.to_string());
-        let range = CFRange {
-            location: 0,
-            length: utf16_len as isize,
-        };
-        let fallback_ref = unsafe {
-            CTFontCreateForString(
-                self.font.as_concrete_TypeRef(),
-                cf_str.as_concrete_TypeRef(),
-                range,
-            )
-        };
-        if fallback_ref.is_null() {
-            return None;
-        }
-        // CTFontCreateForString returns +1 retained — wrap_under_create_rule
-        // adopts ownership without an extra retain.
-        let fallback = unsafe { CTFont::wrap_under_create_rule(fallback_ref) };
-
-        let ok2 = unsafe {
-            fallback.get_glyphs_for_characters(
-                utf16.as_ptr(),
-                glyphs.as_mut_ptr(),
-                utf16_len as isize,
-            )
-        };
-        if ok2 && glyphs[0] != 0 {
-            Some((fallback, glyphs[0]))
-        } else {
-            None
-        }
-    }
-
     fn rasterize_and_upload(&mut self, codepoint: u32, wide: bool) -> Option<GlyphInfo> {
         let ch = char::from_u32(codepoint)?;
-        let (font, glyph) = self.resolve_glyph(ch)?;
+        let raster = rasterize(ch, self.font_size_px)?;
 
-        // Detect color glyphs (Apple Color Emoji and friends) via the
-        // font's symbolic traits. Color glyphs are SBIX/CBDT bitmap fonts
-        // and rasterising them as a grayscale alpha mask would lose all
-        // colour information — they must be drawn into an RGBA context.
-        let is_color = (font.symbolic_traits() & kCTFontColorGlyphsTrait) != 0;
-
+        // Color emoji is conventionally wide in terminals; auto-promote so
+        // the bitmap isn't squished into a single-cell slot.
+        let wide = wide || raster.is_color;
         let (cell_w, cell_h) = self.cell_px;
-        // Wide glyphs (CJK + color emoji) occupy two horizontal cells.
-        // Color emoji is conventionally a wide character in monospace
-        // terminals; force it wide so the bitmap isn't squished into a
-        // single-cell slot.
-        let wide = wide || is_color;
-        let w = if wide { cell_w * 2 } else { cell_w };
-        let h = cell_h;
+        let slot_w = if wide { cell_w * 2 } else { cell_w };
+        let slot_h = cell_h;
 
-        // Wrap to next row if needed; fail safe when atlas is full.
-        if self.cursor_x + w > ATLAS_PX {
+        // Wrap to next row when this slot won't fit; fail safe when the
+        // atlas is exhausted.
+        if self.cursor_x + slot_w > ATLAS_PX {
             self.cursor_x = 0;
-            self.cursor_y += cell_h;
+            self.cursor_y += slot_h;
         }
-        if self.cursor_y + h > ATLAS_PX {
+        if self.cursor_y + slot_h > ATLAS_PX {
             return None;
         }
         let dst_x = self.cursor_x;
         let dst_y = self.cursor_y;
-        self.cursor_x += w;
+        self.cursor_x += slot_w;
 
-        // Rasterise into a BGRA8 buffer (premultiplied, host-little-endian
-        // = BGRA byte order matching the atlas's BGRA8Unorm texture).
-        // For monochrome glyphs we draw white text on a transparent
-        // background; the resulting premultiplied pixels are (a,a,a,a),
-        // which the shader treats as an alpha mask and tints by `fg`.
-        // For color glyphs CoreText draws full RGBA bitmaps directly.
-        let bytes_per_row = (w as usize) * 4;
-        let mut pixels: Vec<u8> = vec![0u8; bytes_per_row * (h as usize)];
-        let color_space = CGColorSpace::create_device_rgb();
-        let bitmap_info = kCGImageAlphaPremultipliedFirst | kCGBitmapByteOrder32Little;
-        let ctx = CGContext::create_bitmap_context(
-            Some(pixels.as_mut_ptr() as *mut _),
-            w as usize,
-            h as usize,
-            8,
-            bytes_per_row,
-            &color_space,
-            bitmap_info,
-        );
-        ctx.set_should_antialias(true);
-        ctx.set_text_drawing_mode(CGTextDrawingMode::CGTextFill);
-        // Mono path: white fill so the resulting alpha-mask premultiplies
-        // to (a,a,a,a). Color path: the fill colour is ignored — bitmap
-        // glyphs carry their own colour data.
-        ctx.set_rgb_fill_color(1.0, 1.0, 1.0, 1.0);
+        // Compose the swash raster into a slot-sized BGRA buffer so the
+        // upload is one MTLRegion::replace_region call.
+        let bytes_per_row = (slot_w as usize) * 4;
+        let mut buf = vec![0u8; bytes_per_row * (slot_h as usize)];
 
-        // Baseline at (0, descent). CG coordinate origin is bottom-left.
-        // Use the primary font's descent so every glyph aligns on the same
-        // baseline within a row, even when a fallback font is used.
-        let descent_px: CGFloat = self.font.descent();
-        let positions = [CGPoint::new(0.0, descent_px)];
-        let glyph_arr: [u16; 1] = [glyph];
-        // draw_glyphs takes an owned CGContext (foreign_type with retain on clone).
-        font.draw_glyphs(&glyph_arr, &positions, ctx.clone());
+        // Center horizontally within the slot. Baseline-align vertically:
+        // swash's `top` is the offset from baseline to glyph top, so the
+        // glyph's top row in atlas space sits at `ascent_px - raster.top`.
+        let x_offset = (((slot_w as i32) - (raster.width as i32)) / 2).max(0) as usize;
+        let y_offset = ((self.ascent_px as i32) - raster.top).max(0) as usize;
 
-        // Drop the CG context to flush.
-        drop(ctx);
+        // Clip if the glyph overflows the slot — never panic on a malformed
+        // or oversized raster.
+        let copy_w = (raster.width as usize).min((slot_w as usize).saturating_sub(x_offset));
+        let copy_h = (raster.height as usize).min((slot_h as usize).saturating_sub(y_offset));
+        let src_stride = (raster.width as usize) * 4;
 
-        // Upload into the atlas texture sub-region.
-        let region = MTLRegion::new_2d(dst_x as u64, dst_y as u64, w as u64, h as u64);
+        for row in 0..copy_h {
+            let src_start = row * src_stride;
+            let src_end = src_start + copy_w * 4;
+            let dst_row = y_offset + row;
+            let dst_start = dst_row * bytes_per_row + x_offset * 4;
+            let dst_end = dst_start + copy_w * 4;
+            if dst_end <= buf.len() && src_end <= raster.pixels.len() {
+                buf[dst_start..dst_end].copy_from_slice(&raster.pixels[src_start..src_end]);
+            }
+        }
+
+        let region = MTLRegion::new_2d(dst_x as u64, dst_y as u64, slot_w as u64, slot_h as u64);
         self.texture
-            .replace_region(region, 0, pixels.as_ptr() as *const _, bytes_per_row as u64);
+            .replace_region(region, 0, buf.as_ptr() as *const _, bytes_per_row as u64);
 
         let atlas_pxf = ATLAS_PX as f32;
         Some(GlyphInfo {
             uv_origin: (dst_x as f32 / atlas_pxf, dst_y as f32 / atlas_pxf),
-            uv_size: (w as f32 / atlas_pxf, h as f32 / atlas_pxf),
-            pixel_size: (w, h),
+            uv_size: (slot_w as f32 / atlas_pxf, slot_h as f32 / atlas_pxf),
+            pixel_size: (slot_w, slot_h),
             wide,
-            is_color,
+            is_color: raster.is_color,
         })
     }
 }
