@@ -16,6 +16,6 @@ enum AppRoute: Hashable {
         case echoShell
         case vimLite
         case rawSink
-        case replay(fixture: String)
+        case replay(preset: String)
     }
 #endif
