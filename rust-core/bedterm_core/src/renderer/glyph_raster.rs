@@ -161,6 +161,60 @@ pub fn rasterize(ch: char, font_size_px: f32) -> Option<RasterizedGlyph> {
     })
 }
 
+/// Monospace cell metrics derived from the resolved primary font.
+//
+// CT-4 swaps `atlas.rs` over to this; until then it's unused outside tests.
+#[allow(dead_code)]
+#[derive(Debug, Clone, Copy)]
+pub struct CellMetrics {
+    pub cell_width: u32,
+    pub cell_height: u32,
+    pub ascent: u32,
+}
+
+/// Measure monospace cell metrics at `font_size_px`. Reads ascent/descent/
+/// leading from the resolved font's swash metrics; cell_width from the
+/// advance of 'M' in the laid-out line. Returns None only if cosmic-text
+/// can't shape 'M' or there are no usable fonts.
+#[allow(dead_code)]
+pub fn measure_cell(font_size_px: f32) -> Option<CellMetrics> {
+    with_font_system(|fs| {
+        // Shape a single 'M' the same way `rasterize` does — same primary
+        // family and same fallback cascade so the metrics match what the
+        // atlas will actually rasterise.
+        let attrs = Attrs::new().family(Family::Name("Menlo"));
+        let attrs_list = AttrsList::new(attrs);
+        let mut line = BufferLine::new("M", LineEnding::None, attrs_list, Shaping::Advanced);
+        let layout = line.layout(fs, font_size_px, None, Wrap::None, None, 8);
+        let lg = layout.first()?.glyphs.first()?;
+        let font_id = lg.font_id;
+        let advance_px = lg.w;
+
+        let font = fs.get_font(font_id)?;
+        let font_ref = font.as_swash();
+        // swash 0.1.19's `metrics` takes a `&[Setting<f32>]` for variation
+        // axes; an empty slice = default instance.
+        let metrics = font_ref.metrics(&[]);
+
+        let upem = metrics.units_per_em as f32;
+        if upem <= 0.0 {
+            return None;
+        }
+        let scale = font_size_px / upem;
+        let ascent_px = (metrics.ascent * scale).ceil().max(1.0) as u32;
+        let descent_px = (metrics.descent.abs() * scale).ceil() as u32;
+        let leading_px = (metrics.leading.max(0.0) * scale).ceil() as u32;
+        let cell_height = (ascent_px + descent_px + leading_px).max(1);
+        let cell_width = (advance_px.ceil() as u32).max(1);
+
+        Some(CellMetrics {
+            cell_width,
+            cell_height,
+            ascent: ascent_px,
+        })
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -213,5 +267,31 @@ mod tests {
             any_chromatic_opaque,
             "no chromatic opaque pixel — emoji may have rendered as a mask"
         );
+    }
+
+    #[test]
+    fn measure_cell_metrics_are_sane() {
+        let m = measure_cell(24.0).expect("Menlo @ 24px should measure");
+        assert!(m.cell_width > 0);
+        assert!(m.cell_height > 0);
+        assert!(m.ascent > 0);
+        // 'M' at 24px in a monospace face is ~10–18 px wide. Wide range so
+        // varying CI hosts (different fallback faces) still pass.
+        assert!(
+            m.cell_width >= 8 && m.cell_width <= 32,
+            "cell_width {} out of plausible range",
+            m.cell_width
+        );
+        // cell_height should exceed ascent — descent + leading non-zero.
+        assert!(m.cell_height > m.ascent);
+    }
+
+    #[test]
+    fn measure_cell_scales_with_size() {
+        let small = measure_cell(12.0).expect("12px metrics");
+        let large = measure_cell(48.0).expect("48px metrics");
+        // 4× point size should roughly 4× the width (within tolerance).
+        assert!(large.cell_width >= small.cell_width * 3);
+        assert!(large.cell_height >= small.cell_height * 3);
     }
 }
