@@ -3,6 +3,7 @@
 pub mod atlas;
 pub mod cells;
 pub mod ffi;
+pub mod font_system;
 pub mod pipeline;
 pub mod shaders;
 
