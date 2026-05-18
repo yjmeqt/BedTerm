@@ -4,6 +4,7 @@ pub mod atlas;
 pub mod cells;
 pub mod ffi;
 pub(crate) mod font_system;
+pub(crate) mod glyph_raster;
 pub mod pipeline;
 pub mod shaders;
 
