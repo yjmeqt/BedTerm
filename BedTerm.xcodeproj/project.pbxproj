@@ -116,28 +116,6 @@
 		};
 /* End PBXResourcesBuildPhase section */
 
-/* Begin PBXShellScriptBuildPhase section */
-		D8D8D8D800000000000000B1 /* Copy DebugFixtures (Debug only) */ = {
-			isa = PBXShellScriptBuildPhase;
-			alwaysOutOfDate = 1;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			inputFileListPaths = (
-			);
-			inputPaths = (
-			);
-			name = "Copy DebugFixtures (Debug only)";
-			outputFileListPaths = (
-			);
-			outputPaths = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-			shellPath = /bin/bash;
-			shellScript = "\"${SRCROOT}/scripts/copy-debug-fixtures.sh\"\n";
-		};
-/* End PBXShellScriptBuildPhase section */
-
 /* Begin PBXGroup section */
 		17D135F5F3C2D922AD89D6B5 /* BedTermTests */ = {
 			isa = PBXGroup;
@@ -242,7 +220,6 @@
 				E8CF050B86F74AE226BAC291 /* Sources */,
 				A1B2C3D400000000000000F1 /* Frameworks */,
 				A55E70AC0000000000000C01 /* Resources */,
-				D8D8D8D800000000000000B1 /* Copy DebugFixtures (Debug only) */,
 			);
 			buildRules = (
 			);
