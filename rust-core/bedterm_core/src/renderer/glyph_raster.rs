@@ -55,6 +55,10 @@ pub struct RasterizedGlyph {
     /// Emoji sbix, COLR layered outlines). Consumers use this to pick the
     /// `is_color` shader path.
     pub is_color: bool,
+    /// Resolved font id from cosmic-text's font cascade. Useful as part
+    /// of an atlas cache key — same codepoint may rasterise from different
+    /// fonts when the primary lacks coverage.
+    pub font_id: cosmic_text::fontdb::ID,
 }
 
 /// Rasterize a single codepoint at the given pixel size. Returns `None` when
@@ -134,6 +138,8 @@ pub fn rasterize(ch: char, font_size_px: f32) -> Option<RasterizedGlyph> {
             }
             // RGBA premultiplied -> BGRA byte swap.
             Content::Color => {
+                // swash emits premultiplied RGBA for color sources (sbix/COLR/CPAL).
+                // We only swizzle to BGRA byte order — no re-premultiplication.
                 debug_assert_eq!(image.data.len() % 4, 0);
                 let mut out = Vec::with_capacity(image.data.len());
                 for px in image.data.chunks_exact(4) {
@@ -150,6 +156,7 @@ pub fn rasterize(ch: char, font_size_px: f32) -> Option<RasterizedGlyph> {
             left: image.placement.left,
             top: image.placement.top,
             is_color,
+            font_id,
         })
     })
 }
@@ -171,21 +178,40 @@ mod tests {
     }
 
     #[test]
-    fn rasterizes_cjk() {
-        let g = rasterize('中', 24.0)
-            .expect("CJK codepoint must rasterise via cosmic-text font cascade");
-        assert!(!g.pixels.is_empty(), "no pixels rendered for '中'");
-        assert_eq!(g.pixels.len() as u32, g.width * g.height * 4);
+    fn rasterizes_cjk_via_font_fallback() {
+        let ascii = rasterize('A', 24.0).expect("'A' should rasterize");
+        let cjk = rasterize('中', 24.0).expect("'中' should rasterize via fallback");
+        assert!(cjk.width > 0 && cjk.height > 0);
+        assert!(cjk.pixels.iter().any(|&b| b != 0));
+        assert_ne!(
+            ascii.font_id, cjk.font_id,
+            "CJK rasterised from the same font as ASCII — fallback cascade not engaged. \
+             Menlo does not contain CJK; if these match the result is a tofu .notdef."
+        );
     }
 
     #[test]
     fn rasterizes_emoji_as_color() {
-        let g = rasterize('😀', 24.0).expect("emoji must rasterise (Apple Color Emoji available)");
-        assert!(!g.pixels.is_empty(), "no pixels rendered for emoji");
-        assert_eq!(g.pixels.len() as u32, g.width * g.height * 4);
+        let g = rasterize('😀', 24.0).expect("emoji should rasterize");
+        assert!(g.is_color, "emoji should rasterize as a color glyph");
+        // 24px emoji should be at least ~16px wide. Be loose enough to tolerate
+        // metric variation across iOS versions but tight enough to catch a
+        // 1x1 white-pixel false positive.
         assert!(
-            g.is_color,
-            "emoji rasterised as mask, not color -- swash didn't pick the sbix/COLR source"
+            g.width >= 16 && g.height >= 16,
+            "emoji dimensions implausible: {}x{}",
+            g.width,
+            g.height
+        );
+        // At least one pixel must be both opaque and non-grayscale — a true
+        // color glyph rather than a tinted mask masquerading as Color.
+        let any_chromatic_opaque = g.pixels.chunks_exact(4).any(|px| {
+            let (b, g_, r, a) = (px[0], px[1], px[2], px[3]);
+            a == 255 && !(b == g_ && g_ == r)
+        });
+        assert!(
+            any_chromatic_opaque,
+            "no chromatic opaque pixel — emoji may have rendered as a mask"
         );
     }
 }
