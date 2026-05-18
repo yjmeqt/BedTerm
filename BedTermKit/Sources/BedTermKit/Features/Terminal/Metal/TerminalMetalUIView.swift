@@ -2,7 +2,7 @@ import MetalKit
 import UIKit
 
 /// UIKit view that owns a `TerminalCore` + `RendererBridge` pair and drives
-/// the Rust Metal renderer on every `setNeedsDisplay()` tick. Plan B1 Task 9.
+/// the Rust Metal renderer on every `setNeedsDisplay()` tick.
 final class TerminalMetalUIView: MTKView {
     let terminalCore: TerminalCore
     let bridge: RendererBridge
@@ -48,12 +48,9 @@ final class TerminalMetalUIView: MTKView {
         self.session = session
         super.init(frame: .zero, device: device)
 
-        // Snap-on-input (R5.scroll_snap_on_input): every PTY-bound byte
-        // funnels through TerminalSession.send, including KeyBar, Composer,
-        // hardware keys, and UIKeyInput. One hook on the session covers them
-        // all. Captures the core directly (the view is owned by the session's
-        // view tree, so it outlives the closure naturally) and uses a weak
-        // self so stopping inertia is safe across deallocation.
+        // Snap-on-input (R5.scroll_snap_on_input): one session hook covers
+        // every PTY-bound byte. Core captured directly; weak self for
+        // inertia-stop safety across dealloc.
         let core = self.terminalCore
         session.onBeforeSend = { [weak self] in
             guard core.scrollOffset > 0 else { return }
@@ -61,6 +58,12 @@ final class TerminalMetalUIView: MTKView {
             self?.stopInertia()
             self?.setNeedsDisplay()
         }
+        // Wire the block store + back-ref so Block view can read live grid.
+        session.blockStore.bind(
+            currentLine: { core.currentLine },
+            snapshotRange: { core.snapshotRange(startLine: $0, endLine: $1) }
+        )
+        session.terminalCore = core
 
         // framebufferOnly=false: we hand the drawable's texture across FFI as a
         // raw pointer, so the GPU pipeline must allow CPU-readable access.
@@ -86,11 +89,10 @@ final class TerminalMetalUIView: MTKView {
                 guard let self else { return }
                 let hadScreenClear = Self.containsScreenClear(chunk)
                 self.terminalCore.feed(chunk)
-                // Mode flags can shift mid-stream (vim entering alt-screen,
-                // bash leaving bracketed paste, etc). Push to the session so
-                // SwiftUI observers react in the same frame as the redraw.
                 self.session?.updateMode(self.terminalCore.mode)
-                // Drain OSC 133 events for Block-view consumers.
+                // Drain OSC 133 events for Block-view consumers. The block
+                // store records boundaries by row range and freezes a grid
+                // snapshot on command-end — no byte capture needed.
                 while let event = self.terminalCore.popOsc133Event() {
                     self.session?.emitOsc133Event(event)
                 }
@@ -108,9 +110,7 @@ final class TerminalMetalUIView: MTKView {
     /// avoiding a retain cycle.
     private func installTraitObservers() {
         // Dynamic Type: re-rasterise atlas + recompute cell size when the
-        // user's preferred content size category changes. Uses the iOS 17+
-        // trait-observation API (the legacy traitCollectionDidChange override
-        // is deprecated on iOS 26).
+        // user's preferred content size category changes (iOS 17+ API).
         registerForTraitChanges(
             [UITraitPreferredContentSizeCategory.self]
         ) { (self: TerminalMetalUIView, _: UITraitCollection) in

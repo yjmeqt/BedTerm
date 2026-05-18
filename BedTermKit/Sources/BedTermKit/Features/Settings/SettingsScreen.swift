@@ -58,24 +58,21 @@ struct SettingsScreen: View {
                 }
 
                 Section {
-                    Toggle(isOn: .constant(false)) {
+                    Toggle(isOn: $settings.showCommandBlocks) {
                         VStack(alignment: .leading, spacing: 2) {
-                            HStack(spacing: 6) {
-                                Text("Command blocks")
-                                Text("Coming soon")
-                                    .font(.caption2.weight(.medium))
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 2)
-                                    .background(Color("ShadcnCard", bundle: .module))
-                                    .foregroundStyle(Color("ShadcnMutedForeground", bundle: .module))
-                                    .clipShape(Capsule())
-                            }
-                            Text("Group command output into collapsible blocks once shell integration ships.")
-                                .font(.footnote)
-                                .foregroundStyle(Color("ShadcnMutedForeground", bundle: .module))
+                            Text("Command blocks")
+                            Text(
+                                """
+                                Show each command and its output as a separate \
+                                block (Warp-style). Needs the shell-integration \
+                                toggle on, or a host already running an OSC 133 \
+                                integration (iTerm2 / kitty / VSCode).
+                                """
+                            )
+                            .font(.footnote)
+                            .foregroundStyle(Color("ShadcnMutedForeground", bundle: .module))
                         }
                     }
-                    .disabled(true)
                     .accessibilityIdentifier("settings.commandBlocks")
                 } header: {
                     Text("Blocks")

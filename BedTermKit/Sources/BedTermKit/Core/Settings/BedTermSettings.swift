@@ -47,9 +47,12 @@ public final class BedTermSettings {
         }
     }
 
-    /// Group command output into collapsible blocks (Warp-style). Requires
-    /// shell-integration injection and OSC 133 parsing — not implemented yet,
-    /// so this toggle is exposed disabled in the UI as a forward signal.
+    /// Group command output into collapsible blocks (Warp-style). When on,
+    /// the terminal session shows the Block list instead of the Classic
+    /// Metal grid (except in alt-screen mode, which always falls back to
+    /// Classic). Needs OSC 133 markers from the remote shell — pair with
+    /// `installShellIntegrationOnConnect`, or run a host that already has
+    /// iTerm2 / kitty / VSCode shell integration installed. Default: off.
     public var showCommandBlocks: Bool {
         didSet {
             if showCommandBlocks != oldValue {

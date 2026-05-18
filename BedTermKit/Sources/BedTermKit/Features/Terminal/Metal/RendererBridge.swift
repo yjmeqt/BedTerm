@@ -69,4 +69,38 @@ final class RendererBridge {
             time
         )
     }
+
+    /// Draw a caller-provided cell array. Used by Block view: sealed blocks
+    /// pass a frozen `GridSnapshot` captured at command-end; running blocks
+    /// pass a fresh range snapshot. Pipeline is identical to `draw(term:)`
+    /// so ANSI colours / wide chars / underlines render the same way.
+    ///
+    /// Copies `cells` into a transient C-layout buffer because Swift's
+    /// `GridSnapshot.Cell` isn't `@frozen` with explicit C layout —
+    /// `withMemoryRebound` between the two types isn't guaranteed safe.
+    @discardableResult
+    func drawCells(
+        _ snapshot: GridSnapshot,
+        into texture: MTLTexture,
+        viewport: CGSize,
+        time: CFTimeInterval
+    ) -> Int32 {
+        let texPtr = Unmanaged.passUnretained(texture as AnyObject).toOpaque()
+        var cBuffer: [CellSnapshot] = snapshot.cells.map {
+            CellSnapshot(ch: $0.ch, fg_rgba: $0.fgRGBA, bg_rgba: $0.bgRGBA, flags: $0.flags)
+        }
+        return cBuffer.withUnsafeMutableBufferPointer { buf in
+            bt_renderer_draw_cells(
+                handle,
+                buf.baseAddress,
+                UInt(buf.count),
+                snapshot.cols,
+                snapshot.rows,
+                texPtr,
+                UInt32(viewport.width),
+                UInt32(viewport.height),
+                time
+            )
+        }
+    }
 }

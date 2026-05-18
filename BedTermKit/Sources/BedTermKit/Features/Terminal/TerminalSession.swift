@@ -25,6 +25,18 @@ final class TerminalSession {
     /// from this; nobody else needs to subscribe.
     private(set) var osc133Events: AsyncStream<Osc133Event>
     private let osc133Continuation: AsyncStream<Osc133Event>.Continuation
+    /// Block view's state machine. Records block boundaries from OSC 133
+    /// events; block bodies live as row ranges in the shared `TerminalCore`
+    /// grid (see `BlockStore.bind`). The renderer view binds the
+    /// `currentLine` / `snapshotRange` accessors at init time.
+    public let blockStore = BlockStore()
+
+    /// The renderer view's `TerminalCore`, surfaced on the session so views
+    /// outside the renderer hierarchy (Block list, future Block view) can
+    /// read live grid state. Set by `TerminalMetalUIView` on init. Weak so
+    /// we don't extend the renderer view's lifetime through this back-edge.
+    @ObservationIgnored
+    public weak var terminalCore: TerminalCore?
     private let client: any SSHClient
     private var pumpTask: Task<Void, Never>?
 
@@ -96,15 +108,19 @@ final class TerminalSession {
     }
 
     /// Forward an OSC 133 event drained by the renderer view into the
-    /// session-level stream. Subscribers reconstruct command lifecycles.
+    /// session-level stream and the block store. The store's state machine
+    /// converts events into Block boundaries; block bodies live as row
+    /// ranges in the shared terminal grid, not as captured byte streams.
     func emitOsc133Event(_ event: Osc133Event) {
         osc133Continuation.yield(event)
+        blockStore.apply(event)
     }
 
     func disconnect() {
         pumpTask?.cancel()
         Task { await client.disconnect() }
         feedContinuation.finish()
+        blockStore.reset()
         state = .closed(reason: String(localized: "Closed"))
     }
 

@@ -213,6 +213,30 @@ uint32_t bt_term_scrollback_lines(const struct BtTerm *h);
 uint32_t bt_term_mode(const struct BtTerm *h);
 
 /**
+ * Cursor's current grid line on the active screen. Swift records this on
+ * each OSC 133 event so Block view can later snapshot a row range that
+ * covers the block.
+ *
+ * # Safety
+ * `h` must be a valid, non-freed handle.
+ */
+int32_t bt_term_current_line(const struct BtTerm *h);
+
+/**
+ * Snapshot a row range from the active screen + scrollback. Same lifetime
+ * contract as `bt_term_snapshot` — the cell pointer in `*out` is valid
+ * until the next mutating call. `start_line` inclusive, `end_line`
+ * exclusive; values outside the grid extent are clamped.
+ *
+ * # Safety
+ * `h` must be a valid, non-freed handle. `out` must be writable.
+ */
+int bt_term_snapshot_range(struct BtTerm *h,
+                           int32_t start_line,
+                           int32_t end_line,
+                           struct BtSnapshotView *out);
+
+/**
  * Pop one queued OSC 133 event, if any. Writes into `*out` and returns `1`
  * when an event was popped, `0` when the queue is empty. Drain in a loop
  * after each call to `bt_term_feed`.
@@ -296,6 +320,30 @@ int bt_renderer_draw(struct BtRenderer *r,
                      uint32_t viewport_width_px,
                      uint32_t viewport_height_px,
                      double time_seconds);
+
+/**
+ * Render an arbitrary cell array — used by Block view to draw each
+ * block's body (either a frozen snapshot of a sealed block or a fresh
+ * row-range snapshot of a running block) through the same Metal pipeline
+ * the main terminal view uses.
+ *
+ * `cells_len` must equal `cols as usize * rows as usize`. `cells` may be
+ * null with `cells_len == 0` for an empty draw (clears the viewport).
+ *
+ * # Safety
+ * `r` must be a live `BtRenderer`. `cells` (when non-null) must point to
+ * `cells_len` valid `CellSnapshot` values for the duration of the call.
+ * `drawable_texture` must be a live `id<MTLTexture>`.
+ */
+int bt_renderer_draw_cells(struct BtRenderer *r,
+                           const struct CellSnapshot *cells,
+                           uintptr_t cells_len,
+                           uint16_t cols,
+                           uint16_t rows,
+                           const void *drawable_texture,
+                           uint32_t viewport_width_px,
+                           uint32_t viewport_height_px,
+                           double time_seconds);
 
 /**
  * # Safety

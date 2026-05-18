@@ -8,6 +8,8 @@ pub mod shaders;
 
 use atlas::GlyphAtlas;
 use cells::{CellVertex, VERTICES_PER_CELL};
+
+use crate::snapshot::CellSnapshot;
 use metal::foreign_types::ForeignType;
 use metal::{
     CommandQueue, Device, MTLClearColor, MTLLoadAction, MTLPrimitiveType, MTLResourceOptions,
@@ -91,22 +93,71 @@ impl Renderer {
             let term = &mut *(term_ptr as *mut crate::ffi::BtTerm);
             Some(term.snapshot_for_renderer().clone())
         };
+        let (cells_slice, cols, rows): (&[CellSnapshot], u16, u16) = match snapshot {
+            Some(ref s) => (s.cells.as_slice(), s.cols, s.rows),
+            None => (&[], 0, 0),
+        };
+        self.draw_cells_inner(cells_slice, cols, rows, texture_ptr, viewport_w, viewport_h)
+    }
 
-        // Build vertex buffer (empty if no term).
+    /// Same as `draw` but the cells come from a caller-provided slice
+    /// instead of being snapshotted from a `BtTerm`. Used by Block view to
+    /// render frozen row ranges (sealed blocks) and live row ranges
+    /// (running blocks) through the same Metal pipeline.
+    ///
+    /// # Safety
+    /// `texture_ptr` must be a live `id<MTLTexture>` borrowed for the
+    /// duration of this call. `cells_ptr` may be null or `cells_len` zero
+    /// for an empty draw. When non-empty, `cells_len` must equal
+    /// `cols as usize * rows as usize`.
+    pub unsafe fn draw_cells(
+        &mut self,
+        cells_ptr: *const CellSnapshot,
+        cells_len: usize,
+        cols: u16,
+        rows: u16,
+        texture_ptr: *const std::ffi::c_void,
+        viewport_w: u32,
+        viewport_h: u32,
+        _time: f64,
+    ) -> i32 {
+        if texture_ptr.is_null() {
+            return -1;
+        }
+        let cells: &[CellSnapshot] = if cells_ptr.is_null() || cells_len == 0 {
+            &[]
+        } else {
+            std::slice::from_raw_parts(cells_ptr, cells_len)
+        };
+        self.draw_cells_inner(cells, cols, rows, texture_ptr, viewport_w, viewport_h)
+    }
+
+    /// Single internal cell→vertex pipeline shared by `draw` and
+    /// `draw_cells`. Returns 0 on success, -1 on missing texture, 0 on an
+    /// empty `cells` slice (clears the viewport but draws nothing).
+    unsafe fn draw_cells_inner(
+        &mut self,
+        cells: &[CellSnapshot],
+        cols: u16,
+        rows: u16,
+        texture_ptr: *const std::ffi::c_void,
+        viewport_w: u32,
+        viewport_h: u32,
+    ) -> i32 {
         let mut verts: Vec<CellVertex> = Vec::new();
-        if let Some(ref snap) = snapshot {
+        if !cells.is_empty() {
             let (cell_w, cell_h) = self.atlas.cell_px;
             let cell_wf = cell_w as f32;
             let cell_hf = cell_h as f32;
-            let cols = snap.cols as usize;
-            let rows = snap.rows as usize;
+            let cols = cols as usize;
+            let rows = rows as usize;
             verts.reserve(cols * rows * VERTICES_PER_CELL);
             // Flag bits — must match `term.rs` snapshot encoding.
             const FLAG_WIDE_LEADING: u16 = 16;
             const FLAG_WIDE_TRAILING: u16 = 32;
             // Pre-ensure all needed glyphs (one-pass; the HashMap dedups).
             // Wide (CJK) glyphs get rasterised into a 2-cell-wide slot.
-            for cell in &snap.cells {
+            for cell in cells {
                 if cell.ch != 0 {
                     let wide = (cell.flags & FLAG_WIDE_LEADING) != 0;
                     self.atlas.ensure(cell.ch, wide);
@@ -114,7 +165,7 @@ impl Renderer {
             }
             for r in 0..rows {
                 for c in 0..cols {
-                    let cell = snap.cells[r * cols + c];
+                    let cell = cells[r * cols + c];
                     // Wide-trailing spacer cells contribute no quad — the
                     // preceding WIDE_LEADING cell's quad already spans both
                     // columns (including the spacer's background).

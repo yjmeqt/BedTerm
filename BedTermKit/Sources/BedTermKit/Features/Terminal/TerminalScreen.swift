@@ -32,6 +32,14 @@ struct TerminalScreen: View {
         reserveTopSafeArea ? .horizontal : [.top, .horizontal]
     }
 
+    /// Whether to show the Block list instead of the Classic grid. Block
+    /// view falls back to Classic when a full-screen TUI is in alt-screen
+    /// (terminal-view R3.alt_screen_collapse) — vim / htop / claude don't
+    /// fit a per-command block model and need the live cursor + grid.
+    private var showBlockView: Bool {
+        settings.showCommandBlocks && !session.mode.contains(.altScreen)
+    }
+
     init(session: TerminalSession, credential: HostCredential, onExit: @escaping () -> Void) {
         _session = State(initialValue: session)
         _keyBar = State(initialValue: KeyBarController { [weak session] data in session?.send(data) })
@@ -54,6 +62,12 @@ struct TerminalScreen: View {
     var body: some View {
         VStack(spacing: 0) {
             ZStack(alignment: .top) {
+                // Always mount the Metal host view — it owns the
+                // TerminalCore that the BlockStore reads from, and that
+                // store needs to keep building blocks even while the user
+                // is looking at the Block list. We just hide it when the
+                // Block list is visible so the GPU isn't redundantly
+                // presenting both.
                 TerminalMetalHostView(
                     session: session,
                     feed: session.feed,
@@ -63,12 +77,18 @@ struct TerminalScreen: View {
                     yieldFirstResponder: composer.isOpen || keyboardHidden
                 )
                 .ignoresSafeArea(edges: ignoredTerminalEdges)
+                .opacity(showBlockView ? 0 : 1)
                 // Top-inset toggle must be instant (terminal-view
                 // R1.alt_screen_top_inset). Animating a mid-frame PTY reflow
                 // tears vim/htop's UI; suppress any animation that the
                 // surrounding view tree might otherwise carry into the
                 // safe-area change.
                 .transaction(value: reserveTopSafeArea) { $0.animation = nil }
+
+                if showBlockView {
+                    BlockListView(session: session)
+                        .transition(.opacity)
+                }
 
                 if case .closed(let reason) = session.state {
                     DisconnectBanner(reason: reason) {
@@ -112,6 +132,7 @@ struct TerminalScreen: View {
         // the system keyboard's own duration — do NOT layer another .animation on it.
         .animation(.smooth(duration: 0.22), value: composer.isOpen)
         .animation(.smooth(duration: 0.22), value: dpadOpen)
+        .animation(.smooth(duration: 0.22), value: showBlockView)
         .onChange(of: composer.isOpen) { _, isOpen in
             if isOpen { dpadOpen = false }
         }

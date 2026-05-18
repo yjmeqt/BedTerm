@@ -208,6 +208,81 @@ impl Terminal {
         self.palette = palette;
     }
 
+    /// Grid line of the cursor on the active screen (`0..rows-1`). Swift
+    /// records this on each OSC 133 boundary so Block view knows where its
+    /// row range starts / ends. Combined with `history_size()` at the same
+    /// instant, the (line, history) pair anchors the block stably as the
+    /// grid scrolls — see `snapshot_range` for the lookup math.
+    pub fn current_line(&self) -> i32 {
+        self.term.grid().cursor.point.line.0
+    }
+
+    /// Snapshot a row range from the active screen + scrollback. Coordinates
+    /// are grid lines: `0` is the top of the active screen, negatives index
+    /// into history. `start_line` inclusive, `end_line` exclusive. Lines
+    /// outside the grid's current extent are clamped; if the entire range
+    /// has fallen off scrollback the returned snapshot has `rows == 0`.
+    pub fn snapshot_range(&self, start_line: i32, end_line: i32) -> GridSnapshot {
+        let cols = self.cols;
+        let grid = self.term.grid();
+        let history = grid.history_size() as i32;
+        let min_line = -history;
+        let max_line = self.rows as i32;
+        let start = start_line.max(min_line).min(max_line);
+        let end = end_line.max(start).min(max_line);
+        let row_count = (end - start).max(0) as u16;
+
+        let mut cells = Vec::with_capacity(cols as usize * row_count as usize);
+        for line in start..end {
+            for col in 0..cols as usize {
+                let cell = &grid[Line(line)][Column(col)];
+                let f = cell.flags;
+                let mut flags: u16 = 0;
+                if f.contains(CellFlags::BOLD) {
+                    flags |= 1;
+                }
+                if f.intersects(CellFlags::ALL_UNDERLINES) {
+                    flags |= 2;
+                }
+                if f.contains(CellFlags::INVERSE) {
+                    flags |= 4;
+                }
+                if f.contains(CellFlags::ITALIC) {
+                    flags |= 8;
+                }
+                if f.contains(CellFlags::WIDE_CHAR) {
+                    flags |= 16;
+                }
+                if f.contains(CellFlags::WIDE_CHAR_SPACER) {
+                    flags |= 32;
+                }
+                let ch =
+                    if f.contains(CellFlags::WIDE_CHAR_SPACER) || (cell.c == ' ' && f.is_empty()) {
+                        0
+                    } else {
+                        cell.c as u32
+                    };
+                cells.push(CellSnapshot {
+                    ch,
+                    fg_rgba: color_to_rgba(cell.fg, &self.palette),
+                    bg_rgba: color_to_rgba(cell.bg, &self.palette),
+                    flags,
+                });
+            }
+        }
+
+        // No cursor for range snapshots — Block bodies don't show one.
+        // `cursor_row = rows` signals "hidden" to Swift.
+        GridSnapshot {
+            cols,
+            rows: row_count,
+            cursor_col: 0,
+            cursor_row: row_count,
+            display_offset: 0,
+            cells,
+        }
+    }
+
     pub fn snapshot(&self) -> GridSnapshot {
         let cols = self.cols;
         let rows = self.rows;

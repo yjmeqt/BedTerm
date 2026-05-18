@@ -172,6 +172,53 @@ pub unsafe extern "C" fn bt_term_mode(h: *const BtTerm) -> u32 {
     (*h).inner.mode()
 }
 
+/// Cursor's current grid line on the active screen. Swift records this on
+/// each OSC 133 event so Block view can later snapshot a row range that
+/// covers the block.
+///
+/// # Safety
+/// `h` must be a valid, non-freed handle.
+#[no_mangle]
+pub unsafe extern "C" fn bt_term_current_line(h: *const BtTerm) -> i32 {
+    if h.is_null() {
+        return 0;
+    }
+    (*h).inner.current_line()
+}
+
+/// Snapshot a row range from the active screen + scrollback. Same lifetime
+/// contract as `bt_term_snapshot` — the cell pointer in `*out` is valid
+/// until the next mutating call. `start_line` inclusive, `end_line`
+/// exclusive; values outside the grid extent are clamped.
+///
+/// # Safety
+/// `h` must be a valid, non-freed handle. `out` must be writable.
+#[no_mangle]
+pub unsafe extern "C" fn bt_term_snapshot_range(
+    h: *mut BtTerm,
+    start_line: i32,
+    end_line: i32,
+    out: *mut BtSnapshotView,
+) -> c_int {
+    if h.is_null() || out.is_null() {
+        return -1;
+    }
+    let term = &mut *h;
+    let snap = term.inner.snapshot_range(start_line, end_line);
+    let view = BtSnapshotView {
+        cols: snap.cols,
+        rows: snap.rows,
+        cursor_col: snap.cursor_col,
+        cursor_row: snap.cursor_row,
+        display_offset: snap.display_offset,
+        cells: snap.cells.as_ptr(),
+        cell_count: snap.cells.len(),
+    };
+    term.cached = Some(snap);
+    *out = view;
+    0
+}
+
 /// Discriminator values for `BtOsc133Event::kind`. Swift mirrors these in
 /// `BedTermOsc133Event`.
 pub const BT_OSC133_PROMPT_START: u8 = 0;

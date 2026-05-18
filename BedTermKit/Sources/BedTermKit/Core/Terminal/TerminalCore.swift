@@ -143,4 +143,41 @@ public final class TerminalCore {
         }
         return events
     }
+
+    /// Cursor's current grid line on the active screen (0..rows-1). Block
+    /// view records this on each OSC 133 event to anchor block boundaries.
+    public var currentLine: Int32 {
+        bt_term_current_line(handle)
+    }
+
+    /// Snapshot a row range from the active screen + scrollback. `start`
+    /// inclusive, `end` exclusive; coordinates are grid lines (0 = top of
+    /// active screen, negative = into scrollback). Returns `nil` if the
+    /// range is empty after clamping. Used by Block view to capture a
+    /// sealed block's body at command-end and to re-render a running
+    /// block's body every frame.
+    public func snapshotRange(startLine: Int32, endLine: Int32) -> GridSnapshot? {
+        var view = BtSnapshotView(
+            cols: 0, rows: 0, cursor_col: 0, cursor_row: 0,
+            display_offset: 0, cells: nil, cell_count: 0)
+        guard bt_term_snapshot_range(handle, startLine, endLine, &view) == 0,
+            view.rows > 0,
+            let cellsPtr = view.cells
+        else {
+            return nil
+        }
+        let buffer = UnsafeBufferPointer(start: cellsPtr, count: Int(view.cell_count))
+        var cells: [GridSnapshot.Cell] = []
+        cells.reserveCapacity(Int(view.cell_count))
+        for raw in buffer {
+            cells.append(
+                GridSnapshot.Cell(
+                    ch: raw.ch, fgRGBA: raw.fg_rgba, bgRGBA: raw.bg_rgba, flags: raw.flags))
+        }
+        bt_term_snapshot_release(handle)
+        return GridSnapshot(
+            cols: view.cols, rows: view.rows,
+            cursorCol: view.cursor_col, cursorRow: view.cursor_row,
+            displayOffset: view.display_offset, cells: cells)
+    }
 }
