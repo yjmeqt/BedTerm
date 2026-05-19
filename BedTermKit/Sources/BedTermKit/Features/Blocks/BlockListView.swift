@@ -3,7 +3,7 @@ import SwiftUI
 /// Warp-style read-only list of command blocks. Renders through a
 /// single Metal surface (`TerminalBlocksMetalView`) overlaid by
 /// SwiftUI header strips inside a UIScrollView — see
-/// `BlockListContainerView` for the architecture.
+/// `BlockListContainerViewController` for the architecture.
 struct BlockListView: View {
     let session: TerminalSession
 
@@ -13,17 +13,28 @@ struct BlockListView: View {
     }
 }
 
-private struct BlockListContainerRepresentable: UIViewRepresentable {
+private struct BlockListContainerRepresentable: UIViewControllerRepresentable {
     let session: TerminalSession
 
-    func makeUIView(context: Context) -> BlockListContainerView {
-        BlockListContainerView(session: session)
+    func makeUIViewController(context: Context) -> BlockListContainerViewController {
+        BlockListContainerViewController(session: session)
     }
 
-    func updateUIView(_ view: BlockListContainerView, context: Context) {
+    func updateUIViewController(
+        _ controller: BlockListContainerViewController, context: Context
+    ) {
         // Touch the observed blocks array so SwiftUI's Observation
-        // dependency tracker connects this updateUIView to BlockStore.
+        // tracker connects updateUIViewController to BlockStore.
         _ = session.blockStore.blocks.count
-        view.refresh()
+        controller.refresh()
+    }
+
+    static func dismantleUIViewController(
+        _ controller: BlockListContainerViewController, coordinator: ()
+    ) {
+        // Break the CADisplayLink → controller retain cycle before
+        // SwiftUI drops its ref. Without this, the controller (and the
+        // TerminalSession it holds strongly) would leak per session.
+        controller.teardown()
     }
 }

@@ -247,6 +247,13 @@ impl Renderer {
         if texture_ptr.is_null() {
             return -1;
         }
+        // Early-layout guard: viewport_w/h == 0 is legitimate during the
+        // first frame before the MTKView gets a drawable size. The
+        // vertex shader's `pos / viewportPx` would divide by zero;
+        // skip the encode entirely.
+        if viewport_w == 0 || viewport_h == 0 {
+            return 0;
+        }
         let mut verts: Vec<CellVertex> = Vec::new();
         if !cells.is_empty() {
             let (cell_w, cell_h) = self.atlas.cell_px;
