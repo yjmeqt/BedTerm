@@ -41,6 +41,11 @@ final class BlockListContainerViewController: UIViewController, UIScrollViewDele
     /// the max counts as "at bottom" for auto-follow.
     private let pinTolerancePt: CGFloat = 24
 
+    /// Headers stay mounted this many points above / below the visible
+    /// viewport. A fast scroll crosses the band before the demounted
+    /// hosts re-mount, eliminating header-gap flashes during inertia.
+    private let headerOverscanPt: CGFloat = 200
+
     /// Reentrancy guard: scrollViewDidScroll fires inside
     /// `scrollToBottom(animated:false)`, which would re-push layout
     /// twice per tick. Bracket the push during state updates.
@@ -101,11 +106,13 @@ final class BlockListContainerViewController: UIViewController, UIScrollViewDele
     func refresh() {
         refreshRowHeight()
         let wasPinnedToBottom = isPinnedToBottom()
-        rebuildHeaders()
         updateContentSize()
         if wasPinnedToBottom {
             scrollToBottom(animated: false)
         }
+        // syncHeaders depends on the up-to-date contentOffset so it
+        // runs AFTER the pin-to-bottom adjustment, not before.
+        syncHeaders()
         pushLayoutToMetalView()
         updateDisplayLink()
     }
@@ -137,11 +144,11 @@ final class BlockListContainerViewController: UIViewController, UIScrollViewDele
 
     @objc private func handleDisplayTick() {
         let wasPinnedToBottom = isPinnedToBottom()
-        rebuildHeaders()
         updateContentSize()
         if wasPinnedToBottom {
             scrollToBottom(animated: false)
         }
+        syncHeaders()
         pushLayoutToMetalView()
     }
 
@@ -192,34 +199,50 @@ final class BlockListContainerViewController: UIViewController, UIScrollViewDele
         contentView.frame = CGRect(origin: .zero, size: scrollView.contentSize)
     }
 
-    private func rebuildHeaders() {
+    /// Mount UIHostingControllers only for blocks whose vertical range
+    /// intersects the visible viewport ± `headerOverscanPt`. With long
+    /// sessions (hundreds of blocks) this caps the active host count at
+    /// roughly the visible block count instead of growing unbounded.
+    private func syncHeaders() {
         let blocks = session.blockStore.blocks
-        let liveIDs = Set(blocks.map(\.id))
-        // Drop hosts whose block is gone — proper child-VC teardown.
-        for (id, host) in headerHosts where !liveIDs.contains(id) {
+        let width = view.bounds.width
+        let scrollY = scrollView.contentOffset.y
+        let viewportTop = scrollY - headerOverscanPt
+        let viewportBot = scrollY + scrollView.bounds.height + headerOverscanPt
+
+        var keepIDs = Set<UInt64>()
+        keepIDs.reserveCapacity(blocks.count)
+        var yPt: CGFloat = 0
+        for block in blocks {
+            let blockTop = yPt
+            let blockBot = blockTop + headerHeightPt + bodyHeightPt(for: block)
+            let intersects = blockBot >= viewportTop && blockTop <= viewportBot
+            if intersects {
+                keepIDs.insert(block.id)
+                let host: UIHostingController<BlockHeader>
+                if let existing = headerHosts[block.id] {
+                    existing.rootView = BlockHeader(block: block)
+                    host = existing
+                } else {
+                    host = UIHostingController(rootView: BlockHeader(block: block))
+                    host.view.backgroundColor = .clear
+                    headerHosts[block.id] = host
+                    addChild(host)
+                    contentView.addSubview(host.view)
+                    host.didMove(toParent: self)
+                }
+                host.view.frame = CGRect(
+                    x: 0, y: blockTop, width: width, height: headerHeightPt)
+            }
+            yPt = blockBot
+        }
+
+        // Demount hosts whose block disappeared or scrolled out of range.
+        for (id, host) in headerHosts where !keepIDs.contains(id) {
             host.willMove(toParent: nil)
             host.view.removeFromSuperview()
             host.removeFromParent()
             headerHosts.removeValue(forKey: id)
-        }
-        var yPt: CGFloat = 0
-        let width = view.bounds.width
-        for block in blocks {
-            let host: UIHostingController<BlockHeader>
-            if let existing = headerHosts[block.id] {
-                existing.rootView = BlockHeader(block: block)
-                host = existing
-            } else {
-                host = UIHostingController(rootView: BlockHeader(block: block))
-                host.view.backgroundColor = .clear
-                headerHosts[block.id] = host
-                addChild(host)
-                contentView.addSubview(host.view)
-                host.didMove(toParent: self)
-            }
-            host.view.frame = CGRect(x: 0, y: yPt, width: width, height: headerHeightPt)
-            yPt += headerHeightPt
-            yPt += bodyHeightPt(for: block)
         }
     }
 
@@ -253,6 +276,10 @@ final class BlockListContainerViewController: UIViewController, UIScrollViewDele
     // MARK: - UIScrollViewDelegate
 
     func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        // Both updates: visibility band moved (new hosts may enter the
+        // overscan window; old hosts may leave), and the Metal pane
+        // needs the new scroll offset before its next draw.
+        syncHeaders()
         pushLayoutToMetalView()
     }
 }
