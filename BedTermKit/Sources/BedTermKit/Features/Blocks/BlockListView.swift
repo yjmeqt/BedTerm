@@ -26,7 +26,7 @@ struct BlockListView: View {
                         ForEach(blocks) { block in
                             BlockRowView(
                                 block: block,
-                                core: terminalCoreForLiveBlock(block),
+                                core: session.terminalCore,
                                 isExpanded: expandedBlockID == block.id,
                                 onToggle: { toggle(block) }
                             )
@@ -49,13 +49,6 @@ struct BlockListView: View {
 
     private func toggle(_ block: Block) {
         expandedBlockID = expandedBlockID == block.id ? nil : block.id
-    }
-
-    /// Running blocks need the live `TerminalCore` to re-snapshot their row
-    /// range every frame. Sealed blocks ignore this — their `frozenSnapshot`
-    /// is the source of truth.
-    private func terminalCoreForLiveBlock(_ block: Block) -> TerminalCore? {
-        block.isRunning ? session.terminalCore : nil
     }
 
     @ViewBuilder

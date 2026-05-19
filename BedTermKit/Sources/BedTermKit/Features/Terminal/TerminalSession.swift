@@ -19,16 +19,10 @@ final class TerminalSession {
     private(set) var mode: BedTermMode = []
     private(set) var feed: AsyncStream<Data>
     private let feedContinuation: AsyncStream<Data>.Continuation
-    /// Stream of OSC 133 (FinalTerm) shell-integration events. The renderer
-    /// view drains the Rust event queue after every `feed` and yields here.
-    /// Consumers (e.g. an upcoming Block view model) build command lifecycles
-    /// from this; nobody else needs to subscribe.
-    private(set) var osc133Events: AsyncStream<Osc133Event>
-    private let osc133Continuation: AsyncStream<Osc133Event>.Continuation
-    /// Block view's state machine. Records block boundaries from OSC 133
-    /// events; block bodies live as row ranges in the shared `TerminalCore`
-    /// grid (see `BlockStore.bind`). The renderer view binds the
-    /// `currentLine` / `snapshotRange` accessors at init time.
+    /// Observable mirror of the Rust-owned block list. The renderer view
+    /// calls `blockStore.refresh(from: terminalCore)` after each
+    /// `TerminalCore.feed(_:)`; canonical state (ids, boundaries, frozen
+    /// snapshots) lives in Rust.
     public let blockStore = BlockStore()
 
     /// The renderer view's `TerminalCore`, surfaced on the session so views
@@ -52,9 +46,6 @@ final class TerminalSession {
         var feedCont: AsyncStream<Data>.Continuation!
         self.feed = AsyncStream<Data> { feedCont = $0 }
         self.feedContinuation = feedCont
-        var oscCont: AsyncStream<Osc133Event>.Continuation!
-        self.osc133Events = AsyncStream<Osc133Event> { oscCont = $0 }
-        self.osc133Continuation = oscCont
     }
 
     func connect(
@@ -105,15 +96,6 @@ final class TerminalSession {
     /// the value actually changes so SwiftUI doesn't churn on identical reads.
     func updateMode(_ next: BedTermMode) {
         if mode != next { mode = next }
-    }
-
-    /// Forward an OSC 133 event drained by the renderer view into the
-    /// session-level stream and the block store. The store's state machine
-    /// converts events into Block boundaries; block bodies live as row
-    /// ranges in the shared terminal grid, not as captured byte streams.
-    func emitOsc133Event(_ event: Osc133Event) {
-        osc133Continuation.yield(event)
-        blockStore.apply(event)
     }
 
     func disconnect() {

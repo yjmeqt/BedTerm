@@ -12,11 +12,12 @@ import Foundation
 /// `GridSnapshot` so it survives subsequent scrolling / scrollback
 /// eviction.
 ///
-/// This mirrors Warp's approach: one terminal grid, blocks are slices
-/// into it. Full ANSI colours / wide chars / line wrapping fall out for
-/// free because alacritty already classifies every cell.
+/// The canonical block list lives in the Rust core (`BlockStore`).
+/// Swift's `BlockStore` is an observable mirror — see
+/// `BlockStore.refresh(from:)`. Frozen snapshots are fetched on demand
+/// from Rust via `TerminalCore.frozenSnapshot(forBlockAt:)`.
 public struct Block: Identifiable, Sendable, Equatable {
-    public let id: UUID
+    public let id: UInt64
     /// The command line as the remote shell saw it. Empty until our
     /// bundled integration script ships it via `cmd=<base64>` on
     /// `OSC 133 ; C`; third-party integrations typically don't include
@@ -29,10 +30,6 @@ public struct Block: Identifiable, Sendable, Equatable {
     /// Grid line one past the last row that belongs to this block. `nil`
     /// while the block is still running.
     public var endLine: Int32?
-    /// Frozen snapshot of `[startLine, endLine)` taken at command-end.
-    /// `nil` while running. The frozen copy survives scrollback eviction
-    /// and is what the Block list renders for sealed blocks.
-    public var frozenSnapshot: GridSnapshot?
     /// Exit code from `OSC 133 ; D`'s positional-2 slot. `nil` when the
     /// integration didn't include it.
     public var exitCode: Int32?
@@ -42,26 +39,46 @@ public struct Block: Identifiable, Sendable, Equatable {
     public var workingDirectory: String?
     /// True from creation until the closing event arrives.
     public var isRunning: Bool
+    /// True once Rust has captured an immutable `GridSnapshot` for this
+    /// block (on `OSC 133 ; D`). The snapshot itself lives in Rust; fetch
+    /// it on demand with `TerminalCore.frozenSnapshot(forBlockAt:)`.
+    public var hasFrozenSnapshot: Bool
 
     public init(
-        id: UUID = UUID(),
+        id: UInt64,
         command: String = "",
         startLine: Int32 = 0,
         endLine: Int32? = nil,
-        frozenSnapshot: GridSnapshot? = nil,
         exitCode: Int32? = nil,
         duration: TimeInterval? = nil,
         workingDirectory: String? = nil,
-        isRunning: Bool = true
+        isRunning: Bool = true,
+        hasFrozenSnapshot: Bool = false
     ) {
         self.id = id
         self.command = command
         self.startLine = startLine
         self.endLine = endLine
-        self.frozenSnapshot = frozenSnapshot
         self.exitCode = exitCode
         self.duration = duration
         self.workingDirectory = workingDirectory
         self.isRunning = isRunning
+        self.hasFrozenSnapshot = hasFrozenSnapshot
+    }
+}
+
+extension Block {
+    init(from rust: RustBlock) {
+        self.init(
+            id: rust.id,
+            command: rust.command,
+            startLine: rust.startLine,
+            endLine: rust.isRunning ? nil : rust.endLine,
+            exitCode: rust.exitCode,
+            duration: rust.duration,
+            workingDirectory: rust.workingDirectory,
+            isRunning: rust.isRunning,
+            hasFrozenSnapshot: rust.hasFrozenSnapshot
+        )
     }
 }

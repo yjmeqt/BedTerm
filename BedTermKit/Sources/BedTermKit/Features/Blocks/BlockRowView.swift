@@ -5,8 +5,9 @@ import SwiftUI
 /// the block's row range from the shared terminal grid.
 struct BlockRowView: View {
     let block: Block
-    /// Live core for running blocks. `nil` for sealed blocks — those
-    /// render exclusively from their `frozenSnapshot`.
+    /// Core needed by both running and sealed blocks: running blocks
+    /// re-snapshot their row range every frame; sealed blocks look up
+    /// their frozen `GridSnapshot` by id via FFI.
     let core: TerminalCore?
     let isExpanded: Bool
     let onToggle: () -> Void
@@ -78,8 +79,8 @@ struct BlockRowView: View {
     // MARK: - Source selection
 
     private var metalSource: BlockMetalView.Source? {
-        if let snap = block.frozenSnapshot {
-            return .frozen(snap)
+        if block.hasFrozenSnapshot, let core {
+            return .frozen(core: core, blockID: block.id)
         }
         if block.isRunning, let core {
             return .live(core: core, startLine: block.startLine)
@@ -94,8 +95,11 @@ struct BlockRowView: View {
         // space they need without over-claiming when the block is tall.
         let rows: Int = {
             switch source {
-            case .frozen(let snap):
-                return Int(snap.rows)
+            case .frozen:
+                if let end = block.endLine {
+                    return max(0, Int(end - block.startLine))
+                }
+                return 0
             case .live(let core, let start):
                 let end = core.currentLine + 1
                 return max(0, Int(end - start))

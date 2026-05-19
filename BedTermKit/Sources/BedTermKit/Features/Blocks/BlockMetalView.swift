@@ -16,7 +16,8 @@ struct BlockMetalView: UIViewRepresentable {
     /// What to draw. `frozen` means the snapshot is final; `live` means
     /// re-snapshot the range every redraw against the supplied core.
     enum Source {
-        case frozen(GridSnapshot)
+        /// Sealed block: fetch the frozen snapshot from Rust by block id.
+        case frozen(core: TerminalCore, blockID: UInt64)
         case live(core: TerminalCore, startLine: Int32)
     }
 
@@ -72,8 +73,13 @@ struct BlockMetalView: UIViewRepresentable {
             let elapsed = CACurrentMediaTime() - startTime
             let snapshot: GridSnapshot? = {
                 switch source {
-                case .frozen(let snap):
-                    return snap
+                case .frozen(let core, let blockID):
+                    guard
+                        let idx = core.allBlocks().firstIndex(where: {
+                            $0.id == blockID
+                        })
+                    else { return nil }
+                    return core.frozenSnapshot(forBlockAt: idx)
                 case .live(let core, let startLine):
                     let end = core.currentLine + 1
                     guard end > startLine else { return nil }

@@ -58,11 +58,9 @@ final class TerminalMetalUIView: MTKView {
             self?.stopInertia()
             self?.setNeedsDisplay()
         }
-        // Wire the block store + back-ref so Block view can read live grid.
-        session.blockStore.bind(
-            currentLine: { core.currentLine },
-            snapshotRange: { core.snapshotRange(startLine: $0, endLine: $1) }
-        )
+        // Back-ref so Block view can read live grid + the Rust-owned block
+        // list directly. BlockStore mirrors that list via `refresh(from:)`
+        // after each feed; no Swift-side state machine.
         session.terminalCore = core
 
         // framebufferOnly=false: we hand the drawable's texture across FFI as a
@@ -90,11 +88,11 @@ final class TerminalMetalUIView: MTKView {
                 let hadScreenClear = Self.containsScreenClear(chunk)
                 self.terminalCore.feed(chunk)
                 self.session?.updateMode(self.terminalCore.mode)
-                // Drain OSC 133 events for Block-view consumers. The block
-                // store records boundaries by row range and freezes a grid
-                // snapshot on command-end — no byte capture needed.
-                while let event = self.terminalCore.popOsc133Event() {
-                    self.session?.emitOsc133Event(event)
+                // Rust owns the block list now — pull a fresh mirror after
+                // each feed. The store skips the rebuild when nothing
+                // observable changed (fast scalar diff).
+                if let session = self.session {
+                    session.blockStore.refresh(from: self.terminalCore)
                 }
                 self.setNeedsDisplay()
                 if hadScreenClear { self.scheduleBottomAnchorPass() }
