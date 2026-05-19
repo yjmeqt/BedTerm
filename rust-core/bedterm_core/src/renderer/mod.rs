@@ -154,8 +154,8 @@ impl Renderer {
     }
 
     /// Single internal cell→vertex pipeline shared by `draw` and
-    /// `draw_cells`. Returns 0 on success, -1 on missing texture, 0 on an
-    /// empty `cells` slice (clears the viewport but draws nothing).
+    /// `draw_cells`. Forwards through `draw_cells_into_subregion` with
+    /// `dest_y_px=0.0` and `clear_first=true` for zero-behaviour-change.
     unsafe fn draw_cells_inner(
         &mut self,
         cells: &[CellSnapshot],
@@ -165,6 +165,88 @@ impl Renderer {
         viewport_w: u32,
         viewport_h: u32,
     ) -> i32 {
+        self.draw_cells_into_subregion(
+            cells,
+            cols,
+            rows,
+            texture_ptr,
+            viewport_w,
+            viewport_h,
+            0.0,
+            true,
+        )
+    }
+
+    /// pub(crate) forwarder so `block_list` FFI (Task 3) can paint a
+    /// cell range at an arbitrary Y offset without cracking open the
+    /// private helper. Same semantics as `draw_cells_into_subregion`.
+    ///
+    /// # Safety
+    /// `texture_ptr` must be a live `id<MTLTexture>` borrowed for the
+    /// duration of this call.
+    #[allow(clippy::too_many_arguments, dead_code)]
+    pub(crate) unsafe fn draw_cells_subregion(
+        &mut self,
+        cells: &[CellSnapshot],
+        cols: u16,
+        rows: u16,
+        texture_ptr: *const std::ffi::c_void,
+        viewport_w: u32,
+        viewport_h: u32,
+        dest_y_px: f32,
+        clear_first: bool,
+    ) -> i32 {
+        self.draw_cells_into_subregion(
+            cells,
+            cols,
+            rows,
+            texture_ptr,
+            viewport_w,
+            viewport_h,
+            dest_y_px,
+            clear_first,
+        )
+    }
+
+    /// Encode a clear-only pass into `texture_ptr`. Used by the block
+    /// view when no blocks are visible (e.g. empty session) so the
+    /// drawable still gets cleared to `self.clear_color` and presented.
+    ///
+    /// # Safety
+    /// `texture_ptr` must be a live `id<MTLTexture>` borrowed for the
+    /// duration of this call.
+    #[allow(dead_code)]
+    pub(crate) unsafe fn clear_viewport(
+        &mut self,
+        texture_ptr: *const std::ffi::c_void,
+        _viewport_w: u32,
+        _viewport_h: u32,
+    ) -> i32 {
+        self.draw_cells_into_subregion(&[], 0, 0, texture_ptr, _viewport_w, _viewport_h, 0.0, true)
+    }
+
+    /// Paint `cells` into a Y-offset region of `texture_ptr`. When
+    /// `clear_first` is true the pass uses `MTLLoadAction::Clear`;
+    /// otherwise `MTLLoadAction::Load` so prior content per-frame is
+    /// preserved (multi-block per-drawable rendering).
+    ///
+    /// Returns 0 on success (including an empty `cells` slice — still
+    /// encodes the clear/load pass), -1 on missing texture.
+    #[allow(clippy::too_many_arguments)]
+    unsafe fn draw_cells_into_subregion(
+        &mut self,
+        cells: &[CellSnapshot],
+        cols: u16,
+        rows: u16,
+        texture_ptr: *const std::ffi::c_void,
+        viewport_w: u32,
+        viewport_h: u32,
+        dest_y_px: f32,
+        clear_first: bool,
+    ) -> i32 {
+        if texture_ptr.is_null() {
+            return -1;
+        }
         let mut verts: Vec<CellVertex> = Vec::new();
         if !cells.is_empty() {
             let (cell_w, cell_h) = self.atlas.cell_px;
@@ -209,7 +291,7 @@ impl Renderer {
                     let span = if wide { 2.0 } else { 1.0 };
                     let cell_span_w = cell_wf * span;
                     let x = c as f32 * cell_wf;
-                    let y = r as f32 * cell_hf;
+                    let y = r as f32 * cell_hf + dest_y_px;
                     let fg = rgba_to_float(cell.fg_rgba);
                     let bg = rgba_to_float(cell.bg_rgba);
                     let is_color_f = if is_color { 1.0 } else { 0.0 };
@@ -264,12 +346,16 @@ impl Renderer {
         let pass = RenderPassDescriptor::new();
         let att = pass.color_attachments().object_at(0).unwrap();
         att.set_texture(Some(&*texture));
-        att.set_load_action(MTLLoadAction::Clear);
+        if clear_first {
+            att.set_load_action(MTLLoadAction::Clear);
+            let [cr, cg, cb, ca] = self.clear_color;
+            att.set_clear_color(MTLClearColor::new(
+                cr as f64, cg as f64, cb as f64, ca as f64,
+            ));
+        } else {
+            att.set_load_action(MTLLoadAction::Load);
+        }
         att.set_store_action(MTLStoreAction::Store);
-        let [cr, cg, cb, ca] = self.clear_color;
-        att.set_clear_color(MTLClearColor::new(
-            cr as f64, cg as f64, cb as f64, ca as f64,
-        ));
 
         let cmd = self.queue.new_command_buffer();
         let enc = cmd.new_render_command_encoder(pass);
