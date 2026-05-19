@@ -1,6 +1,7 @@
 //! Metal renderer.
 
 pub mod atlas;
+pub mod block_list_ffi;
 pub mod cells;
 pub mod ffi;
 pub(crate) mod font_system;
@@ -184,7 +185,7 @@ impl Renderer {
     /// # Safety
     /// `texture_ptr` must be a live `id<MTLTexture>` borrowed for the
     /// duration of this call.
-    #[allow(clippy::too_many_arguments, dead_code)]
+    #[allow(clippy::too_many_arguments)]
     pub(crate) unsafe fn draw_cells_subregion(
         &mut self,
         cells: &[CellSnapshot],
@@ -215,7 +216,6 @@ impl Renderer {
     /// # Safety
     /// `texture_ptr` must be a live `id<MTLTexture>` borrowed for the
     /// duration of this call.
-    #[allow(dead_code)]
     pub(crate) unsafe fn clear_viewport(
         &mut self,
         texture_ptr: *const std::ffi::c_void,
@@ -374,6 +374,71 @@ impl Renderer {
         cmd.commit();
         // NOT cmd.wait_until_completed — Swift's MTKView present happens on
         // its own schedule after this returns.
+        0
+    }
+
+    /// Render visible block bodies in one frame. Called by the FFI; see
+    /// `block_list_ffi::bt_renderer_draw_block_list` for the contract.
+    ///
+    /// # Safety
+    /// `term` must be a valid `&mut BtTerm`. `texture_ptr` must be a live
+    /// `id<MTLTexture>` borrowed for the call.
+    pub(crate) unsafe fn draw_block_list(
+        &mut self,
+        term: &mut crate::ffi::BtTerm,
+        texture_ptr: *const std::ffi::c_void,
+        viewport_w: u32,
+        viewport_h: u32,
+        scroll_y_px: f32,
+        entries: &[crate::renderer::block_list_ffi::BtBlockLayoutEntry],
+    ) -> i32 {
+        let viewport_h_f = viewport_h as f32;
+        let mut painted_any = false;
+
+        for entry in entries {
+            let body_top_in_view = entry.body_y_top_px - scroll_y_px;
+            let body_bot_in_view = body_top_in_view + entry.body_height_px;
+            // Cull blocks entirely outside the viewport.
+            if body_bot_in_view <= 0.0 || body_top_in_view >= viewport_h_f {
+                continue;
+            }
+            // Resolve the snapshot: sealed -> frozen; running -> live range.
+            // Linear scan over blocks: typical visible block count is < 20.
+            let resolved: Option<crate::snapshot::GridSnapshot> = {
+                let inner = term.inner_ref();
+                let blocks = inner.blocks();
+                let block = blocks.iter().find(|b| b.id == entry.block_id);
+                match block {
+                    Some(b) if b.frozen_snapshot.is_some() => b.frozen_snapshot.clone(),
+                    Some(b) => {
+                        let start = b.start_line;
+                        let end = inner.current_line() + 1;
+                        if end > start {
+                            Some(inner.snapshot_range(start, end))
+                        } else {
+                            None
+                        }
+                    }
+                    None => None,
+                }
+            };
+            let Some(snap) = resolved else { continue };
+            self.draw_cells_subregion(
+                &snap.cells,
+                snap.cols,
+                snap.rows,
+                texture_ptr,
+                viewport_w,
+                viewport_h,
+                body_top_in_view,
+                !painted_any, // clear_first only on the very first block
+            );
+            painted_any = true;
+        }
+
+        if !painted_any {
+            self.clear_viewport(texture_ptr, viewport_w, viewport_h);
+        }
         0
     }
 }

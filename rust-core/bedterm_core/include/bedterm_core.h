@@ -190,6 +190,28 @@ typedef struct BtPaletteView {
   struct BtRgb24 ansi[16];
 } BtPaletteView;
 
+/**
+ * One entry per block telling Rust where to paint that block's body in
+ * the logical content space. Header chrome is rendered by Swift in a
+ * UIScrollView Z-overlay and is NOT drawn here.
+ */
+typedef struct BtBlockLayoutEntry {
+  /**
+   * Matches `Block::id`. Looked up by linear scan over `term.blocks()`.
+   */
+  uint64_t block_id;
+  /**
+   * Top-left Y of the BODY (excluding header) in logical content
+   * coordinates (pixels). Swift accumulates header + body heights to
+   * compute this.
+   */
+  float body_y_top_px;
+  /**
+   * Body height in pixels (row_count × cell_height_px).
+   */
+  float body_height_px;
+} BtBlockLayoutEntry;
+
 
 
 
@@ -339,6 +361,25 @@ void bt_term_snapshot_release(struct BtTerm *h);
  * aligned `BtPaletteView`, or be null (a null palette is a no-op).
  */
 void bt_term_set_palette(struct BtTerm *h, const struct BtPaletteView *palette);
+
+/**
+ * Paint visible block bodies into `texture` for one frame. First
+ * visible block clears the viewport; subsequent calls use Load. If no
+ * block intersects the viewport, the viewport is still cleared.
+ *
+ * # Safety
+ * `r`, `term`, `texture_ptr` must be valid live pointers. `entries`
+ * must point to at least `entry_count` `BtBlockLayoutEntry` values
+ * (or be null with `entry_count == 0`).
+ */
+int bt_renderer_draw_block_list(struct BtRenderer *r,
+                                struct BtTerm *term,
+                                const void *texture_ptr,
+                                uint32_t viewport_w,
+                                uint32_t viewport_h,
+                                float scroll_y_px,
+                                const struct BtBlockLayoutEntry *entries,
+                                uintptr_t entry_count);
 
 /**
  * # Safety

@@ -7,7 +7,7 @@ use crate::renderer::Renderer;
 use crate::snapshot::CellSnapshot;
 
 pub struct BtRenderer {
-    inner: Renderer,
+    pub(crate) inner: Renderer,
 }
 
 /// # Safety
