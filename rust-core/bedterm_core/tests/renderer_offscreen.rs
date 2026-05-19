@@ -120,7 +120,7 @@ fn draw_block_list_paints_first_visible_block() {
         panel_height_px: 60.0,
         panel_x_left_px: 0.0,
         panel_width_px: 256.0,
-        panel_bg_rgba: 0,  // skip panel chrome in the smoke test
+        panel_bg_rgba: 0, // skip panel chrome in the smoke test
         panel_corner_radius_px: 0.0,
     };
     let rc = unsafe {

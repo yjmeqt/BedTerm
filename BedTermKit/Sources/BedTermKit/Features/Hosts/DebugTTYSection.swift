@@ -4,27 +4,39 @@
     extension HostsScreen {
         @ViewBuilder
         func debugTerminalScreen(for selection: DebugTTYProgramSelection) -> some View {
-            let client: any SSHClient = {
-                switch selection {
-                case .echoShell: return RustMockTTYClient(program: .echoShell)
-                case .vimLite: return RustMockTTYClient(program: .vimLite)
-                case .rawSink: return RustMockTTYClient(program: .rawSink)
-                case .replay(let fixture):
-                    let bundleURL = Bundle.main.url(
-                        forResource: fixture,
-                        withExtension: "cast",
-                        subdirectory: "DebugFixtures"
-                    )
-                    let opts: String? = bundleURL.map { url in
-                        // Quote the path; the FFI's hand-parser scans for `"cast_path":"…"`.
-                        "{\"cast_path\":\"\(url.path)\"}"
-                    }
-                    return RustMockTTYClient(program: .replay, opts: opts)
+            switch selection {
+            case .mockSSH:
+                let credential = HostCredential(
+                    host: "127.0.0.1", port: 2222, username: "test",
+                    auth: .password("x"))
+                TerminalScreen(
+                    debugClient: CitadelSSHClient(),
+                    credential: credential
+                ) {
+                    if !path.isEmpty { path.removeLast() }
                 }
-            }()
-            TerminalScreen(debugClient: client) {
-                if !path.isEmpty {
-                    path.removeLast()
+            default:
+                let client: any SSHClient = {
+                    switch selection {
+                    case .echoShell: return RustMockTTYClient(program: .echoShell)
+                    case .vimLite: return RustMockTTYClient(program: .vimLite)
+                    case .rawSink: return RustMockTTYClient(program: .rawSink)
+                    case .replay(let fixture):
+                        let bundleURL = Bundle.main.url(
+                            forResource: fixture,
+                            withExtension: "cast",
+                            subdirectory: "DebugFixtures"
+                        )
+                        let opts: String? = bundleURL.map { url in
+                            "{\"cast_path\":\"\(url.path)\"}"
+                        }
+                        return RustMockTTYClient(program: .replay, opts: opts)
+                    case .mockSSH:
+                        preconditionFailure("handled above")
+                    }
+                }()
+                TerminalScreen(debugClient: client) {
+                    if !path.isEmpty { path.removeLast() }
                 }
             }
         }

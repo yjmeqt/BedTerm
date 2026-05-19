@@ -206,14 +206,25 @@ struct TerminalScreen: View {
 #if DEBUG
     extension TerminalScreen {
         init(debugClient: any SSHClient, onExit: @escaping () -> Void) {
-            let session = TerminalSession(client: debugClient)
             let placeholder = HostCredential(
                 host: "debug",
                 port: 0,
                 username: "debug",
                 auth: .password("")
             )
-            self.init(session: session, credential: placeholder, onExit: onExit)
+            self.init(debugClient: debugClient, credential: placeholder, onExit: onExit)
+        }
+
+        /// Variant for SSH-backed debug routes (e.g. `bedterm-mock-ssh`)
+        /// that need a real host/port/auth on the credential — the
+        /// session will hand these to the SSH client during connect.
+        init(
+            debugClient: any SSHClient,
+            credential: HostCredential,
+            onExit: @escaping () -> Void
+        ) {
+            let session = TerminalSession(client: debugClient)
+            self.init(session: session, credential: credential, onExit: onExit)
         }
     }
 #endif
