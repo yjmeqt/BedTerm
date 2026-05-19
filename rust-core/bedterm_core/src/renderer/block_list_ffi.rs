@@ -10,20 +10,34 @@ use crate::ffi::BtTerm;
 use crate::renderer::ffi::BtRenderer;
 use std::os::raw::c_int;
 
-/// One entry per block telling Rust where to paint that block's body in
-/// the logical content space. Header chrome is rendered by Swift in a
-/// UIScrollView Z-overlay and is NOT drawn here.
+/// One entry per block: the BODY cell region + the surrounding Warp-style
+/// panel chrome. Rust draws a rounded-rect panel for each visible block,
+/// then paints cell quads inside. Header text remains a SwiftUI overlay
+/// on top of the panel.
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct BtBlockLayoutEntry {
     /// Matches `Block::id`. Looked up by linear scan over `term.blocks()`.
     pub block_id: u64,
-    /// Top-left Y of the BODY (excluding header) in logical content
-    /// coordinates (pixels). Swift accumulates header + body heights to
-    /// compute this.
+    /// Top-left Y of the BODY (cells start here) in logical content
+    /// coordinates (pixels).
     pub body_y_top_px: f32,
     /// Body height in pixels (row_count × cell_height_px).
     pub body_height_px: f32,
+    /// Top-left Y of the PANEL chrome (includes header). The rounded
+    /// panel BG paints from this Y down to `panel_y_top_px + panel_height_px`.
+    pub panel_y_top_px: f32,
+    /// Panel height in pixels (header + body + any inset).
+    pub panel_height_px: f32,
+    /// Panel left edge X in pixels.
+    pub panel_x_left_px: f32,
+    /// Panel width in pixels.
+    pub panel_width_px: f32,
+    /// Panel background RGBA (0xRRGGBBAA, big-endian packed). Pass 0 to
+    /// skip panel rendering for this entry (terminal pane fallback).
+    pub panel_bg_rgba: u32,
+    /// Panel corner radius in pixels.
+    pub panel_corner_radius_px: f32,
 }
 
 /// Paint visible block bodies into `texture` for one frame. First

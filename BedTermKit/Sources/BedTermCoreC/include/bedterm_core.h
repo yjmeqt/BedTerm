@@ -36,6 +36,11 @@
  */
 #define VERTICES_PER_CELL 6
 
+/**
+ * Two triangles per panel.
+ */
+#define VERTICES_PER_PANEL 6
+
 #define BT_MODE_ALT_SCREEN (1 << 0)
 
 #define BT_MODE_BRACKETED_PASTE (1 << 1)
@@ -191,9 +196,10 @@ typedef struct BtPaletteView {
 } BtPaletteView;
 
 /**
- * One entry per block telling Rust where to paint that block's body in
- * the logical content space. Header chrome is rendered by Swift in a
- * UIScrollView Z-overlay and is NOT drawn here.
+ * One entry per block: the BODY cell region + the surrounding Warp-style
+ * panel chrome. Rust draws a rounded-rect panel for each visible block,
+ * then paints cell quads inside. Header text remains a SwiftUI overlay
+ * on top of the panel.
  */
 typedef struct BtBlockLayoutEntry {
   /**
@@ -201,15 +207,40 @@ typedef struct BtBlockLayoutEntry {
    */
   uint64_t block_id;
   /**
-   * Top-left Y of the BODY (excluding header) in logical content
-   * coordinates (pixels). Swift accumulates header + body heights to
-   * compute this.
+   * Top-left Y of the BODY (cells start here) in logical content
+   * coordinates (pixels).
    */
   float body_y_top_px;
   /**
    * Body height in pixels (row_count × cell_height_px).
    */
   float body_height_px;
+  /**
+   * Top-left Y of the PANEL chrome (includes header). The rounded
+   * panel BG paints from this Y down to `panel_y_top_px + panel_height_px`.
+   */
+  float panel_y_top_px;
+  /**
+   * Panel height in pixels (header + body + any inset).
+   */
+  float panel_height_px;
+  /**
+   * Panel left edge X in pixels.
+   */
+  float panel_x_left_px;
+  /**
+   * Panel width in pixels.
+   */
+  float panel_width_px;
+  /**
+   * Panel background RGBA (0xRRGGBBAA, big-endian packed). Pass 0 to
+   * skip panel rendering for this entry (terminal pane fallback).
+   */
+  uint32_t panel_bg_rgba;
+  /**
+   * Panel corner radius in pixels.
+   */
+  float panel_corner_radius_px;
 } BtBlockLayoutEntry;
 
 

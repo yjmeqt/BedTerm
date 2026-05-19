@@ -10,7 +10,7 @@ pub mod pipeline;
 pub mod shaders;
 
 use atlas::GlyphAtlas;
-use cells::{CellVertex, VERTICES_PER_CELL};
+use cells::{CellVertex, PanelVertex, VERTICES_PER_CELL, VERTICES_PER_PANEL};
 
 use crate::snapshot::CellSnapshot;
 use metal::foreign_types::ForeignType;
@@ -235,10 +235,8 @@ impl Renderer {
         }
 
         let viewport_h_f = viewport_h as f32;
-        // One vertex buffer for all visible blocks. Pre-reserve based on
-        // a coarse estimate: ~80×24 cells × 6 verts each for a typical
-        // visible block. Realloc costs are dwarfed by glyph rasterising.
-        let mut verts: Vec<CellVertex> = Vec::new();
+        let mut cell_verts: Vec<CellVertex> = Vec::new();
+        let mut panel_verts: Vec<PanelVertex> = Vec::new();
 
         for entry in entries {
             let body_top_in_view = entry.body_y_top_px - scroll_y_px;
@@ -247,8 +245,22 @@ impl Renderer {
             if body_bot_in_view <= 0.0 || body_top_in_view >= viewport_h_f {
                 continue;
             }
-            // Resolve the snapshot: sealed -> frozen; running -> live range.
-            // Linear scan: typical visible block count < 20.
+
+            // Panel chrome — only if Swift supplied a non-zero RGBA.
+            if entry.panel_bg_rgba != 0 {
+                let panel_top_in_view = entry.panel_y_top_px - scroll_y_px;
+                Self::append_panel_to_verts(
+                    entry.panel_x_left_px,
+                    panel_top_in_view,
+                    entry.panel_width_px,
+                    entry.panel_height_px,
+                    entry.panel_corner_radius_px,
+                    entry.panel_bg_rgba,
+                    &mut panel_verts,
+                );
+            }
+
+            // Cells — same as before.
             let resolved: Option<crate::snapshot::GridSnapshot> = {
                 let inner = term.inner_ref();
                 let blocks = inner.blocks();
@@ -273,20 +285,132 @@ impl Renderer {
                 snap.cols,
                 snap.rows,
                 body_top_in_view,
-                &mut verts,
+                &mut cell_verts,
             );
         }
 
-        // One render pass — Clear once, one draw call (or just Clear when
-        // no blocks are visible).
-        self.encode_cell_pass(
+        // One render pass — Clear once, panels first (so cells paint on
+        // top), cells second. The panel pipeline uses alpha-blended
+        // premultiplied output so rounded corners anti-alias against
+        // the clear colour.
+        self.encode_block_pass(
             texture_ptr,
             viewport_w,
             viewport_h,
-            &verts,
-            /* clear: */ true,
+            &panel_verts,
+            &cell_verts,
         );
         0
+    }
+
+    fn append_panel_to_verts(
+        x: f32,
+        y: f32,
+        width: f32,
+        height: f32,
+        corner_radius: f32,
+        rgba: u32,
+        verts: &mut Vec<PanelVertex>,
+    ) {
+        if width <= 0.0 || height <= 0.0 {
+            return;
+        }
+        verts.reserve(VERTICES_PER_PANEL);
+        let color = rgba_to_premultiplied(rgba);
+        let v = |dx: f32, dy: f32| PanelVertex {
+            pos_x: x + dx * width,
+            pos_y: y + dy * height,
+            local_x: dx,
+            local_y: dy,
+            size_x: width,
+            size_y: height,
+            color,
+            corner_radius,
+            _pad: [0.0; 3],
+        };
+        // TL, TR, BL  /  TR, BR, BL
+        verts.push(v(0.0, 0.0));
+        verts.push(v(1.0, 0.0));
+        verts.push(v(0.0, 1.0));
+        verts.push(v(1.0, 0.0));
+        verts.push(v(1.0, 1.0));
+        verts.push(v(0.0, 1.0));
+    }
+
+    /// Single render pass that paints panels (rounded chrome) and then
+    /// cells (text) into `texture_ptr`. Always clears with `self.clear_color`.
+    unsafe fn encode_block_pass(
+        &mut self,
+        texture_ptr: *const std::ffi::c_void,
+        viewport_w: u32,
+        viewport_h: u32,
+        panel_verts: &[PanelVertex],
+        cell_verts: &[CellVertex],
+    ) {
+        #[repr(C)]
+        struct Uniforms {
+            vp_x: f32,
+            vp_y: f32,
+        }
+        let uniforms = Uniforms {
+            vp_x: viewport_w as f32,
+            vp_y: viewport_h as f32,
+        };
+
+        let panel_buf = (!panel_verts.is_empty()).then(|| {
+            self.device.new_buffer_with_data(
+                panel_verts.as_ptr() as *const _,
+                std::mem::size_of_val(panel_verts) as u64,
+                MTLResourceOptions::StorageModeShared,
+            )
+        });
+        let cell_buf = (!cell_verts.is_empty()).then(|| {
+            self.device.new_buffer_with_data(
+                cell_verts.as_ptr() as *const _,
+                std::mem::size_of_val(cell_verts) as u64,
+                MTLResourceOptions::StorageModeShared,
+            )
+        });
+
+        let texture = Texture::from_ptr(texture_ptr as *mut _);
+        let texture = std::mem::ManuallyDrop::new(texture);
+
+        let pass = RenderPassDescriptor::new();
+        let att = pass.color_attachments().object_at(0).unwrap();
+        att.set_texture(Some(&*texture));
+        att.set_load_action(MTLLoadAction::Clear);
+        let [cr, cg, cb, ca] = self.clear_color;
+        att.set_clear_color(MTLClearColor::new(
+            cr as f64, cg as f64, cb as f64, ca as f64,
+        ));
+        att.set_store_action(MTLStoreAction::Store);
+
+        let cmd = self.queue.new_command_buffer();
+        let enc = cmd.new_render_command_encoder(pass);
+
+        if let Some(ref b) = panel_buf {
+            enc.set_render_pipeline_state(&self.pipelines.panel_pso);
+            enc.set_vertex_buffer(0, Some(b), 0);
+            enc.set_vertex_bytes(
+                1,
+                std::mem::size_of::<Uniforms>() as u64,
+                &uniforms as *const Uniforms as *const _,
+            );
+            enc.draw_primitives(MTLPrimitiveType::Triangle, 0, panel_verts.len() as u64);
+        }
+        if let Some(ref b) = cell_buf {
+            enc.set_render_pipeline_state(&self.pipelines.cell_pso);
+            enc.set_vertex_buffer(0, Some(b), 0);
+            enc.set_vertex_bytes(
+                1,
+                std::mem::size_of::<Uniforms>() as u64,
+                &uniforms as *const Uniforms as *const _,
+            );
+            enc.set_fragment_texture(0, Some(&self.atlas.texture));
+            enc.draw_primitives(MTLPrimitiveType::Triangle, 0, cell_verts.len() as u64);
+        }
+        enc.end_encoding();
+        cmd.commit();
     }
 
     /// Build per-cell quad vertices for one block's grid, appending into
@@ -431,5 +555,18 @@ fn rgba_to_float(rgba: u32) -> [f32; 4] {
         ((rgba >> 16) & 0xFF) as f32 / 255.0,
         ((rgba >> 8) & 0xFF) as f32 / 255.0,
         (rgba & 0xFF) as f32 / 255.0,
+    ]
+}
+
+/// Same as `rgba_to_float` but multiplies RGB by alpha so the panel
+/// pipeline (premultiplied source-over blending) doesn't double-dip
+/// on the alpha.
+fn rgba_to_premultiplied(rgba: u32) -> [f32; 4] {
+    let a = (rgba & 0xFF) as f32 / 255.0;
+    [
+        ((rgba >> 24) & 0xFF) as f32 / 255.0 * a,
+        ((rgba >> 16) & 0xFF) as f32 / 255.0 * a,
+        ((rgba >> 8) & 0xFF) as f32 / 255.0 * a,
+        a,
     ]
 }

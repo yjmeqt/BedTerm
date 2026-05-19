@@ -22,11 +22,6 @@ final class BlockListContainerViewController: UIViewController, UIScrollViewDele
     private let contentView = UIView()
     private let metalView: TerminalBlocksMetalView
     private var headerHosts: [UInt64: UIHostingController<BlockHeader>] = [:]
-    /// Per-block left accent bar — Warp's iconic block-edge stripe.
-    /// Same visibility virtualisation as `headerHosts`. Style helpers
-    /// live in `BlockAccentBar`.
-    private var accentBars: [UInt64: UIView] = [:]
-    private var accentBarWidthPt: CGFloat { BlockAccentBar.widthPt }
 
     // Layout constants. headerHeightPt may clip at Dynamic Type XXL —
     // accepted v1 limitation per Phase B plan.
@@ -99,8 +94,6 @@ final class BlockListContainerViewController: UIViewController, UIScrollViewDele
             host.removeFromParent()
         }
         headerHosts.removeAll()
-        for (_, bar) in accentBars { bar.removeFromSuperview() }
-        accentBars.removeAll()
         scrollView.delegate = nil
     }
 
@@ -169,18 +162,20 @@ final class BlockListContainerViewController: UIViewController, UIScrollViewDele
         selection?.updateMetrics(
             cellWidth: cellWidthPt, rowHeight: rowHeightPt,
             containerWidth: view.bounds.width,
-            leftInset: accentBarWidthPt)
+            leftInset: BlockPanelStyle.cellLeftInsetPt)
     }
 
     override func viewWillLayoutSubviews() {
         super.viewWillLayoutSubviews()
         let bounds = view.bounds
         scrollView.frame = bounds
-        // Inset the Metal surface by the accent-bar width so cell
-        // column 0 starts to the right of the bar instead of beneath it.
+        // Inset the Metal surface so cell column 0 starts inside the
+        // Warp panel chrome (left padding); Rust paints the rounded
+        // panel BG behind the inset region.
+        let leftInset = BlockPanelStyle.cellLeftInsetPt
         metalView.frame = CGRect(
-            x: accentBarWidthPt, y: 0,
-            width: max(0, bounds.width - accentBarWidthPt),
+            x: leftInset, y: 0,
+            width: max(0, bounds.width - leftInset),
             height: bounds.height)
         // Only re-run the heavy refresh path when bounds actually
         // change. layoutSubviews fires repeatedly during scroll /
@@ -206,10 +201,10 @@ final class BlockListContainerViewController: UIViewController, UIScrollViewDele
 
     private func updateContentSize() {
         let blocks = session.blockStore.blocks
+        let panelInsetPt: CGFloat = 4
         var total: CGFloat = 0
         for block in blocks {
-            total += headerHeightPt
-            total += bodyHeightPt(for: block)
+            total += headerHeightPt + bodyHeightPt(for: block) + panelInsetPt
         }
         let width = view.bounds.width
         scrollView.contentSize = CGSize(width: width, height: total)
@@ -223,6 +218,7 @@ final class BlockListContainerViewController: UIViewController, UIScrollViewDele
     private func syncHeaders() {
         let blocks = session.blockStore.blocks
         let width = view.bounds.width
+        let leftInset = BlockPanelStyle.cellLeftInsetPt
         let scrollY = scrollView.contentOffset.y
         let viewportTop = scrollY - headerOverscanPt
         let viewportBot = scrollY + scrollView.bounds.height + headerOverscanPt
@@ -230,6 +226,7 @@ final class BlockListContainerViewController: UIViewController, UIScrollViewDele
         var keepIDs = Set<UInt64>()
         keepIDs.reserveCapacity(blocks.count)
         var yPt: CGFloat = 0
+        let panelInsetPt: CGFloat = 4
         for block in blocks {
             let blockTop = yPt
             let blockBot = blockTop + headerHeightPt + bodyHeightPt(for: block)
@@ -249,57 +246,54 @@ final class BlockListContainerViewController: UIViewController, UIScrollViewDele
                     host.didMove(toParent: self)
                 }
                 host.view.frame = CGRect(
-                    x: accentBarWidthPt, y: blockTop,
-                    width: width - accentBarWidthPt, height: headerHeightPt)
-                let bar = accentBars[block.id] ?? BlockAccentBar.make()
-                bar.backgroundColor = BlockAccentBar.color(for: block)
-                bar.frame = CGRect(
-                    x: 0, y: blockTop,
-                    width: accentBarWidthPt, height: blockBot - blockTop)
-                BlockAccentBar.applyPulse(to: bar, running: block.isRunning)
-                if bar.superview == nil { contentView.addSubview(bar) }
-                accentBars[block.id] = bar
+                    x: leftInset, y: blockTop,
+                    width: width - leftInset, height: headerHeightPt)
             }
-            yPt = blockBot
+            yPt = blockBot + panelInsetPt
         }
 
-        // Demount hosts + accent bars whose block disappeared or
-        // scrolled out of range.
         for (id, host) in headerHosts where !keepIDs.contains(id) {
             host.willMove(toParent: nil)
             host.view.removeFromSuperview()
             host.removeFromParent()
             headerHosts.removeValue(forKey: id)
         }
-        for (id, bar) in accentBars where !keepIDs.contains(id) {
-            bar.removeFromSuperview()
-            accentBars.removeValue(forKey: id)
-        }
     }
 
     private func pushLayoutToMetalView() {
         // Reentrancy guard: scrollToBottom() triggers
-        // scrollViewDidScroll → pushLayoutToMetalView. Without the
-        // guard we'd rebuild the layout array twice per tick.
+        // scrollViewDidScroll → pushLayoutToMetalView.
         guard !isPushingLayout else { return }
         isPushingLayout = true
         defer { isPushingLayout = false }
 
         let blocks = session.blockStore.blocks
         let scale = view.window?.screen.scale ?? 3.0
+        let panelInsetPt: CGFloat = 4  // small gap between panels
+        let panelBgRgba = BlockPanelStyle.bgRgba(for: view.traitCollection)
+        let cornerRadiusPx = Float(BlockPanelStyle.cornerRadiusPt * scale)
+        let metalViewWidth = metalView.bounds.width
         var yPt: CGFloat = 0
         var entries: [BtBlockLayoutEntry] = []
         entries.reserveCapacity(blocks.count)
         for block in blocks {
-            yPt += headerHeightPt
+            let panelTop = yPt + panelInsetPt / 2
+            let bodyTop = yPt + headerHeightPt
             let bodyPt = bodyHeightPt(for: block)
+            let panelBot = bodyTop + bodyPt + panelInsetPt / 2
             entries.append(
                 BtBlockLayoutEntry(
                     block_id: block.id,
-                    body_y_top_px: Float(yPt * scale),
-                    body_height_px: Float(bodyPt * scale)
+                    body_y_top_px: Float(bodyTop * scale),
+                    body_height_px: Float(bodyPt * scale),
+                    panel_y_top_px: Float(panelTop * scale),
+                    panel_height_px: Float((panelBot - panelTop) * scale),
+                    panel_x_left_px: 0,
+                    panel_width_px: Float(metalViewWidth * scale),
+                    panel_bg_rgba: panelBgRgba,
+                    panel_corner_radius_px: cornerRadiusPx
                 ))
-            yPt += bodyPt
+            yPt += headerHeightPt + bodyPt + panelInsetPt
         }
         metalView.update(scrollOffset: scrollView.contentOffset.y, layout: entries)
     }
