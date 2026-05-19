@@ -140,25 +140,23 @@ impl Terminal {
         // listens for shell-integration markers. The sniffer's VTE state
         // machine is independent — both must see every byte to stay in sync.
         self.parser.advance(&mut self.term, bytes);
-        self.osc133.feed(bytes);
 
-        // Drive the BlockStore off any events the sniffer just produced.
-        // Drain the sniffer first into a local Vec, then iterate — this
-        // avoids overlapping borrows between `&mut self.osc133` (pop) and
-        // `&self.term` (read by the snapshot closure). The closure goes
-        // through `Self::snapshot_range_from` so this code path shares its
-        // implementation with the public `snapshot_range`.
-        let mut pending = Vec::new();
-        while let Some(event) = self.osc133.pop() {
-            pending.push(event);
-        }
-        if !pending.is_empty() {
+        // Record how many OSC 133 events were already queued before this
+        // chunk; everything appended past that boundary is what `feed` just
+        // produced and needs to be applied to the BlockStore. We clone (not
+        // drain) so the sniffer's queue remains intact for `pop_osc133` /
+        // `drainOsc133Events` callers on the Swift side.
+        let before = self.osc133.pending();
+        self.osc133.feed(bytes);
+        let new_events: Vec<_> = self.osc133.events_from(before).cloned().collect();
+
+        if !new_events.is_empty() {
             let current = self.term.grid().cursor.point.line.0;
             let cols = self.cols;
             let rows = self.rows;
             let term = &self.term;
             let palette = &self.palette;
-            for event in &pending {
+            for event in &new_events {
                 self.blocks.apply(event, current, |start, end| {
                     Some(Self::snapshot_range_from(
                         term, cols, rows, palette, start, end,

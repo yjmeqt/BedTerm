@@ -109,6 +109,16 @@ impl Osc133Sniffer {
     pub fn pending(&self) -> usize {
         self.sink.events.len()
     }
+
+    /// Borrow the events whose queue index is at or after `start`. Used by
+    /// `Terminal::feed` to apply only the events newly appended by the
+    /// latest chunk to the BlockStore, without disturbing the queue state
+    /// that `pop` / `drain` callers observe.
+    ///
+    /// Returns an empty iterator if `start >= pending()`.
+    pub fn events_from(&self, start: usize) -> impl Iterator<Item = &Osc133Event> {
+        self.sink.events.range(start.min(self.sink.events.len())..)
+    }
 }
 
 /// Joins a slice of byte-slices back into a single `Vec<u8>` separated by
