@@ -6,12 +6,11 @@ import UIKit
 /// `GridSnapshot` (sealed block) or a fresh row-range snapshot taken from
 /// the live `TerminalCore` every frame (running block).
 ///
-/// Each visible block instantiates one of these. `LazyVStack` virtualises
-/// off-screen rows so the `MTKView` count stays bounded by what's on
-/// screen. Each view creates its own `BtRenderer`; we share the
-/// `MTLDevice` + `MTLCommandQueue` across views via a process-wide
-/// singleton (see `MetalEnvironment`) so the atlas + queue aren't
-/// duplicated per view.
+/// Every Metal-backed view in the app shares the same `RendererBridge`
+/// (and therefore the same atlas + pipeline state + GPU resources) via
+/// `MetalEnvironment.shared`. Each MTKView delegate sets the renderer's
+/// clear colour immediately before its draw call — main-thread
+/// sequencing makes that race-free.
 struct BlockMetalView: UIViewRepresentable {
     /// What to draw. `frozen` means the snapshot is final; `live` means
     /// re-snapshot the range every redraw against the supplied core.
@@ -37,9 +36,8 @@ struct BlockMetalView: UIViewRepresentable {
         view.presentsWithTransaction = true
         view.backgroundColor = .clear
         view.layer.isOpaque = false
+        view.clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 0)
 
-        let renderer = env.makeRenderer()
-        context.coordinator.renderer = renderer
         context.coordinator.source = source
         view.delegate = context.coordinator
         view.setNeedsDisplay()
@@ -51,13 +49,8 @@ struct BlockMetalView: UIViewRepresentable {
         view.setNeedsDisplay()
     }
 
-    static func dismantleUIView(_ view: MTKView, coordinator: Coordinator) {
-        coordinator.renderer = nil
-    }
-
     @MainActor
     final class Coordinator: NSObject, MTKViewDelegate {
-        var renderer: RendererBridge?
         var source: Source?
         private var startTime = CACurrentMediaTime()
 
@@ -66,9 +59,10 @@ struct BlockMetalView: UIViewRepresentable {
         }
 
         func draw(in view: MTKView) {
-            guard let renderer, let source,
+            guard let source,
                 let drawable = view.currentDrawable
             else { return }
+            let renderer = MetalEnvironment.shared.renderer
             let size = view.drawableSize
             let elapsed = CACurrentMediaTime() - startTime
             let snapshot: GridSnapshot? = {
@@ -86,6 +80,12 @@ struct BlockMetalView: UIViewRepresentable {
                     return core.snapshotRange(startLine: startLine, endLine: end)
                 }
             }()
+            // Block bodies sit over a SwiftUI background; the renderer's
+            // clear colour is transparent so SwiftUI's surface shows in any
+            // gap. The terminal pane resets this to its palette bg right
+            // before its own draw — main-thread sequencing makes the shared
+            // state safe.
+            renderer.setClearColor(red: 0, green: 0, blue: 0, alpha: 0)
             if let snapshot {
                 renderer.drawCells(
                     snapshot, into: drawable.texture, viewport: size, time: elapsed)
@@ -98,32 +98,27 @@ struct BlockMetalView: UIViewRepresentable {
     }
 }
 
-/// Process-wide Metal device + command queue shared across the main
-/// terminal view and every Block view. Reusing them keeps the GPU object
-/// count bounded as scrollback grows. `makeRenderer()` mints a fresh
-/// `BtRenderer` per view (atlas isn't shared yet — that's a follow-up
-/// optimisation if memory becomes a concern).
+/// Process-wide Metal device, command queue, and renderer. One atlas +
+/// pipeline state across the live terminal pane and every block-row
+/// view. Per-call clear colour is set by each MTKView delegate
+/// immediately before drawing.
 @MainActor
 final class MetalEnvironment {
     static let shared = MetalEnvironment()
 
     let device: MTLDevice
     let queue: MTLCommandQueue
+    let renderer: RendererBridge
 
     private init() {
         guard let device = MTLCreateSystemDefaultDevice(),
-            let queue = device.makeCommandQueue()
+            let queue = device.makeCommandQueue(),
+            let renderer = RendererBridge(device: device, queue: queue)
         else {
             preconditionFailure("Metal initialisation failed")
         }
         self.device = device
         self.queue = queue
-    }
-
-    func makeRenderer() -> RendererBridge {
-        guard let renderer = RendererBridge(device: device, queue: queue) else {
-            preconditionFailure("Could not construct BtRenderer")
-        }
-        return renderer
+        self.renderer = renderer
     }
 }

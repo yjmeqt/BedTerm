@@ -35,18 +35,15 @@ final class TerminalMetalUIView: MTKView {
         onSend: @escaping (Data) -> Void,
         onResize: @escaping (Int, Int) -> Void
     ) {
-        guard let device = MTLCreateSystemDefaultDevice(),
-            let queue = device.makeCommandQueue(),
-            let bridge = RendererBridge(device: device, queue: queue)
-        else {
-            preconditionFailure("Metal initialisation failed")
-        }
+        // Shared Metal context across the terminal pane and every Block view —
+        // one atlas + pipeline state for the whole app. See MetalEnvironment.
+        let env = MetalEnvironment.shared
         self.terminalCore = TerminalCore(cols: 80, rows: 24)
-        self.bridge = bridge
+        self.bridge = env.renderer
         self.onSend = onSend
         self.onResize = onResize
         self.session = session
-        super.init(frame: .zero, device: device)
+        super.init(frame: .zero, device: env.device)
 
         // Snap-on-input (R5.scroll_snap_on_input): one session hook covers
         // every PTY-bound byte. Core captured directly; weak self for
@@ -195,6 +192,10 @@ final class TerminalMetalUIView: MTKView {
         guard let drawable = currentDrawable else { return }
         let size = drawableSize
         let elapsed = CACurrentMediaTime() - startTime
+        // Reclaim the shared bridge's clear colour (Block views may have left it transparent).
+        bridge.setClearColor(
+            red: Float(clearColor.red), green: Float(clearColor.green),
+            blue: Float(clearColor.blue), alpha: Float(clearColor.alpha))
         _ = bridge.draw(
             term: terminalCore,
             into: drawable.texture,
