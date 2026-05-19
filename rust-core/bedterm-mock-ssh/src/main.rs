@@ -1,32 +1,32 @@
 //! Local-loopback mock SSH server for BedTerm sim testing.
 //!
-//! Spins up a russh-backed SSH server on 127.0.0.1:<port>, accepts any
-//! username + password, and on shell request streams a scripted session
-//! of OSC 133-framed prompts + commands + output. The iOS sim connects
-//! to it as a "Linux / other" host so the full SSH client path +
-//! Rust-side block state machine + renderer get exercised end-to-end
-//! without needing an external SSH host.
+//! Two modes:
+//!   * default (script): streams a canned OSC 133-framed transcript and
+//!     ignores client input. Useful for renderer + block-state tests.
+//!   * `--shell`: spawns `$SHELL -l` in a real PTY and proxies bytes
+//!     both ways, so the sim gets an interactive zsh as the current
+//!     macOS user with no password needed. Bound to `127.0.0.1` only.
 //!
 //! Usage:
-//!   cargo run -p bedterm-mock-ssh -- [--port 2222]
+//!   cargo run -p bedterm-mock-ssh -- [--port 2222] [--shell]
 //!
-//! Then in the BedTerm sim, connect to:
+//! Sim connects to:
 //!   host:     127.0.0.1
 //!   port:     2222
 //!   user:     anything
-//!   password: anything
-//!
-//! The server hands one canned scenario per shell session and closes.
-//! Restart the connection in the app to replay.
+//!   password: anything (only loopback binds — that is the moat)
 
 use anyhow::Result;
 use async_trait::async_trait;
 use clap::Parser;
+use portable_pty::{native_pty_system, CommandBuilder, PtySize};
 use russh::server::{Auth, Handler, Msg, Server, Session};
 use russh::{Channel, ChannelId, CryptoVec, MethodSet};
 use russh_keys::key::KeyPair;
+use std::io::{Read, Write};
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::sync::mpsc;
 use tokio::time::sleep;
 
 #[derive(Parser, Debug)]
@@ -38,6 +38,11 @@ struct Args {
     /// Listen port on 127.0.0.1.
     #[arg(long, default_value_t = 2222)]
     port: u16,
+
+    /// Bridge to a real PTY running `$SHELL -l` instead of replaying
+    /// the canned script. Loopback-only — safe for local sim testing.
+    #[arg(long)]
+    shell: bool,
 }
 
 #[tokio::main]
@@ -61,26 +66,52 @@ async fn main() -> Result<()> {
     let addr = ("127.0.0.1", args.port);
     eprintln!("[bedterm-mock-ssh] listening on 127.0.0.1:{}", args.port);
     eprintln!("[bedterm-mock-ssh] accepts any user + password");
+    if args.shell {
+        let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".into());
+        eprintln!("[bedterm-mock-ssh] --shell mode: bridging to {shell}");
+    } else {
+        eprintln!("[bedterm-mock-ssh] script mode (pass --shell for real PTY)");
+    }
 
-    let mut srv = MockServer;
+    let mut srv = MockServer {
+        shell_mode: args.shell,
+    };
     srv.run_on_address(config, addr).await?;
     Ok(())
 }
 
 #[derive(Clone)]
-struct MockServer;
+struct MockServer {
+    shell_mode: bool,
+}
 
 impl Server for MockServer {
     type Handler = MockHandler;
     fn new_client(&mut self, _peer: Option<std::net::SocketAddr>) -> MockHandler {
-        MockHandler { script_done: false }
+        MockHandler {
+            shell_mode: self.shell_mode,
+            script_done: false,
+            shell_tx: None,
+            pty_cols: 80,
+            pty_rows: 24,
+        }
     }
 }
 
+enum ToShell {
+    Input(Vec<u8>),
+    Resize { cols: u16, rows: u16 },
+    Close,
+}
+
 struct MockHandler {
-    /// One script per shell channel. After the script runs, the
-    /// channel sits idle until the client closes.
+    shell_mode: bool,
+    /// Set once the canned script has been played for this connection.
     script_done: bool,
+    /// Control channel into the PTY bridge thread (shell mode only).
+    shell_tx: Option<mpsc::UnboundedSender<ToShell>>,
+    pty_cols: u16,
+    pty_rows: u16,
 }
 
 #[async_trait]
@@ -111,13 +142,36 @@ impl Handler for MockHandler {
         &mut self,
         _channel: ChannelId,
         _term: &str,
-        _col_width: u32,
-        _row_height: u32,
+        col_width: u32,
+        row_height: u32,
         _pix_width: u32,
         _pix_height: u32,
         _modes: &[(russh::Pty, u32)],
         _session: &mut Session,
     ) -> Result<(), Self::Error> {
+        // Remember requested geometry — applied when the shell spawns.
+        self.pty_cols = col_width.clamp(1, u16::MAX as u32) as u16;
+        self.pty_rows = row_height.clamp(1, u16::MAX as u32) as u16;
+        Ok(())
+    }
+
+    async fn window_change_request(
+        &mut self,
+        _channel: ChannelId,
+        col_width: u32,
+        row_height: u32,
+        _pix_width: u32,
+        _pix_height: u32,
+        _session: &mut Session,
+    ) -> Result<(), Self::Error> {
+        self.pty_cols = col_width.clamp(1, u16::MAX as u32) as u16;
+        self.pty_rows = row_height.clamp(1, u16::MAX as u32) as u16;
+        if let Some(tx) = &self.shell_tx {
+            let _ = tx.send(ToShell::Resize {
+                cols: self.pty_cols,
+                rows: self.pty_rows,
+            });
+        }
         Ok(())
     }
 
@@ -126,12 +180,20 @@ impl Handler for MockHandler {
         channel: ChannelId,
         session: &mut Session,
     ) -> Result<(), Self::Error> {
+        if self.shell_mode {
+            if self.shell_tx.is_some() {
+                return Ok(());
+            }
+            let handle = session.handle();
+            let tx = spawn_pty_bridge(handle, channel, self.pty_cols, self.pty_rows);
+            self.shell_tx = Some(tx);
+            return Ok(());
+        }
         if self.script_done {
             return Ok(());
         }
         self.script_done = true;
         let handle = session.handle();
-        // Spawn the scripted output so we don't block russh's read loop.
         tokio::spawn(async move {
             if let Err(err) = play_script(&handle, channel).await {
                 eprintln!("[bedterm-mock-ssh] script error: {err:?}");
@@ -143,14 +205,159 @@ impl Handler for MockHandler {
     async fn data(
         &mut self,
         _channel: ChannelId,
-        _data: &[u8],
+        data: &[u8],
         _session: &mut Session,
     ) -> Result<(), Self::Error> {
-        // Discard client-typed input — this mock doesn't run a real shell.
-        // The block view only needs OSC 133-framed server output to
-        // populate; user keypresses are unused here.
+        if let Some(tx) = &self.shell_tx {
+            let _ = tx.send(ToShell::Input(data.to_vec()));
+        }
+        // Script mode: silently discard input. The canned transcript
+        // doesn't model an interactive shell.
         Ok(())
     }
+
+    async fn channel_close(
+        &mut self,
+        _channel: ChannelId,
+        _session: &mut Session,
+    ) -> Result<(), Self::Error> {
+        if let Some(tx) = self.shell_tx.take() {
+            let _ = tx.send(ToShell::Close);
+        }
+        Ok(())
+    }
+}
+
+/// Spawn a dedicated OS thread that owns the PTY master + child shell.
+/// Returns a control channel; the thread exits when the child dies or
+/// `ToShell::Close` is received.
+fn spawn_pty_bridge(
+    handle: russh::server::Handle,
+    channel: ChannelId,
+    cols: u16,
+    rows: u16,
+) -> mpsc::UnboundedSender<ToShell> {
+    let (tx, mut rx) = mpsc::unbounded_channel::<ToShell>();
+    let rt = tokio::runtime::Handle::current();
+
+    std::thread::Builder::new()
+        .name("pty-bridge".into())
+        .spawn(move || {
+            let pty_sys = native_pty_system();
+            let pair = match pty_sys.openpty(PtySize {
+                rows,
+                cols,
+                pixel_width: 0,
+                pixel_height: 0,
+            }) {
+                Ok(p) => p,
+                Err(e) => {
+                    eprintln!("[bedterm-mock-ssh] openpty failed: {e:?}");
+                    return;
+                }
+            };
+
+            let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".into());
+            let mut cmd = CommandBuilder::new(&shell);
+            cmd.arg("-l");
+            cmd.env("TERM", "xterm-256color");
+            cmd.env("LANG", "en_US.UTF-8");
+            if let Some(home) = std::env::var_os("HOME") {
+                cmd.cwd(home);
+            }
+
+            let mut child = match pair.slave.spawn_command(cmd) {
+                Ok(c) => c,
+                Err(e) => {
+                    eprintln!("[bedterm-mock-ssh] spawn shell failed: {e:?}");
+                    return;
+                }
+            };
+            drop(pair.slave);
+
+            let mut reader = match pair.master.try_clone_reader() {
+                Ok(r) => r,
+                Err(e) => {
+                    eprintln!("[bedterm-mock-ssh] try_clone_reader: {e:?}");
+                    let _ = child.kill();
+                    return;
+                }
+            };
+            let mut writer = match pair.master.take_writer() {
+                Ok(w) => w,
+                Err(e) => {
+                    eprintln!("[bedterm-mock-ssh] take_writer: {e:?}");
+                    let _ = child.kill();
+                    return;
+                }
+            };
+            let master = pair.master;
+
+            // Reader: PTY → SSH channel.
+            let h_read = handle.clone();
+            let rt_read = rt.clone();
+            std::thread::Builder::new()
+                .name("pty-reader".into())
+                .spawn(move || {
+                    let mut buf = [0u8; 8192];
+                    loop {
+                        match reader.read(&mut buf) {
+                            Ok(0) => break,
+                            Err(_) => break,
+                            Ok(n) => {
+                                let bytes = CryptoVec::from_slice(&buf[..n]);
+                                let h = h_read.clone();
+                                rt_read.block_on(async move {
+                                    let _ = h.data(channel, bytes).await;
+                                });
+                            }
+                        }
+                    }
+                })
+                .expect("spawn pty-reader thread");
+
+            // Control loop: writes, resizes, child-exit polling.
+            loop {
+                if let Ok(Some(status)) = child.try_wait() {
+                    let code = status.exit_code();
+                    rt.block_on(async {
+                        let _ = handle.exit_status_request(channel, code).await;
+                        let _ = handle.eof(channel).await;
+                        let _ = handle.close(channel).await;
+                    });
+                    return;
+                }
+                let msg = rt.block_on(async {
+                    tokio::time::timeout(Duration::from_millis(500), rx.recv()).await
+                });
+                match msg {
+                    Ok(Some(ToShell::Input(b))) => {
+                        let _ = writer.write_all(&b);
+                        let _ = writer.flush();
+                    }
+                    Ok(Some(ToShell::Resize { cols, rows })) => {
+                        let _ = master.resize(PtySize {
+                            rows,
+                            cols,
+                            pixel_width: 0,
+                            pixel_height: 0,
+                        });
+                    }
+                    Ok(Some(ToShell::Close)) | Ok(None) => {
+                        let _ = child.kill();
+                        let _ = child.wait();
+                        rt.block_on(async {
+                            let _ = handle.close(channel).await;
+                        });
+                        return;
+                    }
+                    Err(_) => continue,
+                }
+            }
+        })
+        .expect("spawn pty-bridge thread");
+
+    tx
 }
 
 /// Send one canned terminal session: three OSC 133-framed commands,
