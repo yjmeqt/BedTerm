@@ -9,9 +9,11 @@
 //! fontdb at FontSystem construction. The bundled font is what
 //! `Family::Name("JetBrains Mono")` resolves to in `glyph_raster.rs`.
 //!
-//! Emoji is still a follow-up — Apple Color Emoji isn't redistributable
-//! and Noto Color Emoji renders inconsistently on iOS, so emoji codepoints
-//! still produce tofu until a vetted color-emoji bundle lands.
+//! Color emoji: bundles Noto Color Emoji (Google's CBDT-based color
+//! bitmap font, OFL licensed). Apple Color Emoji is the iOS default but
+//! isn't redistributable, so this is the next-best for a standalone
+//! cross-iOS-version bundle. Rendering quality is good for the common
+//! emoji set; some newer glyphs may lag a release behind Apple's.
 
 use cosmic_text::FontSystem;
 use std::sync::{Mutex, OnceLock};
@@ -26,13 +28,22 @@ const JETBRAINS_MONO_REGULAR: &[u8] = include_bytes!("../../assets/JetBrainsMono
 /// fontdb cascade picks this up automatically when `JetBrains Mono` lacks
 /// coverage for a codepoint. Bundling Traditional Chinese (TC) or
 /// Japanese-optimised kana variants is a future opt-in.
-const NOTO_SANS_MONO_CJK_SC: &[u8] =
-    include_bytes!("../../assets/NotoSansMonoCJKsc-Regular.otf");
+const NOTO_SANS_MONO_CJK_SC: &[u8] = include_bytes!("../../assets/NotoSansMonoCJKsc-Regular.otf");
+
+/// Color emoji fallback. OFL licensed (Noto Color Emoji, ~10 MB; CBDT
+/// bitmap strikes consumed by swash's `Source::ColorBitmap` path). The
+/// rasterizer's source cascade renders colour glyphs through this when
+/// `glyph_raster.rs` sees `Content::Color` from swash.
+const NOTO_COLOR_EMOJI: &[u8] = include_bytes!("../../assets/NotoColorEmoji.ttf");
 
 /// All fonts to register at FontSystem startup. The first entry is the
 /// authoritative cascade root; subsequent entries provide automatic
 /// fallback coverage for codepoints the primary lacks.
-const BUNDLED_FONTS: &[&[u8]] = &[JETBRAINS_MONO_REGULAR, NOTO_SANS_MONO_CJK_SC];
+const BUNDLED_FONTS: &[&[u8]] = &[
+    JETBRAINS_MONO_REGULAR,
+    NOTO_SANS_MONO_CJK_SC,
+    NOTO_COLOR_EMOJI,
+];
 
 static FONT_SYSTEM: OnceLock<Mutex<FontSystem>> = OnceLock::new();
 
