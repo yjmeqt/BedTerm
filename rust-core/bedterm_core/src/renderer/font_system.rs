@@ -9,22 +9,30 @@
 //! fontdb at FontSystem construction. The bundled font is what
 //! `Family::Name("JetBrains Mono")` resolves to in `glyph_raster.rs`.
 //!
-//! CJK + emoji fonts can be added by extending `BUNDLED_FONTS` — but for
-//! the first cosmic-text iOS landing we ship monospace-only and accept
-//! tofu for non-Latin codepoints until those bundles arrive.
+//! Emoji is still a follow-up — Apple Color Emoji isn't redistributable
+//! and Noto Color Emoji renders inconsistently on iOS, so emoji codepoints
+//! still produce tofu until a vetted color-emoji bundle lands.
 
 use cosmic_text::FontSystem;
 use std::sync::{Mutex, OnceLock};
 
-/// Primary monospace face we ship inside the binary. Apache-2.0 licensed
-/// (JetBrains Mono v2.x). The family name registered in fontdb is
-/// `"JetBrains Mono"` (whatever the file's `name` table records — the
-/// JetBrainsMono distribution sets exactly that).
+/// Primary monospace face. Apache-2.0 licensed (JetBrains Mono v2.x).
+/// fontdb registers it under `"JetBrains Mono"` — that name is what
+/// `glyph_raster.rs` requests via `Family::Name(...)`.
 const JETBRAINS_MONO_REGULAR: &[u8] = include_bytes!("../../assets/JetBrainsMono-Regular.ttf");
 
-/// All fonts to register at FontSystem startup, in the order callers
-/// prefer them. Extend this list to bundle CJK / emoji coverage.
-const BUNDLED_FONTS: &[&[u8]] = &[JETBRAINS_MONO_REGULAR];
+/// CJK fallback. OFL licensed (Noto Sans Mono CJK SC Regular, ~16 MB).
+/// Covers Simplified Chinese, Japanese, and Korean ideographs; cosmic-text's
+/// fontdb cascade picks this up automatically when `JetBrains Mono` lacks
+/// coverage for a codepoint. Bundling Traditional Chinese (TC) or
+/// Japanese-optimised kana variants is a future opt-in.
+const NOTO_SANS_MONO_CJK_SC: &[u8] =
+    include_bytes!("../../assets/NotoSansMonoCJKsc-Regular.otf");
+
+/// All fonts to register at FontSystem startup. The first entry is the
+/// authoritative cascade root; subsequent entries provide automatic
+/// fallback coverage for codepoints the primary lacks.
+const BUNDLED_FONTS: &[&[u8]] = &[JETBRAINS_MONO_REGULAR, NOTO_SANS_MONO_CJK_SC];
 
 static FONT_SYSTEM: OnceLock<Mutex<FontSystem>> = OnceLock::new();
 
