@@ -44,6 +44,9 @@ final class BlockListSelectionController {
     private var rowHeightPt: CGFloat
     private var cellWidthPt: CGFloat
     private var containerWidth: CGFloat = 0
+    /// Horizontal inset between contentView's left edge and the first
+    /// cell column — matches the container's Warp-style accent bar.
+    private var leftInsetPt: CGFloat = 0
     private var active: ActiveSelection?
 
     init(
@@ -66,10 +69,14 @@ final class BlockListSelectionController {
     /// Container pushes fresh cell metrics each layout pass. Width drives
     /// hit-test column resolution; height drives row resolution + the
     /// selection layer's geometry.
-    func updateMetrics(cellWidth: CGFloat, rowHeight: CGFloat, containerWidth: CGFloat) {
+    func updateMetrics(
+        cellWidth: CGFloat, rowHeight: CGFloat,
+        containerWidth: CGFloat, leftInset: CGFloat
+    ) {
         cellWidthPt = cellWidth
         rowHeightPt = rowHeight
         self.containerWidth = containerWidth
+        self.leftInsetPt = leftInset
     }
 
     @objc private func handleLongPress(_ gr: UILongPressGestureRecognizer) {
@@ -95,7 +102,7 @@ final class BlockListSelectionController {
             return
         }
         let row = clampRow(point.y - hit.bodyTop, rows: hit.rows)
-        let col = clampCol(point.x, cols: hit.cols)
+        let col = clampCol(point.x - leftInsetPt, cols: hit.cols)
         active = ActiveSelection(
             blockID: hit.blockID, bodyTopInContent: hit.bodyTop,
             cols: hit.cols, rows: hit.rows,
@@ -107,7 +114,7 @@ final class BlockListSelectionController {
     private func extend(to point: CGPoint) {
         guard var sel = active else { return }
         let row = clampRow(point.y - sel.bodyTopInContent, rows: sel.rows)
-        let col = clampCol(point.x, cols: sel.cols)
+        let col = clampCol(point.x - leftInsetPt, cols: sel.cols)
         sel.range.endRow = row
         sel.range.endCol = col + 1
         active = sel
@@ -132,9 +139,11 @@ final class BlockListSelectionController {
             return
         }
         let bodyHeight = CGFloat(sel.rows) * rowHeightPt
+        // Inset the layer so its column-0 rect aligns with the Metal
+        // pane's first cell, which is itself inset by the accent bar.
         selectionLayer.frame = CGRect(
-            x: 0, y: sel.bodyTopInContent,
-            width: containerWidth, height: bodyHeight)
+            x: leftInsetPt, y: sel.bodyTopInContent,
+            width: max(0, containerWidth - leftInsetPt), height: bodyHeight)
         selectionLayer.update(
             sel.range,
             cellSize: CGSize(width: cellWidthPt, height: rowHeightPt),

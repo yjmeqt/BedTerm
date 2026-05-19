@@ -22,6 +22,11 @@ final class BlockListContainerViewController: UIViewController, UIScrollViewDele
     private let contentView = UIView()
     private let metalView: TerminalBlocksMetalView
     private var headerHosts: [UInt64: UIHostingController<BlockHeader>] = [:]
+    /// Per-block left accent bar — Warp's iconic block-edge stripe.
+    /// Same visibility virtualisation as `headerHosts`. Style helpers
+    /// live in `BlockAccentBar`.
+    private var accentBars: [UInt64: UIView] = [:]
+    private var accentBarWidthPt: CGFloat { BlockAccentBar.widthPt }
 
     // Layout constants. headerHeightPt may clip at Dynamic Type XXL —
     // accepted v1 limitation per Phase B plan.
@@ -62,7 +67,9 @@ final class BlockListContainerViewController: UIViewController, UIScrollViewDele
     override func viewDidLoad() {
         super.viewDidLoad()
         scrollView.delegate = self
-        scrollView.alwaysBounceVertical = true
+        // Warp-style: no rubber-band overscroll. Top/bottom clamp hard.
+        scrollView.bounces = false
+        scrollView.alwaysBounceVertical = false
         scrollView.backgroundColor = .clear
         contentView.backgroundColor = .clear
         view.addSubview(scrollView)
@@ -92,6 +99,8 @@ final class BlockListContainerViewController: UIViewController, UIScrollViewDele
             host.removeFromParent()
         }
         headerHosts.removeAll()
+        for (_, bar) in accentBars { bar.removeFromSuperview() }
+        accentBars.removeAll()
         scrollView.delegate = nil
     }
 
@@ -159,14 +168,20 @@ final class BlockListContainerViewController: UIViewController, UIScrollViewDele
         }
         selection?.updateMetrics(
             cellWidth: cellWidthPt, rowHeight: rowHeightPt,
-            containerWidth: view.bounds.width)
+            containerWidth: view.bounds.width,
+            leftInset: accentBarWidthPt)
     }
 
     override func viewWillLayoutSubviews() {
         super.viewWillLayoutSubviews()
         let bounds = view.bounds
         scrollView.frame = bounds
-        metalView.frame = bounds
+        // Inset the Metal surface by the accent-bar width so cell
+        // column 0 starts to the right of the bar instead of beneath it.
+        metalView.frame = CGRect(
+            x: accentBarWidthPt, y: 0,
+            width: max(0, bounds.width - accentBarWidthPt),
+            height: bounds.height)
         // Only re-run the heavy refresh path when bounds actually
         // change. layoutSubviews fires repeatedly during scroll /
         // rotation / keyboard transitions; rebuildHeaders() is O(N).
@@ -234,17 +249,31 @@ final class BlockListContainerViewController: UIViewController, UIScrollViewDele
                     host.didMove(toParent: self)
                 }
                 host.view.frame = CGRect(
-                    x: 0, y: blockTop, width: width, height: headerHeightPt)
+                    x: accentBarWidthPt, y: blockTop,
+                    width: width - accentBarWidthPt, height: headerHeightPt)
+                let bar = accentBars[block.id] ?? BlockAccentBar.make()
+                bar.backgroundColor = BlockAccentBar.color(for: block)
+                bar.frame = CGRect(
+                    x: 0, y: blockTop,
+                    width: accentBarWidthPt, height: blockBot - blockTop)
+                BlockAccentBar.applyPulse(to: bar, running: block.isRunning)
+                if bar.superview == nil { contentView.addSubview(bar) }
+                accentBars[block.id] = bar
             }
             yPt = blockBot
         }
 
-        // Demount hosts whose block disappeared or scrolled out of range.
+        // Demount hosts + accent bars whose block disappeared or
+        // scrolled out of range.
         for (id, host) in headerHosts where !keepIDs.contains(id) {
             host.willMove(toParent: nil)
             host.view.removeFromSuperview()
             host.removeFromParent()
             headerHosts.removeValue(forKey: id)
+        }
+        for (id, bar) in accentBars where !keepIDs.contains(id) {
+            bar.removeFromSuperview()
+            accentBars.removeValue(forKey: id)
         }
     }
 
