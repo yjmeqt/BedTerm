@@ -178,57 +178,9 @@ impl Renderer {
         )
     }
 
-    /// pub(crate) forwarder so `block_list` FFI (Task 3) can paint a
-    /// cell range at an arbitrary Y offset without cracking open the
-    /// private helper. Same semantics as `draw_cells_into_subregion`.
-    ///
-    /// # Safety
-    /// `texture_ptr` must be a live `id<MTLTexture>` borrowed for the
-    /// duration of this call.
-    #[allow(clippy::too_many_arguments)]
-    pub(crate) unsafe fn draw_cells_subregion(
-        &mut self,
-        cells: &[CellSnapshot],
-        cols: u16,
-        rows: u16,
-        texture_ptr: *const std::ffi::c_void,
-        viewport_w: u32,
-        viewport_h: u32,
-        dest_y_px: f32,
-        clear_first: bool,
-    ) -> i32 {
-        self.draw_cells_into_subregion(
-            cells,
-            cols,
-            rows,
-            texture_ptr,
-            viewport_w,
-            viewport_h,
-            dest_y_px,
-            clear_first,
-        )
-    }
-
-    /// Encode a clear-only pass into `texture_ptr`. Used by the block
-    /// view when no blocks are visible (e.g. empty session) so the
-    /// drawable still gets cleared to `self.clear_color` and presented.
-    ///
-    /// # Safety
-    /// `texture_ptr` must be a live `id<MTLTexture>` borrowed for the
-    /// duration of this call.
-    pub(crate) unsafe fn clear_viewport(
-        &mut self,
-        texture_ptr: *const std::ffi::c_void,
-        _viewport_w: u32,
-        _viewport_h: u32,
-    ) -> i32 {
-        self.draw_cells_into_subregion(&[], 0, 0, texture_ptr, _viewport_w, _viewport_h, 0.0, true)
-    }
-
     /// Paint `cells` into a Y-offset region of `texture_ptr`. When
     /// `clear_first` is true the pass uses `MTLLoadAction::Clear`;
-    /// otherwise `MTLLoadAction::Load` so prior content per-frame is
-    /// preserved (multi-block per-drawable rendering).
+    /// otherwise `MTLLoadAction::Load`.
     ///
     /// Returns 0 on success (including an empty `cells` slice — still
     /// encodes the clear/load pass), -1 on missing texture.
@@ -248,92 +200,176 @@ impl Renderer {
             return -1;
         }
         // Early-layout guard: viewport_w/h == 0 is legitimate during the
-        // first frame before the MTKView gets a drawable size. The
-        // vertex shader's `pos / viewportPx` would divide by zero;
-        // skip the encode entirely.
+        // first frame before the MTKView gets a drawable size.
         if viewport_w == 0 || viewport_h == 0 {
             return 0;
         }
         let mut verts: Vec<CellVertex> = Vec::new();
-        if !cells.is_empty() {
-            let (cell_w, cell_h) = self.atlas.cell_px;
-            let cell_wf = cell_w as f32;
-            let cell_hf = cell_h as f32;
-            let cols = cols as usize;
-            let rows = rows as usize;
-            verts.reserve(cols * rows * VERTICES_PER_CELL);
-            // Flag bits — must match `term.rs` snapshot encoding.
-            const FLAG_WIDE_LEADING: u16 = 16;
-            const FLAG_WIDE_TRAILING: u16 = 32;
-            // Pre-ensure all needed glyphs (one-pass; the HashMap dedups).
-            // Wide (CJK) glyphs get rasterised into a 2-cell-wide slot.
-            for cell in cells {
-                if cell.ch != 0 {
-                    let wide = (cell.flags & FLAG_WIDE_LEADING) != 0;
-                    self.atlas.ensure(cell.ch, wide);
-                }
-            }
-            for r in 0..rows {
-                for c in 0..cols {
-                    let cell = cells[r * cols + c];
-                    // Wide-trailing spacer cells contribute no quad — the
-                    // preceding WIDE_LEADING cell's quad already spans both
-                    // columns (including the spacer's background).
-                    if (cell.flags & FLAG_WIDE_TRAILING) != 0 {
-                        continue;
-                    }
-                    let glyph = self.atlas.lookup(cell.ch).copied();
-                    let (uvo, uvs, glyph_wide, is_color) = match glyph {
-                        Some(g) => (g.uv_origin, g.uv_size, g.wide, g.is_color),
-                        None => ((0.0, 0.0), (0.0, 0.0), false, false),
-                    };
-                    // Wide (CJK) glyphs draw across two cell columns. A wide
-                    // cell whose glyph couldn't be rasterised still claims
-                    // both columns so the trailing spacer isn't drawn over by
-                    // a neighbour and the bg colour stays consistent. Color
-                    // emoji glyphs are auto-promoted to wide by the atlas
-                    // even when the terminal didn't tag them WIDE_CHAR; honour
-                    // that so the bitmap renders at its natural aspect ratio.
-                    let wide = (cell.flags & FLAG_WIDE_LEADING) != 0 || glyph_wide;
-                    let span = if wide { 2.0 } else { 1.0 };
-                    let cell_span_w = cell_wf * span;
-                    let x = c as f32 * cell_wf;
-                    let y = r as f32 * cell_hf + dest_y_px;
-                    let fg = rgba_to_float(cell.fg_rgba);
-                    let bg = rgba_to_float(cell.bg_rgba);
-                    let is_color_f = if is_color { 1.0 } else { 0.0 };
-                    let v = |dx: f32, dy: f32, du: f32, dv: f32| CellVertex {
-                        pos_x: x + dx * cell_span_w,
-                        pos_y: y + dy * cell_hf,
-                        uv_x: uvo.0 + du * uvs.0,
-                        uv_y: uvo.1 + dv * uvs.1,
-                        fg,
-                        bg,
-                        is_color: is_color_f,
-                        _pad: [0.0; 3],
-                    };
-                    // Triangle 1: TL, TR, BL
-                    verts.push(v(0.0, 0.0, 0.0, 0.0));
-                    verts.push(v(1.0, 0.0, 1.0, 0.0));
-                    verts.push(v(0.0, 1.0, 0.0, 1.0));
-                    // Triangle 2: TR, BR, BL
-                    verts.push(v(1.0, 0.0, 1.0, 0.0));
-                    verts.push(v(1.0, 1.0, 1.0, 1.0));
-                    verts.push(v(0.0, 1.0, 0.0, 1.0));
-                }
-            }
+        self.append_cells_to_verts(cells, cols, rows, dest_y_px, &mut verts);
+        self.encode_cell_pass(texture_ptr, viewport_w, viewport_h, &verts, clear_first);
+        0
+    }
+
+    /// Render visible block bodies in one frame. One render pass with
+    /// one Clear, one draw call covering the concatenated vertex buffer
+    /// of every visible block. Called by the FFI; see
+    /// `block_list_ffi::bt_renderer_draw_block_list` for the contract.
+    ///
+    /// # Safety
+    /// `term` must be a valid `&mut BtTerm`. `texture_ptr` must be a live
+    /// `id<MTLTexture>` borrowed for the call.
+    pub(crate) unsafe fn draw_block_list(
+        &mut self,
+        term: &mut crate::ffi::BtTerm,
+        texture_ptr: *const std::ffi::c_void,
+        viewport_w: u32,
+        viewport_h: u32,
+        scroll_y_px: f32,
+        entries: &[crate::renderer::block_list_ffi::BtBlockLayoutEntry],
+    ) -> i32 {
+        if texture_ptr.is_null() {
+            return -1;
+        }
+        if viewport_w == 0 || viewport_h == 0 {
+            return 0;
         }
 
-        let vbuf = if verts.is_empty() {
-            None
-        } else {
-            Some(self.device.new_buffer_with_data(
-                verts.as_ptr() as *const _,
-                (verts.len() * std::mem::size_of::<CellVertex>()) as u64,
-                MTLResourceOptions::StorageModeShared,
-            ))
-        };
+        let viewport_h_f = viewport_h as f32;
+        // One vertex buffer for all visible blocks. Pre-reserve based on
+        // a coarse estimate: ~80×24 cells × 6 verts each for a typical
+        // visible block. Realloc costs are dwarfed by glyph rasterising.
+        let mut verts: Vec<CellVertex> = Vec::new();
 
+        for entry in entries {
+            let body_top_in_view = entry.body_y_top_px - scroll_y_px;
+            let body_bot_in_view = body_top_in_view + entry.body_height_px;
+            // Cull blocks entirely outside the viewport.
+            if body_bot_in_view <= 0.0 || body_top_in_view >= viewport_h_f {
+                continue;
+            }
+            // Resolve the snapshot: sealed -> frozen; running -> live range.
+            // Linear scan: typical visible block count < 20.
+            let resolved: Option<crate::snapshot::GridSnapshot> = {
+                let inner = term.inner_ref();
+                let blocks = inner.blocks();
+                let block = blocks.iter().find(|b| b.id == entry.block_id);
+                match block {
+                    Some(b) if b.frozen_snapshot.is_some() => b.frozen_snapshot.clone(),
+                    Some(b) => {
+                        let start = b.start_line;
+                        let end = inner.current_line() + 1;
+                        if end > start {
+                            Some(inner.snapshot_range(start, end))
+                        } else {
+                            None
+                        }
+                    }
+                    None => None,
+                }
+            };
+            let Some(snap) = resolved else { continue };
+            self.append_cells_to_verts(
+                &snap.cells,
+                snap.cols,
+                snap.rows,
+                body_top_in_view,
+                &mut verts,
+            );
+        }
+
+        // One render pass — Clear once, one draw call (or just Clear when
+        // no blocks are visible).
+        self.encode_cell_pass(
+            texture_ptr,
+            viewport_w,
+            viewport_h,
+            &verts,
+            /* clear: */ true,
+        );
+        0
+    }
+
+    /// Build per-cell quad vertices for one block's grid, appending into
+    /// the caller's vertex buffer. Shared between the per-block
+    /// `draw_cells_into_subregion` path and the one-pass `draw_block_list`
+    /// path so glyph-atlas state, wide-glyph handling, and color-emoji
+    /// promotion stay in one place.
+    fn append_cells_to_verts(
+        &mut self,
+        cells: &[CellSnapshot],
+        cols: u16,
+        rows: u16,
+        dest_y_px: f32,
+        verts: &mut Vec<CellVertex>,
+    ) {
+        if cells.is_empty() {
+            return;
+        }
+        let (cell_w, cell_h) = self.atlas.cell_px;
+        let cell_wf = cell_w as f32;
+        let cell_hf = cell_h as f32;
+        let cols = cols as usize;
+        let rows = rows as usize;
+        verts.reserve(cols * rows * VERTICES_PER_CELL);
+        // Flag bits — must match `term.rs` snapshot encoding.
+        const FLAG_WIDE_LEADING: u16 = 16;
+        const FLAG_WIDE_TRAILING: u16 = 32;
+        for cell in cells {
+            if cell.ch != 0 {
+                let wide = (cell.flags & FLAG_WIDE_LEADING) != 0;
+                self.atlas.ensure(cell.ch, wide);
+            }
+        }
+        for r in 0..rows {
+            for c in 0..cols {
+                let cell = cells[r * cols + c];
+                if (cell.flags & FLAG_WIDE_TRAILING) != 0 {
+                    continue;
+                }
+                let glyph = self.atlas.lookup(cell.ch).copied();
+                let (uvo, uvs, glyph_wide, is_color) = match glyph {
+                    Some(g) => (g.uv_origin, g.uv_size, g.wide, g.is_color),
+                    None => ((0.0, 0.0), (0.0, 0.0), false, false),
+                };
+                let wide = (cell.flags & FLAG_WIDE_LEADING) != 0 || glyph_wide;
+                let span = if wide { 2.0 } else { 1.0 };
+                let cell_span_w = cell_wf * span;
+                let x = c as f32 * cell_wf;
+                let y = r as f32 * cell_hf + dest_y_px;
+                let fg = rgba_to_float(cell.fg_rgba);
+                let bg = rgba_to_float(cell.bg_rgba);
+                let is_color_f = if is_color { 1.0 } else { 0.0 };
+                let v = |dx: f32, dy: f32, du: f32, dv: f32| CellVertex {
+                    pos_x: x + dx * cell_span_w,
+                    pos_y: y + dy * cell_hf,
+                    uv_x: uvo.0 + du * uvs.0,
+                    uv_y: uvo.1 + dv * uvs.1,
+                    fg,
+                    bg,
+                    is_color: is_color_f,
+                    _pad: [0.0; 3],
+                };
+                verts.push(v(0.0, 0.0, 0.0, 0.0));
+                verts.push(v(1.0, 0.0, 1.0, 0.0));
+                verts.push(v(0.0, 1.0, 0.0, 1.0));
+                verts.push(v(1.0, 0.0, 1.0, 0.0));
+                verts.push(v(1.0, 1.0, 1.0, 1.0));
+                verts.push(v(0.0, 1.0, 0.0, 1.0));
+            }
+        }
+    }
+
+    /// Emit one render pass: Clear or Load → optional vertex draw → Store
+    /// → commit. Shared between the per-block subregion path and the
+    /// one-pass block-list path.
+    unsafe fn encode_cell_pass(
+        &mut self,
+        texture_ptr: *const std::ffi::c_void,
+        viewport_w: u32,
+        viewport_h: u32,
+        verts: &[CellVertex],
+        clear: bool,
+    ) {
         #[repr(C)]
         struct Uniforms {
             vp_x: f32,
@@ -344,16 +380,23 @@ impl Renderer {
             vp_y: viewport_h as f32,
         };
 
-        // Texture is borrowed — wrap in ManuallyDrop to suppress the
-        // release-on-drop behaviour of the owned Texture. Swift owns the
-        // drawable's retain count.
+        let vbuf = if verts.is_empty() {
+            None
+        } else {
+            Some(self.device.new_buffer_with_data(
+                verts.as_ptr() as *const _,
+                std::mem::size_of_val(verts) as u64,
+                MTLResourceOptions::StorageModeShared,
+            ))
+        };
+
         let texture = Texture::from_ptr(texture_ptr as *mut _);
         let texture = std::mem::ManuallyDrop::new(texture);
 
         let pass = RenderPassDescriptor::new();
         let att = pass.color_attachments().object_at(0).unwrap();
         att.set_texture(Some(&*texture));
-        if clear_first {
+        if clear {
             att.set_load_action(MTLLoadAction::Clear);
             let [cr, cg, cb, ca] = self.clear_color;
             att.set_clear_color(MTLClearColor::new(
@@ -379,74 +422,6 @@ impl Renderer {
         }
         enc.end_encoding();
         cmd.commit();
-        // NOT cmd.wait_until_completed — Swift's MTKView present happens on
-        // its own schedule after this returns.
-        0
-    }
-
-    /// Render visible block bodies in one frame. Called by the FFI; see
-    /// `block_list_ffi::bt_renderer_draw_block_list` for the contract.
-    ///
-    /// # Safety
-    /// `term` must be a valid `&mut BtTerm`. `texture_ptr` must be a live
-    /// `id<MTLTexture>` borrowed for the call.
-    pub(crate) unsafe fn draw_block_list(
-        &mut self,
-        term: &mut crate::ffi::BtTerm,
-        texture_ptr: *const std::ffi::c_void,
-        viewport_w: u32,
-        viewport_h: u32,
-        scroll_y_px: f32,
-        entries: &[crate::renderer::block_list_ffi::BtBlockLayoutEntry],
-    ) -> i32 {
-        let viewport_h_f = viewport_h as f32;
-        let mut painted_any = false;
-
-        for entry in entries {
-            let body_top_in_view = entry.body_y_top_px - scroll_y_px;
-            let body_bot_in_view = body_top_in_view + entry.body_height_px;
-            // Cull blocks entirely outside the viewport.
-            if body_bot_in_view <= 0.0 || body_top_in_view >= viewport_h_f {
-                continue;
-            }
-            // Resolve the snapshot: sealed -> frozen; running -> live range.
-            // Linear scan over blocks: typical visible block count is < 20.
-            let resolved: Option<crate::snapshot::GridSnapshot> = {
-                let inner = term.inner_ref();
-                let blocks = inner.blocks();
-                let block = blocks.iter().find(|b| b.id == entry.block_id);
-                match block {
-                    Some(b) if b.frozen_snapshot.is_some() => b.frozen_snapshot.clone(),
-                    Some(b) => {
-                        let start = b.start_line;
-                        let end = inner.current_line() + 1;
-                        if end > start {
-                            Some(inner.snapshot_range(start, end))
-                        } else {
-                            None
-                        }
-                    }
-                    None => None,
-                }
-            };
-            let Some(snap) = resolved else { continue };
-            self.draw_cells_subregion(
-                &snap.cells,
-                snap.cols,
-                snap.rows,
-                texture_ptr,
-                viewport_w,
-                viewport_h,
-                body_top_in_view,
-                !painted_any, // clear_first only on the very first block
-            );
-            painted_any = true;
-        }
-
-        if !painted_any {
-            self.clear_viewport(texture_ptr, viewport_w, viewport_h);
-        }
-        0
     }
 }
 
