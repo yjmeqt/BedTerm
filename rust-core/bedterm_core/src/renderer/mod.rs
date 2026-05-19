@@ -129,6 +129,8 @@ impl Renderer {
     /// duration of this call. `cells_ptr` may be null or `cells_len` zero
     /// for an empty draw. When non-empty, `cells_len` must equal
     /// `cols as usize * rows as usize`.
+    // 9-arg signature predates the CT atlas swap; refactor tracked separately.
+    #[allow(clippy::too_many_arguments)]
     pub unsafe fn draw_cells(
         &mut self,
         cells_ptr: *const CellSnapshot,
