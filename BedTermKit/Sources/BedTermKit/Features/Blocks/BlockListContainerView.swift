@@ -25,6 +25,15 @@ final class BlockListContainerView: UIView, UIScrollViewDelegate {
     /// atlas metrics. Fallback to 18 if metrics unavailable.
     private var rowHeightPt: CGFloat = 18
 
+    /// CADisplayLink driving 60Hz redraws while any block is running.
+    /// Stopped when the block list is fully sealed (battery hygiene).
+    private var displayLink: CADisplayLink?
+
+    /// Pin-to-bottom: when the user is at the bottom and content grows
+    /// (streaming output / new block sealed), keep them at the bottom.
+    /// "At bottom" = contentOffset.y >= maxOffset - tolerance.
+    private let pinTolerancePt: CGFloat = 24
+
     init(session: TerminalSession) {
         self.session = session
         self.metalView = TerminalBlocksMetalView(session: session)
@@ -42,13 +51,71 @@ final class BlockListContainerView: UIView, UIScrollViewDelegate {
     @available(*, unavailable)
     required init?(coder: NSCoder) { fatalError("not used") }
 
+    isolated deinit {
+        // CADisplayLink retains its target — invalidate so this view
+        // (and the session it weakly references) can actually deinit.
+        displayLink?.invalidate()
+    }
+
     /// Called by the SwiftUI wrapper's `updateUIView` whenever observed
     /// state changes (BlockStore.blocks). Rebuilds header hosts, content
-    /// size, and the Metal layout table.
+    /// size, and the Metal layout table. Preserves pin-to-bottom when
+    /// the content grew.
     func refresh() {
         refreshRowHeight()
+        let wasPinnedToBottom = isPinnedToBottom()
         rebuildHeaders()
         updateContentSize()
+        if wasPinnedToBottom {
+            scrollToBottom(animated: false)
+        }
+        pushLayoutToMetalView()
+        updateDisplayLink()
+    }
+
+    /// True if the user is parked at (or within tolerance of) the
+    /// bottom of the content. Used to gate auto-follow on growth.
+    private func isPinnedToBottom() -> Bool {
+        let maxOffset = max(0, scrollView.contentSize.height - scrollView.bounds.height)
+        return scrollView.contentOffset.y >= maxOffset - pinTolerancePt
+    }
+
+    private func scrollToBottom(animated: Bool) {
+        let maxOffset = max(0, scrollView.contentSize.height - scrollView.bounds.height)
+        // Avoid spurious setContentOffset during early layout when bounds
+        // are zero — that path would clamp negative and stick at 0.
+        guard scrollView.bounds.height > 0 else { return }
+        scrollView.setContentOffset(CGPoint(x: 0, y: maxOffset), animated: animated)
+    }
+
+    /// Drive a 60Hz tick while at least one block is running so the live
+    /// block's row count + cell contents redraw smoothly. Stop the link
+    /// when every block is sealed — running on a sealed list wastes
+    /// power and Metal command-buffer cycles.
+    private func updateDisplayLink() {
+        let hasRunning = session.blockStore.blocks.contains(where: \.isRunning)
+        if hasRunning {
+            if displayLink == nil {
+                let link = CADisplayLink(target: self, selector: #selector(handleDisplayTick))
+                link.add(to: .main, forMode: .common)
+                displayLink = link
+            }
+        } else {
+            displayLink?.invalidate()
+            displayLink = nil
+        }
+    }
+
+    @objc private func handleDisplayTick() {
+        // The running block's row count grows as PTY bytes arrive.
+        // Re-compute layout (cheap — array length × few f32 multiplies),
+        // honour pin-to-bottom, then re-render the Metal surface.
+        let wasPinnedToBottom = isPinnedToBottom()
+        rebuildHeaders()
+        updateContentSize()
+        if wasPinnedToBottom {
+            scrollToBottom(animated: false)
+        }
         pushLayoutToMetalView()
     }
 
