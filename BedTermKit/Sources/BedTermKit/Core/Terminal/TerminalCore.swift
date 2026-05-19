@@ -1,6 +1,20 @@
 import BedTermCoreC
 import Foundation
 
+/// Read-only mirror of a Rust-owned `Block`. Copied out per call —
+/// the FFI string pointers are scratch-backed and must not be retained.
+public struct RustBlock: Identifiable, Sendable, Equatable {
+    public let id: UInt64
+    public let command: String
+    public let startLine: Int32
+    public let endLine: Int32
+    public let exitCode: Int32?
+    public let duration: TimeInterval?
+    public let workingDirectory: String?
+    public let isRunning: Bool
+    public let hasFrozenSnapshot: Bool
+}
+
 /// Swift facade over the Rust terminal core.
 ///
 /// Thread safety: not thread-safe. Construct, feed, resize, and snapshot on a
@@ -179,5 +193,98 @@ public final class TerminalCore {
             cols: view.cols, rows: view.rows,
             cursorCol: view.cursor_col, cursorRow: view.cursor_row,
             displayOffset: view.display_offset, cells: cells)
+    }
+
+    public var blockCount: Int {
+        Int(bt_term_block_count(handle))
+    }
+
+    public func block(at index: Int) -> RustBlock? {
+        // cbindgen surfaces C arrays as Swift tuples; list every field explicitly.
+        var view = BtBlockView(
+            id: 0,
+            start_line: 0,
+            end_line: 0,
+            is_running: 0,
+            has_exit_code: 0,
+            _pad: (0, 0),
+            exit_code: 0,
+            duration_ms: 0,
+            has_duration: 0,
+            _pad2: (0, 0, 0, 0, 0, 0, 0),
+            command: nil,
+            command_len: 0,
+            cwd: nil,
+            cwd_len: 0,
+            has_frozen_snapshot: 0,
+            _pad3: (0, 0, 0, 0, 0, 0, 0)
+        )
+        guard index >= 0,
+            index < blockCount,
+            bt_term_block_at(handle, UInt(index), &view) == 0
+        else {
+            return nil
+        }
+        let command = copyOutString(ptr: view.command, len: Int(view.command_len))
+        let cwd =
+            view.cwd_len > 0
+            ? copyOutString(ptr: view.cwd, len: Int(view.cwd_len))
+            : nil
+        return RustBlock(
+            id: view.id,
+            command: command,
+            startLine: view.start_line,
+            endLine: view.end_line,
+            exitCode: view.has_exit_code != 0 ? view.exit_code : nil,
+            duration: view.has_duration != 0
+                ? TimeInterval(view.duration_ms) / 1000.0
+                : nil,
+            workingDirectory: cwd,
+            isRunning: view.is_running != 0,
+            hasFrozenSnapshot: view.has_frozen_snapshot != 0
+        )
+    }
+
+    public func allBlocks() -> [RustBlock] {
+        let count = blockCount
+        var out: [RustBlock] = []
+        out.reserveCapacity(count)
+        for idx in 0..<count {
+            if let block = block(at: idx) {
+                out.append(block)
+            }
+        }
+        return out
+    }
+
+    public func frozenSnapshot(forBlockAt index: Int) -> GridSnapshot? {
+        var view = BtSnapshotView(
+            cols: 0, rows: 0, cursor_col: 0, cursor_row: 0,
+            display_offset: 0, cells: nil, cell_count: 0)
+        guard bt_term_block_snapshot(handle, UInt(index), &view) == 0,
+            view.rows > 0,
+            let cellsPtr = view.cells
+        else {
+            return nil
+        }
+        let buffer = UnsafeBufferPointer(start: cellsPtr, count: Int(view.cell_count))
+        var cells: [GridSnapshot.Cell] = []
+        cells.reserveCapacity(Int(view.cell_count))
+        for raw in buffer {
+            cells.append(
+                GridSnapshot.Cell(
+                    ch: raw.ch, fgRGBA: raw.fg_rgba, bgRGBA: raw.bg_rgba, flags: raw.flags))
+        }
+        bt_term_block_snapshot_release(handle)
+        return GridSnapshot(
+            cols: view.cols, rows: view.rows,
+            cursorCol: view.cursor_col, cursorRow: view.cursor_row,
+            displayOffset: view.display_offset, cells: cells)
+    }
+
+    private func copyOutString(ptr: UnsafePointer<UInt8>?, len: Int) -> String {
+        guard let ptr, len > 0 else { return "" }
+        let buf = UnsafeBufferPointer(start: ptr, count: len)
+        return String(bytes: buf, encoding: .utf8) ?? ""
     }
 }
