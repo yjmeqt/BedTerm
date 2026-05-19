@@ -103,4 +103,32 @@ final class RendererBridge {
             )
         }
     }
+
+    /// Draw every visible block body in one pass via
+    /// `bt_renderer_draw_block_list`. `layout` is a Swift-built table of
+    /// `BtBlockLayoutEntry` describing where each block's body sits in the
+    /// content (logical pixel) coordinate space; the renderer applies
+    /// `scrollOffsetPx` to clip against the texture viewport.
+    @discardableResult
+    func drawBlockList(
+        term: TerminalCore,
+        into texture: MTLTexture,
+        viewport: CGSize,
+        scrollOffsetPx: CGFloat,
+        layout: [BtBlockLayoutEntry]
+    ) -> Int32 {
+        let texPtr = Unmanaged.passUnretained(texture as AnyObject).toOpaque()
+        return layout.withUnsafeBufferPointer { buf in
+            bt_renderer_draw_block_list(
+                handle,
+                term.unsafeHandle,
+                texPtr,
+                UInt32(viewport.width),
+                UInt32(viewport.height),
+                Float(scrollOffsetPx),
+                buf.baseAddress,
+                UInt(buf.count)
+            )
+        }
+    }
 }
