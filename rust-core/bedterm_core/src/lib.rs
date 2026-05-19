@@ -1,6 +1,7 @@
 //! BedTerm terminal core — VTE parser + grid + scrollback for iOS / macOS.
 
 pub mod blocks;
+pub mod blocks_ffi;
 pub mod ffi;
 pub mod osc133;
 pub mod renderer;
@@ -12,6 +13,7 @@ pub mod mock_tty;
 
 // Re-export FFI mode constants at crate root so cbindgen emits them into the
 // generated C header.
+pub use blocks_ffi::BT_BLOCK_END_LINE_RUNNING;
 pub use ffi::{
     BT_OSC133_COMMAND_END, BT_OSC133_COMMAND_START, BT_OSC133_OUTPUT_START, BT_OSC133_PROMPT_START,
 };

@@ -11,6 +11,15 @@
 #include <stdlib.h>
 
 /**
+ * Sentinel for a still-running block's `end_line`. Picked outside the legal
+ * `i32` grid-line range alacritty produces. Public so the FFI layer can
+ * surface it to Swift.
+ */
+#define BLOCK_END_LINE_RUNNING INT32_MIN
+
+#define BT_BLOCK_END_LINE_RUNNING BLOCK_END_LINE_RUNNING
+
+/**
  * Discriminator values for `BtOsc133Event::kind`. Swift mirrors these in
  * `BedTermOsc133Event`.
  */
@@ -52,6 +61,43 @@ typedef struct BtRenderer BtRenderer;
 typedef struct BtTerm BtTerm;
 
 typedef struct Flags Flags;
+
+typedef struct BtBlockView {
+  uint64_t id;
+  int32_t start_line;
+  /**
+   * `BT_BLOCK_END_LINE_RUNNING` while the block is running.
+   */
+  int32_t end_line;
+  /**
+   * 1 if running, 0 otherwise.
+   */
+  uint8_t is_running;
+  uint8_t has_exit_code;
+  uint8_t _pad[2];
+  int32_t exit_code;
+  /**
+   * 0 when the shell didn't ship `dur=`.
+   */
+  uint64_t duration_ms;
+  uint8_t has_duration;
+  uint8_t _pad2[7];
+  /**
+   * UTF-8 bytes for command. `null` + len=0 when empty.
+   */
+  const uint8_t *command;
+  uintptr_t command_len;
+  /**
+   * UTF-8 bytes for working directory. `null` + len=0 when missing.
+   */
+  const uint8_t *cwd;
+  uintptr_t cwd_len;
+  /**
+   * 1 if `frozen_snapshot` is available (sealed block), 0 otherwise.
+   */
+  uint8_t has_frozen_snapshot;
+  uint8_t _pad3[7];
+} BtBlockView;
 
 typedef struct CellSnapshot {
   /**
@@ -151,6 +197,37 @@ typedef struct BtPaletteView {
 #ifdef __cplusplus
 extern "C" {
 #endif // __cplusplus
+
+/**
+ * # Safety
+ * `h` must be a valid `BtTerm *` returned by `bt_term_new`.
+ */
+uintptr_t bt_term_block_count(const struct BtTerm *h);
+
+/**
+ * # Safety
+ * `h` must be a valid `BtTerm *`; `out` must point to a writable
+ * `BtBlockView`. String pointers in `*out` are invalidated by the next
+ * call as described in the module-level docs.
+ */
+int bt_term_block_at(struct BtTerm *h, uintptr_t idx, struct BtBlockView *out);
+
+/**
+ * Fetch the frozen body of a sealed block. Returns -1 if the block is
+ * still running, missing, or the index is out of bounds. The cell
+ * pointer in `*out` follows the same invalidation rules as
+ * `bt_term_snapshot`.
+ *
+ * # Safety
+ * `h` valid; `out` writable.
+ */
+int bt_term_block_snapshot(struct BtTerm *h, uintptr_t idx, struct BtSnapshotView *out);
+
+/**
+ * # Safety
+ * `h` valid.
+ */
+void bt_term_block_snapshot_release(struct BtTerm *h);
 
 struct BtTerm *bt_term_new(uint16_t cols, uint16_t rows);
 

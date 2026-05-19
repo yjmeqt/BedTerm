@@ -33,6 +33,14 @@ pub struct BtTerm {
     /// is only valid until the next mutating call (next pop / feed / resize /
     /// free) — same lifetime contract as `bt_term_snapshot`'s cell pointer.
     osc133_attrs_scratch: Vec<u8>,
+    /// Scratch for any block-string outparam (command / cwd). Same
+    /// invalidation contract as `bt_term_snapshot`: pointer valid only
+    /// until the next mutating call OR the next block-string read.
+    block_string_scratch: Vec<u8>,
+    /// Cached snapshot for the most recent frozen-block snapshot view we
+    /// handed out. Pointer in `BtSnapshotView` is valid until the next
+    /// snapshot read / mutating call / explicit release.
+    block_snapshot_cached: Option<GridSnapshot>,
 }
 
 impl BtTerm {
@@ -42,6 +50,22 @@ impl BtTerm {
         let snap = self.inner.snapshot();
         self.cached = Some(snap);
         self.cached.as_ref().unwrap()
+    }
+
+    pub(crate) fn inner_ref(&self) -> &crate::term::Terminal {
+        &self.inner
+    }
+
+    pub(crate) fn block_string_scratch_mut(&mut self) -> &mut Vec<u8> {
+        &mut self.block_string_scratch
+    }
+
+    pub(crate) fn set_block_snapshot_cached(&mut self, snap: crate::snapshot::GridSnapshot) {
+        self.block_snapshot_cached = Some(snap);
+    }
+
+    pub(crate) fn clear_block_snapshot_cached(&mut self) {
+        self.block_snapshot_cached = None;
     }
 }
 
@@ -53,6 +77,8 @@ pub extern "C" fn bt_term_new(cols: u16, rows: u16) -> *mut BtTerm {
         inner: Terminal::new(cols, rows),
         cached: None,
         osc133_attrs_scratch: Vec::new(),
+        block_string_scratch: Vec::new(),
+        block_snapshot_cached: None,
     }))
 }
 
