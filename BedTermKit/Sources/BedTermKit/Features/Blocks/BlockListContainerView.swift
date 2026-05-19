@@ -23,38 +23,26 @@ final class BlockListContainerViewController: UIViewController, UIScrollViewDele
     private let metalView: TerminalBlocksMetalView
     private var headerHosts: [UInt64: UIHostingController<BlockHeader>] = [:]
 
-    /// Fixed SwiftUI header strip height. Matches the BlockHeader's
-    /// natural height with current padding (subheadline + caption2 + 10pt
-    /// vertical padding ≈ 56pt). v1 limitation: may clip at Dynamic Type
-    /// XXL — acceptable per Phase B plan.
+    // Layout constants. headerHeightPt may clip at Dynamic Type XXL —
+    // accepted v1 limitation per Phase B plan.
     private let headerHeightPt: CGFloat = 56
-
-    /// Cell row height in points, resolved from the shared renderer's
-    /// atlas metrics. Fallback to 18 if metrics unavailable.
-    private var rowHeightPt: CGFloat = 18
-
-    /// CADisplayLink driving 60Hz redraws while any block is running.
-    /// Stopped when the block list is fully sealed (battery hygiene).
-    private var displayLink: CADisplayLink?
-
-    /// Pin-to-bottom tolerance: contentOffset within this many points of
-    /// the max counts as "at bottom" for auto-follow.
     private let pinTolerancePt: CGFloat = 24
-
-    /// Headers stay mounted this many points above / below the visible
-    /// viewport. A fast scroll crosses the band before the demounted
-    /// hosts re-mount, eliminating header-gap flashes during inertia.
     private let headerOverscanPt: CGFloat = 200
 
-    /// Reentrancy guard: scrollViewDidScroll fires inside
-    /// `scrollToBottom(animated:false)`, which would re-push layout
-    /// twice per tick. Bracket the push during state updates.
-    private var isPushingLayout = false
+    // Atlas-derived metrics; refreshed from the shared renderer each
+    // layout pass. Fallbacks cover the early-launch race where atlas
+    // metrics aren't yet available.
+    private var rowHeightPt: CGFloat = 18
+    private var cellWidthPt: CGFloat = 9
 
-    /// Last bounds we ran a full refresh against. layoutSubviews fires
-    /// repeatedly during scroll, rotation, keyboard; short-circuit when
-    /// nothing relevant has changed.
+    private var displayLink: CADisplayLink?
+    private var isPushingLayout = false
     private var lastLayoutBounds: CGSize = .zero
+
+    // Selection lives on a dedicated controller; the container provides
+    // its hit-resolver + text-resolver since both walk the same block
+    // cumulative-Y the layout pipeline already computes.
+    private var selection: BlockListSelectionController!
 
     init(session: TerminalSession) {
         self.session = session
@@ -80,6 +68,14 @@ final class BlockListContainerViewController: UIViewController, UIScrollViewDele
         view.addSubview(scrollView)
         scrollView.addSubview(contentView)
         view.addSubview(metalView)
+        selection = BlockListSelectionController(
+            contentView: contentView,
+            headerHeightPt: headerHeightPt,
+            hitResolver: { [weak self] point in self?.blockHitTest(at: point) },
+            textResolver: { [weak self] id, range in
+                self?.extractText(blockID: id, range: range)
+            })
+        view.addGestureRecognizer(selection.longPressGR)
     }
 
     /// Called explicitly by the SwiftUI representable's
@@ -158,6 +154,12 @@ final class BlockListContainerViewController: UIViewController, UIScrollViewDele
         if metrics.height >= 8 && metrics.height <= 64 {
             rowHeightPt = metrics.height
         }
+        if metrics.width >= 4 && metrics.width <= 32 {
+            cellWidthPt = metrics.width
+        }
+        selection?.updateMetrics(
+            cellWidth: cellWidthPt, rowHeight: rowHeightPt,
+            containerWidth: view.bounds.width)
     }
 
     override func viewWillLayoutSubviews() {
@@ -271,6 +273,64 @@ final class BlockListContainerViewController: UIViewController, UIScrollViewDele
             yPt += bodyPt
         }
         metalView.update(scrollOffset: scrollView.contentOffset.y, layout: entries)
+    }
+
+    // MARK: - Selection resolvers
+
+    private func blockHitTest(at point: CGPoint) -> BlockListSelectionController.BlockHit? {
+        guard let core = session.terminalCore else { return nil }
+        var yPt: CGFloat = 0
+        for block in session.blockStore.blocks {
+            let bodyTop = yPt + headerHeightPt
+            let bodyBot = bodyTop + bodyHeightPt(for: block)
+            if point.y >= bodyTop && point.y < bodyBot {
+                guard let snap = snapshot(for: block, core: core) else { return nil }
+                return .init(
+                    blockID: block.id, bodyTop: bodyTop,
+                    rows: Int(snap.rows), cols: Int(snap.cols))
+            }
+            yPt = bodyBot
+        }
+        return nil
+    }
+
+    private func snapshot(for block: Block, core: TerminalCore) -> GridSnapshot? {
+        if block.hasFrozenSnapshot {
+            let frozenIdx = core.allBlocks().firstIndex(where: { $0.id == block.id })
+            if let idx = frozenIdx { return core.frozenSnapshot(forBlockAt: idx) }
+        }
+        if block.isRunning {
+            let end = core.currentLine + 1
+            if end > block.startLine {
+                return core.snapshotRange(startLine: block.startLine, endLine: end)
+            }
+        }
+        return nil
+    }
+
+    private func extractText(blockID: UInt64, range: SelectionRange) -> String? {
+        guard let core = session.terminalCore,
+            let block = session.blockStore.blocks.first(where: { $0.id == blockID }),
+            let snap = snapshot(for: block, core: core)
+        else { return nil }
+        let norm = range.normalised
+        let rowsCount = Int(snap.rows)
+        let colsCount = Int(snap.cols)
+        let lastRow = min(norm.endRow, rowsCount - 1)
+        guard norm.startRow <= lastRow else { return nil }
+        var out = ""
+        for row in norm.startRow...lastRow {
+            let from = (row == norm.startRow) ? norm.startCol : 0
+            let to = (row == norm.endRow) ? norm.endCol : colsCount
+            for col in from..<min(to, colsCount) {
+                let scalar = snap.cell(col: col, row: row).flatMap { cell in
+                    cell.ch != 0 ? Unicode.Scalar(cell.ch) : nil
+                }
+                out.append(scalar.map(Character.init) ?? " ")
+            }
+            if row != lastRow { out.append("\n") }
+        }
+        return out
     }
 
     // MARK: - UIScrollViewDelegate
