@@ -114,6 +114,7 @@ pub struct Terminal {
     rows: u16,
     palette: Palette,
     osc133: crate::osc133::Osc133Sniffer,
+    blocks: crate::blocks::BlockStore,
 }
 
 impl Terminal {
@@ -130,6 +131,7 @@ impl Terminal {
             rows,
             palette: Palette::default(),
             osc133: crate::osc133::Osc133Sniffer::new(),
+            blocks: crate::blocks::BlockStore::new(),
         }
     }
 
@@ -139,6 +141,31 @@ impl Terminal {
         // machine is independent — both must see every byte to stay in sync.
         self.parser.advance(&mut self.term, bytes);
         self.osc133.feed(bytes);
+
+        // Drive the BlockStore off any events the sniffer just produced.
+        // Drain the sniffer first into a local Vec, then iterate — this
+        // avoids overlapping borrows between `&mut self.osc133` (pop) and
+        // `&self.term` (read by the snapshot closure). The closure goes
+        // through `Self::snapshot_range_from` so this code path shares its
+        // implementation with the public `snapshot_range`.
+        let mut pending = Vec::new();
+        while let Some(event) = self.osc133.pop() {
+            pending.push(event);
+        }
+        if !pending.is_empty() {
+            let current = self.term.grid().cursor.point.line.0;
+            let cols = self.cols;
+            let rows = self.rows;
+            let term = &self.term;
+            let palette = &self.palette;
+            for event in &pending {
+                self.blocks.apply(event, current, |start, end| {
+                    Some(Self::snapshot_range_from(
+                        term, cols, rows, palette, start, end,
+                    ))
+                });
+            }
+        }
     }
 
     /// Pop the next pending OSC 133 event, or `None` if the queue is empty.
@@ -223,11 +250,32 @@ impl Terminal {
     /// outside the grid's current extent are clamped; if the entire range
     /// has fallen off scrollback the returned snapshot has `rows == 0`.
     pub fn snapshot_range(&self, start_line: i32, end_line: i32) -> GridSnapshot {
-        let cols = self.cols;
-        let grid = self.term.grid();
+        Self::snapshot_range_from(
+            &self.term,
+            self.cols,
+            self.rows,
+            &self.palette,
+            start_line,
+            end_line,
+        )
+    }
+
+    /// Implementation of `snapshot_range` that takes its dependencies as
+    /// explicit parameters instead of through `&self`. Lets `feed` build a
+    /// snapshot closure for `BlockStore::apply` without conflicting with the
+    /// `&mut self.blocks` borrow.
+    fn snapshot_range_from(
+        term: &Term<VoidListener>,
+        cols: u16,
+        rows: u16,
+        palette: &Palette,
+        start_line: i32,
+        end_line: i32,
+    ) -> GridSnapshot {
+        let grid = term.grid();
         let history = grid.history_size() as i32;
         let min_line = -history;
-        let max_line = self.rows as i32;
+        let max_line = rows as i32;
         let start = start_line.max(min_line).min(max_line);
         let end = end_line.max(start).min(max_line);
         let row_count = (end - start).max(0) as u16;
@@ -264,8 +312,8 @@ impl Terminal {
                     };
                 cells.push(CellSnapshot {
                     ch,
-                    fg_rgba: color_to_rgba(cell.fg, &self.palette),
-                    bg_rgba: color_to_rgba(cell.bg, &self.palette),
+                    fg_rgba: color_to_rgba(cell.fg, palette),
+                    bg_rgba: color_to_rgba(cell.bg, palette),
                     flags,
                 });
             }
@@ -281,6 +329,26 @@ impl Terminal {
             display_offset: 0,
             cells,
         }
+    }
+
+    /// Read-only view of the per-command blocks that the OSC 133 sniffer
+    /// has produced so far. Driven automatically by `feed`.
+    pub fn blocks(&self) -> &[crate::blocks::Block] {
+        self.blocks.blocks()
+    }
+
+    pub fn block_count(&self) -> usize {
+        self.blocks.len()
+    }
+
+    pub fn block_at(&self, idx: usize) -> Option<&crate::blocks::Block> {
+        self.blocks.get(idx)
+    }
+
+    /// Drop all accumulated blocks. Resize does NOT call this — only the
+    /// host opts in (e.g. when reconnecting an SSH session).
+    pub fn reset_blocks(&mut self) {
+        self.blocks.reset();
     }
 
     pub fn snapshot(&self) -> GridSnapshot {
@@ -566,5 +634,32 @@ fn default_indexed(i: u8) -> alacritty_terminal::vte::ansi::Rgb {
         r: level,
         g: level,
         b: level,
+    }
+}
+
+#[cfg(test)]
+mod block_integration_tests {
+    use super::*;
+
+    #[test]
+    fn feed_populates_block_store() {
+        let mut term = Terminal::new(80, 24);
+        // OSC 133;A ST  OSC 133;C;cmd=bHM= ST  OSC 133;D;0 ST
+        let stream = b"\x1b]133;A\x1b\\\x1b]133;C;cmd=bHM=\x1b\\\x1b]133;D;0\x1b\\";
+        term.feed(stream);
+        let blocks = term.blocks();
+        assert_eq!(blocks.len(), 1);
+        assert_eq!(blocks[0].command, "ls");
+        assert!(!blocks[0].is_running);
+        assert_eq!(blocks[0].exit_code, Some(0));
+    }
+
+    #[test]
+    fn feed_does_not_strand_running_block_when_only_a_arrives() {
+        let mut term = Terminal::new(80, 24);
+        term.feed(b"\x1b]133;A\x1b\\");
+        let blocks = term.blocks();
+        assert_eq!(blocks.len(), 1);
+        assert!(blocks[0].is_running);
     }
 }
