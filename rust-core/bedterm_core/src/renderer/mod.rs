@@ -47,7 +47,24 @@ impl Renderer {
         let device = Device::from_ptr(device_ptr as *mut _);
         let queue = CommandQueue::from_ptr(queue_ptr as *mut _);
         let pipelines = Pipelines::build(&device).ok()?;
-        let atlas = GlyphAtlas::new(&device, 14.0, 3.0);
+        // Catch panics from the cosmic-text/swash atlas init so the FFI
+        // boundary never unwinds into Swift (which would abort the
+        // process). Returning None lets Swift surface a sensible error
+        // instead of dying mid-view-creation.
+        let atlas = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            GlyphAtlas::new(&device, 14.0, 3.0)
+        })) {
+            Ok(a) => a,
+            Err(panic) => {
+                let msg = panic
+                    .downcast_ref::<&'static str>()
+                    .copied()
+                    .or_else(|| panic.downcast_ref::<String>().map(|s| s.as_str()))
+                    .unwrap_or("<non-string panic payload>");
+                eprintln!("[bedterm] GlyphAtlas::new panicked: {msg}");
+                return None;
+            }
+        };
         Some(Self {
             device,
             queue,

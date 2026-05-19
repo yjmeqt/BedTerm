@@ -13,7 +13,7 @@
 //! - `BufferLine::new` takes `(text, LineEnding, AttrsList, Shaping)` —
 //!   no separate `metadata` arg.
 //! - `Attrs` exposes `.family(...)` only; no `.monospaced(true)` builder.
-//!   `Family::Name("Menlo")` followed by cosmic-text's regular fallback is
+//!   `Family::Name("JetBrains Mono")` followed by cosmic-text's regular fallback is
 //!   sufficient for our cascade requirements.
 //! - swash 0.1.19's `Render::new` accepts a slice of `Source`s. We list
 //!   `ColorBitmap` first (Apple Color Emoji is sbix), then `ColorOutline`
@@ -69,7 +69,7 @@ pub fn rasterize(ch: char, font_size_px: f32) -> Option<RasterizedGlyph> {
         // Shape a single-glyph line so cosmic-text gets to walk its font
         // cascade. Monospaced primary -> CJK fallback -> Apple Color Emoji
         // are the cases we actually care about.
-        let attrs = Attrs::new().family(Family::Name("Menlo"));
+        let attrs = Attrs::new().family(Family::Name("JetBrains Mono"));
         let attrs_list = AttrsList::new(attrs);
         let mut text = [0u8; 4];
         let s: &str = ch.encode_utf8(&mut text);
@@ -177,7 +177,7 @@ pub fn measure_cell(font_size_px: f32) -> Option<CellMetrics> {
         // Shape a single 'M' the same way `rasterize` does — same primary
         // family and same fallback cascade so the metrics match what the
         // atlas will actually rasterise.
-        let attrs = Attrs::new().family(Family::Name("Menlo"));
+        let attrs = Attrs::new().family(Family::Name("JetBrains Mono"));
         let attrs_list = AttrsList::new(attrs);
         let mut line = BufferLine::new("M", LineEnding::None, attrs_list, Shaping::Advanced);
         let layout = line.layout(fs, font_size_px, None, Wrap::None, None, 8);
