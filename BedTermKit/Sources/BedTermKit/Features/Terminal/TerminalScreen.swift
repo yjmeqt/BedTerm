@@ -36,8 +36,35 @@ struct TerminalScreen: View {
     /// view falls back to Classic when a full-screen TUI is in alt-screen
     /// (terminal-view R3.alt_screen_collapse) — vim / htop / claude don't
     /// fit a per-command block model and need the live cursor + grid.
-    private var showBlockView: Bool {
-        settings.showCommandBlocks && !session.mode.contains(.altScreen)
+    private var showBlockView: Bool { displayMode == .blockList }
+
+    /// Three-state display mode derived from settings + the live terminal
+    /// mode flags. Drives both the upper visual stack (block list vs
+    /// live grid) and the lower input stack (Warp-style flat composer
+    /// vs the legacy ComposePill → ComposerBar morph).
+    private var displayMode: TerminalDisplayMode {
+        if session.mode.contains(.altScreen) { return .altScreen }
+        return settings.showCommandBlocks ? .blockList : .inline
+    }
+
+    /// Snapshot of the context chips shown above the block-list
+    /// composer's input. Reads the unfiltered Rust block list so the
+    /// pending block's `pwd` (open but not yet command-filled) still
+    /// lights up the cwd chip; the Swift `BlockStore` mirror hides
+    /// that pending entry by design.
+    private var promptContext: PromptContext {
+        // Read cwd / branch from BlockStore (observable, so the body
+        // re-renders on every Precmd). The last sealed exit code comes
+        // from the visible block list. `host` is constant per session.
+        let lastSealedExit = session.blockStore.blocks
+            .reversed().lazy
+            .first(where: { !$0.isRunning })?.exitCode
+        return PromptContext(
+            host: credential.host,
+            cwd: session.blockStore.latestPwd,
+            lastExitCode: lastSealedExit,
+            gitBranch: session.blockStore.latestGitBranch
+        )
     }
 
     init(session: TerminalSession, credential: HostCredential, onExit: @escaping () -> Void) {
@@ -165,33 +192,59 @@ struct TerminalScreen: View {
 
     @ViewBuilder
     private var bottomBar: some View {
-        // Wrap KeyBar + ComposePill + ComposerBar in a single GlassEffectContainer
-        // so the Liquid Glass capsule with id "composer-capsule" morphs
-        // continuously from the closed-state pill into the open-state composer
-        // bar (R13.open_close_morph). The KeyBar slides off the leading edge to
-        // make room for the morph (R13.row_height_symmetry).
-        GlassEffectContainer(spacing: 8) {
-            HStack(alignment: .bottom, spacing: 8) {
-                if !composer.isOpen {
-                    KeyBar(
-                        controller: keyBar,
-                        keyboardShown: !keyboardHidden,
-                        dpadOpen: dpadOpen,
-                        onToggleKeyboard: { keyboardHidden.toggle() },
-                        onToggleDpad: { dpadOpen.toggle() }
-                    )
-                    .transition(.move(edge: .leading).combined(with: .opacity))
-                    Spacer(minLength: 0)
-                    ComposePill(morphNamespace: composerMorph) { composer.open() }
-                } else {
-                    ComposerBar(controller: composer, morphNamespace: composerMorph)
-                        .frame(maxWidth: .infinity)
-                }
+        // Single component for every mode — `.blockList` keeps cwd +
+        // input always visible; `.launcher` (inline / alt-screen)
+        // starts collapsed, exposes the ✎ Compose chip on the right,
+        // and closes itself on submit so raw PTY input resumes.
+        BlockListComposer(
+            controller: composer, keyBar: keyBar,
+            mode: displayMode == .blockList ? .blockList : .launcher,
+            context: promptContext,
+            keyboardShown: !keyboardHidden,
+            dpadOpen: dpadOpen,
+            debugModeChip: debugModeIndicator,
+            onToggleKeyboard: { keyboardHidden.toggle() },
+            onToggleDpad: { dpadOpen.toggle() }
+        )
+        .onAppear {
+            if displayMode == .blockList && !composer.isOpen {
+                composer.open()
+            } else if displayMode != .blockList && composer.isOpen {
+                composer.cancel()
             }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 6)
         }
-        .animation(.smooth(duration: 0.32), value: composer.isOpen)
+        .onChange(of: displayMode) { _, newMode in
+            if newMode == .blockList && !composer.isOpen {
+                composer.open()
+            } else if newMode != .blockList && composer.isOpen {
+                // Hard close — even with a pending draft. The mode
+                // transition (e.g. entering alt-screen) means raw PTY
+                // should resume immediately.
+                composer.cancel()
+            }
+        }
+    }
+
+    /// DEBUG-only chip text that displays the resolved displayMode plus
+    /// the raw terminal mode flags. Lets us verify alt-screen detection
+    /// from inside the running app without a debugger attached.
+    private var debugModeIndicator: String? {
+        #if DEBUG
+            var flags: [String] = []
+            if session.mode.contains(.altScreen) { flags.append("alt") }
+            if session.mode.contains(.bracketedPaste) { flags.append("bp") }
+            let modeName: String
+            switch displayMode {
+            case .blockList: modeName = "block"
+            case .inline: modeName = "inline"
+            case .altScreen: modeName = "alt"
+            }
+            return flags.isEmpty
+                ? "mode=\(modeName)"
+                : "mode=\(modeName) [\(flags.joined(separator: ","))]"
+        #else
+            return nil
+        #endif
     }
 
     private func reconnect() async {

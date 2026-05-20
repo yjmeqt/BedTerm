@@ -44,8 +44,9 @@ struct SettingsScreen: View {
                                 """
                                 Push a small zsh / bash snippet into each new \
                                 SSH session so prompt and command boundaries \
-                                are reported back (OSC 133). Required for \
-                                upcoming Block view; harmless if unused.
+                                are reported back as Warp-compatible DCS \
+                                hooks. Required for the Block view; harmless \
+                                if unused.
                                 """
                             )
                             .font(.footnote)
@@ -64,9 +65,10 @@ struct SettingsScreen: View {
                             Text(
                                 """
                                 Show each command and its output as a separate \
-                                block (Warp-style). Needs the shell-integration \
-                                toggle on, or a host already running an OSC 133 \
-                                integration (iTerm2 / kitty / VSCode).
+                                block (Warp-style). Requires the \
+                                shell-integration toggle above — BedTerm uses \
+                                Warp's DCS hook protocol, not OSC 133, so \
+                                third-party integrations won't drive it.
                                 """
                             )
                             .font(.footnote)

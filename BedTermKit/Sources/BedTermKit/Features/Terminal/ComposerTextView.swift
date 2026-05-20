@@ -10,6 +10,12 @@ struct ComposerTextView: UIViewRepresentable {
     var placeholder: String
     var isFocused: Bool
     var onFocusChange: (Bool) -> Void
+    /// When set, pressing Return submits instead of inserting a newline.
+    /// Multi-line input is reached via the explicit "newline" toolbar
+    /// button (block-list Warp composer). Leaving this `nil` preserves
+    /// the default UITextView behaviour (Return inserts `\n`) for the
+    /// legacy pill composer.
+    var onSubmit: (() -> Void)?
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
@@ -89,6 +95,18 @@ struct ComposerTextView: UIViewRepresentable {
 
         func refreshPlaceholder(in textView: UITextView) {
             placeholderLabel?.isHidden = !textView.text.isEmpty
+        }
+
+        func textView(
+            _ textView: UITextView,
+            shouldChangeTextIn range: NSRange,
+            replacementText text: String
+        ) -> Bool {
+            if text == "\n", let onSubmit = parent.onSubmit {
+                onSubmit()
+                return false
+            }
+            return true
         }
 
         func textViewDidChange(_ textView: UITextView) {
