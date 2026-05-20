@@ -1,20 +1,19 @@
 //! Local-loopback mock SSH server for BedTerm sim testing.
 //!
-//! Two modes:
-//!   * default (script): streams a canned OSC 133-framed transcript and
-//!     ignores client input. Useful for renderer + block-state tests.
-//!   * `--shell`: spawns `$SHELL -l` in a real PTY and proxies bytes
-//!     both ways, so the sim gets an interactive zsh as the current
-//!     macOS user with no password needed. Bound to `127.0.0.1` only.
+//! Spawns `$SHELL -l` (falling back to `/bin/zsh`) inside a real PTY and
+//! proxies bytes both ways. Auth is a no-op — any username, any password,
+//! any pubkey is accepted. Bound to `127.0.0.1` only; the loopback bind
+//! is the moat. **Do not** change the bind address — that would expose a
+//! passwordless shell to the network.
 //!
 //! Usage:
-//!   cargo run -p bedterm-mock-ssh -- [--port 2222] [--shell]
+//!   cargo run -p bedterm-mock-ssh -- [--port 2222]
 //!
 //! Sim connects to:
 //!   host:     127.0.0.1
 //!   port:     2222
 //!   user:     anything
-//!   password: anything (only loopback binds — that is the moat)
+//!   password: anything
 
 use anyhow::Result;
 use async_trait::async_trait;
@@ -24,10 +23,10 @@ use russh::server::{Auth, Handler, Msg, Server, Session};
 use russh::{Channel, ChannelId, CryptoVec, MethodSet};
 use russh_keys::key::KeyPair;
 use std::io::{Read, Write};
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc;
-use tokio::time::sleep;
 
 #[derive(Parser, Debug)]
 #[command(
@@ -38,21 +37,17 @@ struct Args {
     /// Listen port on 127.0.0.1.
     #[arg(long, default_value_t = 2222)]
     port: u16,
-
-    /// Bridge to a real PTY running `$SHELL -l` instead of replaying
-    /// the canned script. Loopback-only — safe for local sim testing.
-    #[arg(long)]
-    shell: bool,
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = Args::parse();
 
-    // Fresh host key every run — no fingerprint persistence intentionally,
-    // since each launch is a throwaway test session.
-    let host_key = KeyPair::generate_ed25519()
-        .ok_or_else(|| anyhow::anyhow!("ed25519 host-key generation failed"))?;
+    // Persistent host key so the iOS app's stored fingerprint stays valid
+    // across mock-ssh restarts. Path: `$HOME/.cache/bedterm-mock-ssh/
+    // host_ed25519.pem`. Generated on first run, then reused. Delete the
+    // file to force a fresh key.
+    let host_key = load_or_create_host_key()?;
 
     let config = Arc::new(russh::server::Config {
         inactivity_timeout: Some(Duration::from_secs(3600)),
@@ -64,33 +59,72 @@ async fn main() -> Result<()> {
     });
 
     let addr = ("127.0.0.1", args.port);
+    let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".into());
     eprintln!("[bedterm-mock-ssh] listening on 127.0.0.1:{}", args.port);
     eprintln!("[bedterm-mock-ssh] accepts any user + password");
-    if args.shell {
-        let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".into());
-        eprintln!("[bedterm-mock-ssh] --shell mode: bridging to {shell}");
-    } else {
-        eprintln!("[bedterm-mock-ssh] script mode (pass --shell for real PTY)");
-    }
+    eprintln!("[bedterm-mock-ssh] bridging to real PTY: {shell} -l");
 
-    let mut srv = MockServer {
-        shell_mode: args.shell,
-    };
+    let mut srv = MockServer;
     srv.run_on_address(config, addr).await?;
     Ok(())
 }
 
-#[derive(Clone)]
-struct MockServer {
-    shell_mode: bool,
+/// Path to the persisted ed25519 host key. Resolves under
+/// `$HOME/.cache/bedterm-mock-ssh/` so it survives mock-ssh restarts and
+/// keeps the iOS app's stored host fingerprint valid.
+fn host_key_path() -> Result<PathBuf> {
+    let home = std::env::var_os("HOME").ok_or_else(|| anyhow::anyhow!("$HOME not set"))?;
+    Ok(PathBuf::from(home)
+        .join(".cache")
+        .join("bedterm-mock-ssh")
+        .join("host_ed25519.pem"))
 }
+
+fn load_or_create_host_key() -> Result<KeyPair> {
+    let path = host_key_path()?;
+    if let Ok(pem) = std::fs::read_to_string(&path) {
+        match russh_keys::decode_secret_key(&pem, None) {
+            Ok(key) => {
+                eprintln!("[bedterm-mock-ssh] loaded host key from {}", path.display());
+                return Ok(key);
+            }
+            Err(err) => {
+                eprintln!(
+                    "[bedterm-mock-ssh] stale host key at {} ({err:?}); regenerating",
+                    path.display()
+                );
+            }
+        }
+    }
+
+    let key = KeyPair::generate_ed25519()
+        .ok_or_else(|| anyhow::anyhow!("ed25519 host-key generation failed"))?;
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let mut buf = Vec::new();
+    russh_keys::encode_pkcs8_pem(&key, &mut buf)?;
+    std::fs::write(&path, &buf)?;
+    // 0o600 — host key is sensitive enough to keep user-only.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
+    }
+    eprintln!(
+        "[bedterm-mock-ssh] new host key persisted to {}",
+        path.display()
+    );
+    Ok(key)
+}
+
+#[derive(Clone)]
+struct MockServer;
 
 impl Server for MockServer {
     type Handler = MockHandler;
     fn new_client(&mut self, _peer: Option<std::net::SocketAddr>) -> MockHandler {
         MockHandler {
-            shell_mode: self.shell_mode,
-            script_done: false,
             shell_tx: None,
             pty_cols: 80,
             pty_rows: 24,
@@ -105,10 +139,7 @@ enum ToShell {
 }
 
 struct MockHandler {
-    shell_mode: bool,
-    /// Set once the canned script has been played for this connection.
-    script_done: bool,
-    /// Control channel into the PTY bridge thread (shell mode only).
+    /// Control channel into the PTY bridge thread.
     shell_tx: Option<mpsc::UnboundedSender<ToShell>>,
     pty_cols: u16,
     pty_rows: u16,
@@ -180,25 +211,12 @@ impl Handler for MockHandler {
         channel: ChannelId,
         session: &mut Session,
     ) -> Result<(), Self::Error> {
-        if self.shell_mode {
-            if self.shell_tx.is_some() {
-                return Ok(());
-            }
-            let handle = session.handle();
-            let tx = spawn_pty_bridge(handle, channel, self.pty_cols, self.pty_rows);
-            self.shell_tx = Some(tx);
+        if self.shell_tx.is_some() {
             return Ok(());
         }
-        if self.script_done {
-            return Ok(());
-        }
-        self.script_done = true;
         let handle = session.handle();
-        tokio::spawn(async move {
-            if let Err(err) = play_script(&handle, channel).await {
-                eprintln!("[bedterm-mock-ssh] script error: {err:?}");
-            }
-        });
+        let tx = spawn_pty_bridge(handle, channel, self.pty_cols, self.pty_rows);
+        self.shell_tx = Some(tx);
         Ok(())
     }
 
@@ -211,8 +229,6 @@ impl Handler for MockHandler {
         if let Some(tx) = &self.shell_tx {
             let _ = tx.send(ToShell::Input(data.to_vec()));
         }
-        // Script mode: silently discard input. The canned transcript
-        // doesn't model an interactive shell.
         Ok(())
     }
 
@@ -358,56 +374,4 @@ fn spawn_pty_bridge(
         .expect("spawn pty-bridge thread");
 
     tx
-}
-
-/// Send one canned terminal session: three OSC 133-framed commands,
-/// each with simulated output, then an unfinished prompt at the end.
-async fn play_script(handle: &russh::server::Handle, channel: ChannelId) -> Result<()> {
-    macro_rules! send {
-        ($bytes:expr) => {{
-            let _ = handle.data(channel, CryptoVec::from_slice($bytes)).await;
-        }};
-    }
-
-    // OSC 133 helpers.
-    const OSC_A: &[u8] = b"\x1b]133;A\x1b\\";
-    const OSC_B: &[u8] = b"\x1b]133;B\x1b\\";
-
-    // 1) ls
-    send!(OSC_A);
-    send!(b"\x1b[1;32muser@bedterm-mock\x1b[0m:\x1b[1;34m~\x1b[0m$ ");
-    send!(OSC_B);
-    send!(b"\x1b]133;C;cmd=bHM=\x1b\\"); // cmd="ls"
-    send!(b"ls\r\n");
-    sleep(Duration::from_millis(80)).await;
-    send!(b"Cargo.toml      README.md       src/\r\n");
-    send!(b"Cargo.lock      examples/       target/\r\n");
-    send!(b"\x1b]133;D;0\x1b\\");
-
-    // 2) echo with CJK + emoji
-    send!(OSC_A);
-    send!(b"\x1b[1;32muser@bedterm-mock\x1b[0m:\x1b[1;34m~\x1b[0m$ ");
-    send!(OSC_B);
-    // cmd = `echo "你好 こんにちは 안녕 😀🎉"`
-    send!(b"\x1b]133;C;cmd=ZWNobyAi5L2g5aW9IOOBk+OCk+OBq+OBoeOBryDslYjri4Eg8J+YgPCfjok=\x1b\\");
-    send!(b"echo \"\xe4\xbd\xa0\xe5\xa5\xbd \xe3\x81\x93\xe3\x82\x93\xe3\x81\xab\xe3\x81\xa1\xe3\x81\xaf \xec\x95\x88\xeb\x85\x95 \xf0\x9f\x98\x80\xf0\x9f\x8e\x89\"\r\n");
-    sleep(Duration::from_millis(60)).await;
-    send!(b"\xe4\xbd\xa0\xe5\xa5\xbd \xe3\x81\x93\xe3\x82\x93\xe3\x81\xab\xe3\x81\xa1\xe3\x81\xaf \xec\x95\x88\xeb\x85\x95 \xf0\x9f\x98\x80\xf0\x9f\x8e\x89\r\n");
-    send!(b"\x1b]133;D;0\x1b\\");
-
-    // 3) `false` — a failing command to exercise the red status path.
-    send!(OSC_A);
-    send!(b"\x1b[1;32muser@bedterm-mock\x1b[0m:\x1b[1;34m~\x1b[0m$ ");
-    send!(OSC_B);
-    send!(b"\x1b]133;C;cmd=ZmFsc2U=\x1b\\"); // cmd="false"
-    send!(b"false\r\n");
-    sleep(Duration::from_millis(40)).await;
-    send!(b"\x1b]133;D;1\x1b\\");
-
-    // 4) Final prompt — left "running" so the pulse animation shows.
-    send!(OSC_A);
-    send!(b"\x1b[1;32muser@bedterm-mock\x1b[0m:\x1b[1;34m~\x1b[0m$ ");
-    send!(OSC_B);
-    // No OSC 133;C/D — last block stays running.
-    Ok(())
 }

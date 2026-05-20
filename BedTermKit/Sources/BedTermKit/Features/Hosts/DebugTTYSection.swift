@@ -2,13 +2,23 @@
     import SwiftUI
 
     extension HostsScreen {
+        /// Mock SSH is a loopback throwaway server. Drop any
+        /// previously-stored host fingerprint so a fresh key (first run,
+        /// regenerated, server re-keyed) lands as trust-on-first-use
+        /// instead of a "Host key changed" dead-end.
+        private func mockSSHCredential() -> HostCredential {
+            let credential = HostCredential(
+                host: "127.0.0.1", port: 2222, username: "test",
+                auth: .password("x"))
+            HostKeyStore().remove(host: credential.host, port: credential.port)
+            return credential
+        }
+
         @ViewBuilder
         func debugTerminalScreen(for selection: DebugTTYProgramSelection) -> some View {
             switch selection {
             case .mockSSH:
-                let credential = HostCredential(
-                    host: "127.0.0.1", port: 2222, username: "test",
-                    auth: .password("x"))
+                let credential = mockSSHCredential()
                 TerminalScreen(
                     debugClient: CitadelSSHClient(),
                     credential: credential
