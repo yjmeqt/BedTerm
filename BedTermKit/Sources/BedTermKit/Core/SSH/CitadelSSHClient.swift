@@ -141,27 +141,39 @@ public final class CitadelSSHClient: BedTermKit.SSHClient, @unchecked Sendable {
                 do {
                     try await citadel.withPTY(ptyRequest) { inbound, outbound in
                         self.writer = outbound
-                        // Push the optional bootstrap payload (e.g. our OSC
-                        // 133 shell-integration heredoc) before resuming the
-                        // caller. Failing here is non-fatal — the session
-                        // works without integration, just without block
-                        // markers. We `try?` and move on.
-                        // Push the optional bootstrap payload before yielding
-                        // control to the caller / inbound pump.
-                        await Self.pushBootstrap(
-                            payload: request.bootstrapPayload,
-                            writer: outbound)
                         self.maybeResume(ready, with: .success(()))
 
-                        // Pump inbound stdout/stderr into our AsyncStream.
+                        // Pump inbound stdout/stderr into our AsyncStream
+                        // AND defer the bootstrap push until the remote
+                        // shell produces its first byte. Writing the
+                        // bootstrap into `outbound` BEFORE the inbound
+                        // pump is active is observed to silently drop
+                        // the bytes on some Citadel + sshd combinations
+                        // (probe sentinel never returns). Waiting for
+                        // first-output guarantees the shell has finished
+                        // PTY setup, loaded `.zshrc`, and is reading from
+                        // stdin in ZLE mode — the bootstrap heredoc then
+                        // arrives as ordinary user input and gets eval'd.
+                        let bootstrapPayload = request.bootstrapPayload
                         let pump = Task { [weak self] in
                             guard let self else { return }
+                            var bootstrapPushed = false
                             do {
                                 for try await chunk in inbound {
                                     switch chunk {
                                     case let .stdout(buffer), let .stderr(buffer):
                                         let data = Data(buffer.readableBytesView)
+                                        logChunk("IN ", data)
                                         self.outputContinuation.yield(data)
+                                    }
+                                    if !bootstrapPushed {
+                                        bootstrapPushed = true
+                                        Task { [citadel] in
+                                            await Self.pushBootstrap(
+                                                payload: bootstrapPayload,
+                                                writer: outbound,
+                                                ssh: citadel)
+                                        }
                                     }
                                 }
                             } catch {
@@ -224,6 +236,7 @@ public final class CitadelSSHClient: BedTermKit.SSHClient, @unchecked Sendable {
         guard let writer = self.writer else {
             throw SSHError.disconnected("not connected")
         }
+        logChunk("OUT", data)
         var buffer = ByteBufferAllocator().buffer(capacity: data.count)
         buffer.writeBytes(data)
         do {

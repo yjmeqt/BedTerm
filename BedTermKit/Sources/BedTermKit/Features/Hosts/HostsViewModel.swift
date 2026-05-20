@@ -47,6 +47,11 @@ public final class HostsViewModel {
     /// can render a Retry/Open-Settings toast). Set by `HostsScreen` on first
     /// connect dispatch; tests can leave it nil.
     public var onConnectError: ((UUID, String, Bool) -> Void)?
+    /// Resolves the shell-integration heredoc to push at connect time.
+    /// Set by `HostsScreen` after the SwiftUI environment is wired so we
+    /// can read `BedTermSettings.installShellIntegrationOnConnect`. Nil
+    /// keeps the channel pristine.
+    public var bootstrapPayloadProvider: (@MainActor () -> String?)?
 
     private let store: HostsStore
     private let connectFactory: @MainActor () -> ConnectAttempt
@@ -132,7 +137,9 @@ public final class HostsViewModel {
             return
         }
         let attempt = self.connectFactory()
-        let outcome = await attempt.run(credential: entry.credential)
+        let outcome = await attempt.run(
+            credential: entry.credential,
+            bootstrapPayload: self.bootstrapPayloadProvider?())
         if Task.isCancelled { return }
 
         switch outcome {

@@ -4,6 +4,7 @@ import UIKit
 public struct HostsScreen: View {
     @Binding var path: NavigationPath
     @Environment(\.toaster) private var toaster
+    @Environment(BedTermSettings.self) private var settings
     @State private var viewModel = HostsViewModel()
     @State private var didFirstAppear = false
     @State private var showingMismatchReview = false
@@ -344,6 +345,16 @@ public struct HostsScreen: View {
 
     private func onAppear() {
         viewModel.load()
+        // Settings env is unavailable at view-init time; wire the
+        // bootstrap-payload resolver here so the saved-host Connect
+        // path can push the shell-integration heredoc when the user
+        // has the toggle on. `[settings]` capture is Sendable because
+        // BedTermSettings is `@MainActor @Observable` and the closure
+        // runs on the main actor.
+        viewModel.bootstrapPayloadProvider = { [settings] in
+            guard settings.installShellIntegrationOnConnect else { return nil }
+            return ShellIntegrationScript.bootstrapPayload()
+        }
         guard !didFirstAppear else { return }
         didFirstAppear = true
         let defaults = UserDefaults.standard
