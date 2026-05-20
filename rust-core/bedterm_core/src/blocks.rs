@@ -1,10 +1,15 @@
-//! Warp-style command-block state machine. Consumes the OSC 133 event stream
-//! emitted by `osc133::Osc133Sniffer` and produces a list of `Block`s: row
+//! Warp-style command-block state machine. Consumes the DCS event stream
+//! emitted by `dcs::DcsSniffer` and produces a list of `Block`s: row
 //! ranges into the shared terminal grid, sealed with a frozen `GridSnapshot`
 //! at command-end so they survive scrollback eviction.
+//!
+//! Wall-clock duration is computed on the Rust side as the delta between
+//! `Preexec` and `CommandFinished` boundaries — the shell doesn't ship a
+//! `duration_ms` field (and neither does Warp's wire format).
 
-use crate::osc133::Osc133Event;
+use crate::dcs::DcsEvent;
 use crate::snapshot::GridSnapshot;
+use std::time::Instant;
 
 /// Stable monotonic block id, assigned at open. Never reused inside a single
 /// `BlockStore`; survives `reset()` by continuing to count up so Swift `@Observable`
@@ -25,12 +30,19 @@ pub struct Block {
     pub end_line: i32,
     /// `None` while running.
     pub frozen_snapshot: Option<GridSnapshot>,
-    /// `None` if the shell didn't ship one.
+    /// `None` if the block sealed without a `CommandFinished` (Ctrl-C path,
+    /// partial integration).
     pub exit_code: Option<i32>,
-    /// `None` if the shell didn't ship `dur=`.
+    /// Wall-clock command duration. `None` if no matching `Preexec` was
+    /// observed before the seal.
     pub duration_ms: Option<u64>,
-    /// `None` if the shell didn't ship `cwd=`.
+    /// Working directory captured at the opening `Precmd`. `None` if the
+    /// shell didn't ship `pwd`.
     pub working_directory: Option<String>,
+    /// Git branch (short name, or short SHA when detached) captured at
+    /// the opening `Precmd`. `None` when cwd is outside a repo or the
+    /// remote `git` is missing.
+    pub git_branch: Option<String>,
     pub is_running: bool,
 }
 
@@ -38,6 +50,9 @@ pub struct BlockStore {
     blocks: Vec<Block>,
     next_id: BlockId,
     open_index: Option<usize>,
+    /// Recorded on `Preexec`; consumed on `CommandFinished` to compute
+    /// `duration_ms`. Cleared on `reset()`.
+    command_start: Option<Instant>,
 }
 
 impl Default for BlockStore {
@@ -52,6 +67,7 @@ impl BlockStore {
             blocks: Vec::new(),
             next_id: 1,
             open_index: None,
+            command_start: None,
         }
     }
 
@@ -74,50 +90,70 @@ impl BlockStore {
     pub fn reset(&mut self) {
         self.blocks.clear();
         self.open_index = None;
+        self.command_start = None;
         // `next_id` deliberately NOT reset — see doc on BlockId.
     }
 
-    /// Apply one OSC 133 event. `current_line` is the cursor's current
-    /// grid line (`Terminal::current_line()`); `snapshot_range` is a
-    /// callback that produces the frozen body when sealing — the caller
-    /// owns the live `Terminal` and is the only one who can read its
-    /// grid. Returning `None` from the callback is fine (block seals
-    /// with `frozen_snapshot = None`).
-    pub fn apply<F>(&mut self, event: &Osc133Event, current_line: i32, mut snapshot_range: F)
-    where
+    /// Apply one DCS event.
+    ///
+    /// - `current_line` is the cursor's current grid line at the moment the
+    ///   event arrives (used as the row boundary).
+    /// - `now` is the wall-clock instant the event arrived; used to
+    ///   compute `duration_ms` across `Preexec` → `CommandFinished`. The
+    ///   parameter lets tests inject deterministic clocks; production
+    ///   callers pass `Instant::now()`.
+    /// - `snapshot_range` produces the frozen body when sealing — the caller
+    ///   owns the live `Terminal` and is the only one who can read its grid.
+    pub fn apply<F>(
+        &mut self,
+        event: &DcsEvent,
+        current_line: i32,
+        now: Instant,
+        mut snapshot_range: F,
+    ) where
         F: FnMut(i32, i32) -> Option<GridSnapshot>,
     {
         match event {
-            Osc133Event::PromptStart { attrs } => {
-                // Seal an unclosed prior block (Ctrl-C path).
-                self.seal_open(current_line, None, None, None, &mut snapshot_range);
-                let cwd = decode_attr_b64(attrs, b"cwd");
-                self.open_new(current_line, cwd);
+            DcsEvent::Precmd { pwd, git_branch } => {
+                // A bare Precmd means "about to draw a prompt". If a block
+                // is still open it never got a CommandFinished (Ctrl-C,
+                // partial integration); seal it with no exit + no duration.
+                self.seal_open(current_line, None, &mut snapshot_range);
+                self.open_new(current_line, pwd.clone(), git_branch.clone());
             }
-            Osc133Event::CommandStart { .. } => {
-                // Informational; no state change. Required event for the
-                // FinalTerm contract but our state machine doesn't react.
-            }
-            Osc133Event::OutputStart { attrs } => {
+            DcsEvent::Preexec { command } => {
                 if self.open_index.is_none() {
-                    // Reconnect / partial integration: synthesise an open.
-                    self.open_new(current_line, None);
+                    self.open_new(current_line, None, None);
                 }
-                if let Some(cmd) = decode_attr_b64(attrs, b"cmd") {
-                    if let Some(idx) = self.open_index {
-                        self.blocks[idx].command = cmd;
-                    }
+                if let Some(idx) = self.open_index {
+                    self.blocks[idx].command = command.clone();
+                    // Move `start_line` forward to the row Preexec fires
+                    // on — that's the line just after the prompt + the
+                    // echoed command, i.e. where the command's output
+                    // begins. Warp displays only the output in a block's
+                    // body; the prompt/command live in the header. By
+                    // advancing the body's row range we hide the echoed
+                    // prompt line from the block snapshot.
+                    self.blocks[idx].start_line = current_line;
                 }
+                self.command_start = Some(now);
             }
-            Osc133Event::CommandEnd { exit_code, attrs } => {
-                let dur_ms = decode_attr_u64(attrs, b"dur");
-                let cwd = decode_attr_b64(attrs, b"cwd");
-                self.seal_open(current_line, *exit_code, dur_ms, cwd, &mut snapshot_range);
+            DcsEvent::CommandFinished { exit_code } => {
+                let duration_ms = self
+                    .command_start
+                    .take()
+                    .map(|start| now.saturating_duration_since(start).as_millis() as u64);
+                self.seal_with(
+                    current_line,
+                    Some(*exit_code),
+                    duration_ms,
+                    &mut snapshot_range,
+                );
             }
         }
     }
 
-    fn open_new(&mut self, current_line: i32, cwd: Option<String>) {
+    fn open_new(&mut self, current_line: i32, pwd: Option<String>, git_branch: Option<String>) {
         let id = self.next_id;
         self.next_id += 1;
         self.blocks.push(Block {
@@ -128,18 +164,27 @@ impl BlockStore {
             frozen_snapshot: None,
             exit_code: None,
             duration_ms: None,
-            working_directory: cwd,
+            working_directory: pwd,
+            git_branch,
             is_running: true,
         });
         self.open_index = Some(self.blocks.len() - 1);
     }
 
-    fn seal_open<F>(
+    /// Seal the currently-open block (if any) without exit/duration —
+    /// used when a Precmd arrives over an already-running block.
+    fn seal_open<F>(&mut self, current_line: i32, exit_code: Option<i32>, snapshot_range: &mut F)
+    where
+        F: FnMut(i32, i32) -> Option<GridSnapshot>,
+    {
+        self.seal_with(current_line, exit_code, None, snapshot_range);
+    }
+
+    fn seal_with<F>(
         &mut self,
         current_line: i32,
         exit_code: Option<i32>,
-        dur_ms: Option<u64>,
-        cwd: Option<String>,
+        duration_ms: Option<u64>,
         snapshot_range: &mut F,
     ) where
         F: FnMut(i32, i32) -> Option<GridSnapshot>,
@@ -155,77 +200,15 @@ impl BlockStore {
         block.end_line = end_line;
         block.frozen_snapshot = snap;
         block.exit_code = exit_code;
-        block.duration_ms = dur_ms;
-        if cwd.is_some() && block.working_directory.is_none() {
-            block.working_directory = cwd;
-        }
+        block.duration_ms = duration_ms;
         self.open_index = None;
     }
-}
-
-/// Parse the sniffer's raw `attrs` payload (`key=value;key=value` bytes,
-/// no leading/trailing semicolon) looking for `key`. Returns the value
-/// slice (possibly empty) if found.
-fn find_attr<'a>(attrs: &'a [u8], key: &[u8]) -> Option<&'a [u8]> {
-    for pair in attrs.split(|&b| b == b';') {
-        if let Some(eq) = pair.iter().position(|&b| b == b'=') {
-            if &pair[..eq] == key {
-                return Some(&pair[eq + 1..]);
-            }
-        } else if pair == key {
-            return Some(&[]);
-        }
-    }
-    None
-}
-
-fn decode_attr_b64(attrs: &[u8], key: &[u8]) -> Option<String> {
-    let raw = find_attr(attrs, key)?;
-    if raw.is_empty() {
-        return None;
-    }
-    let bytes = base64_decode(raw)?;
-    String::from_utf8(bytes).ok()
-}
-
-fn decode_attr_u64(attrs: &[u8], key: &[u8]) -> Option<u64> {
-    let raw = find_attr(attrs, key)?;
-    std::str::from_utf8(raw).ok()?.parse().ok()
-}
-
-/// Tiny stdlib-only base64 decoder. We only feed it the well-formed
-/// payloads our shell-integration scripts emit (and what third-party
-/// integrations like iTerm2 emit); malformed input returns `None`.
-fn base64_decode(input: &[u8]) -> Option<Vec<u8>> {
-    fn val(b: u8) -> Option<u8> {
-        match b {
-            b'A'..=b'Z' => Some(b - b'A'),
-            b'a'..=b'z' => Some(b - b'a' + 26),
-            b'0'..=b'9' => Some(b - b'0' + 52),
-            b'+' => Some(62),
-            b'/' => Some(63),
-            _ => None,
-        }
-    }
-    let trimmed: Vec<u8> = input.iter().copied().filter(|&b| b != b'=').collect();
-    let mut out = Vec::with_capacity(trimmed.len() * 3 / 4);
-    let mut buf: u32 = 0;
-    let mut bits: u32 = 0;
-    for &b in &trimmed {
-        let v = val(b)? as u32;
-        buf = (buf << 6) | v;
-        bits += 6;
-        if bits >= 8 {
-            bits -= 8;
-            out.push((buf >> bits) as u8);
-        }
-    }
-    Some(out)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::Duration;
 
     fn snap_stub(_start: i32, _end: i32) -> Option<GridSnapshot> {
         Some(GridSnapshot {
@@ -247,6 +230,23 @@ mod tests {
         None
     }
 
+    fn precmd(pwd: Option<&str>) -> DcsEvent {
+        DcsEvent::Precmd {
+            pwd: pwd.map(str::to_owned),
+            git_branch: None,
+        }
+    }
+
+    fn preexec(cmd: &str) -> DcsEvent {
+        DcsEvent::Preexec {
+            command: cmd.to_owned(),
+        }
+    }
+
+    fn command_finished(exit: i32) -> DcsEvent {
+        DcsEvent::CommandFinished { exit_code: exit }
+    }
+
     #[test]
     fn empty_on_init() {
         let s = BlockStore::new();
@@ -254,170 +254,121 @@ mod tests {
     }
 
     #[test]
-    fn prompt_start_opens_running_block() {
+    fn first_precmd_opens_running_block_with_pwd() {
         let mut s = BlockStore::new();
-        s.apply(&Osc133Event::PromptStart { attrs: vec![] }, 5, no_snap);
+        s.apply(&precmd(Some("/home/alice")), 5, Instant::now(), no_snap);
         assert_eq!(s.len(), 1);
         let b = s.get(0).unwrap();
         assert_eq!(b.start_line, 5);
         assert_eq!(b.end_line, BLOCK_END_LINE_RUNNING);
         assert!(b.is_running);
+        assert_eq!(b.working_directory.as_deref(), Some("/home/alice"));
         assert!(b.frozen_snapshot.is_none());
     }
 
     #[test]
-    fn output_start_fills_command() {
+    fn preexec_fills_command_and_starts_clock() {
         let mut s = BlockStore::new();
-        s.apply(&Osc133Event::PromptStart { attrs: vec![] }, 0, no_snap);
-        // "bHM=" → "ls"
-        s.apply(
-            &Osc133Event::OutputStart {
-                attrs: b"cmd=bHM=".to_vec(),
-            },
-            0,
-            no_snap,
-        );
+        let t0 = Instant::now();
+        s.apply(&precmd(None), 0, t0, no_snap);
+        s.apply(&preexec("ls"), 0, t0, no_snap);
         assert_eq!(s.get(0).unwrap().command, "ls");
     }
 
     #[test]
-    fn command_end_seals_and_freezes() {
+    fn command_finished_seals_and_records_duration() {
         let mut s = BlockStore::new();
-        s.apply(&Osc133Event::PromptStart { attrs: vec![] }, 3, no_snap);
+        let t0 = Instant::now();
+        s.apply(&precmd(Some("/tmp")), 3, t0, no_snap);
+        s.apply(&preexec("ls"), 3, t0, no_snap);
         s.apply(
-            &Osc133Event::OutputStart {
-                attrs: b"cmd=bHM=".to_vec(),
-            },
-            3,
-            no_snap,
-        );
-        s.apply(
-            &Osc133Event::CommandEnd {
-                exit_code: Some(0),
-                attrs: b"dur=1234".to_vec(),
-            },
+            &command_finished(0),
             7,
+            t0 + Duration::from_millis(1234),
             snap_stub,
         );
-        let b = s.get(0).unwrap();
-        assert!(!b.is_running);
-        assert_eq!(b.end_line, 8); // current_line + 1
-        assert_eq!(b.exit_code, Some(0));
-        assert_eq!(b.duration_ms, Some(1234));
-        assert!(b.frozen_snapshot.is_some());
-    }
-
-    #[test]
-    fn cwd_attr_from_prompt_start() {
-        // base64 "/home/alice" = "L2hvbWUvYWxpY2U="
-        let mut s = BlockStore::new();
-        s.apply(
-            &Osc133Event::PromptStart {
-                attrs: b"cwd=L2hvbWUvYWxpY2U=".to_vec(),
-            },
-            0,
-            no_snap,
-        );
-        assert_eq!(
-            s.get(0).unwrap().working_directory.as_deref(),
-            Some("/home/alice")
-        );
+        let first = s.get(0).unwrap();
+        assert!(!first.is_running);
+        assert_eq!(first.end_line, 8);
+        assert_eq!(first.exit_code, Some(0));
+        assert_eq!(first.duration_ms, Some(1234));
+        assert!(first.frozen_snapshot.is_some());
     }
 
     #[test]
     fn nonzero_exit_carried() {
         let mut s = BlockStore::new();
-        s.apply(&Osc133Event::PromptStart { attrs: vec![] }, 0, no_snap);
-        s.apply(&Osc133Event::OutputStart { attrs: vec![] }, 0, no_snap);
-        s.apply(
-            &Osc133Event::CommandEnd {
-                exit_code: Some(127),
-                attrs: vec![],
-            },
-            0,
-            no_snap,
-        );
+        let t0 = Instant::now();
+        s.apply(&precmd(None), 0, t0, no_snap);
+        s.apply(&preexec("false"), 0, t0, no_snap);
+        s.apply(&command_finished(127), 0, t0, no_snap);
         assert_eq!(s.get(0).unwrap().exit_code, Some(127));
     }
 
     #[test]
-    fn missing_exit_and_dur() {
+    fn precmd_without_command_finished_seals_with_no_exit() {
+        // Ctrl-C path: user kills a running command, shell skips
+        // CommandFinished and goes straight to the next Precmd.
         let mut s = BlockStore::new();
-        s.apply(&Osc133Event::PromptStart { attrs: vec![] }, 0, no_snap);
-        s.apply(&Osc133Event::OutputStart { attrs: vec![] }, 0, no_snap);
+        let t0 = Instant::now();
+        s.apply(&precmd(None), 0, t0, no_snap);
+        s.apply(&preexec("sleep 100"), 0, t0, no_snap);
+        s.apply(&precmd(None), 0, t0, no_snap);
+        assert_eq!(s.len(), 2);
+        let first = s.get(0).unwrap();
+        assert!(!first.is_running);
+        assert!(first.exit_code.is_none());
+        assert!(first.duration_ms.is_none());
+    }
+
+    #[test]
+    fn preexec_without_precmd_synthesises_open() {
+        let mut s = BlockStore::new();
+        s.apply(&preexec("date"), 9, Instant::now(), no_snap);
+        assert_eq!(s.len(), 1);
+        assert_eq!(s.get(0).unwrap().command, "date");
+        assert!(s.get(0).unwrap().is_running);
+    }
+
+    #[test]
+    fn command_finished_without_preexec_seals_without_duration() {
+        // Partial-integration path: a CommandFinished arrives but no
+        // matching Preexec was seen. Seal anyway with no duration.
+        let mut s = BlockStore::new();
+        let t0 = Instant::now();
+        s.apply(&precmd(None), 0, t0, no_snap);
         s.apply(
-            &Osc133Event::CommandEnd {
-                exit_code: None,
-                attrs: vec![],
-            },
+            &command_finished(0),
             0,
+            t0 + Duration::from_millis(50),
             no_snap,
         );
         let b = s.get(0).unwrap();
-        assert!(b.exit_code.is_none());
+        assert!(!b.is_running);
+        assert_eq!(b.exit_code, Some(0));
         assert!(b.duration_ms.is_none());
-    }
-
-    #[test]
-    fn new_prompt_seals_previous_if_running() {
-        let mut s = BlockStore::new();
-        s.apply(&Osc133Event::PromptStart { attrs: vec![] }, 1, no_snap);
-        s.apply(&Osc133Event::PromptStart { attrs: vec![] }, 4, no_snap);
-        assert_eq!(s.len(), 2);
-        assert!(!s.get(0).unwrap().is_running);
-        assert!(s.get(0).unwrap().exit_code.is_none());
-        assert_eq!(s.get(1).unwrap().start_line, 4);
-    }
-
-    #[test]
-    fn output_start_opens_block_if_missing_prompt() {
-        let mut s = BlockStore::new();
-        s.apply(
-            &Osc133Event::OutputStart {
-                attrs: b"cmd=ZGF0ZQ==".to_vec(), // "date"
-            },
-            9,
-            no_snap,
-        );
-        assert_eq!(s.len(), 1);
-        assert_eq!(s.get(0).unwrap().command, "date");
     }
 
     #[test]
     fn reset_clears_all() {
         let mut s = BlockStore::new();
-        s.apply(&Osc133Event::PromptStart { attrs: vec![] }, 0, no_snap);
-        s.apply(&Osc133Event::OutputStart { attrs: vec![] }, 0, no_snap);
-        s.apply(
-            &Osc133Event::CommandEnd {
-                exit_code: Some(0),
-                attrs: vec![],
-            },
-            0,
-            no_snap,
-        );
+        let t0 = Instant::now();
+        s.apply(&precmd(None), 0, t0, no_snap);
+        s.apply(&preexec("ls"), 0, t0, no_snap);
+        s.apply(&command_finished(0), 0, t0, no_snap);
         assert!(!s.is_empty());
         s.reset();
         assert!(s.is_empty());
     }
 
     #[test]
-    fn command_start_is_informational_only() {
-        let mut s = BlockStore::new();
-        s.apply(&Osc133Event::PromptStart { attrs: vec![] }, 0, no_snap);
-        let before = s.len();
-        s.apply(&Osc133Event::CommandStart { attrs: vec![] }, 0, no_snap);
-        assert_eq!(s.len(), before);
-        assert!(s.get(0).unwrap().is_running);
-    }
-
-    #[test]
     fn block_ids_are_monotonic_across_reset() {
         let mut s = BlockStore::new();
-        s.apply(&Osc133Event::PromptStart { attrs: vec![] }, 0, no_snap);
+        let t0 = Instant::now();
+        s.apply(&precmd(None), 0, t0, no_snap);
         let first_id = s.get(0).unwrap().id;
         s.reset();
-        s.apply(&Osc133Event::PromptStart { attrs: vec![] }, 0, no_snap);
+        s.apply(&precmd(None), 0, t0, no_snap);
         assert!(s.get(0).unwrap().id > first_id);
     }
 }

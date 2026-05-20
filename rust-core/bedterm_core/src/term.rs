@@ -113,7 +113,7 @@ pub struct Terminal {
     cols: u16,
     rows: u16,
     palette: Palette,
-    osc133: crate::osc133::Osc133Sniffer,
+    dcs: crate::dcs::DcsSniffer,
     blocks: crate::blocks::BlockStore,
 }
 
@@ -130,46 +130,44 @@ impl Terminal {
             cols,
             rows,
             palette: Palette::default(),
-            osc133: crate::osc133::Osc133Sniffer::new(),
+            dcs: crate::dcs::DcsSniffer::new(),
             blocks: crate::blocks::BlockStore::new(),
         }
     }
 
     pub fn feed(&mut self, bytes: &[u8]) {
-        // Dual-feed: alacritty owns grid mutation, while the OSC 133 sniffer
-        // listens for shell-integration markers. The sniffer's VTE state
-        // machine is independent — both must see every byte to stay in sync.
+        // Dual-feed: alacritty owns grid mutation, while the DCS sniffer
+        // listens for the Warp-compatible shell-integration frame
+        // `ESC P $ d <hex(JSON)> ST`. Both VTE state machines are
+        // independent; both must see every byte.
         self.parser.advance(&mut self.term, bytes);
 
-        // Record how many OSC 133 events were already queued before this
-        // chunk; everything appended past that boundary is what `feed` just
-        // produced and needs to be applied to the BlockStore. We clone (not
-        // drain) so the sniffer's queue remains intact for `pop_osc133` /
-        // `drainOsc133Events` callers on the Swift side.
-        let before = self.osc133.pending();
-        self.osc133.feed(bytes);
-        let new_events: Vec<_> = self.osc133.events_from(before).cloned().collect();
+        let before = self.dcs.pending();
+        self.dcs.feed(bytes);
+        let new_events: Vec<_> = self.dcs.events_from(before).cloned().collect();
 
         if !new_events.is_empty() {
-            let current = self.term.grid().cursor.point.line.0;
+            // Grid-absolute line: `cursor.point.line.0` alone is
+            // screen-relative (0..rows-1), so once scrollback starts
+            // every Precmd captures the same value (the bottom row
+            // the prompt redraws on). Adding `history_size()` makes
+            // it monotonic, so block start/end deltas equal the rows
+            // the command actually consumed.
+            let grid = self.term.grid();
+            let current = grid.history_size() as i32 + grid.cursor.point.line.0;
             let cols = self.cols;
             let rows = self.rows;
             let term = &self.term;
             let palette = &self.palette;
+            let now = std::time::Instant::now();
             for event in &new_events {
-                self.blocks.apply(event, current, |start, end| {
+                self.blocks.apply(event, current, now, |start, end| {
                     Some(Self::snapshot_range_from(
                         term, cols, rows, palette, start, end,
                     ))
                 });
             }
         }
-    }
-
-    /// Pop the next pending OSC 133 event, or `None` if the queue is empty.
-    /// Cheap; safe to drain after every feed.
-    pub fn pop_osc133(&mut self) -> Option<crate::osc133::Osc133Event> {
-        self.osc133.pop()
     }
 
     pub fn resize(&mut self, cols: u16, rows: u16) {
@@ -233,13 +231,16 @@ impl Terminal {
         self.palette = palette;
     }
 
-    /// Grid line of the cursor on the active screen (`0..rows-1`). Swift
-    /// records this on each OSC 133 boundary so Block view knows where its
-    /// row range starts / ends. Combined with `history_size()` at the same
-    /// instant, the (line, history) pair anchors the block stably as the
-    /// grid scrolls — see `snapshot_range` for the lookup math.
+    /// Grid-absolute line of the cursor (`history_size() + screen_line`).
+    /// Monotonically non-decreasing as output scrolls — every newline that
+    /// pushes content into scrollback bumps `history_size`. Block start /
+    /// end lines are stored in this same absolute frame; the row count
+    /// `end - start` therefore equals the rows the command actually
+    /// consumed. `snapshot_range` translates back to alacritty's
+    /// screen-relative space internally.
     pub fn current_line(&self) -> i32 {
-        self.term.grid().cursor.point.line.0
+        let grid = self.term.grid();
+        grid.history_size() as i32 + grid.cursor.point.line.0
     }
 
     /// Snapshot a row range from the active screen + scrollback. Coordinates
@@ -272,10 +273,17 @@ impl Terminal {
     ) -> GridSnapshot {
         let grid = term.grid();
         let history = grid.history_size() as i32;
+        // Callers pass grid-absolute lines (see `current_line` docs).
+        // alacritty's `grid[Line(l)]` expects screen-relative l in
+        // `[-history, rows-1]`, so subtract `history` to translate.
+        // Absolute lines that have fallen off scrollback land below
+        // `-history` after subtraction and get clamped out.
+        let rel_start = start_line - history;
+        let rel_end = end_line - history;
         let min_line = -history;
         let max_line = rows as i32;
-        let start = start_line.max(min_line).min(max_line);
-        let end = end_line.max(start).min(max_line);
+        let start = rel_start.max(min_line).min(max_line);
+        let end = rel_end.max(start).min(max_line);
         let row_count = (end - start).max(0) as u16;
 
         let mut cells = Vec::with_capacity(cols as usize * row_count as usize);
@@ -329,8 +337,8 @@ impl Terminal {
         }
     }
 
-    /// Read-only view of the per-command blocks that the OSC 133 sniffer
-    /// has produced so far. Driven automatically by `feed`.
+    /// Read-only view of the per-command blocks that the DCS sniffer has
+    /// produced so far. Driven automatically by `feed`.
     pub fn blocks(&self) -> &[crate::blocks::Block] {
         self.blocks.blocks()
     }
@@ -639,23 +647,44 @@ fn default_indexed(i: u8) -> alacritty_terminal::vte::ansi::Rgb {
 mod block_integration_tests {
     use super::*;
 
+    fn hex(input: &str) -> String {
+        use std::fmt::Write;
+        let mut out = String::with_capacity(input.len() * 2);
+        for b in input.bytes() {
+            write!(out, "{b:02x}").unwrap();
+        }
+        out
+    }
+
+    /// `ESC P $ d <hex(JSON)> 0x9C` — Warp's wire frame.
+    fn dcs(json: &str) -> Vec<u8> {
+        let mut v = vec![0x1B, b'P', b'$', b'd'];
+        v.extend_from_slice(hex(json).as_bytes());
+        v.push(0x9C);
+        v
+    }
+
     #[test]
     fn feed_populates_block_store() {
         let mut term = Terminal::new(80, 24);
-        // OSC 133;A ST  OSC 133;C;cmd=bHM= ST  OSC 133;D;0 ST
-        let stream = b"\x1b]133;A\x1b\\\x1b]133;C;cmd=bHM=\x1b\\\x1b]133;D;0\x1b\\";
-        term.feed(stream);
+        term.feed(&dcs(r#"{"hook":"Precmd","value":{"pwd":"/tmp"}}"#));
+        term.feed(&dcs(r#"{"hook":"Preexec","value":{"command":"ls"}}"#));
+        term.feed(&dcs(
+            r#"{"hook":"CommandFinished","value":{"exit_code":0}}"#,
+        ));
         let blocks = term.blocks();
         assert_eq!(blocks.len(), 1);
         assert_eq!(blocks[0].command, "ls");
         assert!(!blocks[0].is_running);
         assert_eq!(blocks[0].exit_code, Some(0));
+        // duration is wall-clock — just assert it's Some.
+        assert!(blocks[0].duration_ms.is_some());
     }
 
     #[test]
-    fn feed_does_not_strand_running_block_when_only_a_arrives() {
+    fn feed_does_not_strand_running_block_when_only_precmd_arrives() {
         let mut term = Terminal::new(80, 24);
-        term.feed(b"\x1b]133;A\x1b\\");
+        term.feed(&dcs(r#"{"hook":"Precmd","value":{"pwd":""}}"#));
         let blocks = term.blocks();
         assert_eq!(blocks.len(), 1);
         assert!(blocks[0].is_running);

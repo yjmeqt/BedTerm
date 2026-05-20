@@ -27,7 +27,6 @@
 		B4B4B4B400000000000000A1 /* TerminalRendererParityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B4B4B4B400000000000000F1 /* TerminalRendererParityTests.swift */; };
 		B5B5B5B500000000000000A1 /* TerminalPaletteTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5B5B5B500000000000000F1 /* TerminalPaletteTests.swift */; };
 		B6B6B6B600000000000000A1 /* BedTermSettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6B6B6B600000000000000F1 /* BedTermSettingsTests.swift */; };
-		B7B7B7B700000000000000A1 /* Osc133Tests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7B7B7B700000000000000F1 /* Osc133Tests.swift */; };
 		B8B8B8B800000000000000A1 /* ShellIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8B8B8B800000000000000F1 /* ShellIntegrationTests.swift */; };
 		B9B9B9B900000000000000A1 /* BlockStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9B9B9B900000000000000F1 /* BlockStoreTests.swift */; };
 		F3F3F3F300000000000000A2 /* Fixtures in Resources */ = {isa = PBXBuildFile; fileRef = F3F3F3F300000000000000F2 /* Fixtures */; };
@@ -78,7 +77,6 @@
 		B4B4B4B400000000000000F1 /* TerminalRendererParityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalRendererParityTests.swift; sourceTree = "<group>"; };
 		B5B5B5B500000000000000F1 /* TerminalPaletteTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalPaletteTests.swift; sourceTree = "<group>"; };
 		B6B6B6B600000000000000F1 /* BedTermSettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BedTermSettingsTests.swift; sourceTree = "<group>"; };
-		B7B7B7B700000000000000F1 /* Osc133Tests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Osc133Tests.swift; sourceTree = "<group>"; };
 		B8B8B8B800000000000000F1 /* ShellIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShellIntegrationTests.swift; sourceTree = "<group>"; };
 		B9B9B9B900000000000000F1 /* BlockStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlockStoreTests.swift; sourceTree = "<group>"; };
 		D5D5D5D500000000000000F1 /* RustMockTTYClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RustMockTTYClientTests.swift; sourceTree = "<group>"; };
@@ -169,7 +167,6 @@
 				B4B4B4B400000000000000F1 /* TerminalRendererParityTests.swift */,
 				B5B5B5B500000000000000F1 /* TerminalPaletteTests.swift */,
 				B6B6B6B600000000000000F1 /* BedTermSettingsTests.swift */,
-				B7B7B7B700000000000000F1 /* Osc133Tests.swift */,
 				B8B8B8B800000000000000F1 /* ShellIntegrationTests.swift */,
 				B9B9B9B900000000000000F1 /* BlockStoreTests.swift */,
 				D5D5D5D500000000000000F1 /* RustMockTTYClientTests.swift */,
@@ -364,7 +361,6 @@
 				B4B4B4B400000000000000A1 /* TerminalRendererParityTests.swift in Sources */,
 				B5B5B5B500000000000000A1 /* TerminalPaletteTests.swift in Sources */,
 				B6B6B6B600000000000000A1 /* BedTermSettingsTests.swift in Sources */,
-				B7B7B7B700000000000000A1 /* Osc133Tests.swift in Sources */,
 				B8B8B8B800000000000000A1 /* ShellIntegrationTests.swift in Sources */,
 				B9B9B9B900000000000000A1 /* BlockStoreTests.swift in Sources */,
 				D5D5D5D500000000000000A1 /* RustMockTTYClientTests.swift in Sources */,

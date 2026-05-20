@@ -11,6 +11,7 @@ public struct RustBlock: Identifiable, Sendable, Equatable {
     public let exitCode: Int32?
     public let duration: TimeInterval?
     public let workingDirectory: String?
+    public let gitBranch: String?
     public let isRunning: Bool
     public let hasFrozenSnapshot: Bool
 }
@@ -130,36 +131,8 @@ public final class TerminalCore {
         BedTermMode(rawValue: bt_term_mode(handle))
     }
 
-    /// Pop the next pending OSC 133 (FinalTerm) shell-integration event, or
-    /// `nil` if the queue is empty. Drain in a loop after each `feed(_:)` to
-    /// reconstruct command lifecycles. The event's `attrs` are copied out
-    /// inside this call, so the Rust-side scratch buffer is safe to
-    /// invalidate on the next pop.
-    public func popOsc133Event() -> Osc133Event? {
-        var raw = BtOsc133Event(
-            kind: 0,
-            has_exit_code: 0,
-            _reserved: (0, 0),
-            exit_code: 0,
-            attrs: nil,
-            attrs_len: 0
-        )
-        guard bt_term_pop_osc133(handle, &raw) == 1 else { return nil }
-        return Osc133Event(raw: raw)
-    }
-
-    /// Drain every pending OSC 133 event into an array. Equivalent to calling
-    /// `popOsc133Event()` until it returns `nil`.
-    public func drainOsc133Events() -> [Osc133Event] {
-        var events: [Osc133Event] = []
-        while let event = popOsc133Event() {
-            events.append(event)
-        }
-        return events
-    }
-
     /// Cursor's current grid line on the active screen (0..rows-1). Block
-    /// view records this on each OSC 133 event to anchor block boundaries.
+    /// view records this on each block boundary to anchor block ranges.
     public var currentLine: Int32 {
         bt_term_current_line(handle)
     }
@@ -216,6 +189,8 @@ public final class TerminalCore {
             command_len: 0,
             cwd: nil,
             cwd_len: 0,
+            git_branch: nil,
+            git_branch_len: 0,
             has_frozen_snapshot: 0,
             _pad3: (0, 0, 0, 0, 0, 0, 0)
         )
@@ -230,6 +205,10 @@ public final class TerminalCore {
             view.cwd_len > 0
             ? copyOutString(ptr: view.cwd, len: Int(view.cwd_len))
             : nil
+        let gitBranch =
+            view.git_branch_len > 0
+            ? copyOutString(ptr: view.git_branch, len: Int(view.git_branch_len))
+            : nil
         return RustBlock(
             id: view.id,
             command: command,
@@ -240,6 +219,7 @@ public final class TerminalCore {
                 ? TimeInterval(view.duration_ms) / 1000.0
                 : nil,
             workingDirectory: cwd,
+            gitBranch: gitBranch,
             isRunning: view.is_running != 0,
             hasFrozenSnapshot: view.has_frozen_snapshot != 0
         )

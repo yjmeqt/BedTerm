@@ -36,6 +36,11 @@ pub struct BtBlockView {
     /// UTF-8 bytes for working directory. `null` + len=0 when missing.
     pub cwd: *const u8,
     pub cwd_len: usize,
+    /// UTF-8 bytes for git branch (short name or short SHA when
+    /// detached). `null` + len=0 when cwd is outside a repo or the
+    /// shell-integration didn't ship the field.
+    pub git_branch: *const u8,
+    pub git_branch_len: usize,
     /// 1 if `frozen_snapshot` is available (sealed block), 0 otherwise.
     pub has_frozen_snapshot: u8,
     pub _pad3: [u8; 7],
@@ -79,6 +84,7 @@ pub unsafe extern "C" fn bt_term_block_at(
         has_frozen_snapshot,
         command,
         working_directory,
+        git_branch,
     ) = {
         let Some(block) = term.inner_ref().block_at(idx) else {
             return -1;
@@ -93,6 +99,7 @@ pub unsafe extern "C" fn bt_term_block_at(
             block.frozen_snapshot.is_some(),
             block.command.clone(),
             block.working_directory.clone(),
+            block.git_branch.clone(),
         )
     };
 
@@ -111,6 +118,13 @@ pub unsafe extern "C" fn bt_term_block_at(
     } else {
         (0, 0)
     };
+    let (branch_offset, branch_len) = if let Some(branch) = git_branch.as_ref() {
+        let start = scratch.len();
+        scratch.extend_from_slice(branch.as_bytes());
+        (start, branch.len())
+    } else {
+        (0, 0)
+    };
     let base = scratch.as_ptr();
     let command_ptr = if command_len > 0 {
         base.add(command_offset)
@@ -119,6 +133,11 @@ pub unsafe extern "C" fn bt_term_block_at(
     };
     let cwd_ptr = if cwd_len > 0 {
         base.add(cwd_offset)
+    } else {
+        std::ptr::null()
+    };
+    let branch_ptr = if branch_len > 0 {
+        base.add(branch_offset)
     } else {
         std::ptr::null()
     };
@@ -138,6 +157,8 @@ pub unsafe extern "C" fn bt_term_block_at(
         command_len,
         cwd: cwd_ptr,
         cwd_len,
+        git_branch: branch_ptr,
+        git_branch_len: branch_len,
         has_frozen_snapshot: if has_frozen_snapshot { 1 } else { 0 },
         _pad3: [0; 7],
     };

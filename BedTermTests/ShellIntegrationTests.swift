@@ -13,11 +13,15 @@ final class ShellIntegrationTests: XCTestCase {
         XCTAssertNotNil(ShellIntegrationScript.load())
     }
 
-    func testScriptEmitsOsc133Sequences() throws {
+    func testScriptEmitsDcsSequences() throws {
         let body = try XCTUnwrap(ShellIntegrationScript.load())
-        // The three OSC 133 boundaries we care about should all appear in the
-        // script as escape literals so the remote shell will emit them.
-        XCTAssertTrue(body.contains(#"\033]133;%s"#))
+        // The DCS opener — `ESC P $ d` — that wraps every hex-encoded JSON
+        // payload must be present as a literal printf format string.
+        XCTAssertTrue(body.contains(#"\033P$d"#))
+        // Warp-tagged JSON shapes for the three hook variants we ship.
+        XCTAssertTrue(body.contains(#"{"hook":"Precmd","value":{"pwd":"#))
+        XCTAssertTrue(body.contains(#"{"hook":"Preexec","value":{"command":"#))
+        XCTAssertTrue(body.contains(#"{"hook":"CommandFinished","value":{"exit_code":"#))
         // The zsh + bash hook entry points.
         XCTAssertTrue(body.contains("__bedterm_precmd"))
         XCTAssertTrue(body.contains("__bedterm_preexec"))

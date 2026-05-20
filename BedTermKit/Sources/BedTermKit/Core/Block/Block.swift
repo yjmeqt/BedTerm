@@ -1,16 +1,16 @@
 import Foundation
 
 /// One Warp-style command block: the command, its row range in the
-/// underlying terminal grid, and the metadata captured around it via OSC
-/// 133 (FinalTerm) markers.
+/// underlying terminal grid, and the metadata captured around it from
+/// the bundled DCS shell-integration protocol.
 ///
 /// Storage model: a block is **a row range within the shared terminal
 /// grid**, not a separate byte-capture buffer. While the block is running
 /// it re-snapshots `[startLine, currentCursorLine + 1)` from the grid on
-/// every redraw — same Metal pipeline the live terminal view uses. On
-/// `OSC 133 ; D` (command end) the row range is frozen into an immutable
-/// `GridSnapshot` so it survives subsequent scrolling / scrollback
-/// eviction.
+/// every redraw — same Metal pipeline the live terminal view uses. When
+/// the next prompt boundary arrives (the shell's `precmd` hook), the row
+/// range is frozen into an immutable `GridSnapshot` so it survives
+/// subsequent scrolling / scrollback eviction.
 ///
 /// The canonical block list lives in the Rust core (`BlockStore`).
 /// Swift's `BlockStore` is an observable mirror — see
@@ -18,30 +18,35 @@ import Foundation
 /// from Rust via `TerminalCore.frozenSnapshot(forBlockAt:)`.
 public struct Block: Identifiable, Sendable, Equatable {
     public let id: UInt64
-    /// The command line as the remote shell saw it. Empty until our
-    /// bundled integration script ships it via `cmd=<base64>` on
-    /// `OSC 133 ; C`; third-party integrations typically don't include
-    /// it (and the UI shows a placeholder).
+    /// The command line as the remote shell saw it. Filled by the
+    /// `bedterm_preexec` DCS event (`{"cmd":"<hex>"}`). Empty until then.
     public var command: String
-    /// Grid line where the block started (the line of the prompt at the
-    /// instant `OSC 133 ; A` arrived). Used by the running-block renderer
-    /// to compute the row range to draw — start..currentCursorLine+1.
+    /// Grid line where the block started — the cursor line at the
+    /// `bedterm_precmd` boundary that opened this block. Used by the
+    /// running-block renderer to compute the row range to draw.
     public var startLine: Int32
     /// Grid line one past the last row that belongs to this block. `nil`
     /// while the block is still running.
     public var endLine: Int32?
-    /// Exit code from `OSC 133 ; D`'s positional-2 slot. `nil` when the
-    /// integration didn't include it.
+    /// Exit code from the next `bedterm_precmd`'s `exit` field. `nil` when
+    /// the shell didn't ship it (first-of-session or partial integration).
     public var exitCode: Int32?
-    /// Wall-clock duration from `dur=<millis>` attr. `nil` when not shipped.
+    /// Wall-clock duration from the next `bedterm_precmd`'s `dur_ms`. `nil`
+    /// when not shipped.
     public var duration: TimeInterval?
-    /// Working directory from `cwd=<base64>` attr. `nil` when not shipped.
+    /// Working directory from `bedterm_precmd`'s `cwd` field. `nil` when
+    /// not shipped.
     public var workingDirectory: String?
-    /// True from creation until the closing event arrives.
+    /// Git branch (short name / short SHA) from `bedterm_precmd`'s
+    /// `git_branch` field. `nil` when cwd is outside a repo, `git` is
+    /// missing remotely, or the shell-integration script hasn't been
+    /// installed yet (older payloads).
+    public var gitBranch: String?
+    /// True from creation until the closing precmd event arrives.
     public var isRunning: Bool
     /// True once Rust has captured an immutable `GridSnapshot` for this
-    /// block (on `OSC 133 ; D`). The snapshot itself lives in Rust; fetch
-    /// it on demand with `TerminalCore.frozenSnapshot(forBlockAt:)`.
+    /// block. The snapshot itself lives in Rust; fetch it on demand with
+    /// `TerminalCore.frozenSnapshot(forBlockAt:)`.
     public var hasFrozenSnapshot: Bool
 
     public init(
@@ -52,6 +57,7 @@ public struct Block: Identifiable, Sendable, Equatable {
         exitCode: Int32? = nil,
         duration: TimeInterval? = nil,
         workingDirectory: String? = nil,
+        gitBranch: String? = nil,
         isRunning: Bool = true,
         hasFrozenSnapshot: Bool = false
     ) {
@@ -62,6 +68,7 @@ public struct Block: Identifiable, Sendable, Equatable {
         self.exitCode = exitCode
         self.duration = duration
         self.workingDirectory = workingDirectory
+        self.gitBranch = gitBranch
         self.isRunning = isRunning
         self.hasFrozenSnapshot = hasFrozenSnapshot
     }
@@ -77,6 +84,7 @@ extension Block {
             exitCode: rust.exitCode,
             duration: rust.duration,
             workingDirectory: rust.workingDirectory,
+            gitBranch: rust.gitBranch,
             isRunning: rust.isRunning,
             hasFrozenSnapshot: rust.hasFrozenSnapshot
         )
