@@ -17,15 +17,33 @@ import UIKit
 ///     bodies via one `bt_renderer_draw_block_list` call per frame.
 @MainActor
 final class BlockListContainerViewController: UIViewController, UIScrollViewDelegate {
-    private let session: TerminalSession
+    let session: TerminalSession
     private let scrollView = UIScrollView()
-    private let contentView = UIView()
+    let contentView = UIView()
     private let metalView: TerminalBlocksMetalView
-    private var headerHosts: [UInt64: UIHostingController<BlockHeader>] = [:]
+    var headerHosts: [UInt64: UIHostingController<BlockHeader>] = [:]
+    /// Thin hairline UIViews drawn in the gap above each block (skipped
+    /// for the first block). Live in `contentView` so they scroll with
+    /// the list; sit beneath `metalView` but show through where the
+    /// metal surface has no body content to paint (transparent BG).
+    var dividerHosts: [UInt64: UIView] = [:]
+
+    /// Section-header pinning: a single hosting controller floats above
+    /// `metalView` (in `view`, not `contentView`) and adopts the
+    /// currently-scrolling block's command/header content. Lets the user
+    /// see which command they're inside even when its output is taller
+    /// than the screen. Lazily created the first time a header needs to
+    /// be pinned; `pinnedBlockID` tracks which block is currently shown
+    /// (or nil when no block intersects the sticky band).
+    var pinnedHost: UIHostingController<BlockHeader>?
+    var pinnedBlockID: UInt64?
+    /// Solid backdrop strip behind `pinnedHost` so the floating header
+    /// occludes the body cells `metalView` paints beneath it.
+    var pinnedBackground: UIView?
 
     // Layout constants. headerHeightPt may clip at Dynamic Type XXL —
     // accepted v1 limitation per Phase B plan.
-    private let headerHeightPt: CGFloat = 56
+    let headerHeightPt: CGFloat = 56
     private let pinTolerancePt: CGFloat = 24
     private let headerOverscanPt: CGFloat = 200
 
@@ -94,6 +112,17 @@ final class BlockListContainerViewController: UIViewController, UIScrollViewDele
             host.removeFromParent()
         }
         headerHosts.removeAll()
+        for (_, divider) in dividerHosts { divider.removeFromSuperview() }
+        dividerHosts.removeAll()
+        if let host = pinnedHost {
+            host.willMove(toParent: nil)
+            host.view.removeFromSuperview()
+            host.removeFromParent()
+        }
+        pinnedHost = nil
+        pinnedBackground?.removeFromSuperview()
+        pinnedBackground = nil
+        pinnedBlockID = nil
         scrollView.delegate = nil
     }
 
@@ -186,7 +215,7 @@ final class BlockListContainerViewController: UIViewController, UIScrollViewDele
         }
     }
 
-    private func bodyHeightPt(for block: Block) -> CGFloat {
+    func bodyHeightPt(for block: Block) -> CGFloat {
         let rows: Int = {
             if let end = block.endLine {
                 return max(1, Int(end - block.startLine))
@@ -201,10 +230,10 @@ final class BlockListContainerViewController: UIViewController, UIScrollViewDele
 
     private func updateContentSize() {
         let blocks = session.blockStore.blocks
-        let panelInsetPt: CGFloat = 4
+        let gap = BlockPanelStyle.interBlockGapPt
         var total: CGFloat = 0
         for block in blocks {
-            total += headerHeightPt + bodyHeightPt(for: block) + panelInsetPt
+            total += headerHeightPt + bodyHeightPt(for: block) + gap
         }
         let width = view.bounds.width
         scrollView.contentSize = CGSize(width: width, height: total)
@@ -218,46 +247,61 @@ final class BlockListContainerViewController: UIViewController, UIScrollViewDele
     private func syncHeaders() {
         let blocks = session.blockStore.blocks
         let width = view.bounds.width
-        let leftInset = BlockPanelStyle.cellLeftInsetPt
         let scrollY = scrollView.contentOffset.y
         let viewportTop = scrollY - headerOverscanPt
         let viewportBot = scrollY + scrollView.bounds.height + headerOverscanPt
+        let gap = BlockPanelStyle.interBlockGapPt
+        let ranges = computeBlockRanges(blocks: blocks, gap: gap)
 
         var keepIDs = Set<UInt64>()
         keepIDs.reserveCapacity(blocks.count)
-        var yPt: CGFloat = 0
-        let panelInsetPt: CGFloat = 4
-        for block in blocks {
-            let blockTop = yPt
-            let blockBot = blockTop + headerHeightPt + bodyHeightPt(for: block)
-            let intersects = blockBot >= viewportTop && blockTop <= viewportBot
+        let dividerColor = resolveDividerColor()
+        for (idx, range) in ranges.enumerated() {
+            let intersects = range.bot >= viewportTop && range.top <= viewportBot
             if intersects {
-                keepIDs.insert(block.id)
-                let host: UIHostingController<BlockHeader>
-                if let existing = headerHosts[block.id] {
-                    existing.rootView = BlockHeader(block: block)
-                    host = existing
-                } else {
-                    host = UIHostingController(rootView: BlockHeader(block: block))
-                    host.view.backgroundColor = .clear
-                    headerHosts[block.id] = host
-                    addChild(host)
-                    contentView.addSubview(host.view)
-                    host.didMove(toParent: self)
-                }
-                host.view.frame = CGRect(
-                    x: leftInset, y: blockTop,
-                    width: width - leftInset, height: headerHeightPt)
+                keepIDs.insert(range.block.id)
+                mountHeader(for: range.block, blockTop: range.top, width: width)
+                placeDividerForRange(range, idx: idx, width: width, gap: gap, color: dividerColor)
             }
-            yPt = blockBot + panelInsetPt
         }
+        recycleHostsAndDividers(keep: keepIDs)
+        updateStickyHeader(ranges: ranges, scrollY: scrollY, width: width)
+    }
 
-        for (id, host) in headerHosts where !keepIDs.contains(id) {
-            host.willMove(toParent: nil)
-            host.view.removeFromSuperview()
-            host.removeFromParent()
-            headerHosts.removeValue(forKey: id)
+    /// Per-block top + bottom Y in scroll-content coordinates. One pass.
+    private func computeBlockRanges(blocks: [Block], gap: CGFloat) -> [BlockRange] {
+        var out: [BlockRange] = []
+        out.reserveCapacity(blocks.count)
+        var yPt: CGFloat = 0
+        for block in blocks {
+            let top = yPt
+            let bot = top + headerHeightPt + bodyHeightPt(for: block)
+            out.append(BlockRange(block: block, top: top, bot: bot))
+            yPt = bot + gap
         }
+        return out
+    }
+
+    private func placeDividerForRange(
+        _ range: BlockRange, idx: Int, width: CGFloat,
+        gap: CGFloat, color: UIColor
+    ) {
+        let inset = BlockPanelStyle.dividerHorizontalInsetPt
+        let thickness = BlockPanelStyle.dividerThicknessPt
+        let rect = CGRect(
+            x: inset,
+            y: range.top - gap / 2 - thickness / 2,
+            width: max(0, width - inset * 2),
+            height: thickness)
+        placeDivider(for: range.block, isFirst: idx == 0, rect: rect, color: color)
+    }
+
+    /// (block, naturalTop, naturalBot) in scroll-content coordinates.
+    /// Shared between header mounting and sticky-pinning.
+    struct BlockRange {
+        let block: Block
+        let top: CGFloat
+        let bot: CGFloat
     }
 
     private func pushLayoutToMetalView() {
@@ -269,91 +313,33 @@ final class BlockListContainerViewController: UIViewController, UIScrollViewDele
 
         let blocks = session.blockStore.blocks
         let scale = view.window?.screen.scale ?? 3.0
-        let panelInsetPt: CGFloat = 4  // small gap between panels
-        let panelBgRgba = BlockPanelStyle.bgRgba(for: view.traitCollection)
-        let cornerRadiusPx = Float(BlockPanelStyle.cornerRadiusPt * scale)
+        let gap = BlockPanelStyle.interBlockGapPt
         let metalViewWidth = metalView.bounds.width
         var yPt: CGFloat = 0
         var entries: [BtBlockLayoutEntry] = []
         entries.reserveCapacity(blocks.count)
         for block in blocks {
-            let panelTop = yPt + panelInsetPt / 2
             let bodyTop = yPt + headerHeightPt
             let bodyPt = bodyHeightPt(for: block)
-            let panelBot = bodyTop + bodyPt + panelInsetPt / 2
+            // We dropped the rounded panel chrome — pass `panel_bg_rgba=0`
+            // and `panel_corner_radius_px=0` so Rust skips the panel draw
+            // entirely. The hairline divider between blocks is painted on
+            // the Swift side as a UIView in `syncHeaders`.
             entries.append(
                 BtBlockLayoutEntry(
                     block_id: block.id,
                     body_y_top_px: Float(bodyTop * scale),
                     body_height_px: Float(bodyPt * scale),
-                    panel_y_top_px: Float(panelTop * scale),
-                    panel_height_px: Float((panelBot - panelTop) * scale),
+                    panel_y_top_px: Float(yPt * scale),
+                    panel_height_px: Float((headerHeightPt + bodyPt) * scale),
                     panel_x_left_px: 0,
                     panel_width_px: Float(metalViewWidth * scale),
-                    panel_bg_rgba: panelBgRgba,
-                    panel_corner_radius_px: cornerRadiusPx
+                    panel_bg_rgba: 0,
+                    panel_corner_radius_px: 0
                 ))
-            yPt += headerHeightPt + bodyPt + panelInsetPt
+            yPt += headerHeightPt + bodyPt + gap
         }
         metalView.update(scrollOffset: scrollView.contentOffset.y, layout: entries)
-    }
-
-    // MARK: - Selection resolvers
-
-    private func blockHitTest(at point: CGPoint) -> BlockListSelectionController.BlockHit? {
-        guard let core = session.terminalCore else { return nil }
-        var yPt: CGFloat = 0
-        for block in session.blockStore.blocks {
-            let bodyTop = yPt + headerHeightPt
-            let bodyBot = bodyTop + bodyHeightPt(for: block)
-            if point.y >= bodyTop && point.y < bodyBot {
-                guard let snap = snapshot(for: block, core: core) else { return nil }
-                return .init(
-                    blockID: block.id, bodyTop: bodyTop,
-                    rows: Int(snap.rows), cols: Int(snap.cols))
-            }
-            yPt = bodyBot
-        }
-        return nil
-    }
-
-    private func snapshot(for block: Block, core: TerminalCore) -> GridSnapshot? {
-        if block.hasFrozenSnapshot {
-            let frozenIdx = core.allBlocks().firstIndex(where: { $0.id == block.id })
-            if let idx = frozenIdx { return core.frozenSnapshot(forBlockAt: idx) }
-        }
-        if block.isRunning {
-            let end = core.currentLine + 1
-            if end > block.startLine {
-                return core.snapshotRange(startLine: block.startLine, endLine: end)
-            }
-        }
-        return nil
-    }
-
-    private func extractText(blockID: UInt64, range: SelectionRange) -> String? {
-        guard let core = session.terminalCore,
-            let block = session.blockStore.blocks.first(where: { $0.id == blockID }),
-            let snap = snapshot(for: block, core: core)
-        else { return nil }
-        let norm = range.normalised
-        let rowsCount = Int(snap.rows)
-        let colsCount = Int(snap.cols)
-        let lastRow = min(norm.endRow, rowsCount - 1)
-        guard norm.startRow <= lastRow else { return nil }
-        var out = ""
-        for row in norm.startRow...lastRow {
-            let from = (row == norm.startRow) ? norm.startCol : 0
-            let to = (row == norm.endRow) ? norm.endCol : colsCount
-            for col in from..<min(to, colsCount) {
-                let scalar = snap.cell(col: col, row: row).flatMap { cell in
-                    cell.ch != 0 ? Unicode.Scalar(cell.ch) : nil
-                }
-                out.append(scalar.map(Character.init) ?? " ")
-            }
-            if row != lastRow { out.append("\n") }
-        }
-        return out
     }
 
     // MARK: - UIScrollViewDelegate

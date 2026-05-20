@@ -1,36 +1,25 @@
-import UIKit
+import CoreGraphics
 
-/// Tunables for the Warp-style rounded block panel that Rust paints
-/// behind each block. Centralised here so `BlockListContainerView` and
-/// any future call site read the same numbers.
+/// Tunables for the block list's layout. We dropped the Warp-style
+/// rounded panel chrome in favour of a divider-separated list — blocks
+/// share the scroll background; only a hairline `ShadcnBorder` line
+/// sits in the gap between them.
 @MainActor
 enum BlockPanelStyle {
-    /// Corner radius in points. ~10pt gives the Warp look without
-    /// looking childishly bubbly.
-    static let cornerRadiusPt: CGFloat = 10
+    /// Vertical gap between adjacent blocks (header above sits inside
+    /// the next gap's top half; divider hairline sits dead-centre).
+    static let interBlockGapPt: CGFloat = 16
 
     /// Horizontal inset between the panel's left edge and cell column 0.
-    /// Matches the right-side padding too — Rust paints the panel BG
-    /// full-width and cells sit indented inside.
+    /// Kept so the Metal text indents nicely from the screen edge even
+    /// though there is no longer a panel BG.
     static let cellLeftInsetPt: CGFloat = 12
 
-    /// Resolve the panel BG colour from the design-system token for the
-    /// given trait collection (light/dark). Packs into `0xRRGGBBAA`
-    /// because the Rust FFI takes a single `u32`.
-    static func bgRgba(for traits: UITraitCollection) -> UInt32 {
-        let baseName = "ShadcnCard"
-        let resolved =
-            UIColor(named: baseName, in: .module, compatibleWith: traits)
-            ?? UIColor.secondarySystemBackground
-        let rgba = resolved.resolvedColor(with: traits)
-        var red: CGFloat = 0
-        var green: CGFloat = 0
-        var blue: CGFloat = 0
-        var alpha: CGFloat = 0
-        rgba.getRed(&red, green: &green, blue: &blue, alpha: &alpha)
-        let pack = { (component: CGFloat) -> UInt32 in
-            UInt32((max(0, min(1, component)) * 255.0).rounded())
-        }
-        return (pack(red) << 24) | (pack(green) << 16) | (pack(blue) << 8) | pack(alpha)
-    }
+    /// Hairline thickness drawn in the gap between blocks.
+    static let dividerThicknessPt: CGFloat = 1
+
+    /// Horizontal inset for the divider hairline — slightly indented
+    /// from the screen edge so it reads as a list separator rather
+    /// than a hard rule.
+    static let dividerHorizontalInsetPt: CGFloat = 16
 }
