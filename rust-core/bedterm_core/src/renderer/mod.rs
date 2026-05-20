@@ -260,12 +260,26 @@ impl Renderer {
                 );
             }
 
-            // Cells — same as before.
+            // Cells. Resolution order:
+            //   1. `block.grid` — live, running command. The block owns
+            //      its own VTE + grid; render whatever cells are
+            //      currently there. Mirrors Warp's `output_grid` model
+            //      so claude / fzf / gum cursor-positioning redraws
+            //      stay scoped to the block's body.
+            //   2. `block.frozen_snapshot` — sealed block. Snapshot
+            //      captured at `CommandFinished` from the (now-dropped)
+            //      block grid.
+            //   3. Fallback: global terminal row range — legacy path
+            //      for blocks that predate the per-block grid (e.g.
+            //      Ctrl-C path that synthesises a block without ever
+            //      hitting `Preexec`).
             let resolved: Option<crate::snapshot::GridSnapshot> = {
                 let inner = term.inner_ref();
+                let palette = inner.palette();
                 let blocks = inner.blocks();
                 let block = blocks.iter().find(|b| b.id == entry.block_id);
                 match block {
+                    Some(b) if b.grid.is_some() => b.grid.as_ref().map(|g| g.snapshot(palette)),
                     Some(b) if b.frozen_snapshot.is_some() => b.frozen_snapshot.clone(),
                     Some(b) => {
                         let start = b.start_line;

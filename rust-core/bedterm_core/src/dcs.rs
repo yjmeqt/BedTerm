@@ -116,6 +116,95 @@ impl DcsSniffer {
     }
 }
 
+/// A located DCS event — the `(start, end_exclusive)` byte offsets the
+/// frame occupies in the input slice plus the parsed event. Drives the
+/// per-block byte-routing in `Terminal::feed`: bytes before `start` go
+/// to the current target, the frame itself is fed through (alacritty
+/// silently ignores our DCS), then `event` is applied (potentially
+/// switching the target), then bytes from `end_exclusive` onward go to
+/// the new target.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LocatedDcsEvent {
+    pub start: usize,
+    pub end_exclusive: usize,
+    pub event: DcsEvent,
+}
+
+/// Scan a byte slice for BedTerm DCS frames (`ESC P $ d <hex> ST`) and
+/// return their byte offsets + parsed events. Non-DCS bytes and
+/// foreign DCS sequences (Sixel, kitty graphics, etc.) are silently
+/// skipped — only the `$ d` final-byte family is ours.
+///
+/// Tolerates 7-bit (`ESC \`) and 8-bit (`\x9c`) string terminators.
+/// Malformed frames (missing terminator before the slice ends; body
+/// not pure hex; payload not a tagged-enum DcsEvent JSON) are dropped
+/// silently to mirror the parser's behaviour.
+pub fn scan_dcs_events(bytes: &[u8]) -> Vec<LocatedDcsEvent> {
+    let mut out = Vec::new();
+    let mut idx = 0;
+    while idx + 4 <= bytes.len() {
+        // Look for `ESC P $ d` — four-byte prefix unique to our DCS.
+        if bytes[idx] != 0x1B || bytes[idx + 1] != b'P' {
+            idx += 1;
+            continue;
+        }
+        // Some DCS sequences have parameters before `$`, but ours is
+        // bare. Require the next two bytes to be `$ d`.
+        if bytes[idx + 2] != b'$' || bytes[idx + 3] != b'd' {
+            // Foreign DCS — skip past its terminator and continue.
+            match find_st(&bytes[idx + 2..]) {
+                Some(rel) => {
+                    let st_pos = idx + 2 + rel;
+                    idx = match bytes.get(st_pos) {
+                        Some(&0x9C) => st_pos + 1,
+                        Some(&0x1B) => st_pos + 2,
+                        _ => bytes.len(),
+                    };
+                }
+                None => break, // truncated foreign DCS
+            }
+            continue;
+        }
+        let body_start = idx + 4;
+        // Hex body until ST.
+        let body_end = match find_st(&bytes[body_start..]) {
+            Some(rel) => body_start + rel,
+            None => break, // truncated frame; bail
+        };
+        let frame_end = match bytes.get(body_end) {
+            Some(&0x9C) => body_end + 1, // 8-bit ST
+            Some(&0x1B) if bytes.get(body_end + 1) == Some(&b'\\') => body_end + 2, // 7-bit ST
+            _ => break,
+        };
+        let body = &bytes[body_start..body_end];
+        if let Some(event) = parse_body(body) {
+            out.push(LocatedDcsEvent {
+                start: idx,
+                end_exclusive: frame_end,
+                event,
+            });
+        }
+        idx = frame_end;
+    }
+    out
+}
+
+/// Find the next string-terminator byte. Returns the offset to the ST's
+/// first byte (`\x9c` for 8-bit, `\x1b` for the start of `ESC \`).
+fn find_st(bytes: &[u8]) -> Option<usize> {
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == 0x9C {
+            return Some(i);
+        }
+        if bytes[i] == 0x1B && bytes.get(i + 1) == Some(&b'\\') {
+            return Some(i);
+        }
+        i += 1;
+    }
+    None
+}
+
 impl Perform for Sink {
     fn hook(
         &mut self,
@@ -515,5 +604,103 @@ mod tests {
                 git_branch: None,
             })
         );
+    }
+
+    // --- scan_dcs_events ---
+
+    fn dcs_8bit(json: &str) -> Vec<u8> {
+        let mut v = vec![0x1B, b'P', b'$', b'd'];
+        v.extend_from_slice(hex_of(json).as_bytes());
+        v.push(0x9C);
+        v
+    }
+
+    #[test]
+    fn scanner_finds_single_event() {
+        let frame = dcs_8bit(r#"{"hook":"Precmd","value":{"pwd":"/tmp"}}"#);
+        let located = scan_dcs_events(&frame);
+        assert_eq!(located.len(), 1);
+        assert_eq!(located[0].start, 0);
+        assert_eq!(located[0].end_exclusive, frame.len());
+        assert_eq!(
+            located[0].event,
+            DcsEvent::Precmd {
+                pwd: Some("/tmp".into()),
+                git_branch: None,
+            }
+        );
+    }
+
+    #[test]
+    fn scanner_handles_pre_and_post_text() {
+        let pre = b"prompt> ";
+        let frame = dcs_8bit(r#"{"hook":"Preexec","value":{"command":"ls"}}"#);
+        let post = b"output line";
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(pre);
+        bytes.extend_from_slice(&frame);
+        bytes.extend_from_slice(post);
+        let located = scan_dcs_events(&bytes);
+        assert_eq!(located.len(), 1);
+        assert_eq!(located[0].start, pre.len());
+        assert_eq!(located[0].end_exclusive, pre.len() + frame.len());
+    }
+
+    #[test]
+    fn scanner_handles_back_to_back_events() {
+        // CommandFinished immediately followed by Precmd — happens
+        // every prompt cycle once a command has finished running.
+        let cf = dcs_8bit(r#"{"hook":"CommandFinished","value":{"exit_code":0}}"#);
+        let pc = dcs_8bit(r#"{"hook":"Precmd","value":{"pwd":"/x"}}"#);
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(&cf);
+        bytes.extend_from_slice(&pc);
+        let located = scan_dcs_events(&bytes);
+        assert_eq!(located.len(), 2);
+        assert_eq!(located[0].end_exclusive, cf.len());
+        assert_eq!(located[1].start, cf.len());
+    }
+
+    #[test]
+    fn scanner_accepts_7bit_terminator() {
+        let json = r#"{"hook":"Precmd","value":{"pwd":"/x"}}"#;
+        let mut bytes = vec![0x1B, b'P', b'$', b'd'];
+        bytes.extend_from_slice(hex_of(json).as_bytes());
+        bytes.extend_from_slice(&[0x1B, b'\\']);
+        let located = scan_dcs_events(&bytes);
+        assert_eq!(located.len(), 1);
+        assert_eq!(located[0].end_exclusive, bytes.len());
+    }
+
+    #[test]
+    fn scanner_skips_foreign_dcs() {
+        // A Sixel-shaped DCS (final byte `q`) followed by our frame.
+        let mut bytes = vec![0x1B, b'P', b'q', b'1', b';', 0x9C];
+        let frame = dcs_8bit(r#"{"hook":"Precmd","value":{"pwd":"/x"}}"#);
+        bytes.extend_from_slice(&frame);
+        let located = scan_dcs_events(&bytes);
+        assert_eq!(located.len(), 1);
+        assert_eq!(located[0].event.precmd_pwd().as_deref(), Some("/x"));
+    }
+
+    #[test]
+    fn scanner_ignores_truncated_frame() {
+        // Frame starts but no terminator before slice ends.
+        let mut bytes = vec![0x1B, b'P', b'$', b'd'];
+        bytes.extend_from_slice(hex_of(r#"{"hook":"Precmd"}"#).as_bytes());
+        // no ST
+        let located = scan_dcs_events(&bytes);
+        assert!(located.is_empty());
+    }
+}
+
+impl DcsEvent {
+    #[cfg(test)]
+    fn precmd_pwd(&self) -> Option<String> {
+        if let DcsEvent::Precmd { pwd, .. } = self {
+            pwd.clone()
+        } else {
+            None
+        }
     }
 }

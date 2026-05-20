@@ -83,14 +83,14 @@ impl Default for Palette {
 
 /// Scrollback buffer size. 10 000 lines × 80 cols × ~16 B/cell ≈ 12 MB worst
 /// case, on par with the glyph atlas budget.
-const SCROLLBACK_LINES: u16 = 10_000;
+pub(crate) const SCROLLBACK_LINES: u16 = 10_000;
 
 /// Minimal Dimensions implementation. `total_lines` includes scrollback so the
 /// alacritty grid actually allocates history.
 #[derive(Clone, Copy, Debug)]
-struct Dims {
-    cols: u16,
-    screen_rows: u16,
+pub(crate) struct Dims {
+    pub(crate) cols: u16,
+    pub(crate) screen_rows: u16,
 }
 
 impl Dimensions for Dims {
@@ -136,38 +136,79 @@ impl Terminal {
     }
 
     pub fn feed(&mut self, bytes: &[u8]) {
-        // Dual-feed: alacritty owns grid mutation, while the DCS sniffer
-        // listens for the Warp-compatible shell-integration frame
-        // `ESC P $ d <hex(JSON)> ST`. Both VTE state machines are
-        // independent; both must see every byte.
-        self.parser.advance(&mut self.term, bytes);
+        // Per-block routing: bytes between `Preexec` and the matching
+        // `CommandFinished` go to the running block's private grid;
+        // every other byte (prompt drawing, between-command output)
+        // goes to the global terminal. The DCS sniffer still sees
+        // every byte for visibility — its event queue can be drained
+        // independently — but is no longer the source of routing
+        // truth.
+        //
+        // Mirrors Warp's per-block grid model. Implementation: scan
+        // the input for our DCS frames up front to get byte offsets,
+        // then walk the input in (chunk → event) pairs:
+        //   1. Feed pre-event chunk to current target.
+        //   2. Feed the DCS frame itself to current target (alacritty
+        //      ignores `$d` final-byte DCS, but the parser state needs
+        //      to advance through it cleanly).
+        //   3. Apply the event — may change target (Preexec attaches a
+        //      new grid, CommandFinished detaches it).
+        //   4. Continue with the post-event tail.
+        let events = crate::dcs::scan_dcs_events(bytes);
 
-        let before = self.dcs.pending();
+        // Keep the original DCS sniffer fed for compatibility / future
+        // diagnostics. Its events queue grows in lockstep with `events`.
         self.dcs.feed(bytes);
-        let new_events: Vec<_> = self.dcs.events_from(before).cloned().collect();
 
-        if !new_events.is_empty() {
-            // Grid-absolute line: `cursor.point.line.0` alone is
-            // screen-relative (0..rows-1), so once scrollback starts
-            // every Precmd captures the same value (the bottom row
-            // the prompt redraws on). Adding `history_size()` makes
-            // it monotonic, so block start/end deltas equal the rows
-            // the command actually consumed.
-            let grid = self.term.grid();
-            let current = grid.history_size() as i32 + grid.cursor.point.line.0;
-            let cols = self.cols;
-            let rows = self.rows;
-            let term = &self.term;
-            let palette = &self.palette;
-            let now = std::time::Instant::now();
-            for event in &new_events {
-                self.blocks.apply(event, current, now, |start, end| {
-                    Some(Self::snapshot_range_from(
-                        term, cols, rows, palette, start, end,
-                    ))
-                });
+        let cols = self.cols;
+        let rows = self.rows;
+        let now = std::time::Instant::now();
+
+        let mut cursor = 0usize;
+        for located in &events {
+            // Pre-event chunk → current target.
+            self.dispatch_chunk(&bytes[cursor..located.start]);
+            // DCS frame itself → current target (transparent to grid).
+            self.dispatch_chunk(&bytes[located.start..located.end_exclusive]);
+            // Sample the current line right before applying the event so
+            // `start_line` / `end_line` correspond to the cursor position
+            // at the event boundary (Warp's behaviour).
+            let current = self.current_grid_absolute_line();
+            self.blocks
+                .apply(&located.event, current, now, cols, rows, &self.palette);
+            cursor = located.end_exclusive;
+        }
+        // Trailing chunk after the last (or only) event.
+        self.dispatch_chunk(&bytes[cursor..]);
+    }
+
+    /// Feed `bytes` to the currently-active target — the open block's
+    /// private grid if a command is running, else the global terminal.
+    fn dispatch_chunk(&mut self, bytes: &[u8]) {
+        if bytes.is_empty() {
+            return;
+        }
+        if let Some(block) = self.blocks.open_block_mut() {
+            if let Some(grid) = block.grid.as_mut() {
+                grid.feed(bytes);
+                return;
             }
         }
+        self.parser.advance(&mut self.term, bytes);
+    }
+
+    /// Grid-absolute current line, sampled from the *active* grid —
+    /// the open block's private grid when one is attached (cursor
+    /// has no history offset there), else the global terminal's
+    /// cursor + scrollback offset.
+    fn current_grid_absolute_line(&self) -> i32 {
+        if let Some(block) = self.blocks.blocks().iter().rev().find(|b| b.is_running) {
+            if let Some(grid) = block.grid.as_ref() {
+                return grid.cursor_row();
+            }
+        }
+        let grid = self.term.grid();
+        grid.history_size() as i32 + grid.cursor.point.line.0
     }
 
     pub fn resize(&mut self, cols: u16, rows: u16) {
@@ -176,6 +217,7 @@ impl Terminal {
             screen_rows: rows,
         };
         self.term.resize(dims);
+        self.blocks.resize_grids(cols, rows);
         self.cols = cols;
         self.rows = rows;
     }
@@ -229,6 +271,13 @@ impl Terminal {
 
     pub fn set_palette(&mut self, palette: Palette) {
         self.palette = palette;
+    }
+
+    /// Borrow the current palette. Used by the renderer when freezing
+    /// a per-block live grid into the cell stream — every cell needs
+    /// the same colour resolution as the global grid.
+    pub fn palette(&self) -> &Palette {
+        &self.palette
     }
 
     /// Grid-absolute line index of the screen's bottom row, regardless of
@@ -445,7 +494,7 @@ impl Terminal {
     }
 }
 
-fn color_to_rgba(c: alacritty_terminal::vte::ansi::Color, palette: &Palette) -> u32 {
+pub(crate) fn color_to_rgba(c: alacritty_terminal::vte::ansi::Color, palette: &Palette) -> u32 {
     use alacritty_terminal::vte::ansi::Color;
     let rgb = match c {
         Color::Spec(rgb) => BtRgb24 {
@@ -698,5 +747,82 @@ mod block_integration_tests {
         let blocks = term.blocks();
         assert_eq!(blocks.len(), 1);
         assert!(blocks[0].is_running);
+    }
+
+    /// Verifies the per-block-grid byte-routing introduced when we
+    /// switched away from the single-grid model. Bytes between
+    /// `Preexec` and `CommandFinished` must land in the running
+    /// block's private grid (`block.grid`) and *not* in the global
+    /// terminal — that's the whole point of the refactor.
+    #[test]
+    fn feed_routes_command_output_to_block_grid_not_global() {
+        let mut term = Terminal::new(20, 5);
+
+        // Build one big chunk: Precmd ▸ "BEFORE" prompt prose ▸
+        // Preexec ▸ "INSIDE" command output ▸ CommandFinished ▸
+        // "AFTER" next prompt prose.
+        let mut chunk = Vec::new();
+        chunk.extend_from_slice(&dcs(r#"{"hook":"Precmd","value":{"pwd":"/x"}}"#));
+        chunk.extend_from_slice(b"BEFORE");
+        chunk.extend_from_slice(&dcs(r#"{"hook":"Preexec","value":{"command":"echo"}}"#));
+        chunk.extend_from_slice(b"INSIDE");
+        chunk.extend_from_slice(&dcs(
+            r#"{"hook":"CommandFinished","value":{"exit_code":0}}"#,
+        ));
+        chunk.extend_from_slice(b"AFTER");
+        term.feed(&chunk);
+
+        // The block sealed at CommandFinished; its frozen_snapshot
+        // is the snapshot of its block grid. Stringify the row
+        // contents and look for our markers.
+        let blocks = term.blocks();
+        assert_eq!(blocks.len(), 1);
+        let snap = blocks[0]
+            .frozen_snapshot
+            .as_ref()
+            .expect("block grid should have produced a snapshot");
+        let block_text = snapshot_to_string(snap);
+        assert!(
+            block_text.contains("INSIDE"),
+            "block grid missing the in-command bytes — got {block_text:?}"
+        );
+        assert!(
+            !block_text.contains("BEFORE"),
+            "block grid incorrectly received pre-Preexec bytes — got {block_text:?}"
+        );
+        assert!(
+            !block_text.contains("AFTER"),
+            "block grid incorrectly received post-CommandFinished bytes — got {block_text:?}"
+        );
+
+        // The global terminal should have BEFORE + AFTER but never
+        // INSIDE (that went to the block grid).
+        let global = term.snapshot();
+        let global_text = snapshot_to_string(&global);
+        assert!(
+            global_text.contains("BEFORE"),
+            "global term missing pre-Preexec bytes — got {global_text:?}"
+        );
+        assert!(
+            global_text.contains("AFTER"),
+            "global term missing post-CommandFinished bytes — got {global_text:?}"
+        );
+        assert!(
+            !global_text.contains("INSIDE"),
+            "global term leaked command-output bytes — got {global_text:?}"
+        );
+    }
+
+    fn snapshot_to_string(snap: &crate::snapshot::GridSnapshot) -> String {
+        snap.cells
+            .iter()
+            .map(|c| {
+                if c.ch == 0 {
+                    ' '
+                } else {
+                    char::from_u32(c.ch).unwrap_or('?')
+                }
+            })
+            .collect()
     }
 }

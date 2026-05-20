@@ -1,5 +1,6 @@
 //! BedTerm terminal core — VTE parser + grid + scrollback for iOS / macOS.
 
+pub mod block_grid;
 pub mod blocks;
 pub mod blocks_ffi;
 pub mod cli_agent;

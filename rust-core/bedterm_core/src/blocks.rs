@@ -7,9 +7,11 @@
 //! `Preexec` and `CommandFinished` boundaries — the shell doesn't ship a
 //! `duration_ms` field (and neither does Warp's wire format).
 
+use crate::block_grid::BlockGrid;
 use crate::cli_agent::CliAgent;
 use crate::dcs::DcsEvent;
 use crate::snapshot::GridSnapshot;
+use crate::term::Palette;
 use std::time::Instant;
 
 /// Stable monotonic block id, assigned at open. Never reused inside a single
@@ -22,7 +24,7 @@ pub type BlockId = u64;
 /// surface it to Swift.
 pub const BLOCK_END_LINE_RUNNING: i32 = i32::MIN;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Block {
     pub id: BlockId,
     pub command: String,
@@ -49,6 +51,16 @@ pub struct Block {
     /// Mirrors Warp's `CLIAgent::detect`; informs branding only, not
     /// layout decisions.
     pub cli_agent: Option<CliAgent>,
+    /// Per-block private VTE + grid. Set by `Terminal::feed` when the
+    /// `Preexec` boundary is processed (the command starts producing
+    /// output); cleared at `CommandFinished` after the final state
+    /// has been frozen into `frozen_snapshot`. Routing of command
+    /// output bytes targets this grid so cursor positioning,
+    /// erase-line, and redraws inside a TUI stay scoped to the
+    /// block's body — mirrors Warp's `output_grid: BlockGrid` per
+    /// block. `None` for sealed blocks (already snapshot) and for
+    /// open-but-not-yet-Preexec blocks (no command running yet).
+    pub grid: Option<BlockGrid>,
     pub is_running: bool,
 }
 
@@ -104,27 +116,37 @@ impl BlockStore {
     ///
     /// - `current_line` is the cursor's current grid line at the moment the
     ///   event arrives (used as the row boundary).
-    /// - `now` is the wall-clock instant the event arrived; used to
-    ///   compute `duration_ms` across `Preexec` → `CommandFinished`. The
-    ///   parameter lets tests inject deterministic clocks; production
-    ///   callers pass `Instant::now()`.
-    /// - `snapshot_range` produces the frozen body when sealing — the caller
-    ///   owns the live `Terminal` and is the only one who can read its grid.
-    pub fn apply<F>(
+    /// - `now` is the wall-clock instant the event arrived.
+    /// - `cols` / `rows` are the live PTY screen size; used to size the
+    ///   per-block grid attached on `Preexec`.
+    /// - `palette` resolves named colours when freezing the block's grid
+    ///   into `frozen_snapshot` at `CommandFinished`.
+    ///
+    /// Block lifetime:
+    ///   - **`Precmd`**: open a fresh block (no grid yet — there's no
+    ///     command running). Seal any previously-open block first (Ctrl-C
+    ///     path).
+    ///   - **`Preexec`**: fill the block's command + cli_agent + advance
+    ///     `start_line` past the prompt echo. **Attach a private
+    ///     `BlockGrid`** so subsequent output bytes can be routed to it
+    ///     instead of the global terminal.
+    ///   - **`CommandFinished`**: freeze the block's grid into
+    ///     `frozen_snapshot`, then drop the grid.
+    pub fn apply(
         &mut self,
         event: &DcsEvent,
         current_line: i32,
         now: Instant,
-        mut snapshot_range: F,
-    ) where
-        F: FnMut(i32, i32) -> Option<GridSnapshot>,
-    {
+        cols: u16,
+        rows: u16,
+        palette: &Palette,
+    ) {
         match event {
             DcsEvent::Precmd { pwd, git_branch } => {
                 // A bare Precmd means "about to draw a prompt". If a block
                 // is still open it never got a CommandFinished (Ctrl-C,
                 // partial integration); seal it with no exit + no duration.
-                self.seal_open(current_line, None, &mut snapshot_range);
+                self.seal_open(current_line, None, palette);
                 self.open_new(current_line, pwd.clone(), git_branch.clone());
             }
             DcsEvent::Preexec { command } => {
@@ -142,6 +164,13 @@ impl BlockStore {
                     // advancing the body's row range we hide the echoed
                     // prompt line from the block snapshot.
                     self.blocks[idx].start_line = current_line;
+                    // Per-block grid: attach a private VTE + grid so the
+                    // command's bytes get routed here instead of the
+                    // global terminal. Idempotent — only attach once per
+                    // block lifecycle.
+                    if self.blocks[idx].grid.is_none() {
+                        self.blocks[idx].grid = Some(BlockGrid::new(cols, rows));
+                    }
                 }
                 self.command_start = Some(now);
             }
@@ -150,12 +179,29 @@ impl BlockStore {
                     .command_start
                     .take()
                     .map(|start| now.saturating_duration_since(start).as_millis() as u64);
-                self.seal_with(
-                    current_line,
-                    Some(*exit_code),
-                    duration_ms,
-                    &mut snapshot_range,
-                );
+                self.seal_with(current_line, Some(*exit_code), duration_ms, palette);
+            }
+        }
+    }
+
+    /// Mutable access to the currently-open block (the running one).
+    /// `None` after `CommandFinished` until the next `Precmd`. Used by
+    /// `Terminal::feed` to route command output bytes into the open
+    /// block's private grid.
+    pub fn open_block_mut(&mut self) -> Option<&mut Block> {
+        let idx = self.open_index?;
+        self.blocks.get_mut(idx)
+    }
+
+    /// Resize every still-attached `BlockGrid` to the new PTY
+    /// geometry — called by `Terminal::resize` so a running command
+    /// inside a TUI doesn't get scrambled when the iOS view bounds
+    /// change. The global terminal resize is handled separately by
+    /// the caller.
+    pub fn resize_grids(&mut self, cols: u16, rows: u16) {
+        for block in &mut self.blocks {
+            if let Some(grid) = block.grid.as_mut() {
+                grid.resize(cols, rows);
             }
         }
     }
@@ -174,6 +220,7 @@ impl BlockStore {
             working_directory: pwd,
             git_branch,
             cli_agent: None,
+            grid: None,
             is_running: true,
         });
         self.open_index = Some(self.blocks.len() - 1);
@@ -181,32 +228,32 @@ impl BlockStore {
 
     /// Seal the currently-open block (if any) without exit/duration —
     /// used when a Precmd arrives over an already-running block.
-    fn seal_open<F>(&mut self, current_line: i32, exit_code: Option<i32>, snapshot_range: &mut F)
-    where
-        F: FnMut(i32, i32) -> Option<GridSnapshot>,
-    {
-        self.seal_with(current_line, exit_code, None, snapshot_range);
+    fn seal_open(&mut self, current_line: i32, exit_code: Option<i32>, palette: &Palette) {
+        self.seal_with(current_line, exit_code, None, palette);
     }
 
-    fn seal_with<F>(
+    fn seal_with(
         &mut self,
         current_line: i32,
         exit_code: Option<i32>,
         duration_ms: Option<u64>,
-        snapshot_range: &mut F,
-    ) where
-        F: FnMut(i32, i32) -> Option<GridSnapshot>,
-    {
+        palette: &Palette,
+    ) {
         let Some(idx) = self.open_index else { return };
         if !self.blocks[idx].is_running {
             return;
         }
         let end_line = current_line.saturating_add(1);
-        let snap = snapshot_range(self.blocks[idx].start_line, end_line);
+        // Freeze the block's private grid (if it has one — Preexec
+        // attaches it). The cell extent of the snapshot is the grid's
+        // full rows × cols, which is what the renderer wants for a
+        // sealed block. Drop the grid afterwards to release memory.
+        let snap = self.blocks[idx].grid.as_ref().map(|g| g.snapshot(palette));
         let block = &mut self.blocks[idx];
         block.is_running = false;
         block.end_line = end_line;
         block.frozen_snapshot = snap;
+        block.grid = None;
         block.exit_code = exit_code;
         block.duration_ms = duration_ms;
         self.open_index = None;
@@ -218,24 +265,22 @@ mod tests {
     use super::*;
     use std::time::Duration;
 
-    fn snap_stub(_start: i32, _end: i32) -> Option<GridSnapshot> {
-        Some(GridSnapshot {
-            cols: 1,
-            rows: 1,
-            cursor_col: 0,
-            cursor_row: 1,
-            display_offset: 0,
-            cells: vec![crate::snapshot::CellSnapshot {
-                ch: 'A' as u32,
-                fg_rgba: 0,
-                bg_rgba: 0,
-                flags: 0,
-            }],
-        })
-    }
+    /// Test helpers — synthesise a fresh BlockStore with a known
+    /// PTY geometry + default palette. Callers apply DCS events via
+    /// `apply_event` which forwards to `BlockStore::apply` with the
+    /// same fixed cols/rows/palette so each test stays terse.
+    const TEST_COLS: u16 = 20;
+    const TEST_ROWS: u16 = 5;
 
-    fn no_snap(_start: i32, _end: i32) -> Option<GridSnapshot> {
-        None
+    fn apply_event(store: &mut BlockStore, event: &DcsEvent, current_line: i32, now: Instant) {
+        store.apply(
+            event,
+            current_line,
+            now,
+            TEST_COLS,
+            TEST_ROWS,
+            &Palette::default(),
+        );
     }
 
     fn precmd(pwd: Option<&str>) -> DcsEvent {
@@ -264,7 +309,7 @@ mod tests {
     #[test]
     fn first_precmd_opens_running_block_with_pwd() {
         let mut s = BlockStore::new();
-        s.apply(&precmd(Some("/home/alice")), 5, Instant::now(), no_snap);
+        apply_event(&mut s, &precmd(Some("/home/alice")), 5, Instant::now());
         assert_eq!(s.len(), 1);
         let b = s.get(0).unwrap();
         assert_eq!(b.start_line, 5);
@@ -278,8 +323,8 @@ mod tests {
     fn preexec_fills_command_and_starts_clock() {
         let mut s = BlockStore::new();
         let t0 = Instant::now();
-        s.apply(&precmd(None), 0, t0, no_snap);
-        s.apply(&preexec("ls"), 0, t0, no_snap);
+        apply_event(&mut s, &precmd(None), 0, t0);
+        apply_event(&mut s, &preexec("ls"), 0, t0);
         assert_eq!(s.get(0).unwrap().command, "ls");
     }
 
@@ -287,13 +332,13 @@ mod tests {
     fn command_finished_seals_and_records_duration() {
         let mut s = BlockStore::new();
         let t0 = Instant::now();
-        s.apply(&precmd(Some("/tmp")), 3, t0, no_snap);
-        s.apply(&preexec("ls"), 3, t0, no_snap);
-        s.apply(
+        apply_event(&mut s, &precmd(Some("/tmp")), 3, t0);
+        apply_event(&mut s, &preexec("ls"), 3, t0);
+        apply_event(
+            &mut s,
             &command_finished(0),
             7,
             t0 + Duration::from_millis(1234),
-            snap_stub,
         );
         let first = s.get(0).unwrap();
         assert!(!first.is_running);
@@ -307,9 +352,9 @@ mod tests {
     fn nonzero_exit_carried() {
         let mut s = BlockStore::new();
         let t0 = Instant::now();
-        s.apply(&precmd(None), 0, t0, no_snap);
-        s.apply(&preexec("false"), 0, t0, no_snap);
-        s.apply(&command_finished(127), 0, t0, no_snap);
+        apply_event(&mut s, &precmd(None), 0, t0);
+        apply_event(&mut s, &preexec("false"), 0, t0);
+        apply_event(&mut s, &command_finished(127), 0, t0);
         assert_eq!(s.get(0).unwrap().exit_code, Some(127));
     }
 
@@ -319,9 +364,9 @@ mod tests {
         // CommandFinished and goes straight to the next Precmd.
         let mut s = BlockStore::new();
         let t0 = Instant::now();
-        s.apply(&precmd(None), 0, t0, no_snap);
-        s.apply(&preexec("sleep 100"), 0, t0, no_snap);
-        s.apply(&precmd(None), 0, t0, no_snap);
+        apply_event(&mut s, &precmd(None), 0, t0);
+        apply_event(&mut s, &preexec("sleep 100"), 0, t0);
+        apply_event(&mut s, &precmd(None), 0, t0);
         assert_eq!(s.len(), 2);
         let first = s.get(0).unwrap();
         assert!(!first.is_running);
@@ -332,7 +377,7 @@ mod tests {
     #[test]
     fn preexec_without_precmd_synthesises_open() {
         let mut s = BlockStore::new();
-        s.apply(&preexec("date"), 9, Instant::now(), no_snap);
+        apply_event(&mut s, &preexec("date"), 9, Instant::now());
         assert_eq!(s.len(), 1);
         assert_eq!(s.get(0).unwrap().command, "date");
         assert!(s.get(0).unwrap().is_running);
@@ -344,12 +389,12 @@ mod tests {
         // matching Preexec was seen. Seal anyway with no duration.
         let mut s = BlockStore::new();
         let t0 = Instant::now();
-        s.apply(&precmd(None), 0, t0, no_snap);
-        s.apply(
+        apply_event(&mut s, &precmd(None), 0, t0);
+        apply_event(
+            &mut s,
             &command_finished(0),
             0,
             t0 + Duration::from_millis(50),
-            no_snap,
         );
         let b = s.get(0).unwrap();
         assert!(!b.is_running);
@@ -361,9 +406,9 @@ mod tests {
     fn reset_clears_all() {
         let mut s = BlockStore::new();
         let t0 = Instant::now();
-        s.apply(&precmd(None), 0, t0, no_snap);
-        s.apply(&preexec("ls"), 0, t0, no_snap);
-        s.apply(&command_finished(0), 0, t0, no_snap);
+        apply_event(&mut s, &precmd(None), 0, t0);
+        apply_event(&mut s, &preexec("ls"), 0, t0);
+        apply_event(&mut s, &command_finished(0), 0, t0);
         assert!(!s.is_empty());
         s.reset();
         assert!(s.is_empty());
@@ -373,10 +418,10 @@ mod tests {
     fn block_ids_are_monotonic_across_reset() {
         let mut s = BlockStore::new();
         let t0 = Instant::now();
-        s.apply(&precmd(None), 0, t0, no_snap);
+        apply_event(&mut s, &precmd(None), 0, t0);
         let first_id = s.get(0).unwrap().id;
         s.reset();
-        s.apply(&precmd(None), 0, t0, no_snap);
+        apply_event(&mut s, &precmd(None), 0, t0);
         assert!(s.get(0).unwrap().id > first_id);
     }
 }
