@@ -206,6 +206,21 @@ pub unsafe extern "C" fn bt_term_current_line(h: *const BtTerm) -> i32 {
     (*h).inner.current_line()
 }
 
+/// Grid-absolute line index of the screen's bottom row. Block view uses
+/// this as the body's upper bound for running blocks so that TUI cells
+/// drawn *below* the cursor via cursor-positioning escapes (claude / fzf
+/// / gum) stay visible.
+///
+/// # Safety
+/// `h` must be a valid, non-freed handle.
+#[no_mangle]
+pub unsafe extern "C" fn bt_term_screen_bottom_line(h: *const BtTerm) -> i32 {
+    if h.is_null() {
+        return 0;
+    }
+    (*h).inner.screen_bottom_line()
+}
+
 /// Snapshot a row range from the active screen + scrollback. Same lifetime
 /// contract as `bt_term_snapshot` — the cell pointer in `*out` is valid
 /// until the next mutating call. `start_line` inclusive, `end_line`

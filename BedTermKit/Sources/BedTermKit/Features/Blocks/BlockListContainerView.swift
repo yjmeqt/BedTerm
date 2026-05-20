@@ -221,7 +221,14 @@ final class BlockListContainerViewController: UIViewController, UIScrollViewDele
                 return max(1, Int(end - block.startLine))
             }
             if let core = session.terminalCore {
-                return max(1, Int(core.currentLine + 1 - block.startLine))
+                // Running block — use the grid-absolute screen bottom
+                // as the body's lower edge so cells drawn *below*
+                // where the cursor currently sits (claude / fzf draw
+                // UI elements via cursor-positioning escapes after
+                // moving the cursor back up to the input prompt)
+                // stay visible. Cursor-based row count would clip.
+                let bottom = Int(core.screenBottomLine + 1 - block.startLine)
+                return max(1, bottom)
             }
             return 1
         }()

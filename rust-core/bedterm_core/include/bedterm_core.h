@@ -347,6 +347,17 @@ uint32_t bt_term_mode(const struct BtTerm *h);
 int32_t bt_term_current_line(const struct BtTerm *h);
 
 /**
+ * Grid-absolute line index of the screen's bottom row. Block view uses
+ * this as the body's upper bound for running blocks so that TUI cells
+ * drawn *below* the cursor via cursor-positioning escapes (claude / fzf
+ * / gum) stay visible.
+ *
+ * # Safety
+ * `h` must be a valid, non-freed handle.
+ */
+int32_t bt_term_screen_bottom_line(const struct BtTerm *h);
+
+/**
  * Snapshot a row range from the active screen + scrollback. Same lifetime
  * contract as `bt_term_snapshot` — the cell pointer in `*out` is valid
  * until the next mutating call. `start_line` inclusive, `end_line`

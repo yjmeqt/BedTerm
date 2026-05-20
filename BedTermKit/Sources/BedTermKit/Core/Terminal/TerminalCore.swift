@@ -25,6 +25,11 @@ public final class TerminalCore {
     /// OpaquePointer wraps the C `BtTerm *` — the struct body is intentionally
     /// hidden by the Rust-generated header (opaque / forward-declared only).
     private let handle: OpaquePointer
+    /// Live PTY screen geometry — kept in sync at `init` / `resize` so
+    /// callers (e.g. running-block body sizing) don't need a Rust FFI
+    /// round-trip just to read the row count.
+    public private(set) var screenCols: Int
+    public private(set) var screenRows: Int
 
     public init(cols: Int, rows: Int) {
         let colsClamped = UInt16(max(1, min(cols, Int(UInt16.max))))
@@ -33,6 +38,8 @@ public final class TerminalCore {
             preconditionFailure("bt_term_new returned NULL")
         }
         self.handle = ptr
+        self.screenCols = Int(colsClamped)
+        self.screenRows = Int(rowsClamped)
     }
 
     deinit {
@@ -54,6 +61,8 @@ public final class TerminalCore {
         let colsClamped = UInt16(max(1, min(cols, Int(UInt16.max))))
         let rowsClamped = UInt16(max(1, min(rows, Int(UInt16.max))))
         bt_term_resize(handle, colsClamped, rowsClamped)
+        self.screenCols = Int(colsClamped)
+        self.screenRows = Int(rowsClamped)
     }
 
     /// Push a palette (16 ANSI entries + 2 defaults) to the Rust core. Subsequent snapshots resolve
@@ -136,6 +145,14 @@ public final class TerminalCore {
     /// view records this on each block boundary to anchor block ranges.
     public var currentLine: Int32 {
         bt_term_current_line(handle)
+    }
+
+    /// Grid-absolute line index of the screen's bottom row. Use this
+    /// as the upper bound for a running block's body so cells drawn
+    /// below the cursor (TUI redraws via cursor-positioning escapes)
+    /// stay visible.
+    public var screenBottomLine: Int32 {
+        bt_term_screen_bottom_line(handle)
     }
 
     /// Snapshot a row range from the active screen + scrollback. `start`

@@ -231,6 +231,16 @@ impl Terminal {
         self.palette = palette;
     }
 
+    /// Grid-absolute line index of the screen's bottom row, regardless of
+    /// where the cursor sits. Running TUIs (claude, fzf) draw cells with
+    /// cursor-positioning escapes that land *below* the current cursor
+    /// row, so the cursor-based row count under-reports a running block's
+    /// extent. Use this as the upper bound for a running block's body.
+    pub fn screen_bottom_line(&self) -> i32 {
+        let grid = self.term.grid();
+        grid.history_size() as i32 + self.rows as i32 - 1
+    }
+
     /// Grid-absolute line of the cursor (`history_size() + screen_line`).
     /// Monotonically non-decreasing as output scrolls — every newline that
     /// pushes content into scrollback bumps `history_size`. Block start /
