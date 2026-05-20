@@ -96,6 +96,34 @@ impl DcsSniffer {
         self.parser.advance(&mut self.sink, bytes);
     }
 
+    /// Stateful feed that returns each newly-completed DCS event
+    /// paired with its **end-of-frame byte offset** in `bytes` (1-past
+    /// the terminator). Unlike the freestanding `scan_dcs_events`,
+    /// this handles frames that span multiple `feed` calls — the VTE
+    /// parser keeps DCS state between calls, so a `\eP$d` start in
+    /// one feed and the matching `\e\` terminator in the next still
+    /// emit a single event at the right position.
+    ///
+    /// Implementation feeds bytes one at a time and watches the
+    /// sink's event queue grow. Byte-by-byte advance is allowed by
+    /// the VTE parser by design — it's a finite state machine that
+    /// handles any chunking.
+    pub fn feed_with_positions(&mut self, bytes: &[u8]) -> Vec<(usize, DcsEvent)> {
+        let mut located = Vec::new();
+        for (i, byte) in bytes.iter().enumerate() {
+            let before = self.sink.events.len();
+            self.parser
+                .advance(&mut self.sink, std::slice::from_ref(byte));
+            if self.sink.events.len() > before {
+                // One event surfaced for each new entry — usually just one.
+                for j in before..self.sink.events.len() {
+                    located.push((i + 1, self.sink.events[j].clone()));
+                }
+            }
+        }
+        located
+    }
+
     pub fn pop(&mut self) -> Option<DcsEvent> {
         self.sink.events.pop_front()
     }

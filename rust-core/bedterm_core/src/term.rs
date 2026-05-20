@@ -139,46 +139,42 @@ impl Terminal {
         // Per-block routing: bytes between `Preexec` and the matching
         // `CommandFinished` go to the running block's private grid;
         // every other byte (prompt drawing, between-command output)
-        // goes to the global terminal. The DCS sniffer still sees
-        // every byte for visibility — its event queue can be drained
-        // independently — but is no longer the source of routing
-        // truth.
+        // goes to the global terminal. Mirrors Warp's per-block grid
+        // model.
         //
-        // Mirrors Warp's per-block grid model. Implementation: scan
-        // the input for our DCS frames up front to get byte offsets,
-        // then walk the input in (chunk → event) pairs:
-        //   1. Feed pre-event chunk to current target.
-        //   2. Feed the DCS frame itself to current target (alacritty
-        //      ignores `$d` final-byte DCS, but the parser state needs
-        //      to advance through it cleanly).
-        //   3. Apply the event — may change target (Preexec attaches a
-        //      new grid, CommandFinished detaches it).
-        //   4. Continue with the post-event tail.
-        let events = crate::dcs::scan_dcs_events(bytes);
-
-        // Keep the original DCS sniffer fed for compatibility / future
-        // diagnostics. Its events queue grows in lockstep with `events`.
-        self.dcs.feed(bytes);
-
+        // We rely on the existing stateful `DcsSniffer` (alacritty's
+        // VTE parser) to emit events because DCS frames routinely
+        // span multiple `feed` calls in practice — we observed shell
+        // integration ship a single frame as three separate writes
+        // (`\eP$d` start, hex body, `\e\` terminator). A stateless
+        // scanner over one chunk would miss every cross-chunk frame.
+        //
+        // `feed_with_positions` returns each newly-completed event
+        // paired with its end-of-frame byte offset in `bytes`. Walk
+        // the input as (chunk-up-to-and-including-the-frame, event)
+        // pairs:
+        //   1. Feed bytes through `cursor..event.end` to the current
+        //      target (DCS frame included — alacritty silently
+        //      swallows `$d`-final DCS so this is a no-op for the
+        //      grid but keeps its parser state happy).
+        //   2. Apply the event — may attach a new block grid
+        //      (`Preexec`) or seal the current one (`CommandFinished`).
+        //   3. Continue past the frame.
         let cols = self.cols;
         let rows = self.rows;
         let now = std::time::Instant::now();
+        let events = self.dcs.feed_with_positions(bytes);
 
         let mut cursor = 0usize;
-        for located in &events {
-            // Pre-event chunk → current target.
-            self.dispatch_chunk(&bytes[cursor..located.start]);
-            // DCS frame itself → current target (transparent to grid).
-            self.dispatch_chunk(&bytes[located.start..located.end_exclusive]);
-            // Sample the current line right before applying the event so
-            // `start_line` / `end_line` correspond to the cursor position
-            // at the event boundary (Warp's behaviour).
+        for (end_pos, event) in events {
+            self.dispatch_chunk(&bytes[cursor..end_pos]);
             let current = self.current_grid_absolute_line();
             self.blocks
-                .apply(&located.event, current, now, cols, rows, &self.palette);
-            cursor = located.end_exclusive;
+                .apply(&event, current, now, cols, rows, &self.palette);
+            cursor = end_pos;
         }
-        // Trailing chunk after the last (or only) event.
+        // Trailing bytes after the last event (or the entire chunk
+        // if no event completed this call — most chunks).
         self.dispatch_chunk(&bytes[cursor..]);
     }
 
@@ -810,6 +806,60 @@ mod block_integration_tests {
         assert!(
             !global_text.contains("INSIDE"),
             "global term leaked command-output bytes — got {global_text:?}"
+        );
+    }
+
+    /// Real-world wire pattern: shell-integration ships a single DCS
+    /// frame as **three separate writes** (`\eP$d` prefix, hex body,
+    /// `\e\` terminator). A stateless scanner over one chunk misses
+    /// the event entirely — caught in production, fixed by switching
+    /// to `DcsSniffer::feed_with_positions` (stateful VTE parser
+    /// preserves DCS state between calls).
+    #[test]
+    fn feed_handles_dcs_frame_split_across_chunks() {
+        let mut term = Terminal::new(20, 5);
+        // Build a Preexec frame, then break it apart at the same
+        // boundaries we observed on the wire:
+        //   chunk 1: `\eP$d`
+        //   chunk 2: hex of body
+        //   chunk 3: `\e\`
+        let json = r#"{"hook":"Preexec","value":{"command":"hi"}}"#;
+        let frame = dcs(json);
+        let split1 = 4; // `\eP$d`
+        let split2 = frame.len() - 1; // everything up to the last byte (ST is 0x9c, single byte; split it before/after)
+
+        // First open a block via Precmd in one chunk so the Preexec
+        // has somewhere to land.
+        term.feed(&dcs(r#"{"hook":"Precmd","value":{"pwd":"/x"}}"#));
+        // Now stream the Preexec frame piecemeal.
+        term.feed(&frame[..split1]);
+        term.feed(&frame[split1..split2]);
+        term.feed(&frame[split2..]);
+
+        assert_eq!(term.blocks().len(), 1);
+        assert_eq!(term.blocks()[0].command, "hi");
+        // The Preexec apply also attached a private grid; subsequent
+        // output bytes should route there.
+        term.feed(b"INSIDE");
+        let snap = term.blocks()[0]
+            .grid
+            .as_ref()
+            .expect("grid attached at Preexec")
+            .snapshot(term.palette());
+        let text: String = snap
+            .cells
+            .iter()
+            .map(|c| {
+                if c.ch == 0 {
+                    ' '
+                } else {
+                    char::from_u32(c.ch).unwrap_or('?')
+                }
+            })
+            .collect();
+        assert!(
+            text.contains("INSIDE"),
+            "block grid missed bytes after split-frame Preexec — got {text:?}"
         );
     }
 

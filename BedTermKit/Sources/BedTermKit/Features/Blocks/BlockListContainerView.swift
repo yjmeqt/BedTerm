@@ -221,14 +221,15 @@ final class BlockListContainerViewController: UIViewController, UIScrollViewDele
                 return max(1, Int(end - block.startLine))
             }
             if let core = session.terminalCore {
-                // Running block — use the grid-absolute screen bottom
-                // as the body's lower edge so cells drawn *below*
-                // where the cursor currently sits (claude / fzf draw
-                // UI elements via cursor-positioning escapes after
-                // moving the cursor back up to the input prompt)
-                // stay visible. Cursor-based row count would clip.
-                let bottom = Int(core.screenBottomLine + 1 - block.startLine)
-                return max(1, bottom)
+                // Running block — the Rust side now owns a private
+                // `BlockGrid` per running block (Warp-style), sized to
+                // the live PTY geometry. The renderer reads from that
+                // grid directly, so the body's row count is the PTY's
+                // row count, full stop. TUI redraws via cursor
+                // positioning land inside the block's grid and stay
+                // visible regardless of where the cursor currently
+                // sits — no more "rows below cursor get clipped".
+                return max(1, core.screenRows)
             }
             return 1
         }()
