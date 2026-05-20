@@ -42,6 +42,11 @@ public struct Block: Identifiable, Sendable, Equatable {
     /// missing remotely, or the shell-integration script hasn't been
     /// installed yet (older payloads).
     public var gitBranch: String?
+    /// Known CLI agent (Claude / Codex / Gemini / …) identified from
+    /// the command line at `Preexec`. `nil` for unrecognised
+    /// commands. Used for the brand icon next to the header; does
+    /// not influence layout.
+    public var cliAgent: CLIAgent?
     /// True from creation until the closing precmd event arrives.
     public var isRunning: Bool
     /// True once Rust has captured an immutable `GridSnapshot` for this
@@ -58,6 +63,7 @@ public struct Block: Identifiable, Sendable, Equatable {
         duration: TimeInterval? = nil,
         workingDirectory: String? = nil,
         gitBranch: String? = nil,
+        cliAgent: CLIAgent? = nil,
         isRunning: Bool = true,
         hasFrozenSnapshot: Bool = false
     ) {
@@ -69,6 +75,7 @@ public struct Block: Identifiable, Sendable, Equatable {
         self.duration = duration
         self.workingDirectory = workingDirectory
         self.gitBranch = gitBranch
+        self.cliAgent = cliAgent
         self.isRunning = isRunning
         self.hasFrozenSnapshot = hasFrozenSnapshot
     }
@@ -85,6 +92,7 @@ extension Block {
             duration: rust.duration,
             workingDirectory: rust.workingDirectory,
             gitBranch: rust.gitBranch,
+            cliAgent: rust.cliAgent,
             isRunning: rust.isRunning,
             hasFrozenSnapshot: rust.hasFrozenSnapshot
         )

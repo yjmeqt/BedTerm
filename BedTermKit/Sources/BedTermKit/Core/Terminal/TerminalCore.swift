@@ -12,6 +12,7 @@ public struct RustBlock: Identifiable, Sendable, Equatable {
     public let duration: TimeInterval?
     public let workingDirectory: String?
     public let gitBranch: String?
+    public let cliAgent: CLIAgent?
     public let isRunning: Bool
     public let hasFrozenSnapshot: Bool
 }
@@ -192,7 +193,8 @@ public final class TerminalCore {
             git_branch: nil,
             git_branch_len: 0,
             has_frozen_snapshot: 0,
-            _pad3: (0, 0, 0, 0, 0, 0, 0)
+            cli_agent: 0,
+            _pad3: (0, 0, 0, 0, 0, 0)
         )
         guard index >= 0,
             index < blockCount,
@@ -220,6 +222,7 @@ public final class TerminalCore {
                 : nil,
             workingDirectory: cwd,
             gitBranch: gitBranch,
+            cliAgent: CLIAgent(ffiTag: view.cli_agent),
             isRunning: view.is_running != 0,
             hasFrozenSnapshot: view.has_frozen_snapshot != 0
         )

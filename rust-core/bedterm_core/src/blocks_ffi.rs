@@ -43,10 +43,30 @@ pub struct BtBlockView {
     pub git_branch_len: usize,
     /// 1 if `frozen_snapshot` is available (sealed block), 0 otherwise.
     pub has_frozen_snapshot: u8,
-    pub _pad3: [u8; 7],
+    /// CLI agent tag — `0` = none / unrecognised, otherwise one of the
+    /// `BT_CLI_AGENT_*` constants below. Stable across releases; new
+    /// agents append. Identifying a known agent lets the host paint a
+    /// brand icon next to the block header; does NOT change layout.
+    pub cli_agent: u8,
+    pub _pad3: [u8; 6],
 }
 
 pub const BT_BLOCK_END_LINE_RUNNING: i32 = BLOCK_END_LINE_RUNNING;
+
+pub const BT_CLI_AGENT_NONE: u8 = 0;
+pub const BT_CLI_AGENT_CLAUDE: u8 = 1;
+pub const BT_CLI_AGENT_GEMINI: u8 = 2;
+pub const BT_CLI_AGENT_CODEX: u8 = 3;
+pub const BT_CLI_AGENT_AMP: u8 = 4;
+pub const BT_CLI_AGENT_DROID: u8 = 5;
+pub const BT_CLI_AGENT_OPENCODE: u8 = 6;
+pub const BT_CLI_AGENT_COPILOT: u8 = 7;
+pub const BT_CLI_AGENT_PI: u8 = 8;
+pub const BT_CLI_AGENT_AUGGIE: u8 = 9;
+pub const BT_CLI_AGENT_CURSOR_CLI: u8 = 10;
+pub const BT_CLI_AGENT_GOOSE: u8 = 11;
+pub const BT_CLI_AGENT_HERMES: u8 = 12;
+pub const BT_CLI_AGENT_VIBE: u8 = 13;
 
 /// # Safety
 /// `h` must be a valid `BtTerm *` returned by `bt_term_new`.
@@ -85,6 +105,7 @@ pub unsafe extern "C" fn bt_term_block_at(
         command,
         working_directory,
         git_branch,
+        cli_agent_tag,
     ) = {
         let Some(block) = term.inner_ref().block_at(idx) else {
             return -1;
@@ -100,6 +121,10 @@ pub unsafe extern "C" fn bt_term_block_at(
             block.command.clone(),
             block.working_directory.clone(),
             block.git_branch.clone(),
+            block
+                .cli_agent
+                .map(|a| a.ffi_tag())
+                .unwrap_or(BT_CLI_AGENT_NONE),
         )
     };
 
@@ -160,7 +185,8 @@ pub unsafe extern "C" fn bt_term_block_at(
         git_branch: branch_ptr,
         git_branch_len: branch_len,
         has_frozen_snapshot: if has_frozen_snapshot { 1 } else { 0 },
-        _pad3: [0; 7],
+        cli_agent: cli_agent_tag,
+        _pad3: [0; 6],
     };
     0
 }

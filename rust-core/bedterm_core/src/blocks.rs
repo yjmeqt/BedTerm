@@ -7,6 +7,7 @@
 //! `Preexec` and `CommandFinished` boundaries — the shell doesn't ship a
 //! `duration_ms` field (and neither does Warp's wire format).
 
+use crate::cli_agent::CliAgent;
 use crate::dcs::DcsEvent;
 use crate::snapshot::GridSnapshot;
 use std::time::Instant;
@@ -43,6 +44,11 @@ pub struct Block {
     /// the opening `Precmd`. `None` when cwd is outside a repo or the
     /// remote `git` is missing.
     pub git_branch: Option<String>,
+    /// CLI agent identified at `Preexec` from the command line — e.g.
+    /// `claude`, `codex`, `gemini`. `None` for unrecognised commands.
+    /// Mirrors Warp's `CLIAgent::detect`; informs branding only, not
+    /// layout decisions.
+    pub cli_agent: Option<CliAgent>,
     pub is_running: bool,
 }
 
@@ -127,6 +133,7 @@ impl BlockStore {
                 }
                 if let Some(idx) = self.open_index {
                     self.blocks[idx].command = command.clone();
+                    self.blocks[idx].cli_agent = CliAgent::detect(command);
                     // Move `start_line` forward to the row Preexec fires
                     // on — that's the line just after the prompt + the
                     // echoed command, i.e. where the command's output
@@ -166,6 +173,7 @@ impl BlockStore {
             duration_ms: None,
             working_directory: pwd,
             git_branch,
+            cli_agent: None,
             is_running: true,
         });
         self.open_index = Some(self.blocks.len() - 1);

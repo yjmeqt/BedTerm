@@ -19,6 +19,34 @@
 
 #define BT_BLOCK_END_LINE_RUNNING BLOCK_END_LINE_RUNNING
 
+#define BT_CLI_AGENT_NONE 0
+
+#define BT_CLI_AGENT_CLAUDE 1
+
+#define BT_CLI_AGENT_GEMINI 2
+
+#define BT_CLI_AGENT_CODEX 3
+
+#define BT_CLI_AGENT_AMP 4
+
+#define BT_CLI_AGENT_DROID 5
+
+#define BT_CLI_AGENT_OPENCODE 6
+
+#define BT_CLI_AGENT_COPILOT 7
+
+#define BT_CLI_AGENT_PI 8
+
+#define BT_CLI_AGENT_AUGGIE 9
+
+#define BT_CLI_AGENT_CURSOR_CLI 10
+
+#define BT_CLI_AGENT_GOOSE 11
+
+#define BT_CLI_AGENT_HERMES 12
+
+#define BT_CLI_AGENT_VIBE 13
+
 /**
  * Two triangles per cell.
  */
@@ -96,7 +124,14 @@ typedef struct BtBlockView {
    * 1 if `frozen_snapshot` is available (sealed block), 0 otherwise.
    */
   uint8_t has_frozen_snapshot;
-  uint8_t _pad3[7];
+  /**
+   * CLI agent tag — `0` = none / unrecognised, otherwise one of the
+   * `BT_CLI_AGENT_*` constants below. Stable across releases; new
+   * agents append. Identifying a known agent lets the host paint a
+   * brand icon next to the block header; does NOT change layout.
+   */
+  uint8_t cli_agent;
+  uint8_t _pad3[6];
 } BtBlockView;
 
 typedef struct CellSnapshot {
