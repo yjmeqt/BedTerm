@@ -28,11 +28,14 @@ pub struct BtSnapshotView {
 pub struct BtTerm {
     inner: Terminal,
     cached: Option<GridSnapshot>,
-    /// Scratch buffer for the most recently popped OSC 133 event's `attrs`.
-    /// The pointer handed across FFI in `BtOsc133Event::attrs` aims here and
-    /// is only valid until the next mutating call (next pop / feed / resize /
-    /// free) — same lifetime contract as `bt_term_snapshot`'s cell pointer.
-    osc133_attrs_scratch: Vec<u8>,
+    /// Scratch for any block-string outparam (command / cwd). Same
+    /// invalidation contract as `bt_term_snapshot`: pointer valid only
+    /// until the next mutating call OR the next block-string read.
+    block_string_scratch: Vec<u8>,
+    /// Cached snapshot for the most recent frozen-block snapshot view we
+    /// handed out. Pointer in `BtSnapshotView` is valid until the next
+    /// snapshot read / mutating call / explicit release.
+    block_snapshot_cached: Option<GridSnapshot>,
 }
 
 impl BtTerm {
@@ -43,6 +46,22 @@ impl BtTerm {
         self.cached = Some(snap);
         self.cached.as_ref().unwrap()
     }
+
+    pub(crate) fn inner_ref(&self) -> &crate::term::Terminal {
+        &self.inner
+    }
+
+    pub(crate) fn block_string_scratch_mut(&mut self) -> &mut Vec<u8> {
+        &mut self.block_string_scratch
+    }
+
+    pub(crate) fn set_block_snapshot_cached(&mut self, snap: crate::snapshot::GridSnapshot) {
+        self.block_snapshot_cached = Some(snap);
+    }
+
+    pub(crate) fn clear_block_snapshot_cached(&mut self) {
+        self.block_snapshot_cached = None;
+    }
 }
 
 #[no_mangle]
@@ -52,7 +71,8 @@ pub extern "C" fn bt_term_new(cols: u16, rows: u16) -> *mut BtTerm {
     Box::into_raw(Box::new(BtTerm {
         inner: Terminal::new(cols, rows),
         cached: None,
-        osc133_attrs_scratch: Vec::new(),
+        block_string_scratch: Vec::new(),
+        block_snapshot_cached: None,
     }))
 }
 
@@ -172,89 +192,66 @@ pub unsafe extern "C" fn bt_term_mode(h: *const BtTerm) -> u32 {
     (*h).inner.mode()
 }
 
-/// Discriminator values for `BtOsc133Event::kind`. Swift mirrors these in
-/// `BedTermOsc133Event`.
-pub const BT_OSC133_PROMPT_START: u8 = 0;
-pub const BT_OSC133_COMMAND_START: u8 = 1;
-pub const BT_OSC133_OUTPUT_START: u8 = 2;
-pub const BT_OSC133_COMMAND_END: u8 = 3;
-
-/// One OSC 133 (FinalTerm) shell-integration event. Tagged union with a
-/// single-payload field (`exit_code`) that's only meaningful when
-/// `kind == COMMAND_END`, plus a borrowed `attrs` slice carrying the raw
-/// `key=value;key=value` extension tail.
-#[repr(C)]
-pub struct BtOsc133Event {
-    /// One of the `BT_OSC133_*` constants.
-    pub kind: u8,
-    /// `1` when the remote shell shipped an exit code; `0` otherwise.
-    /// Only meaningful when `kind == BT_OSC133_COMMAND_END`.
-    pub has_exit_code: u8,
-    /// Padding so `exit_code` is naturally aligned. Caller must ignore.
-    pub _reserved: [u8; 2],
-    /// Command exit code. Only meaningful when `kind == BT_OSC133_COMMAND_END`
-    /// and `has_exit_code != 0`.
-    pub exit_code: i32,
-    /// UTF-8 bytes of the extension attribute tail — `key=value` pairs
-    /// joined by `;`, exactly as the integration emitted them. Null when
-    /// no attrs. Borrowed from a scratch buffer inside the `BtTerm`; valid
-    /// only until the next mutating call. Caller copies before drainin
-    /// further events.
-    pub attrs: *const u8,
-    pub attrs_len: usize,
-}
-
-/// Pop one queued OSC 133 event, if any. Writes into `*out` and returns `1`
-/// when an event was popped, `0` when the queue is empty. Drain in a loop
-/// after each call to `bt_term_feed`.
-///
-/// `attrs` in the returned event points into a scratch buffer that the next
-/// mutating call overwrites — copy out the bytes before calling pop again.
+/// Cursor's current grid line on the active screen. Swift records this on
+/// each block boundary so Block view can later snapshot a row range that
+/// covers the block.
 ///
 /// # Safety
-/// `h` must be a valid, non-freed handle; `out` must point to a writable
-/// `BtOsc133Event`.
+/// `h` must be a valid, non-freed handle.
 #[no_mangle]
-pub unsafe extern "C" fn bt_term_pop_osc133(h: *mut BtTerm, out: *mut BtOsc133Event) -> u8 {
-    if h.is_null() || out.is_null() {
+pub unsafe extern "C" fn bt_term_current_line(h: *const BtTerm) -> i32 {
+    if h.is_null() {
         return 0;
     }
-    let term = &mut *h;
-    let Some(event) = term.inner.pop_osc133() else {
+    (*h).inner.current_line()
+}
+
+/// Grid-absolute line index of the screen's bottom row. Block view uses
+/// this as the body's upper bound for running blocks so that TUI cells
+/// drawn *below* the cursor via cursor-positioning escapes (claude / fzf
+/// / gum) stay visible.
+///
+/// # Safety
+/// `h` must be a valid, non-freed handle.
+#[no_mangle]
+pub unsafe extern "C" fn bt_term_screen_bottom_line(h: *const BtTerm) -> i32 {
+    if h.is_null() {
         return 0;
+    }
+    (*h).inner.screen_bottom_line()
+}
+
+/// Snapshot a row range from the active screen + scrollback. Same lifetime
+/// contract as `bt_term_snapshot` — the cell pointer in `*out` is valid
+/// until the next mutating call. `start_line` inclusive, `end_line`
+/// exclusive; values outside the grid extent are clamped.
+///
+/// # Safety
+/// `h` must be a valid, non-freed handle. `out` must be writable.
+#[no_mangle]
+pub unsafe extern "C" fn bt_term_snapshot_range(
+    h: *mut BtTerm,
+    start_line: i32,
+    end_line: i32,
+    out: *mut BtSnapshotView,
+) -> c_int {
+    if h.is_null() || out.is_null() {
+        return -1;
+    }
+    let term = &mut *h;
+    let snap = term.inner.snapshot_range(start_line, end_line);
+    let view = BtSnapshotView {
+        cols: snap.cols,
+        rows: snap.rows,
+        cursor_col: snap.cursor_col,
+        cursor_row: snap.cursor_row,
+        display_offset: snap.display_offset,
+        cells: snap.cells.as_ptr(),
+        cell_count: snap.cells.len(),
     };
-    use crate::osc133::Osc133Event;
-    let (kind, has, code, attrs) = match event {
-        Osc133Event::PromptStart { attrs } => (BT_OSC133_PROMPT_START, 0u8, 0, attrs),
-        Osc133Event::CommandStart { attrs } => (BT_OSC133_COMMAND_START, 0u8, 0, attrs),
-        Osc133Event::OutputStart { attrs } => (BT_OSC133_OUTPUT_START, 0u8, 0, attrs),
-        Osc133Event::CommandEnd {
-            exit_code: Some(code),
-            attrs,
-        } => (BT_OSC133_COMMAND_END, 1u8, code, attrs),
-        Osc133Event::CommandEnd {
-            exit_code: None,
-            attrs,
-        } => (BT_OSC133_COMMAND_END, 0u8, 0, attrs),
-    };
-    term.osc133_attrs_scratch = attrs;
-    let (attrs_ptr, attrs_len) = if term.osc133_attrs_scratch.is_empty() {
-        (std::ptr::null(), 0)
-    } else {
-        (
-            term.osc133_attrs_scratch.as_ptr(),
-            term.osc133_attrs_scratch.len(),
-        )
-    };
-    *out = BtOsc133Event {
-        kind,
-        has_exit_code: has,
-        _reserved: [0; 2],
-        exit_code: code,
-        attrs: attrs_ptr,
-        attrs_len,
-    };
-    1
+    term.cached = Some(snap);
+    *out = view;
+    0
 }
 
 /// # Safety

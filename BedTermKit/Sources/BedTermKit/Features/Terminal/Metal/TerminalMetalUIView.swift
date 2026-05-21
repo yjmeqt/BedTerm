@@ -2,7 +2,7 @@ import MetalKit
 import UIKit
 
 /// UIKit view that owns a `TerminalCore` + `RendererBridge` pair and drives
-/// the Rust Metal renderer on every `setNeedsDisplay()` tick. Plan B1 Task 9.
+/// the Rust Metal renderer on every `setNeedsDisplay()` tick.
 final class TerminalMetalUIView: MTKView {
     let terminalCore: TerminalCore
     let bridge: RendererBridge
@@ -35,25 +35,19 @@ final class TerminalMetalUIView: MTKView {
         onSend: @escaping (Data) -> Void,
         onResize: @escaping (Int, Int) -> Void
     ) {
-        guard let device = MTLCreateSystemDefaultDevice(),
-            let queue = device.makeCommandQueue(),
-            let bridge = RendererBridge(device: device, queue: queue)
-        else {
-            preconditionFailure("Metal initialisation failed")
-        }
+        // Shared Metal context across the terminal pane and every Block view —
+        // one atlas + pipeline state for the whole app. See MetalEnvironment.
+        let env = MetalEnvironment.shared
         self.terminalCore = TerminalCore(cols: 80, rows: 24)
-        self.bridge = bridge
+        self.bridge = env.renderer
         self.onSend = onSend
         self.onResize = onResize
         self.session = session
-        super.init(frame: .zero, device: device)
+        super.init(frame: .zero, device: env.device)
 
-        // Snap-on-input (R5.scroll_snap_on_input): every PTY-bound byte
-        // funnels through TerminalSession.send, including KeyBar, Composer,
-        // hardware keys, and UIKeyInput. One hook on the session covers them
-        // all. Captures the core directly (the view is owned by the session's
-        // view tree, so it outlives the closure naturally) and uses a weak
-        // self so stopping inertia is safe across deallocation.
+        // Snap-on-input (R5.scroll_snap_on_input): one session hook covers
+        // every PTY-bound byte. Core captured directly; weak self for
+        // inertia-stop safety across dealloc.
         let core = self.terminalCore
         session.onBeforeSend = { [weak self] in
             guard core.scrollOffset > 0 else { return }
@@ -61,6 +55,10 @@ final class TerminalMetalUIView: MTKView {
             self?.stopInertia()
             self?.setNeedsDisplay()
         }
+        // Back-ref so Block view can read live grid + the Rust-owned block
+        // list directly. BlockStore mirrors that list via `refresh(from:)`
+        // after each feed; no Swift-side state machine.
+        session.terminalCore = core
 
         // framebufferOnly=false: we hand the drawable's texture across FFI as a
         // raw pointer, so the GPU pipeline must allow CPU-readable access.
@@ -86,13 +84,12 @@ final class TerminalMetalUIView: MTKView {
                 guard let self else { return }
                 let hadScreenClear = Self.containsScreenClear(chunk)
                 self.terminalCore.feed(chunk)
-                // Mode flags can shift mid-stream (vim entering alt-screen,
-                // bash leaving bracketed paste, etc). Push to the session so
-                // SwiftUI observers react in the same frame as the redraw.
                 self.session?.updateMode(self.terminalCore.mode)
-                // Drain OSC 133 events for Block-view consumers.
-                while let event = self.terminalCore.popOsc133Event() {
-                    self.session?.emitOsc133Event(event)
+                // Rust owns the block list now — pull a fresh mirror after
+                // each feed. The store skips the rebuild when nothing
+                // observable changed (fast scalar diff).
+                if let session = self.session {
+                    session.blockStore.refresh(from: self.terminalCore)
                 }
                 self.setNeedsDisplay()
                 if hadScreenClear { self.scheduleBottomAnchorPass() }
@@ -108,9 +105,7 @@ final class TerminalMetalUIView: MTKView {
     /// avoiding a retain cycle.
     private func installTraitObservers() {
         // Dynamic Type: re-rasterise atlas + recompute cell size when the
-        // user's preferred content size category changes. Uses the iOS 17+
-        // trait-observation API (the legacy traitCollectionDidChange override
-        // is deprecated on iOS 26).
+        // user's preferred content size category changes (iOS 17+ API).
         registerForTraitChanges(
             [UITraitPreferredContentSizeCategory.self]
         ) { (self: TerminalMetalUIView, _: UITraitCollection) in
@@ -197,6 +192,10 @@ final class TerminalMetalUIView: MTKView {
         guard let drawable = currentDrawable else { return }
         let size = drawableSize
         let elapsed = CACurrentMediaTime() - startTime
+        // Reclaim the shared bridge's clear colour (Block views may have left it transparent).
+        bridge.setClearColor(
+            red: Float(clearColor.red), green: Float(clearColor.green),
+            blue: Float(clearColor.blue), alpha: Float(clearColor.alpha))
         _ = bridge.draw(
             term: terminalCore,
             into: drawable.texture,

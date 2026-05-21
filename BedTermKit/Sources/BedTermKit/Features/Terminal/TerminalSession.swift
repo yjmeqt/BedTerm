@@ -19,12 +19,18 @@ final class TerminalSession {
     private(set) var mode: BedTermMode = []
     private(set) var feed: AsyncStream<Data>
     private let feedContinuation: AsyncStream<Data>.Continuation
-    /// Stream of OSC 133 (FinalTerm) shell-integration events. The renderer
-    /// view drains the Rust event queue after every `feed` and yields here.
-    /// Consumers (e.g. an upcoming Block view model) build command lifecycles
-    /// from this; nobody else needs to subscribe.
-    private(set) var osc133Events: AsyncStream<Osc133Event>
-    private let osc133Continuation: AsyncStream<Osc133Event>.Continuation
+    /// Observable mirror of the Rust-owned block list. The renderer view
+    /// calls `blockStore.refresh(from: terminalCore)` after each
+    /// `TerminalCore.feed(_:)`; canonical state (ids, boundaries, frozen
+    /// snapshots) lives in Rust.
+    public let blockStore = BlockStore()
+
+    /// The renderer view's `TerminalCore`, surfaced on the session so views
+    /// outside the renderer hierarchy (Block list, future Block view) can
+    /// read live grid state. Set by `TerminalMetalUIView` on init. Weak so
+    /// we don't extend the renderer view's lifetime through this back-edge.
+    @ObservationIgnored
+    public weak var terminalCore: TerminalCore?
     private let client: any SSHClient
     private var pumpTask: Task<Void, Never>?
 
@@ -40,9 +46,6 @@ final class TerminalSession {
         var feedCont: AsyncStream<Data>.Continuation!
         self.feed = AsyncStream<Data> { feedCont = $0 }
         self.feedContinuation = feedCont
-        var oscCont: AsyncStream<Osc133Event>.Continuation!
-        self.osc133Events = AsyncStream<Osc133Event> { oscCont = $0 }
-        self.osc133Continuation = oscCont
     }
 
     func connect(
@@ -95,16 +98,11 @@ final class TerminalSession {
         if mode != next { mode = next }
     }
 
-    /// Forward an OSC 133 event drained by the renderer view into the
-    /// session-level stream. Subscribers reconstruct command lifecycles.
-    func emitOsc133Event(_ event: Osc133Event) {
-        osc133Continuation.yield(event)
-    }
-
     func disconnect() {
         pumpTask?.cancel()
         Task { await client.disconnect() }
         feedContinuation.finish()
+        blockStore.reset()
         state = .closed(reason: String(localized: "Closed"))
     }
 

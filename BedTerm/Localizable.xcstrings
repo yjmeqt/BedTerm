@@ -3781,41 +3781,6 @@
         }
       }
     },
-    "Group command output into collapsible blocks once shell integration ships." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "シェル統合の導入後、コマンド出力を折りたたみ可能なブロックにまとめます。"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "셸 통합이 출시되면 명령 출력을 접을 수 있는 블록으로 묶습니다."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "После добавления интеграции с shell вывод команд будет группироваться в сворачиваемые блоки."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "shell 集成上线后将命令输出归入可折叠的区块。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "shell 整合上線後將命令輸出歸入可摺疊的區塊。"
-          }
-        }
-      }
-    },
     "Display" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -4022,6 +3987,251 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "向每個新 SSH 連線推送一段小型 zsh / bash 指令稿,用於回報提示字元和命令邊界(OSC 133)。即將上線的 Block 視圖需要它;未使用也無害。"
+          }
+        }
+      }
+    },
+    "No command blocks yet" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "コマンドブロックがまだありません"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "아직 명령 블록이 없습니다"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Пока нет блоков команд"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "暂无命令区块"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "尚無命令區塊"
+          }
+        }
+      }
+    },
+    "Run a command at the remote shell prompt. Each prompt → command → output cycle becomes a block here." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "リモートシェルのプロンプトでコマンドを実行してください。プロンプト → コマンド → 出力のサイクルが、ここで 1 つのブロックになります。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "원격 셸 프롬프트에서 명령을 실행하세요. 프롬프트 → 명령 → 출력 주기가 여기에서 하나의 블록이 됩니다."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Выполните команду в строке приглашения удалённой оболочки. Каждый цикл «приглашение → команда → вывод» становится блоком."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在远端 shell 提示符下运行命令。每个「提示符 → 命令 → 输出」周期会在这里形成一个区块。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在遠端 shell 提示字元下執行命令。每個「提示字元 → 命令 → 輸出」週期會在這裡形成一個區塊。"
+          }
+        }
+      }
+    },
+    "(no command captured)" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "（コマンド未取得）"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "（명령 미수집）"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "(команда не записана)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "（未捕获命令）"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "（未擷取命令）"
+          }
+        }
+      }
+    },
+    "running…" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "実行中…"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "실행 중…"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "выполняется…"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "运行中…"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "執行中…"
+          }
+        }
+      }
+    },
+    "(output streaming…)" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "（出力ストリーミング中…）"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "（출력 스트리밍 중…）"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "(идёт вывод…)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "（输出流式传输中…）"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "（輸出串流中…）"
+          }
+        }
+      }
+    },
+    "(no output captured)" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "（出力未取得）"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "（출력 미수집）"
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "(вывод не записан)"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "（未捕获输出）"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "（未擷取輸出）"
+          }
+        }
+      }
+    },
+    "Show each command and its output as a separate block (Warp-style). Needs the shell-integration toggle on, or a host already running an OSC 133 integration (iTerm2 / kitty / VSCode)." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "各コマンドとその出力を独立したブロック (Warp 風) として表示します。シェル統合トグルを有効にするか、OSC 133 統合 (iTerm2 / kitty / VSCode) が稼働しているホストが必要です。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "각 명령과 출력을 별도의 블록(Warp 스타일)으로 표시합니다. 셸 통합 토글이 켜져 있거나 OSC 133 통합(iTerm2 / kitty / VSCode)이 이미 실행 중인 호스트가 필요합니다."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Показывать каждую команду и её вывод отдельным блоком (в стиле Warp). Требует включённой интеграции с shell или хоста с уже работающей интеграцией OSC 133 (iTerm2 / kitty / VSCode)."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "将每条命令及其输出显示为单独的区块(Warp 风格)。需要打开 shell 集成开关,或主机已运行 OSC 133 集成(iTerm2 / kitty / VSCode)。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "將每條命令及其輸出顯示為獨立的區塊(Warp 風格)。需要打開 shell 整合開關,或主機已執行 OSC 133 整合(iTerm2 / kitty / VSCode)。"
           }
         }
       }

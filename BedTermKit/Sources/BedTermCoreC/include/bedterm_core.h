@@ -11,21 +11,51 @@
 #include <stdlib.h>
 
 /**
- * Discriminator values for `BtOsc133Event::kind`. Swift mirrors these in
- * `BedTermOsc133Event`.
+ * Sentinel for a still-running block's `end_line`. Picked outside the legal
+ * `i32` grid-line range alacritty produces. Public so the FFI layer can
+ * surface it to Swift.
  */
-#define BT_OSC133_PROMPT_START 0
+#define BLOCK_END_LINE_RUNNING INT32_MIN
 
-#define BT_OSC133_COMMAND_START 1
+#define BT_BLOCK_END_LINE_RUNNING BLOCK_END_LINE_RUNNING
 
-#define BT_OSC133_OUTPUT_START 2
+#define BT_CLI_AGENT_NONE 0
 
-#define BT_OSC133_COMMAND_END 3
+#define BT_CLI_AGENT_CLAUDE 1
+
+#define BT_CLI_AGENT_GEMINI 2
+
+#define BT_CLI_AGENT_CODEX 3
+
+#define BT_CLI_AGENT_AMP 4
+
+#define BT_CLI_AGENT_DROID 5
+
+#define BT_CLI_AGENT_OPENCODE 6
+
+#define BT_CLI_AGENT_COPILOT 7
+
+#define BT_CLI_AGENT_PI 8
+
+#define BT_CLI_AGENT_AUGGIE 9
+
+#define BT_CLI_AGENT_CURSOR_CLI 10
+
+#define BT_CLI_AGENT_GOOSE 11
+
+#define BT_CLI_AGENT_HERMES 12
+
+#define BT_CLI_AGENT_VIBE 13
 
 /**
  * Two triangles per cell.
  */
 #define VERTICES_PER_CELL 6
+
+/**
+ * Two triangles per panel.
+ */
+#define VERTICES_PER_PANEL 6
 
 #define BT_MODE_ALT_SCREEN (1 << 0)
 
@@ -52,6 +82,66 @@ typedef struct BtRenderer BtRenderer;
 typedef struct BtTerm BtTerm;
 
 typedef struct Flags Flags;
+
+typedef struct BtBlockView {
+  uint64_t id;
+  int32_t start_line;
+  /**
+   * `BT_BLOCK_END_LINE_RUNNING` while the block is running.
+   */
+  int32_t end_line;
+  /**
+   * 1 if running, 0 otherwise.
+   */
+  uint8_t is_running;
+  uint8_t has_exit_code;
+  uint8_t _pad[2];
+  int32_t exit_code;
+  /**
+   * 0 when the shell didn't ship `dur=`.
+   */
+  uint64_t duration_ms;
+  uint8_t has_duration;
+  uint8_t _pad2[7];
+  /**
+   * UTF-8 bytes for command. `null` + len=0 when empty.
+   */
+  const uint8_t *command;
+  uintptr_t command_len;
+  /**
+   * UTF-8 bytes for working directory. `null` + len=0 when missing.
+   */
+  const uint8_t *cwd;
+  uintptr_t cwd_len;
+  /**
+   * UTF-8 bytes for git branch (short name or short SHA when
+   * detached). `null` + len=0 when cwd is outside a repo or the
+   * shell-integration didn't ship the field.
+   */
+  const uint8_t *git_branch;
+  uintptr_t git_branch_len;
+  /**
+   * 1 if `frozen_snapshot` is available (sealed block), 0 otherwise.
+   */
+  uint8_t has_frozen_snapshot;
+  /**
+   * CLI agent tag — `0` = none / unrecognised, otherwise one of the
+   * `BT_CLI_AGENT_*` constants below. Stable across releases; new
+   * agents append. Identifying a known agent lets the host paint a
+   * brand icon next to the block header; does NOT change layout.
+   */
+  uint8_t cli_agent;
+  uint8_t _pad3[2];
+  /**
+   * Live body height in grid rows. For sealed blocks this equals
+   * `end_line - start_line`. For running blocks this is the block
+   * grid's current `used_rows()` — the bottom-most non-blank visible
+   * row + 1 (plus any history). The host should use this for the
+   * block's body extent so a streaming TUI grows the block in real
+   * time without pre-allocating the full PTY screen height.
+   */
+  uint32_t body_rows;
+} BtBlockView;
 
 typedef struct CellSnapshot {
   /**
@@ -89,42 +179,6 @@ typedef struct BtSnapshotView {
 } BtSnapshotView;
 
 /**
- * One OSC 133 (FinalTerm) shell-integration event. Tagged union with a
- * single-payload field (`exit_code`) that's only meaningful when
- * `kind == COMMAND_END`, plus a borrowed `attrs` slice carrying the raw
- * `key=value;key=value` extension tail.
- */
-typedef struct BtOsc133Event {
-  /**
-   * One of the `BT_OSC133_*` constants.
-   */
-  uint8_t kind;
-  /**
-   * `1` when the remote shell shipped an exit code; `0` otherwise.
-   * Only meaningful when `kind == BT_OSC133_COMMAND_END`.
-   */
-  uint8_t has_exit_code;
-  /**
-   * Padding so `exit_code` is naturally aligned. Caller must ignore.
-   */
-  uint8_t _reserved[2];
-  /**
-   * Command exit code. Only meaningful when `kind == BT_OSC133_COMMAND_END`
-   * and `has_exit_code != 0`.
-   */
-  int32_t exit_code;
-  /**
-   * UTF-8 bytes of the extension attribute tail — `key=value` pairs
-   * joined by `;`, exactly as the integration emitted them. Null when
-   * no attrs. Borrowed from a scratch buffer inside the `BtTerm`; valid
-   * only until the next mutating call. Caller copies before drainin
-   * further events.
-   */
-  const uint8_t *attrs;
-  uintptr_t attrs_len;
-} BtOsc133Event;
-
-/**
  * 8-bit-per-channel sRGB triple. The renderer-facing snapshot stores
  * premultiplied RGBA u32s; this type only exists at the host-config boundary.
  */
@@ -144,6 +198,54 @@ typedef struct BtPaletteView {
   struct BtRgb24 ansi[16];
 } BtPaletteView;
 
+/**
+ * One entry per block: the BODY cell region + the surrounding Warp-style
+ * panel chrome. Rust draws a rounded-rect panel for each visible block,
+ * then paints cell quads inside. Header text remains a SwiftUI overlay
+ * on top of the panel.
+ */
+typedef struct BtBlockLayoutEntry {
+  /**
+   * Matches `Block::id`. Looked up by linear scan over `term.blocks()`.
+   */
+  uint64_t block_id;
+  /**
+   * Top-left Y of the BODY (cells start here) in logical content
+   * coordinates (pixels).
+   */
+  float body_y_top_px;
+  /**
+   * Body height in pixels (row_count × cell_height_px).
+   */
+  float body_height_px;
+  /**
+   * Top-left Y of the PANEL chrome (includes header). The rounded
+   * panel BG paints from this Y down to `panel_y_top_px + panel_height_px`.
+   */
+  float panel_y_top_px;
+  /**
+   * Panel height in pixels (header + body + any inset).
+   */
+  float panel_height_px;
+  /**
+   * Panel left edge X in pixels.
+   */
+  float panel_x_left_px;
+  /**
+   * Panel width in pixels.
+   */
+  float panel_width_px;
+  /**
+   * Panel background RGBA (0xRRGGBBAA, big-endian packed). Pass 0 to
+   * skip panel rendering for this entry (terminal pane fallback).
+   */
+  uint32_t panel_bg_rgba;
+  /**
+   * Panel corner radius in pixels.
+   */
+  float panel_corner_radius_px;
+} BtBlockLayoutEntry;
+
 
 
 
@@ -151,6 +253,37 @@ typedef struct BtPaletteView {
 #ifdef __cplusplus
 extern "C" {
 #endif // __cplusplus
+
+/**
+ * # Safety
+ * `h` must be a valid `BtTerm *` returned by `bt_term_new`.
+ */
+uintptr_t bt_term_block_count(const struct BtTerm *h);
+
+/**
+ * # Safety
+ * `h` must be a valid `BtTerm *`; `out` must point to a writable
+ * `BtBlockView`. String pointers in `*out` are invalidated by the next
+ * call as described in the module-level docs.
+ */
+int bt_term_block_at(struct BtTerm *h, uintptr_t idx, struct BtBlockView *out);
+
+/**
+ * Fetch the frozen body of a sealed block. Returns -1 if the block is
+ * still running, missing, or the index is out of bounds. The cell
+ * pointer in `*out` follows the same invalidation rules as
+ * `bt_term_snapshot`.
+ *
+ * # Safety
+ * `h` valid; `out` writable.
+ */
+int bt_term_block_snapshot(struct BtTerm *h, uintptr_t idx, struct BtSnapshotView *out);
+
+/**
+ * # Safety
+ * `h` valid.
+ */
+void bt_term_block_snapshot_release(struct BtTerm *h);
 
 struct BtTerm *bt_term_new(uint16_t cols, uint16_t rows);
 
@@ -213,18 +346,39 @@ uint32_t bt_term_scrollback_lines(const struct BtTerm *h);
 uint32_t bt_term_mode(const struct BtTerm *h);
 
 /**
- * Pop one queued OSC 133 event, if any. Writes into `*out` and returns `1`
- * when an event was popped, `0` when the queue is empty. Drain in a loop
- * after each call to `bt_term_feed`.
- *
- * `attrs` in the returned event points into a scratch buffer that the next
- * mutating call overwrites — copy out the bytes before calling pop again.
+ * Cursor's current grid line on the active screen. Swift records this on
+ * each block boundary so Block view can later snapshot a row range that
+ * covers the block.
  *
  * # Safety
- * `h` must be a valid, non-freed handle; `out` must point to a writable
- * `BtOsc133Event`.
+ * `h` must be a valid, non-freed handle.
  */
-uint8_t bt_term_pop_osc133(struct BtTerm *h, struct BtOsc133Event *out);
+int32_t bt_term_current_line(const struct BtTerm *h);
+
+/**
+ * Grid-absolute line index of the screen's bottom row. Block view uses
+ * this as the body's upper bound for running blocks so that TUI cells
+ * drawn *below* the cursor via cursor-positioning escapes (claude / fzf
+ * / gum) stay visible.
+ *
+ * # Safety
+ * `h` must be a valid, non-freed handle.
+ */
+int32_t bt_term_screen_bottom_line(const struct BtTerm *h);
+
+/**
+ * Snapshot a row range from the active screen + scrollback. Same lifetime
+ * contract as `bt_term_snapshot` — the cell pointer in `*out` is valid
+ * until the next mutating call. `start_line` inclusive, `end_line`
+ * exclusive; values outside the grid extent are clamped.
+ *
+ * # Safety
+ * `h` must be a valid, non-freed handle. `out` must be writable.
+ */
+int bt_term_snapshot_range(struct BtTerm *h,
+                           int32_t start_line,
+                           int32_t end_line,
+                           struct BtSnapshotView *out);
 
 /**
  * # Safety
@@ -238,6 +392,25 @@ void bt_term_snapshot_release(struct BtTerm *h);
  * aligned `BtPaletteView`, or be null (a null palette is a no-op).
  */
 void bt_term_set_palette(struct BtTerm *h, const struct BtPaletteView *palette);
+
+/**
+ * Paint visible block bodies into `texture` for one frame. First
+ * visible block clears the viewport; subsequent calls use Load. If no
+ * block intersects the viewport, the viewport is still cleared.
+ *
+ * # Safety
+ * `r`, `term`, `texture_ptr` must be valid live pointers. `entries`
+ * must point to at least `entry_count` `BtBlockLayoutEntry` values
+ * (or be null with `entry_count == 0`).
+ */
+int bt_renderer_draw_block_list(struct BtRenderer *r,
+                                struct BtTerm *term,
+                                const void *texture_ptr,
+                                uint32_t viewport_w,
+                                uint32_t viewport_h,
+                                float scroll_y_px,
+                                const struct BtBlockLayoutEntry *entries,
+                                uintptr_t entry_count);
 
 /**
  * # Safety
@@ -296,6 +469,30 @@ int bt_renderer_draw(struct BtRenderer *r,
                      uint32_t viewport_width_px,
                      uint32_t viewport_height_px,
                      double time_seconds);
+
+/**
+ * Render an arbitrary cell array — used by Block view to draw each
+ * block's body (either a frozen snapshot of a sealed block or a fresh
+ * row-range snapshot of a running block) through the same Metal pipeline
+ * the main terminal view uses.
+ *
+ * `cells_len` must equal `cols as usize * rows as usize`. `cells` may be
+ * null with `cells_len == 0` for an empty draw (clears the viewport).
+ *
+ * # Safety
+ * `r` must be a live `BtRenderer`. `cells` (when non-null) must point to
+ * `cells_len` valid `CellSnapshot` values for the duration of the call.
+ * `drawable_texture` must be a live `id<MTLTexture>`.
+ */
+int bt_renderer_draw_cells(struct BtRenderer *r,
+                           const struct CellSnapshot *cells,
+                           uintptr_t cells_len,
+                           uint16_t cols,
+                           uint16_t rows,
+                           const void *drawable_texture,
+                           uint32_t viewport_width_px,
+                           uint32_t viewport_height_px,
+                           double time_seconds);
 
 /**
  * # Safety

@@ -25,8 +25,12 @@ final class ConnectAttempt {
 
     /// Run the attempt. `onPrewarm(true)` fires when the LAN permission prompt is in flight;
     /// `onPrewarm(false)` fires when it resolves so the caller can show/hide UI.
+    /// `bootstrapPayload` is the shell-integration heredoc to push after the
+    /// remote shell emits its first byte; pass `nil` to keep the channel
+    /// pristine (default).
     func run(
         credential: HostCredential,
+        bootstrapPayload: String? = nil,
         onPrewarm: (@MainActor (Bool) -> Void)? = nil
     ) async -> Outcome {
         let needsPrewarm =
@@ -47,7 +51,10 @@ final class ConnectAttempt {
         }
 
         let session = TerminalSession(client: self.clientFactory())
-        await session.connect(credential: credential, initialPTY: .init(cols: 80, rows: 24))
+        await session.connect(
+            credential: credential,
+            initialPTY: .init(cols: 80, rows: 24),
+            bootstrapPayload: bootstrapPayload)
 
         switch session.state {
         case .open:

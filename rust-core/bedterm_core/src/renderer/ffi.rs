@@ -4,9 +4,10 @@ use std::os::raw::c_int;
 
 use crate::ffi::BtTerm;
 use crate::renderer::Renderer;
+use crate::snapshot::CellSnapshot;
 
 pub struct BtRenderer {
-    inner: Renderer,
+    pub(crate) inner: Renderer,
 }
 
 /// # Safety
@@ -106,6 +107,45 @@ pub unsafe extern "C" fn bt_renderer_draw(
     }
     (*r).inner.draw(
         term,
+        drawable_texture,
+        viewport_width_px,
+        viewport_height_px,
+        time_seconds,
+    )
+}
+
+/// Render an arbitrary cell array — used by Block view to draw each
+/// block's body (either a frozen snapshot of a sealed block or a fresh
+/// row-range snapshot of a running block) through the same Metal pipeline
+/// the main terminal view uses.
+///
+/// `cells_len` must equal `cols as usize * rows as usize`. `cells` may be
+/// null with `cells_len == 0` for an empty draw (clears the viewport).
+///
+/// # Safety
+/// `r` must be a live `BtRenderer`. `cells` (when non-null) must point to
+/// `cells_len` valid `CellSnapshot` values for the duration of the call.
+/// `drawable_texture` must be a live `id<MTLTexture>`.
+#[no_mangle]
+pub unsafe extern "C" fn bt_renderer_draw_cells(
+    r: *mut BtRenderer,
+    cells: *const CellSnapshot,
+    cells_len: usize,
+    cols: u16,
+    rows: u16,
+    drawable_texture: *const std::ffi::c_void,
+    viewport_width_px: u32,
+    viewport_height_px: u32,
+    time_seconds: f64,
+) -> c_int {
+    if r.is_null() {
+        return -1;
+    }
+    (*r).inner.draw_cells(
+        cells,
+        cells_len,
+        cols,
+        rows,
         drawable_texture,
         viewport_width_px,
         viewport_height_px,

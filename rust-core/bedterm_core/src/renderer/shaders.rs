@@ -1,5 +1,11 @@
 //! Metal shader source. Compiled at runtime via
 //! `MTLDevice.newLibraryWithSource:options:error:`.
+//!
+//! Two pipelines live in this source: `cell_vertex / cell_fragment` for
+//! text cells, and `panel_vertex / panel_fragment` for Warp-style
+//! rounded block backgrounds. The panel pipeline renders one quad per
+//! visible block and produces an anti-aliased rounded-rectangle alpha
+//! mask via a signed-distance function in the fragment stage.
 
 pub const TERMINAL_METAL_SOURCE: &str = r#"
 #include <metal_stdlib>
@@ -13,11 +19,19 @@ struct CellVertex {
     float  isColor;    // 1.0 = color bitmap glyph, 0.0 = monochrome alpha mask
 };
 
+struct PanelVertex {
+    float2 pos;          // pixel coords inside the viewport
+    float2 local;        // 0..1 within the panel
+    float2 size;         // panel size in pixels
+    float4 color;        // premultiplied bg colour
+    float  cornerRadius; // in pixels
+};
+
 struct Uniforms {
     float2 viewportPx;
 };
 
-struct VertexOut {
+struct CellVertexOut {
     float4 position [[position]];
     float2 uv;
     float4 fg;
@@ -25,13 +39,21 @@ struct VertexOut {
     float  isColor;
 };
 
-vertex VertexOut cell_vertex(uint vid [[vertex_id]],
-                             const device CellVertex *cells [[buffer(0)]],
-                             constant Uniforms &u [[buffer(1)]]) {
+struct PanelVertexOut {
+    float4 position [[position]];
+    float2 local;
+    float2 size;
+    float4 color;
+    float  cornerRadius;
+};
+
+vertex CellVertexOut cell_vertex(uint vid [[vertex_id]],
+                                 const device CellVertex *cells [[buffer(0)]],
+                                 constant Uniforms &u [[buffer(1)]]) {
     CellVertex v = cells[vid];
     float2 ndc = (v.pos / u.viewportPx) * 2.0 - 1.0;
     ndc.y = -ndc.y; // flip so row 0 is at the top
-    VertexOut out;
+    CellVertexOut out;
     out.position = float4(ndc, 0.0, 1.0);
     out.uv = v.uv;
     out.fg = v.fg;
@@ -42,7 +64,7 @@ vertex VertexOut cell_vertex(uint vid [[vertex_id]],
 
 constexpr sampler glyph_sampler(filter::linear, address::clamp_to_edge);
 
-fragment float4 cell_fragment(VertexOut in [[stage_in]],
+fragment float4 cell_fragment(CellVertexOut in [[stage_in]],
                               texture2d<float> atlas [[texture(0)]]) {
     // Atlas is BGRA8Unorm premultiplied. Metal's float sample returns RGBA
     // in linear order regardless of the underlying byte order, so `sample`
@@ -56,5 +78,33 @@ fragment float4 cell_fragment(VertexOut in [[stage_in]],
     // Monochrome glyph: the bitmap is white premultiplied by coverage, so
     // sample.a is the alpha mask. Tint by foreground colour over background.
     return mix(in.bg, in.fg, sample.a);
+}
+
+vertex PanelVertexOut panel_vertex(uint vid [[vertex_id]],
+                                   const device PanelVertex *panels [[buffer(0)]],
+                                   constant Uniforms &u [[buffer(1)]]) {
+    PanelVertex p = panels[vid];
+    float2 ndc = (p.pos / u.viewportPx) * 2.0 - 1.0;
+    ndc.y = -ndc.y;
+    PanelVertexOut out;
+    out.position = float4(ndc, 0.0, 1.0);
+    out.local = p.local;
+    out.size = p.size;
+    out.color = p.color;
+    out.cornerRadius = p.cornerRadius;
+    return out;
+}
+
+fragment float4 panel_fragment(PanelVertexOut in [[stage_in]]) {
+    // Anti-aliased rounded-rect SDF. `q` is the offset from the
+    // nearest corner's inner anchor; `d` is the signed distance to the
+    // rounded boundary (negative inside, positive outside).
+    float2 px = in.local * in.size;
+    float2 halfSize = in.size * 0.5;
+    float2 q = abs(px - halfSize) - (halfSize - in.cornerRadius);
+    float d = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - in.cornerRadius;
+    float alpha = 1.0 - smoothstep(-1.0, 0.0, d);
+    // Premultiplied output: scale the colour by the coverage alpha.
+    return float4(in.color.rgb * alpha, in.color.a * alpha);
 }
 "#;

@@ -2,23 +2,46 @@
     import SwiftUI
 
     extension HostsScreen {
+        /// Mock SSH is a loopback throwaway server. Drop any
+        /// previously-stored host fingerprint so a fresh key (first run,
+        /// regenerated, server re-keyed) lands as trust-on-first-use
+        /// instead of a "Host key changed" dead-end.
+        private func mockSSHCredential() -> HostCredential {
+            let credential = HostCredential(
+                host: "127.0.0.1", port: 2222, username: "test",
+                auth: .password("x"))
+            HostKeyStore().remove(host: credential.host, port: credential.port)
+            return credential
+        }
+
         @ViewBuilder
         func debugTerminalScreen(for selection: DebugTTYProgramSelection) -> some View {
-            let client: any SSHClient = {
-                switch selection {
-                case .echoShell: return RustMockTTYClient(program: .echoShell)
-                case .vimLite: return RustMockTTYClient(program: .vimLite)
-                case .rawSink: return RustMockTTYClient(program: .rawSink)
-                case .replay(let preset):
-                    // The cast bytes are embedded into the Rust rlib via
-                    // include_str!; the FFI's `preset` opt picks which one.
-                    let opts = "{\"preset\":\"\(preset)\"}"
-                    return RustMockTTYClient(program: .replay, opts: opts)
+            switch selection {
+            case .mockSSH:
+                let credential = mockSSHCredential()
+                TerminalScreen(
+                    debugClient: CitadelSSHClient(),
+                    credential: credential
+                ) {
+                    if !path.isEmpty { path.removeLast() }
                 }
-            }()
-            TerminalScreen(debugClient: client) {
-                if !path.isEmpty {
-                    path.removeLast()
+            default:
+                let client: any SSHClient = {
+                    switch selection {
+                    case .echoShell: return RustMockTTYClient(program: .echoShell)
+                    case .vimLite: return RustMockTTYClient(program: .vimLite)
+                    case .rawSink: return RustMockTTYClient(program: .rawSink)
+                    case .replay(let preset):
+                        // The cast bytes are embedded into the Rust rlib via
+                        // include_str!; the FFI's `preset` opt picks which one.
+                        let opts = "{\"preset\":\"\(preset)\"}"
+                        return RustMockTTYClient(program: .replay, opts: opts)
+                    case .mockSSH:
+                        preconditionFailure("handled above")
+                    }
+                }()
+                TerminalScreen(debugClient: client) {
+                    if !path.isEmpty { path.removeLast() }
                 }
             }
         }

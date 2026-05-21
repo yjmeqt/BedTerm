@@ -10,6 +10,19 @@ struct ComposerTextView: UIViewRepresentable {
     var placeholder: String
     var isFocused: Bool
     var onFocusChange: (Bool) -> Void
+    /// When set, pressing Return submits instead of inserting a newline.
+    /// Multi-line input is reached via the explicit "newline" toolbar
+    /// button (block-list Warp composer). Leaving this `nil` preserves
+    /// the default UITextView behaviour (Return inserts `\n`) for the
+    /// legacy pill composer.
+    var onSubmit: (() -> Void)?
+    /// When true, the buffer is locked and every keystroke is funnelled
+    /// to `onPassthroughChars` / `onPassthroughBackspace` instead of
+    /// being inserted into the editor — Warp's behaviour while a block
+    /// is running.
+    var isPassthrough: Bool = false
+    var onPassthroughChars: ((String) -> Void)?
+    var onPassthroughBackspace: (() -> Void)?
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
@@ -55,6 +68,12 @@ struct ComposerTextView: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: UITextView, context: Context) {
+        // SwiftUI rebuilds the struct on every state change; the
+        // Coordinator was created once with the initial copy. Refresh
+        // its `parent` so delegate callbacks read up-to-date flags
+        // (notably `isPassthrough`) instead of the stale snapshot from
+        // `makeCoordinator`.
+        context.coordinator.parent = self
         context.coordinator.placeholderLabel?.text = placeholder
         if uiView.text != text {
             uiView.text = text
@@ -89,6 +108,26 @@ struct ComposerTextView: UIViewRepresentable {
 
         func refreshPlaceholder(in textView: UITextView) {
             placeholderLabel?.isHidden = !textView.text.isEmpty
+        }
+
+        func textView(
+            _ textView: UITextView,
+            shouldChangeTextIn range: NSRange,
+            replacementText text: String
+        ) -> Bool {
+            if parent.isPassthrough {
+                if text.isEmpty && range.length > 0 {
+                    parent.onPassthroughBackspace?()
+                } else if !text.isEmpty {
+                    parent.onPassthroughChars?(text)
+                }
+                return false
+            }
+            if text == "\n", let onSubmit = parent.onSubmit {
+                onSubmit()
+                return false
+            }
+            return true
         }
 
         func textViewDidChange(_ textView: UITextView) {

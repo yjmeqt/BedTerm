@@ -1,6 +1,29 @@
 import BedTermCoreC
 import Foundation
 
+/// Read-only mirror of a Rust-owned `Block`. Copied out per call —
+/// the FFI string pointers are scratch-backed and must not be retained.
+public struct RustBlock: Identifiable, Sendable, Equatable {
+    public let id: UInt64
+    public let command: String
+    public let startLine: Int32
+    public let endLine: Int32
+    public let exitCode: Int32?
+    public let duration: TimeInterval?
+    public let workingDirectory: String?
+    public let gitBranch: String?
+    public let cliAgent: CLIAgent?
+    public let isRunning: Bool
+    public let hasFrozenSnapshot: Bool
+    /// Live body extent in grid rows. For sealed blocks this equals
+    /// `endLine - startLine`; for running blocks it's the block grid's
+    /// current bottom-most-content-row + 1 (plus history). The host
+    /// sizes block-body height in points off this value so a streaming
+    /// TUI grows the block in real time without pre-allocating the
+    /// full PTY screen height.
+    public let bodyRows: UInt32
+}
+
 /// Swift facade over the Rust terminal core.
 ///
 /// Thread safety: not thread-safe. Construct, feed, resize, and snapshot on a
@@ -9,6 +32,11 @@ public final class TerminalCore {
     /// OpaquePointer wraps the C `BtTerm *` — the struct body is intentionally
     /// hidden by the Rust-generated header (opaque / forward-declared only).
     private let handle: OpaquePointer
+    /// Live PTY screen geometry — kept in sync at `init` / `resize` so
+    /// callers (e.g. running-block body sizing) don't need a Rust FFI
+    /// round-trip just to read the row count.
+    public private(set) var screenCols: Int
+    public private(set) var screenRows: Int
 
     public init(cols: Int, rows: Int) {
         let colsClamped = UInt16(max(1, min(cols, Int(UInt16.max))))
@@ -17,6 +45,8 @@ public final class TerminalCore {
             preconditionFailure("bt_term_new returned NULL")
         }
         self.handle = ptr
+        self.screenCols = Int(colsClamped)
+        self.screenRows = Int(rowsClamped)
     }
 
     deinit {
@@ -38,6 +68,8 @@ public final class TerminalCore {
         let colsClamped = UInt16(max(1, min(cols, Int(UInt16.max))))
         let rowsClamped = UInt16(max(1, min(rows, Int(UInt16.max))))
         bt_term_resize(handle, colsClamped, rowsClamped)
+        self.screenCols = Int(colsClamped)
+        self.screenRows = Int(rowsClamped)
     }
 
     /// Push a palette (16 ANSI entries + 2 defaults) to the Rust core. Subsequent snapshots resolve
@@ -116,31 +148,159 @@ public final class TerminalCore {
         BedTermMode(rawValue: bt_term_mode(handle))
     }
 
-    /// Pop the next pending OSC 133 (FinalTerm) shell-integration event, or
-    /// `nil` if the queue is empty. Drain in a loop after each `feed(_:)` to
-    /// reconstruct command lifecycles. The event's `attrs` are copied out
-    /// inside this call, so the Rust-side scratch buffer is safe to
-    /// invalidate on the next pop.
-    public func popOsc133Event() -> Osc133Event? {
-        var raw = BtOsc133Event(
-            kind: 0,
-            has_exit_code: 0,
-            _reserved: (0, 0),
-            exit_code: 0,
-            attrs: nil,
-            attrs_len: 0
-        )
-        guard bt_term_pop_osc133(handle, &raw) == 1 else { return nil }
-        return Osc133Event(raw: raw)
+    /// Cursor's current grid line on the active screen (0..rows-1). Block
+    /// view records this on each block boundary to anchor block ranges.
+    public var currentLine: Int32 {
+        bt_term_current_line(handle)
     }
 
-    /// Drain every pending OSC 133 event into an array. Equivalent to calling
-    /// `popOsc133Event()` until it returns `nil`.
-    public func drainOsc133Events() -> [Osc133Event] {
-        var events: [Osc133Event] = []
-        while let event = popOsc133Event() {
-            events.append(event)
+    /// Grid-absolute line index of the screen's bottom row. Use this
+    /// as the upper bound for a running block's body so cells drawn
+    /// below the cursor (TUI redraws via cursor-positioning escapes)
+    /// stay visible.
+    public var screenBottomLine: Int32 {
+        bt_term_screen_bottom_line(handle)
+    }
+
+    /// Snapshot a row range from the active screen + scrollback. `start`
+    /// inclusive, `end` exclusive; coordinates are grid lines (0 = top of
+    /// active screen, negative = into scrollback). Returns `nil` if the
+    /// range is empty after clamping. Used by Block view to capture a
+    /// sealed block's body at command-end and to re-render a running
+    /// block's body every frame.
+    public func snapshotRange(startLine: Int32, endLine: Int32) -> GridSnapshot? {
+        var view = BtSnapshotView(
+            cols: 0, rows: 0, cursor_col: 0, cursor_row: 0,
+            display_offset: 0, cells: nil, cell_count: 0)
+        guard bt_term_snapshot_range(handle, startLine, endLine, &view) == 0,
+            view.rows > 0,
+            let cellsPtr = view.cells
+        else {
+            return nil
         }
-        return events
+        let buffer = UnsafeBufferPointer(start: cellsPtr, count: Int(view.cell_count))
+        var cells: [GridSnapshot.Cell] = []
+        cells.reserveCapacity(Int(view.cell_count))
+        for raw in buffer {
+            cells.append(
+                GridSnapshot.Cell(
+                    ch: raw.ch, fgRGBA: raw.fg_rgba, bgRGBA: raw.bg_rgba, flags: raw.flags))
+        }
+        bt_term_snapshot_release(handle)
+        return GridSnapshot(
+            cols: view.cols, rows: view.rows,
+            cursorCol: view.cursor_col, cursorRow: view.cursor_row,
+            displayOffset: view.display_offset, cells: cells)
+    }
+
+    public var blockCount: Int {
+        Int(bt_term_block_count(handle))
+    }
+
+    public func block(at index: Int) -> RustBlock? {
+        var view = Self.emptyBlockView()
+        guard index >= 0,
+            index < blockCount,
+            bt_term_block_at(handle, UInt(index), &view) == 0
+        else {
+            return nil
+        }
+        let command = copyOutString(ptr: view.command, len: Int(view.command_len))
+        let cwd =
+            view.cwd_len > 0
+            ? copyOutString(ptr: view.cwd, len: Int(view.cwd_len))
+            : nil
+        let gitBranch =
+            view.git_branch_len > 0
+            ? copyOutString(ptr: view.git_branch, len: Int(view.git_branch_len))
+            : nil
+        return RustBlock(
+            id: view.id,
+            command: command,
+            startLine: view.start_line,
+            endLine: view.end_line,
+            exitCode: view.has_exit_code != 0 ? view.exit_code : nil,
+            duration: view.has_duration != 0
+                ? TimeInterval(view.duration_ms) / 1000.0
+                : nil,
+            workingDirectory: cwd,
+            gitBranch: gitBranch,
+            cliAgent: CLIAgent(ffiTag: view.cli_agent),
+            isRunning: view.is_running != 0,
+            hasFrozenSnapshot: view.has_frozen_snapshot != 0,
+            bodyRows: view.body_rows
+        )
+    }
+
+    public func allBlocks() -> [RustBlock] {
+        let count = blockCount
+        var out: [RustBlock] = []
+        out.reserveCapacity(count)
+        for idx in 0..<count {
+            if let block = block(at: idx) {
+                out.append(block)
+            }
+        }
+        return out
+    }
+
+    public func frozenSnapshot(forBlockAt index: Int) -> GridSnapshot? {
+        var view = BtSnapshotView(
+            cols: 0, rows: 0, cursor_col: 0, cursor_row: 0,
+            display_offset: 0, cells: nil, cell_count: 0)
+        guard bt_term_block_snapshot(handle, UInt(index), &view) == 0,
+            view.rows > 0,
+            let cellsPtr = view.cells
+        else {
+            return nil
+        }
+        let buffer = UnsafeBufferPointer(start: cellsPtr, count: Int(view.cell_count))
+        var cells: [GridSnapshot.Cell] = []
+        cells.reserveCapacity(Int(view.cell_count))
+        for raw in buffer {
+            cells.append(
+                GridSnapshot.Cell(
+                    ch: raw.ch, fgRGBA: raw.fg_rgba, bgRGBA: raw.bg_rgba, flags: raw.flags))
+        }
+        bt_term_block_snapshot_release(handle)
+        return GridSnapshot(
+            cols: view.cols, rows: view.rows,
+            cursorCol: view.cursor_col, cursorRow: view.cursor_row,
+            displayOffset: view.display_offset, cells: cells)
+    }
+
+    /// Zero-filled `BtBlockView` for in/out FFI calls. cbindgen surfaces
+    /// the struct's C arrays as Swift tuples, so every padding tuple
+    /// must be enumerated explicitly; pulled out of `block(at:)` to
+    /// keep that function's body under SwiftLint's length cap.
+    private static func emptyBlockView() -> BtBlockView {
+        BtBlockView(
+            id: 0,
+            start_line: 0,
+            end_line: 0,
+            is_running: 0,
+            has_exit_code: 0,
+            _pad: (0, 0),
+            exit_code: 0,
+            duration_ms: 0,
+            has_duration: 0,
+            _pad2: (0, 0, 0, 0, 0, 0, 0),
+            command: nil,
+            command_len: 0,
+            cwd: nil,
+            cwd_len: 0,
+            git_branch: nil,
+            git_branch_len: 0,
+            has_frozen_snapshot: 0,
+            cli_agent: 0,
+            _pad3: (0, 0),
+            body_rows: 0
+        )
+    }
+
+    private func copyOutString(ptr: UnsafePointer<UInt8>?, len: Int) -> String {
+        guard let ptr, len > 0 else { return "" }
+        let buf = UnsafeBufferPointer(start: ptr, count: len)
+        return String(bytes: buf, encoding: .utf8) ?? ""
     }
 }

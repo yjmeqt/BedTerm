@@ -83,14 +83,14 @@ impl Default for Palette {
 
 /// Scrollback buffer size. 10 000 lines × 80 cols × ~16 B/cell ≈ 12 MB worst
 /// case, on par with the glyph atlas budget.
-const SCROLLBACK_LINES: u16 = 10_000;
+pub(crate) const SCROLLBACK_LINES: u16 = 10_000;
 
 /// Minimal Dimensions implementation. `total_lines` includes scrollback so the
 /// alacritty grid actually allocates history.
 #[derive(Clone, Copy, Debug)]
-struct Dims {
-    cols: u16,
-    screen_rows: u16,
+pub(crate) struct Dims {
+    pub(crate) cols: u16,
+    pub(crate) screen_rows: u16,
 }
 
 impl Dimensions for Dims {
@@ -113,7 +113,8 @@ pub struct Terminal {
     cols: u16,
     rows: u16,
     palette: Palette,
-    osc133: crate::osc133::Osc133Sniffer,
+    dcs: crate::dcs::DcsSniffer,
+    blocks: crate::blocks::BlockStore,
 }
 
 impl Terminal {
@@ -129,22 +130,102 @@ impl Terminal {
             cols,
             rows,
             palette: Palette::default(),
-            osc133: crate::osc133::Osc133Sniffer::new(),
+            dcs: crate::dcs::DcsSniffer::new(),
+            blocks: crate::blocks::BlockStore::new(),
         }
     }
 
     pub fn feed(&mut self, bytes: &[u8]) {
-        // Dual-feed: alacritty owns grid mutation, while the OSC 133 sniffer
-        // listens for shell-integration markers. The sniffer's VTE state
-        // machine is independent — both must see every byte to stay in sync.
-        self.parser.advance(&mut self.term, bytes);
-        self.osc133.feed(bytes);
+        // Per-block routing: bytes between `Preexec` and the matching
+        // `CommandFinished` go to the running block's private grid;
+        // every other byte (prompt drawing, between-command output)
+        // goes to the global terminal. Mirrors Warp's per-block grid
+        // model.
+        //
+        // We rely on the existing stateful `DcsSniffer` (alacritty's
+        // VTE parser) to emit events because DCS frames routinely
+        // span multiple `feed` calls in practice — we observed shell
+        // integration ship a single frame as three separate writes
+        // (`\eP$d` start, hex body, `\e\` terminator). A stateless
+        // scanner over one chunk would miss every cross-chunk frame.
+        //
+        // `feed_with_positions` returns each newly-completed event
+        // paired with its end-of-frame byte offset in `bytes`. Walk
+        // the input as (chunk-up-to-and-including-the-frame, event)
+        // pairs:
+        //   1. Feed bytes through `cursor..event.end` to the current
+        //      target (DCS frame included — alacritty silently
+        //      swallows `$d`-final DCS so this is a no-op for the
+        //      grid but keeps its parser state happy).
+        //   2. Apply the event — may attach a new block grid
+        //      (`Preexec`) or seal the current one (`CommandFinished`).
+        //   3. Continue past the frame.
+        let cols = self.cols;
+        let rows = self.rows;
+        let now = std::time::Instant::now();
+        let events = self.dcs.feed_with_positions(bytes);
+
+        let mut cursor = 0usize;
+        for (end_pos, event) in events {
+            self.dispatch_chunk(&bytes[cursor..end_pos]);
+            let current = self.current_grid_absolute_line();
+            self.blocks
+                .apply(&event, current, now, cols, rows, &self.palette);
+            cursor = end_pos;
+        }
+        // Trailing bytes after the last event (or the entire chunk
+        // if no event completed this call — most chunks).
+        self.dispatch_chunk(&bytes[cursor..]);
     }
 
-    /// Pop the next pending OSC 133 event, or `None` if the queue is empty.
-    /// Cheap; safe to drain after every feed.
-    pub fn pop_osc133(&mut self) -> Option<crate::osc133::Osc133Event> {
-        self.osc133.pop()
+    /// Feed `bytes` to the currently-active target — the open block's
+    /// private grid if a command is running, else the global terminal.
+    fn dispatch_chunk(&mut self, bytes: &[u8]) {
+        if bytes.is_empty() {
+            return;
+        }
+        let mut also_global = true;
+        if let Some(block) = self.blocks.open_block_mut() {
+            if let Some(grid) = block.grid.as_mut() {
+                // When a TUI inside the running block is in alt-screen
+                // (vim / htop / claude / less / fzf) the host UI flips
+                // to the classic full-screen renderer which paints from
+                // the *global* term. We need the global term to see the
+                // same alt-screen bytes so it can render the TUI and,
+                // crucially, the `\e[?1049l` exit escape — without that
+                // the global term gets stuck in alt-screen even after
+                // the TUI quits.
+                //
+                // Sample alt-screen state on both sides of the grid
+                // feed and union them. Without the post-feed sample we
+                // would miss the entry escape (state was off before
+                // feeding, on after) and global would never enter alt-
+                // screen at all. Without the pre-feed sample we would
+                // miss the exit escape (state was on before, off after)
+                // and global would never leave.
+                let was_alt = grid.term().mode().contains(TermMode::ALT_SCREEN);
+                grid.feed(bytes);
+                let is_alt = grid.term().mode().contains(TermMode::ALT_SCREEN);
+                also_global = was_alt || is_alt;
+            }
+        }
+        if also_global {
+            self.parser.advance(&mut self.term, bytes);
+        }
+    }
+
+    /// Grid-absolute current line, sampled from the *active* grid —
+    /// the open block's private grid when one is attached (cursor
+    /// has no history offset there), else the global terminal's
+    /// cursor + scrollback offset.
+    fn current_grid_absolute_line(&self) -> i32 {
+        if let Some(block) = self.blocks.blocks().iter().rev().find(|b| b.is_running) {
+            if let Some(grid) = block.grid.as_ref() {
+                return grid.cursor_row();
+            }
+        }
+        let grid = self.term.grid();
+        grid.history_size() as i32 + grid.cursor.point.line.0
     }
 
     pub fn resize(&mut self, cols: u16, rows: u16) {
@@ -153,6 +234,7 @@ impl Terminal {
             screen_rows: rows,
         };
         self.term.resize(dims);
+        self.blocks.resize_grids(cols, rows);
         self.cols = cols;
         self.rows = rows;
     }
@@ -181,7 +263,20 @@ impl Terminal {
     /// Encode the terminal's current mode flags into BedTerm-stable bits.
     /// Returns a `u32` bitmask of `BT_MODE_*` constants.
     pub fn mode(&self) -> u32 {
-        let m = *self.term.mode();
+        // Union of the global term's mode and any running block's
+        // private-grid mode. With per-block VTE routing, full-screen
+        // TUIs (vim/htop/claude) send their alt-screen + mouse-mode
+        // escapes into the running block's `BlockGrid`, never touching
+        // the global term. Without unioning here the host would never
+        // see `ALT_SCREEN` and would keep showing the block-list +
+        // composer instead of switching to the live grid view, leaving
+        // the TUI unreachable.
+        let mut m = *self.term.mode();
+        if let Some(block) = self.blocks.blocks().iter().rev().find(|b| b.is_running) {
+            if let Some(grid) = block.grid.as_ref() {
+                m |= *grid.term().mode();
+            }
+        }
         let mut out: u32 = 0;
         if m.contains(TermMode::ALT_SCREEN) {
             out |= BT_MODE_ALT_SCREEN;
@@ -206,6 +301,149 @@ impl Terminal {
 
     pub fn set_palette(&mut self, palette: Palette) {
         self.palette = palette;
+    }
+
+    /// Borrow the current palette. Used by the renderer when freezing
+    /// a per-block live grid into the cell stream — every cell needs
+    /// the same colour resolution as the global grid.
+    pub fn palette(&self) -> &Palette {
+        &self.palette
+    }
+
+    /// Grid-absolute line index of the screen's bottom row, regardless of
+    /// where the cursor sits. Running TUIs (claude, fzf) draw cells with
+    /// cursor-positioning escapes that land *below* the current cursor
+    /// row, so the cursor-based row count under-reports a running block's
+    /// extent. Use this as the upper bound for a running block's body.
+    pub fn screen_bottom_line(&self) -> i32 {
+        let grid = self.term.grid();
+        grid.history_size() as i32 + self.rows as i32 - 1
+    }
+
+    /// Grid-absolute line of the cursor (`history_size() + screen_line`).
+    /// Monotonically non-decreasing as output scrolls — every newline that
+    /// pushes content into scrollback bumps `history_size`. Block start /
+    /// end lines are stored in this same absolute frame; the row count
+    /// `end - start` therefore equals the rows the command actually
+    /// consumed. `snapshot_range` translates back to alacritty's
+    /// screen-relative space internally.
+    pub fn current_line(&self) -> i32 {
+        let grid = self.term.grid();
+        grid.history_size() as i32 + grid.cursor.point.line.0
+    }
+
+    /// Snapshot a row range from the active screen + scrollback. Coordinates
+    /// are grid lines: `0` is the top of the active screen, negatives index
+    /// into history. `start_line` inclusive, `end_line` exclusive. Lines
+    /// outside the grid's current extent are clamped; if the entire range
+    /// has fallen off scrollback the returned snapshot has `rows == 0`.
+    pub fn snapshot_range(&self, start_line: i32, end_line: i32) -> GridSnapshot {
+        Self::snapshot_range_from(
+            &self.term,
+            self.cols,
+            self.rows,
+            &self.palette,
+            start_line,
+            end_line,
+        )
+    }
+
+    /// Implementation of `snapshot_range` that takes its dependencies as
+    /// explicit parameters instead of through `&self`. Lets `feed` build a
+    /// snapshot closure for `BlockStore::apply` without conflicting with the
+    /// `&mut self.blocks` borrow.
+    fn snapshot_range_from(
+        term: &Term<VoidListener>,
+        cols: u16,
+        rows: u16,
+        palette: &Palette,
+        start_line: i32,
+        end_line: i32,
+    ) -> GridSnapshot {
+        let grid = term.grid();
+        let history = grid.history_size() as i32;
+        // Callers pass grid-absolute lines (see `current_line` docs).
+        // alacritty's `grid[Line(l)]` expects screen-relative l in
+        // `[-history, rows-1]`, so subtract `history` to translate.
+        // Absolute lines that have fallen off scrollback land below
+        // `-history` after subtraction and get clamped out.
+        let rel_start = start_line - history;
+        let rel_end = end_line - history;
+        let min_line = -history;
+        let max_line = rows as i32;
+        let start = rel_start.max(min_line).min(max_line);
+        let end = rel_end.max(start).min(max_line);
+        let row_count = (end - start).max(0) as u16;
+
+        let mut cells = Vec::with_capacity(cols as usize * row_count as usize);
+        for line in start..end {
+            for col in 0..cols as usize {
+                let cell = &grid[Line(line)][Column(col)];
+                let f = cell.flags;
+                let mut flags: u16 = 0;
+                if f.contains(CellFlags::BOLD) {
+                    flags |= 1;
+                }
+                if f.intersects(CellFlags::ALL_UNDERLINES) {
+                    flags |= 2;
+                }
+                if f.contains(CellFlags::INVERSE) {
+                    flags |= 4;
+                }
+                if f.contains(CellFlags::ITALIC) {
+                    flags |= 8;
+                }
+                if f.contains(CellFlags::WIDE_CHAR) {
+                    flags |= 16;
+                }
+                if f.contains(CellFlags::WIDE_CHAR_SPACER) {
+                    flags |= 32;
+                }
+                let ch =
+                    if f.contains(CellFlags::WIDE_CHAR_SPACER) || (cell.c == ' ' && f.is_empty()) {
+                        0
+                    } else {
+                        cell.c as u32
+                    };
+                cells.push(CellSnapshot {
+                    ch,
+                    fg_rgba: color_to_rgba(cell.fg, palette),
+                    bg_rgba: color_to_rgba(cell.bg, palette),
+                    flags,
+                });
+            }
+        }
+
+        // No cursor for range snapshots — Block bodies don't show one.
+        // `cursor_row = rows` signals "hidden" to Swift.
+        GridSnapshot {
+            cols,
+            rows: row_count,
+            cursor_col: 0,
+            cursor_row: row_count,
+            display_offset: 0,
+            cells,
+        }
+    }
+
+    /// Read-only view of the per-command blocks that the DCS sniffer has
+    /// produced so far. Driven automatically by `feed`.
+    pub fn blocks(&self) -> &[crate::blocks::Block] {
+        self.blocks.blocks()
+    }
+
+    pub fn block_count(&self) -> usize {
+        self.blocks.len()
+    }
+
+    pub fn block_at(&self, idx: usize) -> Option<&crate::blocks::Block> {
+        self.blocks.get(idx)
+    }
+
+    /// Drop all accumulated blocks. Resize does NOT call this — only the
+    /// host opts in (e.g. when reconnecting an SSH session).
+    pub fn reset_blocks(&mut self) {
+        self.blocks.reset();
     }
 
     pub fn snapshot(&self) -> GridSnapshot {
@@ -286,7 +524,7 @@ impl Terminal {
     }
 }
 
-fn color_to_rgba(c: alacritty_terminal::vte::ansi::Color, palette: &Palette) -> u32 {
+pub(crate) fn color_to_rgba(c: alacritty_terminal::vte::ansi::Color, palette: &Palette) -> u32 {
     use alacritty_terminal::vte::ansi::Color;
     let rgb = match c {
         Color::Spec(rgb) => BtRgb24 {
@@ -491,5 +729,224 @@ fn default_indexed(i: u8) -> alacritty_terminal::vte::ansi::Rgb {
         r: level,
         g: level,
         b: level,
+    }
+}
+
+#[cfg(test)]
+mod block_integration_tests {
+    use super::*;
+
+    fn hex(input: &str) -> String {
+        use std::fmt::Write;
+        let mut out = String::with_capacity(input.len() * 2);
+        for b in input.bytes() {
+            write!(out, "{b:02x}").unwrap();
+        }
+        out
+    }
+
+    /// `ESC P $ d <hex(JSON)> 0x9C` — Warp's wire frame.
+    fn dcs(json: &str) -> Vec<u8> {
+        let mut v = vec![0x1B, b'P', b'$', b'd'];
+        v.extend_from_slice(hex(json).as_bytes());
+        v.push(0x9C);
+        v
+    }
+
+    /// `ESC P $ d <hex(JSON)> ESC \` — the 7-bit ST form actually
+    /// emitted by `bedterm-integration.sh`. Matters because the VTE
+    /// parser handles ESC + `\` differently from the 8-bit 0x9C
+    /// terminator, and we hit a wild-`\`-into-block-grid bug with the
+    /// 7-bit form on real hardware.
+    fn dcs7(json: &str) -> Vec<u8> {
+        let mut v = vec![0x1B, b'P', b'$', b'd'];
+        v.extend_from_slice(hex(json).as_bytes());
+        v.extend_from_slice(b"\x1b\\");
+        v
+    }
+
+    #[test]
+    fn seven_bit_st_does_not_leak_backslash_into_block_grid() {
+        // Reproduces a production bug where the first cell of every
+        // sealed block was a literal `\` (0x5c). Suspected the trailing
+        // `\` of `ESC \` ST leaks past `feed_with_positions`'s reported
+        // end_pos when the parser fires `unhook` before consuming the
+        // final byte.
+        let mut term = Terminal::new(20, 5);
+        term.feed(&dcs7(r#"{"hook":"Precmd","value":{"pwd":"/x"}}"#));
+        term.feed(&dcs7(r#"{"hook":"Preexec","value":{"command":"ls"}}"#));
+        term.feed(b"hello\r\n");
+        term.feed(&dcs7(
+            r#"{"hook":"CommandFinished","value":{"exit_code":0}}"#,
+        ));
+        let blocks = term.blocks();
+        assert_eq!(blocks.len(), 1);
+        let snap = blocks[0].frozen_snapshot.as_ref().expect("snap");
+        let text = snapshot_to_string(snap);
+        assert!(
+            !text.contains('\\'),
+            "block grid leaked a literal backslash — got {text:?}"
+        );
+        assert!(
+            text.contains("hello"),
+            "block grid missing payload — got {text:?}"
+        );
+    }
+
+    #[test]
+    fn feed_populates_block_store() {
+        let mut term = Terminal::new(80, 24);
+        term.feed(&dcs(r#"{"hook":"Precmd","value":{"pwd":"/tmp"}}"#));
+        term.feed(&dcs(r#"{"hook":"Preexec","value":{"command":"ls"}}"#));
+        term.feed(&dcs(
+            r#"{"hook":"CommandFinished","value":{"exit_code":0}}"#,
+        ));
+        let blocks = term.blocks();
+        assert_eq!(blocks.len(), 1);
+        assert_eq!(blocks[0].command, "ls");
+        assert!(!blocks[0].is_running);
+        assert_eq!(blocks[0].exit_code, Some(0));
+        // duration is wall-clock — just assert it's Some.
+        assert!(blocks[0].duration_ms.is_some());
+    }
+
+    #[test]
+    fn feed_does_not_strand_running_block_when_only_precmd_arrives() {
+        let mut term = Terminal::new(80, 24);
+        term.feed(&dcs(r#"{"hook":"Precmd","value":{"pwd":""}}"#));
+        let blocks = term.blocks();
+        assert_eq!(blocks.len(), 1);
+        assert!(blocks[0].is_running);
+    }
+
+    /// Verifies the per-block-grid byte-routing introduced when we
+    /// switched away from the single-grid model. Bytes between
+    /// `Preexec` and `CommandFinished` must land in the running
+    /// block's private grid (`block.grid`) and *not* in the global
+    /// terminal — that's the whole point of the refactor.
+    #[test]
+    fn feed_routes_command_output_to_block_grid_not_global() {
+        let mut term = Terminal::new(20, 5);
+
+        // Build one big chunk: Precmd ▸ "BEFORE" prompt prose ▸
+        // Preexec ▸ "INSIDE" command output ▸ CommandFinished ▸
+        // "AFTER" next prompt prose.
+        let mut chunk = Vec::new();
+        chunk.extend_from_slice(&dcs(r#"{"hook":"Precmd","value":{"pwd":"/x"}}"#));
+        chunk.extend_from_slice(b"BEFORE");
+        chunk.extend_from_slice(&dcs(r#"{"hook":"Preexec","value":{"command":"echo"}}"#));
+        chunk.extend_from_slice(b"INSIDE");
+        chunk.extend_from_slice(&dcs(
+            r#"{"hook":"CommandFinished","value":{"exit_code":0}}"#,
+        ));
+        chunk.extend_from_slice(b"AFTER");
+        term.feed(&chunk);
+
+        // The block sealed at CommandFinished; its frozen_snapshot
+        // is the snapshot of its block grid. Stringify the row
+        // contents and look for our markers.
+        let blocks = term.blocks();
+        assert_eq!(blocks.len(), 1);
+        let snap = blocks[0]
+            .frozen_snapshot
+            .as_ref()
+            .expect("block grid should have produced a snapshot");
+        let block_text = snapshot_to_string(snap);
+        assert!(
+            block_text.contains("INSIDE"),
+            "block grid missing the in-command bytes — got {block_text:?}"
+        );
+        assert!(
+            !block_text.contains("BEFORE"),
+            "block grid incorrectly received pre-Preexec bytes — got {block_text:?}"
+        );
+        assert!(
+            !block_text.contains("AFTER"),
+            "block grid incorrectly received post-CommandFinished bytes — got {block_text:?}"
+        );
+
+        // The global terminal should have BEFORE + AFTER but never
+        // INSIDE (that went to the block grid).
+        let global = term.snapshot();
+        let global_text = snapshot_to_string(&global);
+        assert!(
+            global_text.contains("BEFORE"),
+            "global term missing pre-Preexec bytes — got {global_text:?}"
+        );
+        assert!(
+            global_text.contains("AFTER"),
+            "global term missing post-CommandFinished bytes — got {global_text:?}"
+        );
+        assert!(
+            !global_text.contains("INSIDE"),
+            "global term leaked command-output bytes — got {global_text:?}"
+        );
+    }
+
+    /// Real-world wire pattern: shell-integration ships a single DCS
+    /// frame as **three separate writes** (`\eP$d` prefix, hex body,
+    /// `\e\` terminator). A stateless scanner over one chunk misses
+    /// the event entirely — caught in production, fixed by switching
+    /// to `DcsSniffer::feed_with_positions` (stateful VTE parser
+    /// preserves DCS state between calls).
+    #[test]
+    fn feed_handles_dcs_frame_split_across_chunks() {
+        let mut term = Terminal::new(20, 5);
+        // Build a Preexec frame, then break it apart at the same
+        // boundaries we observed on the wire:
+        //   chunk 1: `\eP$d`
+        //   chunk 2: hex of body
+        //   chunk 3: `\e\`
+        let json = r#"{"hook":"Preexec","value":{"command":"hi"}}"#;
+        let frame = dcs(json);
+        let split1 = 4; // `\eP$d`
+        let split2 = frame.len() - 1; // everything up to the last byte (ST is 0x9c, single byte; split it before/after)
+
+        // First open a block via Precmd in one chunk so the Preexec
+        // has somewhere to land.
+        term.feed(&dcs(r#"{"hook":"Precmd","value":{"pwd":"/x"}}"#));
+        // Now stream the Preexec frame piecemeal.
+        term.feed(&frame[..split1]);
+        term.feed(&frame[split1..split2]);
+        term.feed(&frame[split2..]);
+
+        assert_eq!(term.blocks().len(), 1);
+        assert_eq!(term.blocks()[0].command, "hi");
+        // The Preexec apply also attached a private grid; subsequent
+        // output bytes should route there.
+        term.feed(b"INSIDE");
+        let snap = term.blocks()[0]
+            .grid
+            .as_ref()
+            .expect("grid attached at Preexec")
+            .snapshot(term.palette());
+        let text: String = snap
+            .cells
+            .iter()
+            .map(|c| {
+                if c.ch == 0 {
+                    ' '
+                } else {
+                    char::from_u32(c.ch).unwrap_or('?')
+                }
+            })
+            .collect();
+        assert!(
+            text.contains("INSIDE"),
+            "block grid missed bytes after split-frame Preexec — got {text:?}"
+        );
+    }
+
+    fn snapshot_to_string(snap: &crate::snapshot::GridSnapshot) -> String {
+        snap.cells
+            .iter()
+            .map(|c| {
+                if c.ch == 0 {
+                    ' '
+                } else {
+                    char::from_u32(c.ch).unwrap_or('?')
+                }
+            })
+            .collect()
     }
 }

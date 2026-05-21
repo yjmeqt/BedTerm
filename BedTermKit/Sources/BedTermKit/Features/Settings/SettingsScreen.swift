@@ -44,8 +44,9 @@ struct SettingsScreen: View {
                                 """
                                 Push a small zsh / bash snippet into each new \
                                 SSH session so prompt and command boundaries \
-                                are reported back (OSC 133). Required for \
-                                upcoming Block view; harmless if unused.
+                                are reported back as Warp-compatible DCS \
+                                hooks. Required for the Block view; harmless \
+                                if unused.
                                 """
                             )
                             .font(.footnote)
@@ -58,24 +59,22 @@ struct SettingsScreen: View {
                 }
 
                 Section {
-                    Toggle(isOn: .constant(false)) {
+                    Toggle(isOn: $settings.showCommandBlocks) {
                         VStack(alignment: .leading, spacing: 2) {
-                            HStack(spacing: 6) {
-                                Text("Command blocks")
-                                Text("Coming soon")
-                                    .font(.caption2.weight(.medium))
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 2)
-                                    .background(Color("ShadcnCard", bundle: .module))
-                                    .foregroundStyle(Color("ShadcnMutedForeground", bundle: .module))
-                                    .clipShape(Capsule())
-                            }
-                            Text("Group command output into collapsible blocks once shell integration ships.")
-                                .font(.footnote)
-                                .foregroundStyle(Color("ShadcnMutedForeground", bundle: .module))
+                            Text("Command blocks")
+                            Text(
+                                """
+                                Show each command and its output as a separate \
+                                block (Warp-style). Requires the \
+                                shell-integration toggle above — BedTerm uses \
+                                Warp's DCS hook protocol, not OSC 133, so \
+                                third-party integrations won't drive it.
+                                """
+                            )
+                            .font(.footnote)
+                            .foregroundStyle(Color("ShadcnMutedForeground", bundle: .module))
                         }
                     }
-                    .disabled(true)
                     .accessibilityIdentifier("settings.commandBlocks")
                 } header: {
                     Text("Blocks")

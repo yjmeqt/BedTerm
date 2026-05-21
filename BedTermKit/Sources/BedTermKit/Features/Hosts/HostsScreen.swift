@@ -4,6 +4,7 @@ import UIKit
 public struct HostsScreen: View {
     @Binding var path: NavigationPath
     @Environment(\.toaster) private var toaster
+    @Environment(BedTermSettings.self) private var settings
     @State private var viewModel = HostsViewModel()
     @State private var didFirstAppear = false
     @State private var showingMismatchReview = false
@@ -104,6 +105,8 @@ public struct HostsScreen: View {
         ScrollView {
             LazyVStack(spacing: 12) {
                 #if DEBUG
+                    debugMockSSHRow
+                        .padding(.horizontal, 16)
                     DebugTTYSection(path: $path)
                         .padding(.top, 8)
                 #endif
@@ -214,6 +217,33 @@ public struct HostsScreen: View {
         return viewModel.entries.first { $0.id == id }
     }
 
+    #if DEBUG
+        /// Ephemeral debug-only host row: connects to the loopback
+        /// `bedterm-mock-ssh` server on 127.0.0.1:2222 with hard-coded
+        /// credentials. Not persisted — the entry only exists for the
+        /// duration of the running DEBUG app.
+        @ViewBuilder
+        private var debugMockSSHRow: some View {
+            let credential = HostCredential(
+                host: "127.0.0.1", port: 2222, username: "test",
+                auth: .password("x"))
+            // Stable UUID derived from the credential so the row's
+            // identity doesn't churn across SwiftUI body re-evals.
+            let id =
+                UUID(uuidString: "0000DEBC-0001-0000-0000-000027C2DD22")
+                ?? UUID()
+            let entry = SavedHost(
+                id: id, label: "Mock SSH (loopback)", credential: credential)
+            HostRow(
+                entry: entry,
+                inFlight: false,
+                isCurrentSession: false,
+                onEdit: { path.append(AppRoute.debugTerminal(.mockSSH)) },
+                onConnect: { path.append(AppRoute.debugTerminal(.mockSSH)) }
+            )
+        }
+    #endif
+
     private func handleFormOutcome(_ outcome: ConnectionFormScreen.Outcome) {
         viewModel.refresh()
         if !path.isEmpty { path.removeLast() }
@@ -315,6 +345,16 @@ public struct HostsScreen: View {
 
     private func onAppear() {
         viewModel.load()
+        // Settings env is unavailable at view-init time; wire the
+        // bootstrap-payload resolver here so the saved-host Connect
+        // path can push the shell-integration heredoc when the user
+        // has the toggle on. `[settings]` capture is Sendable because
+        // BedTermSettings is `@MainActor @Observable` and the closure
+        // runs on the main actor.
+        viewModel.bootstrapPayloadProvider = { [settings] in
+            guard settings.installShellIntegrationOnConnect else { return nil }
+            return ShellIntegrationScript.bootstrapPayload()
+        }
         guard !didFirstAppear else { return }
         didFirstAppear = true
         let defaults = UserDefaults.standard
