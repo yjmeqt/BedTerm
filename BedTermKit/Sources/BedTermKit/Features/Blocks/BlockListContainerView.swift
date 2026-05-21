@@ -13,12 +13,17 @@ import UIKit
 ///   - `scrollView` (manages momentum + contentSize),
 ///   - `contentView` inside scrollView holding the per-block header
 ///     strips at absolute Y,
-///   - `metalView` pinned sibling on top, paints all visible block
-///     bodies via one `bt_renderer_draw_block_list` call per frame.
+///   - `metalView` pinned sibling **beneath** the scrollView, paints all
+///     visible block bodies via one `bt_renderer_draw_block_list` call
+///     per frame. Lives below the scroll view so the SwiftUI header
+///     hosts (inside `contentView`) render over its transparent regions
+///     — otherwise the Metal layer's opaque body cells were the only
+///     thing visible and every natural header got hidden, leaving only
+///     the floating pinned header at the top of the screen.
 @MainActor
 final class BlockListContainerViewController: UIViewController, UIScrollViewDelegate {
     let session: TerminalSession
-    private let scrollView = UIScrollView()
+    let scrollView = UIScrollView()
     let contentView = UIView()
     private let metalView: TerminalBlocksMetalView
     var headerHosts: [UInt64: UIHostingController<BlockHeader>] = [:]
@@ -85,9 +90,9 @@ final class BlockListContainerViewController: UIViewController, UIScrollViewDele
         scrollView.alwaysBounceVertical = false
         scrollView.backgroundColor = .clear
         contentView.backgroundColor = .clear
+        view.addSubview(metalView)
         view.addSubview(scrollView)
         scrollView.addSubview(contentView)
-        view.addSubview(metalView)
         selection = BlockListSelectionController(
             contentView: contentView,
             headerHeightPt: headerHeightPt,
@@ -126,33 +131,64 @@ final class BlockListContainerViewController: UIViewController, UIScrollViewDele
         scrollView.delegate = nil
     }
 
+    var scrollPosition: ScrollPosition = .followsBottom
+    var lastBlockCount: Int = 0
+
     /// Called by the SwiftUI wrapper's `updateUIViewController` whenever
     /// observed state changes (BlockStore.blocks). Rebuilds header hosts,
-    /// content size, and the Metal layout table; preserves pin-to-bottom
-    /// when content grew.
+    /// content size, and the Metal layout table; honours the recorded
+    /// `scrollPosition` so growing content doesn't yank a scrolled-back
+    /// user.
     func refresh() {
         refreshRowHeight()
-        let wasPinnedToBottom = isPinnedToBottom()
-        updateContentSize()
-        if wasPinnedToBottom {
-            scrollToBottom(animated: false)
+        // Mirror Warp's `AfterCommandExecutionStarted` — when a new
+        // block lands, re-anchor to the bottom so the user always sees
+        // the command they just submitted, even if they had previously
+        // scrolled into history.
+        let blockCount = session.blockStore.blocks.count
+        if blockCount > lastBlockCount {
+            scrollPosition = .followsBottom
         }
+        lastBlockCount = blockCount
+        updateContentSize()
+        applyScrollPosition(animated: false)
         // syncHeaders depends on the up-to-date contentOffset so it
-        // runs AFTER the pin-to-bottom adjustment, not before.
+        // runs AFTER the pin adjustment, not before.
         syncHeaders()
         pushLayoutToMetalView()
         updateDisplayLink()
     }
 
-    private func isPinnedToBottom() -> Bool {
-        let maxOffset = max(0, scrollView.contentSize.height - scrollView.bounds.height)
-        return scrollView.contentOffset.y >= maxOffset - pinTolerancePt
-    }
-
-    private func scrollToBottom(animated: Bool) {
+    private func applyScrollPosition(animated: Bool) {
         let maxOffset = max(0, scrollView.contentSize.height - scrollView.bounds.height)
         guard scrollView.bounds.height > 0 else { return }
-        scrollView.setContentOffset(CGPoint(x: 0, y: maxOffset), animated: animated)
+        // While the user is dragging or the scroll view is decelerating
+        // from a flick, the gesture owns contentOffset. Calling
+        // `setContentOffset` here yanks the viewport back to our anchor
+        // and visibly fights the finger — symptom: "can't scroll while
+        // claude is running because the display link re-pins every
+        // frame". Defer until interaction ends.
+        guard !scrollView.isTracking, !scrollView.isDecelerating else { return }
+        switch scrollPosition {
+        case .followsBottom:
+            scrollView.setContentOffset(CGPoint(x: 0, y: maxOffset), animated: animated)
+        case .fixedAt(let anchorY):
+            // Clamp to the new max in case content shrank (a TUI cleared
+            // its block and the contentSize fell beneath the user's
+            // saved offset).
+            let clamped = min(max(0, anchorY), maxOffset)
+            // Avoid re-issuing the same offset every frame — that's a
+            // no-op for UIScrollView but it still flushes pending
+            // animations and causes minor jank in Instruments.
+            if abs(scrollView.contentOffset.y - clamped) > 0.5 {
+                scrollView.setContentOffset(CGPoint(x: 0, y: clamped), animated: animated)
+            }
+        }
+    }
+
+    func isAtBottomEdge() -> Bool {
+        let maxOffset = max(0, scrollView.contentSize.height - scrollView.bounds.height)
+        return scrollView.contentOffset.y >= maxOffset - pinTolerancePt
     }
 
     private func updateDisplayLink() {
@@ -170,11 +206,8 @@ final class BlockListContainerViewController: UIViewController, UIScrollViewDele
     }
 
     @objc private func handleDisplayTick() {
-        let wasPinnedToBottom = isPinnedToBottom()
         updateContentSize()
-        if wasPinnedToBottom {
-            scrollToBottom(animated: false)
-        }
+        applyScrollPosition(animated: false)
         syncHeaders()
         pushLayoutToMetalView()
     }
@@ -201,10 +234,16 @@ final class BlockListContainerViewController: UIViewController, UIScrollViewDele
         // Inset the Metal surface so cell column 0 starts inside the
         // Warp panel chrome (left padding); Rust paints the rounded
         // panel BG behind the inset region.
-        let leftInset = BlockPanelStyle.cellLeftInsetPt
+        // Full-width metalView. We used to inset by `cellLeftInsetPt`,
+        // which made the GPU drawable 12pt narrower than what the PTY
+        // was sized from (Classic view computes cols from the unindented
+        // bounds), so the rightmost 1-2 cells were clipped off the
+        // edge — characters at col 45 of a 46-wide grid simply vanished.
+        // Headers/dividers already carry the visual left gutter via
+        // SwiftUI padding, so the metalView no longer needs to.
         metalView.frame = CGRect(
-            x: leftInset, y: 0,
-            width: max(0, bounds.width - leftInset),
+            x: 0, y: 0,
+            width: bounds.width,
             height: bounds.height)
         // Only re-run the heavy refresh path when bounds actually
         // change. layoutSubviews fires repeatedly during scroll /
@@ -216,23 +255,13 @@ final class BlockListContainerViewController: UIViewController, UIScrollViewDele
     }
 
     func bodyHeightPt(for block: Block) -> CGFloat {
-        let rows: Int = {
-            if let end = block.endLine {
-                return max(1, Int(end - block.startLine))
-            }
-            if let core = session.terminalCore {
-                // Running block — the Rust side now owns a private
-                // `BlockGrid` per running block (Warp-style), sized to
-                // the live PTY geometry. The renderer reads from that
-                // grid directly, so the body's row count is the PTY's
-                // row count, full stop. TUI redraws via cursor
-                // positioning land inside the block's grid and stay
-                // visible regardless of where the cursor currently
-                // sits — no more "rows below cursor get clipped".
-                return max(1, core.screenRows)
-            }
-            return 1
-        }()
+        // `bodyRows` is Rust's `BlockGrid::used_rows()` for running
+        // blocks and `end_line - start_line` for sealed ones. Tracking
+        // it directly (instead of falling back to `core.screenRows`
+        // while running) keeps the block visually flush with the
+        // composer / next block as the TUI draws — no pre-allocated
+        // 39-row canvas, no jarring collapse at seal time.
+        let rows = max(1, Int(block.bodyRows))
         return CGFloat(rows) * rowHeightPt
     }
 
@@ -252,7 +281,7 @@ final class BlockListContainerViewController: UIViewController, UIScrollViewDele
     /// intersects the visible viewport ± `headerOverscanPt`. With long
     /// sessions (hundreds of blocks) this caps the active host count at
     /// roughly the visible block count instead of growing unbounded.
-    private func syncHeaders() {
+    func syncHeaders() {
         let blocks = session.blockStore.blocks
         let width = view.bounds.width
         let scrollY = scrollView.contentOffset.y
@@ -312,7 +341,7 @@ final class BlockListContainerViewController: UIViewController, UIScrollViewDele
         let bot: CGFloat
     }
 
-    private func pushLayoutToMetalView() {
+    func pushLayoutToMetalView() {
         // Reentrancy guard: scrollToBottom() triggers
         // scrollViewDidScroll → pushLayoutToMetalView.
         guard !isPushingLayout else { return }
@@ -350,13 +379,4 @@ final class BlockListContainerViewController: UIViewController, UIScrollViewDele
         metalView.update(scrollOffset: scrollView.contentOffset.y, layout: entries)
     }
 
-    // MARK: - UIScrollViewDelegate
-
-    func scrollViewDidScroll(_ scrollView: UIScrollView) {
-        // Both updates: visibility band moved (new hosts may enter the
-        // overscan window; old hosts may leave), and the Metal pane
-        // needs the new scroll offset before its next draw.
-        syncHeaders()
-        pushLayoutToMetalView()
-    }
 }

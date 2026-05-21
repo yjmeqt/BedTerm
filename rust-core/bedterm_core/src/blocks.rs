@@ -243,15 +243,25 @@ impl BlockStore {
         if !self.blocks[idx].is_running {
             return;
         }
-        let end_line = current_line.saturating_add(1);
-        // Freeze the block's private grid (if it has one — Preexec
-        // attaches it). The cell extent of the snapshot is the grid's
-        // full rows × cols, which is what the renderer wants for a
-        // sealed block. Drop the grid afterwards to release memory.
-        let snap = self.blocks[idx].grid.as_ref().map(|g| g.snapshot(palette));
+        // With per-block VTE routing the global cursor barely moves
+        // during a command (bytes flow into `block.grid` instead), so
+        // `current_line` would give a body 0–1 rows tall. Ask the
+        // grid for its full used row count (history scrollback +
+        // currently-occupied visible rows). A `seq 80` into a 29-row
+        // grid returns 80; a `ls` into the same grid returns
+        // (e.g.) 5. Must match the row count produced by
+        // `BlockGrid::snapshot()` so the renderer's body extent and
+        // the host's body height agree.
+        let (snap, used_rows) = match self.blocks[idx].grid.as_ref() {
+            Some(g) => (Some(g.snapshot(palette)), g.used_rows() as i32),
+            None => (
+                None,
+                current_line.saturating_add(1) - self.blocks[idx].start_line,
+            ),
+        };
         let block = &mut self.blocks[idx];
         block.is_running = false;
-        block.end_line = end_line;
+        block.end_line = block.start_line.saturating_add(used_rows.max(1));
         block.frozen_snapshot = snap;
         block.grid = None;
         block.exit_code = exit_code;
@@ -342,7 +352,12 @@ mod tests {
         );
         let first = s.get(0).unwrap();
         assert!(!first.is_running);
-        assert_eq!(first.end_line, 8);
+        // Per-block grid was attached at Preexec with cursor at row 0;
+        // no bytes were fed before CommandFinished so `used_rows == 1`
+        // and `end_line == start_line + 1`. (The CommandFinished
+        // `current_line` argument is ignored when a grid is present —
+        // the grid's own cursor row is authoritative.)
+        assert_eq!(first.end_line, first.start_line + 1);
         assert_eq!(first.exit_code, Some(0));
         assert_eq!(first.duration_ms, Some(1234));
         assert!(first.frozen_snapshot.is_some());

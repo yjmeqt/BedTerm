@@ -10,6 +10,9 @@ struct TerminalScreen: View {
     @State private var keyboardHidden = false
     @State private var dpadOpen = false
     @Namespace private var composerMorph
+    #if DEBUG
+        @State private var fpsMeter = FPSMeter()
+    #endif
     let credential: HostCredential
     let onExit: () -> Void
 
@@ -46,6 +49,46 @@ struct TerminalScreen: View {
         if session.mode.contains(.altScreen) { return .altScreen }
         return settings.showCommandBlocks ? .blockList : .inline
     }
+
+    /// True while any block in the store is running. Drives the
+    /// composer's passthrough lock release — when this flips back to
+    /// false the just-finished command is done and the editor is free
+    /// to accept the next one.
+    private var hasRunningBlock: Bool {
+        session.blockStore.blocks.contains(where: \.isRunning)
+    }
+
+    #if DEBUG
+        /// Floating debug chip at the top-right corner: live PTY geometry
+        /// + resolved display mode + frame rate. Diagnostic only — if
+        /// `cols=32` shows up here, claude isn't getting what it needs;
+        /// if `mode=alt` lingers after a TUI exits we've leaked the
+        /// alt-screen bit; the FPS column flags renderer stalls during
+        /// long scrollback.
+        private var geomHUD: some View {
+            VStack(alignment: .trailing, spacing: 2) {
+                if let core = session.terminalCore {
+                    debugChip(text: "\(core.screenCols)×\(core.screenRows)")
+                }
+                debugChip(text: debugModeIndicator ?? "")
+                debugChip(text: "\(fpsMeter.fps) fps")
+            }
+        }
+
+        private func debugChip(text: String) -> some View {
+            Text(verbatim: text)
+                .font(.system(size: 10, design: .monospaced))
+                .foregroundStyle(Color("ShadcnMutedForeground", bundle: .module))
+                .padding(.horizontal, 6)
+                .padding(.vertical, 3)
+                .background(
+                    RoundedRectangle(cornerRadius: 4, style: .continuous)
+                        .fill(
+                            Color("ShadcnMutedForeground", bundle: .module)
+                                .opacity(0.15))
+                )
+        }
+    #endif
 
     /// Snapshot of the context chips shown above the block-list
     /// composer's input. Reads the unfiltered Rust block list so the
@@ -124,6 +167,17 @@ struct TerminalScreen: View {
                     .padding(.top, 8)
                 }
 
+                #if DEBUG
+                    geomHUD
+                        .padding(.top, 4)
+                        .padding(.trailing, 8)
+                        .frame(
+                            maxWidth: .infinity, maxHeight: .infinity,
+                            alignment: .topTrailing
+                        )
+                        .allowsHitTesting(false)
+                #endif
+
                 if dpadOpen {
                     Color.clear
                         .contentShape(Rectangle())
@@ -162,6 +216,16 @@ struct TerminalScreen: View {
         .animation(.smooth(duration: 0.22), value: showBlockView)
         .onChange(of: composer.isOpen) { _, isOpen in
             if isOpen { dpadOpen = false }
+        }
+        // Mirror Warp's "command done → editor unlocks" handoff: when
+        // the running block transitions to none-running, drop the
+        // passthrough lock so the composer accepts the next command's
+        // text instead of streaming it as stdin to the (now-finished)
+        // process. Watching the boolean (not the array) keeps this
+        // .onChange fire when running state actually flips, ignoring
+        // intra-running snapshot updates.
+        .onChange(of: hasRunningBlock) { _, isRunning in
+            if !isRunning { composer.endPassthrough() }
         }
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
@@ -202,7 +266,6 @@ struct TerminalScreen: View {
             context: promptContext,
             keyboardShown: !keyboardHidden,
             dpadOpen: dpadOpen,
-            debugModeChip: debugModeIndicator,
             onToggleKeyboard: { keyboardHidden.toggle() },
             onToggleDpad: { dpadOpen.toggle() }
         )

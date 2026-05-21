@@ -15,6 +15,13 @@ public struct RustBlock: Identifiable, Sendable, Equatable {
     public let cliAgent: CLIAgent?
     public let isRunning: Bool
     public let hasFrozenSnapshot: Bool
+    /// Live body extent in grid rows. For sealed blocks this equals
+    /// `endLine - startLine`; for running blocks it's the block grid's
+    /// current bottom-most-content-row + 1 (plus history). The host
+    /// sizes block-body height in points off this value so a streaming
+    /// TUI grows the block in real time without pre-allocating the
+    /// full PTY screen height.
+    public let bodyRows: UInt32
 }
 
 /// Swift facade over the Rust terminal core.
@@ -191,28 +198,7 @@ public final class TerminalCore {
     }
 
     public func block(at index: Int) -> RustBlock? {
-        // cbindgen surfaces C arrays as Swift tuples; list every field explicitly.
-        var view = BtBlockView(
-            id: 0,
-            start_line: 0,
-            end_line: 0,
-            is_running: 0,
-            has_exit_code: 0,
-            _pad: (0, 0),
-            exit_code: 0,
-            duration_ms: 0,
-            has_duration: 0,
-            _pad2: (0, 0, 0, 0, 0, 0, 0),
-            command: nil,
-            command_len: 0,
-            cwd: nil,
-            cwd_len: 0,
-            git_branch: nil,
-            git_branch_len: 0,
-            has_frozen_snapshot: 0,
-            cli_agent: 0,
-            _pad3: (0, 0, 0, 0, 0, 0)
-        )
+        var view = Self.emptyBlockView()
         guard index >= 0,
             index < blockCount,
             bt_term_block_at(handle, UInt(index), &view) == 0
@@ -241,7 +227,8 @@ public final class TerminalCore {
             gitBranch: gitBranch,
             cliAgent: CLIAgent(ffiTag: view.cli_agent),
             isRunning: view.is_running != 0,
-            hasFrozenSnapshot: view.has_frozen_snapshot != 0
+            hasFrozenSnapshot: view.has_frozen_snapshot != 0,
+            bodyRows: view.body_rows
         )
     }
 
@@ -280,6 +267,35 @@ public final class TerminalCore {
             cols: view.cols, rows: view.rows,
             cursorCol: view.cursor_col, cursorRow: view.cursor_row,
             displayOffset: view.display_offset, cells: cells)
+    }
+
+    /// Zero-filled `BtBlockView` for in/out FFI calls. cbindgen surfaces
+    /// the struct's C arrays as Swift tuples, so every padding tuple
+    /// must be enumerated explicitly; pulled out of `block(at:)` to
+    /// keep that function's body under SwiftLint's length cap.
+    private static func emptyBlockView() -> BtBlockView {
+        BtBlockView(
+            id: 0,
+            start_line: 0,
+            end_line: 0,
+            is_running: 0,
+            has_exit_code: 0,
+            _pad: (0, 0),
+            exit_code: 0,
+            duration_ms: 0,
+            has_duration: 0,
+            _pad2: (0, 0, 0, 0, 0, 0, 0),
+            command: nil,
+            command_len: 0,
+            cwd: nil,
+            cwd_len: 0,
+            git_branch: nil,
+            git_branch_len: 0,
+            has_frozen_snapshot: 0,
+            cli_agent: 0,
+            _pad3: (0, 0),
+            body_rows: 0
+        )
     }
 
     private func copyOutString(ptr: UnsafePointer<UInt8>?, len: Int) -> String {

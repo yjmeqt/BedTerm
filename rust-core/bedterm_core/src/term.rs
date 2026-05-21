@@ -184,13 +184,34 @@ impl Terminal {
         if bytes.is_empty() {
             return;
         }
+        let mut also_global = true;
         if let Some(block) = self.blocks.open_block_mut() {
             if let Some(grid) = block.grid.as_mut() {
+                // When a TUI inside the running block is in alt-screen
+                // (vim / htop / claude / less / fzf) the host UI flips
+                // to the classic full-screen renderer which paints from
+                // the *global* term. We need the global term to see the
+                // same alt-screen bytes so it can render the TUI and,
+                // crucially, the `\e[?1049l` exit escape — without that
+                // the global term gets stuck in alt-screen even after
+                // the TUI quits.
+                //
+                // Sample alt-screen state on both sides of the grid
+                // feed and union them. Without the post-feed sample we
+                // would miss the entry escape (state was off before
+                // feeding, on after) and global would never enter alt-
+                // screen at all. Without the pre-feed sample we would
+                // miss the exit escape (state was on before, off after)
+                // and global would never leave.
+                let was_alt = grid.term().mode().contains(TermMode::ALT_SCREEN);
                 grid.feed(bytes);
-                return;
+                let is_alt = grid.term().mode().contains(TermMode::ALT_SCREEN);
+                also_global = was_alt || is_alt;
             }
         }
-        self.parser.advance(&mut self.term, bytes);
+        if also_global {
+            self.parser.advance(&mut self.term, bytes);
+        }
     }
 
     /// Grid-absolute current line, sampled from the *active* grid —
@@ -242,7 +263,20 @@ impl Terminal {
     /// Encode the terminal's current mode flags into BedTerm-stable bits.
     /// Returns a `u32` bitmask of `BT_MODE_*` constants.
     pub fn mode(&self) -> u32 {
-        let m = *self.term.mode();
+        // Union of the global term's mode and any running block's
+        // private-grid mode. With per-block VTE routing, full-screen
+        // TUIs (vim/htop/claude) send their alt-screen + mouse-mode
+        // escapes into the running block's `BlockGrid`, never touching
+        // the global term. Without unioning here the host would never
+        // see `ALT_SCREEN` and would keep showing the block-list +
+        // composer instead of switching to the live grid view, leaving
+        // the TUI unreachable.
+        let mut m = *self.term.mode();
+        if let Some(block) = self.blocks.blocks().iter().rev().find(|b| b.is_running) {
+            if let Some(grid) = block.grid.as_ref() {
+                m |= *grid.term().mode();
+            }
+        }
         let mut out: u32 = 0;
         if m.contains(TermMode::ALT_SCREEN) {
             out |= BT_MODE_ALT_SCREEN;
@@ -717,6 +751,46 @@ mod block_integration_tests {
         v.extend_from_slice(hex(json).as_bytes());
         v.push(0x9C);
         v
+    }
+
+    /// `ESC P $ d <hex(JSON)> ESC \` — the 7-bit ST form actually
+    /// emitted by `bedterm-integration.sh`. Matters because the VTE
+    /// parser handles ESC + `\` differently from the 8-bit 0x9C
+    /// terminator, and we hit a wild-`\`-into-block-grid bug with the
+    /// 7-bit form on real hardware.
+    fn dcs7(json: &str) -> Vec<u8> {
+        let mut v = vec![0x1B, b'P', b'$', b'd'];
+        v.extend_from_slice(hex(json).as_bytes());
+        v.extend_from_slice(b"\x1b\\");
+        v
+    }
+
+    #[test]
+    fn seven_bit_st_does_not_leak_backslash_into_block_grid() {
+        // Reproduces a production bug where the first cell of every
+        // sealed block was a literal `\` (0x5c). Suspected the trailing
+        // `\` of `ESC \` ST leaks past `feed_with_positions`'s reported
+        // end_pos when the parser fires `unhook` before consuming the
+        // final byte.
+        let mut term = Terminal::new(20, 5);
+        term.feed(&dcs7(r#"{"hook":"Precmd","value":{"pwd":"/x"}}"#));
+        term.feed(&dcs7(r#"{"hook":"Preexec","value":{"command":"ls"}}"#));
+        term.feed(b"hello\r\n");
+        term.feed(&dcs7(
+            r#"{"hook":"CommandFinished","value":{"exit_code":0}}"#,
+        ));
+        let blocks = term.blocks();
+        assert_eq!(blocks.len(), 1);
+        let snap = blocks[0].frozen_snapshot.as_ref().expect("snap");
+        let text = snapshot_to_string(snap);
+        assert!(
+            !text.contains('\\'),
+            "block grid leaked a literal backslash — got {text:?}"
+        );
+        assert!(
+            text.contains("hello"),
+            "block grid missing payload — got {text:?}"
+        );
     }
 
     #[test]

@@ -110,15 +110,36 @@ impl DcsSniffer {
     /// handles any chunking.
     pub fn feed_with_positions(&mut self, bytes: &[u8]) -> Vec<(usize, DcsEvent)> {
         let mut located = Vec::new();
-        for (i, byte) in bytes.iter().enumerate() {
+        let mut i = 0;
+        while i < bytes.len() {
+            let byte = bytes[i];
             let before = self.sink.events.len();
             self.parser
-                .advance(&mut self.sink, std::slice::from_ref(byte));
+                .advance(&mut self.sink, std::slice::from_ref(&byte));
             if self.sink.events.len() > before {
-                // One event surfaced for each new entry — usually just one.
+                // Per VT500 state machine: a 7-bit ST is `ESC \`, and
+                // `unhook` fires on the ESC byte while the trailing `\`
+                // is still unconsumed (parser is now in Escape state, and
+                // the next `\` would transition back to ground). If we
+                // reported `i + 1` here the caller's
+                // `dispatch_chunk(&bytes[..end_pos])` would feed only the
+                // ESC, leaving the literal `\` to leak into whatever
+                // target the next iteration routes to — observed as a
+                // wild `\` at col 0 of every fresh BlockGrid in production.
+                // Consume the trailing `\` through our parser too so its
+                // state returns to ground for subsequent input.
+                let end = if byte == 0x1B && bytes.get(i + 1) == Some(&b'\\') {
+                    self.parser.advance(&mut self.sink, &[b'\\']);
+                    i + 2
+                } else {
+                    i + 1
+                };
                 for j in before..self.sink.events.len() {
-                    located.push((i + 1, self.sink.events[j].clone()));
+                    located.push((end, self.sink.events[j].clone()));
                 }
+                i = end;
+            } else {
+                i += 1;
             }
         }
         located

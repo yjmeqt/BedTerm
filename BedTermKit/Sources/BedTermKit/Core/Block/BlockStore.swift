@@ -60,5 +60,6 @@ public final class BlockStore {
             && rust.endLine == (mirror.endLine ?? Int32.min)
             && rust.startLine == mirror.startLine
             && rust.hasFrozenSnapshot == mirror.hasFrozenSnapshot
+            && rust.bodyRows == mirror.bodyRows
     }
 }

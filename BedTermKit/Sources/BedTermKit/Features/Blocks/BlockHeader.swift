@@ -70,9 +70,9 @@ struct BlockHeader: View {
     /// a static dictionary so the lookup function stays under
     /// SwiftLint's cyclomatic-complexity cap).
     private static let agentTints: [CLIAgent: UInt32] = [
-        .claude: 0xD66E_4D,    // CLAUDE_ORANGE
-        .codex: 0x6BB6_B1,     // OpenAI teal
-        .gemini: 0x4D8C_F2,    // Google blue
+        .claude: 0xD66E_4D,  // CLAUDE_ORANGE
+        .codex: 0x6BB6_B1,  // OpenAI teal
+        .gemini: 0x4D8C_F2,  // Google blue
         .amp: 0xFFC8_22,
         .droid: 0x9CC4_33,
         .openCode: 0x7373_D9,

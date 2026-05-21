@@ -53,6 +53,12 @@ public struct Block: Identifiable, Sendable, Equatable {
     /// block. The snapshot itself lives in Rust; fetch it on demand with
     /// `TerminalCore.frozenSnapshot(forBlockAt:)`.
     public var hasFrozenSnapshot: Bool
+    /// Live body extent in grid rows reported by Rust. Use this — not
+    /// `endLine - startLine` — when sizing the block body in points;
+    /// for running blocks Rust updates it every feed so a streaming
+    /// TUI grows the block in real time without pre-allocating the
+    /// full PTY screen height.
+    public var bodyRows: UInt32
 
     public init(
         id: UInt64,
@@ -65,7 +71,8 @@ public struct Block: Identifiable, Sendable, Equatable {
         gitBranch: String? = nil,
         cliAgent: CLIAgent? = nil,
         isRunning: Bool = true,
-        hasFrozenSnapshot: Bool = false
+        hasFrozenSnapshot: Bool = false,
+        bodyRows: UInt32 = 1
     ) {
         self.id = id
         self.command = command
@@ -78,6 +85,7 @@ public struct Block: Identifiable, Sendable, Equatable {
         self.cliAgent = cliAgent
         self.isRunning = isRunning
         self.hasFrozenSnapshot = hasFrozenSnapshot
+        self.bodyRows = bodyRows
     }
 }
 
@@ -94,7 +102,8 @@ extension Block {
             gitBranch: rust.gitBranch,
             cliAgent: rust.cliAgent,
             isRunning: rust.isRunning,
-            hasFrozenSnapshot: rust.hasFrozenSnapshot
+            hasFrozenSnapshot: rust.hasFrozenSnapshot,
+            bodyRows: rust.bodyRows
         )
     }
 }

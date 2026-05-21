@@ -33,17 +33,16 @@ struct BlockListComposer: View {
     var context: PromptContext = .init()
     var keyboardShown: Bool = true
     var dpadOpen: Bool = false
-    /// DEBUG only — pass `true` to overlay a tiny chip showing the
-    /// resolved `displayMode` + alt-screen flag in the cwd row. Helps
-    /// diagnose mode-detection bugs (e.g. "claude entered alt-screen
-    /// but blocks are still showing"). Should be off in release.
-    var debugModeChip: String?
     var onToggleKeyboard: () -> Void = {}
     var onToggleDpad: () -> Void = {}
     @State private var contentHeight: CGFloat = 0
     @State private var isFocused: Bool = false
 
-    private var showsCwd: Bool { mode == .blockList }
+    private var showsCwd: Bool { mode == .blockList && !controller.isPassthrough }
+    /// Keep the input row mounted even while we're in passthrough — the
+    /// hidden text view is what captures keystrokes via the system
+    /// keyboard. During passthrough we collapse it to zero height +
+    /// alpha so the slim status row above it is what the user sees.
     private var showsInput: Bool {
         switch mode {
         case .blockList: return true
@@ -51,6 +50,7 @@ struct BlockListComposer: View {
         }
     }
     private var showsRun: Bool {
+        if controller.isPassthrough { return false }
         switch mode {
         case .blockList: return true
         case .launcher: return controller.isOpen
@@ -80,10 +80,26 @@ struct BlockListComposer: View {
                     .padding(.bottom, 4)
             }
             if showsInput {
-                inputRow
-                    .padding(.horizontal, horizontalInset)
-                    .padding(.top, showsCwd ? 0 : verticalPadding)
-                    .padding(.bottom, 6)
+                // Overlay during passthrough: input row stays mounted at
+                // full size so its embedded UITextView keeps holding
+                // first-responder + delivering keystrokes via
+                // `shouldChangeTextIn` → `sendPassthrough`. Collapsing
+                // the frame to zero silently resigns first responder
+                // and swallows every key. We hide the row visually
+                // (opacity 0) and stack the slim status row on top, so
+                // user sees only the status while the keyboard still
+                // talks to the real text view underneath.
+                ZStack {
+                    inputRow
+                        .opacity(controller.isPassthrough ? 0 : 1)
+                        .accessibilityHidden(controller.isPassthrough)
+                    if controller.isPassthrough {
+                        passthroughStatus
+                    }
+                }
+                .padding(.horizontal, horizontalInset)
+                .padding(.top, showsCwd ? 0 : verticalPadding)
+                .padding(.bottom, 6)
             }
             footer
                 .padding(.horizontal, horizontalInset)
@@ -118,19 +134,6 @@ struct BlockListComposer: View {
             HStack(spacing: 6) {
                 chip(icon: "folder", text: cwd)
                 Spacer(minLength: 0)
-                // if let host = context.host {
-                //     chip(icon: "server.rack", text: host)
-                // }
-                // if let branch = context.gitBranch, !branch.isEmpty {
-                //     chip(icon: "arrow.triangle.branch", text: branch)
-                // }
-                // if let exit = context.lastExitCode, exit != 0 {
-                //     chip(
-                //         icon: "xmark.circle.fill",
-                //         text: "exit \(exit)",
-                //         accent: Color("ShadcnDestructive", bundle: .module)
-                //     )
-                // }
             }
             .lineLimit(1)
             .truncationMode(.head)
@@ -161,6 +164,25 @@ struct BlockListComposer: View {
         )
     }
 
+    /// Slim "stdin is being forwarded" status row shown in place of the
+    /// editable input while a command is running. Tells the user where
+    /// their keystrokes are going and reminds them which command holds
+    /// the PTY. Keystrokes still arrive through the same hidden text
+    /// view, so no separate first-responder plumbing is needed.
+    private var passthroughStatus: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "arrow.right.to.line.compact")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(Color("ShadcnMutedForeground", bundle: .module))
+            Text(verbatim: String(localized: "Forwarding keys to running command"))
+                .font(.system(size: 12))
+                .foregroundStyle(Color("ShadcnMutedForeground", bundle: .module))
+            Spacer(minLength: 0)
+            ProgressView()
+                .controlSize(.mini)
+        }
+    }
+
     private var inputRow: some View {
         HStack(alignment: .top, spacing: 0) {
             Text(verbatim: "❯")
@@ -174,7 +196,25 @@ struct BlockListComposer: View {
                 placeholder: String(localized: "Type a command — Enter to run"),
                 isFocused: isFocused,
                 onFocusChange: { isFocused = $0 },
-                onSubmit: { handleSubmit() }
+                onSubmit: { handleSubmit() },
+                isPassthrough: controller.isPassthrough,
+                onPassthroughChars: { chars in
+                    // Honour a pending Ctrl latch: when the user tapped
+                    // the Ctrl chip just before typing, route through
+                    // keyBar so the first char gets the Ctrl modifier
+                    // (Ctrl-C → 0x03, Ctrl-D → 0x04, etc.) instead of
+                    // being sent literal. Without this the latch chip
+                    // is dead during passthrough and the user can't
+                    // interrupt a running command.
+                    if keyBar.isPending, let first = chars.first {
+                        keyBar.handle(.char(first))
+                        let rest = chars.dropFirst()
+                        if !rest.isEmpty { controller.sendPassthrough(String(rest)) }
+                    } else {
+                        controller.sendPassthrough(chars)
+                    }
+                },
+                onPassthroughBackspace: { controller.sendBackspace() }
             )
             .frame(height: bodyHeight)
         }
@@ -184,24 +224,15 @@ struct BlockListComposer: View {
         HStack(spacing: 0) {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 0) {
-                    if let debug = debugModeChip {
-                        Text(verbatim: debug)
-                            .font(.system(size: 10, design: .monospaced))
-                            .foregroundStyle(Color("ShadcnMutedForeground", bundle: .module))
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 4)
-                            .background(
-                                RoundedRectangle(cornerRadius: 4, style: .continuous)
-                                    .fill(Color("ShadcnMutedForeground", bundle: .module)
-                                        .opacity(0.1))
-                            )
-                            .padding(.trailing, 4)
-                    }
                     keyChip(
                         .tab, icon: "arrow.right.to.line.compact",
                         label: String(localized: "Tab"), id: "tab")
                     footerChip(icon: "return", label: String(localized: "Newline")) {
-                        controller.text += "\n"
+                        if controller.isPassthrough {
+                            controller.sendPassthrough("\n")
+                        } else {
+                            controller.text += "\n"
+                        }
                     }
                     .accessibilityIdentifier("composer.newline")
                     keyChip(
@@ -311,85 +342,9 @@ struct BlockListComposer: View {
             .opacity(controller.text.isEmpty ? 0.4 : 1)
         }
         .buttonStyle(.plain)
-        .disabled(controller.text.isEmpty)
+        .disabled(controller.text.isEmpty || controller.isPassthrough)
         .accessibilityIdentifier("composer.run")
         .accessibilityLabel("Run command")
     }
 
-    private var chipDivider: some View {
-        Rectangle()
-            .fill(Color("ShadcnBorder", bundle: .module).opacity(0.6))
-            .frame(width: 1, height: 18)
-            .padding(.horizontal, 6)
-    }
-
-    private func chromeChip(
-        icon: String, accent: Bool, flipped: Bool = false,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            Image(systemName: icon)
-                .font(.system(size: 12, weight: .medium))
-                .scaleEffect(y: flipped ? -1 : 1)
-                .foregroundStyle(
-                    accent
-                        ? Color.accentColor
-                        : Color("ShadcnMutedForeground", bundle: .module))
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func footerChip(
-        icon: String,
-        label: String,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            HStack(spacing: 4) {
-                Image(systemName: icon)
-                    .font(.system(size: 11, weight: .medium))
-                Text(verbatim: label)
-                    .font(.system(size: 12))
-            }
-            .foregroundStyle(Color("ShadcnMutedForeground", bundle: .module))
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-    }
-
-    /// KeyBarController-backed chip for the raw-PTY modifier keys
-    /// (Esc / Ctrl / Tab) now living in this footer row instead of in
-    /// the separate KeyBar below. `highlighted` swaps the chip text +
-    /// icon to `accentColor` (used by the Ctrl latch state).
-    private func keyChip(
-        _ tap: KeyTap, icon: String, label: String, id: String,
-        highlighted: Bool = false
-    ) -> some View {
-        Button {
-            UIImpactFeedbackGenerator(style: highlighted ? .medium : .light)
-                .impactOccurred()
-            keyBar.handle(tap)
-        } label: {
-            HStack(spacing: 4) {
-                Image(systemName: icon)
-                    .font(.system(size: 11, weight: .medium))
-                Text(verbatim: label)
-                    .font(.system(size: 12))
-            }
-            .foregroundStyle(
-                highlighted
-                    ? Color.accentColor
-                    : Color("ShadcnMutedForeground", bundle: .module))
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier("composer.\(id)")
-    }
 }

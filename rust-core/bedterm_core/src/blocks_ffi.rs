@@ -48,7 +48,14 @@ pub struct BtBlockView {
     /// agents append. Identifying a known agent lets the host paint a
     /// brand icon next to the block header; does NOT change layout.
     pub cli_agent: u8,
-    pub _pad3: [u8; 6],
+    pub _pad3: [u8; 2],
+    /// Live body height in grid rows. For sealed blocks this equals
+    /// `end_line - start_line`. For running blocks this is the block
+    /// grid's current `used_rows()` — the bottom-most non-blank visible
+    /// row + 1 (plus any history). The host should use this for the
+    /// block's body extent so a streaming TUI grows the block in real
+    /// time without pre-allocating the full PTY screen height.
+    pub body_rows: u32,
 }
 
 pub const BT_BLOCK_END_LINE_RUNNING: i32 = BLOCK_END_LINE_RUNNING;
@@ -106,9 +113,24 @@ pub unsafe extern "C" fn bt_term_block_at(
         working_directory,
         git_branch,
         cli_agent_tag,
+        body_rows,
     ) = {
         let Some(block) = term.inner_ref().block_at(idx) else {
             return -1;
+        };
+        // For running blocks ask the live grid for its used_rows so the
+        // host body extent tracks the printed content in real time. For
+        // sealed blocks the snapshot's recorded `end_line - start_line`
+        // is the source of truth (matches the frozen_snapshot's row
+        // count exactly).
+        let body_rows = if block.is_running {
+            block
+                .grid
+                .as_ref()
+                .map(|g| u32::from(g.used_rows()))
+                .unwrap_or(1)
+        } else {
+            (block.end_line - block.start_line).max(1) as u32
         };
         (
             block.id,
@@ -125,6 +147,7 @@ pub unsafe extern "C" fn bt_term_block_at(
                 .cli_agent
                 .map(|a| a.ffi_tag())
                 .unwrap_or(BT_CLI_AGENT_NONE),
+            body_rows,
         )
     };
 
@@ -186,7 +209,8 @@ pub unsafe extern "C" fn bt_term_block_at(
         git_branch_len: branch_len,
         has_frozen_snapshot: if has_frozen_snapshot { 1 } else { 0 },
         cli_agent: cli_agent_tag,
-        _pad3: [0; 6],
+        _pad3: [0; 2],
+        body_rows,
     };
     0
 }

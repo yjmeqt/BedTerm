@@ -131,7 +131,16 @@ typedef struct BtBlockView {
    * brand icon next to the block header; does NOT change layout.
    */
   uint8_t cli_agent;
-  uint8_t _pad3[6];
+  uint8_t _pad3[2];
+  /**
+   * Live body height in grid rows. For sealed blocks this equals
+   * `end_line - start_line`. For running blocks this is the block
+   * grid's current `used_rows()` — the bottom-most non-blank visible
+   * row + 1 (plus any history). The host should use this for the
+   * block's body extent so a streaming TUI grows the block in real
+   * time without pre-allocating the full PTY screen height.
+   */
+  uint32_t body_rows;
 } BtBlockView;
 
 typedef struct CellSnapshot {
