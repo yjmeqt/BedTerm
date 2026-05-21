@@ -11,6 +11,18 @@
 #include <stdlib.h>
 
 /**
+ * Discriminator values for `BtOsc133Event::kind`. Swift mirrors these in
+ * `BedTermOsc133Event`.
+ */
+#define BT_OSC133_PROMPT_START 0
+
+#define BT_OSC133_COMMAND_START 1
+
+#define BT_OSC133_OUTPUT_START 2
+
+#define BT_OSC133_COMMAND_END 3
+
+/**
  * Two triangles per cell.
  */
 #define VERTICES_PER_CELL 6
@@ -75,6 +87,42 @@ typedef struct BtSnapshotView {
   const struct CellSnapshot *cells;
   uintptr_t cell_count;
 } BtSnapshotView;
+
+/**
+ * One OSC 133 (FinalTerm) shell-integration event. Tagged union with a
+ * single-payload field (`exit_code`) that's only meaningful when
+ * `kind == COMMAND_END`, plus a borrowed `attrs` slice carrying the raw
+ * `key=value;key=value` extension tail.
+ */
+typedef struct BtOsc133Event {
+  /**
+   * One of the `BT_OSC133_*` constants.
+   */
+  uint8_t kind;
+  /**
+   * `1` when the remote shell shipped an exit code; `0` otherwise.
+   * Only meaningful when `kind == BT_OSC133_COMMAND_END`.
+   */
+  uint8_t has_exit_code;
+  /**
+   * Padding so `exit_code` is naturally aligned. Caller must ignore.
+   */
+  uint8_t _reserved[2];
+  /**
+   * Command exit code. Only meaningful when `kind == BT_OSC133_COMMAND_END`
+   * and `has_exit_code != 0`.
+   */
+  int32_t exit_code;
+  /**
+   * UTF-8 bytes of the extension attribute tail — `key=value` pairs
+   * joined by `;`, exactly as the integration emitted them. Null when
+   * no attrs. Borrowed from a scratch buffer inside the `BtTerm`; valid
+   * only until the next mutating call. Caller copies before drainin
+   * further events.
+   */
+  const uint8_t *attrs;
+  uintptr_t attrs_len;
+} BtOsc133Event;
 
 /**
  * 8-bit-per-channel sRGB triple. The renderer-facing snapshot stores
@@ -163,6 +211,20 @@ uint32_t bt_term_scrollback_lines(const struct BtTerm *h);
  * `h` must be a valid, non-freed handle.
  */
 uint32_t bt_term_mode(const struct BtTerm *h);
+
+/**
+ * Pop one queued OSC 133 event, if any. Writes into `*out` and returns `1`
+ * when an event was popped, `0` when the queue is empty. Drain in a loop
+ * after each call to `bt_term_feed`.
+ *
+ * `attrs` in the returned event points into a scratch buffer that the next
+ * mutating call overwrites — copy out the bytes before calling pop again.
+ *
+ * # Safety
+ * `h` must be a valid, non-freed handle; `out` must point to a writable
+ * `BtOsc133Event`.
+ */
+uint8_t bt_term_pop_osc133(struct BtTerm *h, struct BtOsc133Event *out);
 
 /**
  * # Safety

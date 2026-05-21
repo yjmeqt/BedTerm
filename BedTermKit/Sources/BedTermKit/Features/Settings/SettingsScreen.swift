@@ -37,6 +37,27 @@ struct SettingsScreen: View {
                 }
 
                 Section {
+                    Toggle(isOn: $settings.installShellIntegrationOnConnect) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Install shell integration on connect")
+                            Text(
+                                """
+                                Push a small zsh / bash snippet into each new \
+                                SSH session so prompt and command boundaries \
+                                are reported back (OSC 133). Required for \
+                                upcoming Block view; harmless if unused.
+                                """
+                            )
+                            .font(.footnote)
+                            .foregroundStyle(Color("ShadcnMutedForeground", bundle: .module))
+                        }
+                    }
+                    .accessibilityIdentifier("settings.installShellIntegration")
+                } header: {
+                    Text("Shell integration")
+                }
+
+                Section {
                     Toggle(isOn: .constant(false)) {
                         VStack(alignment: .leading, spacing: 2) {
                             HStack(spacing: 6) {

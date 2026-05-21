@@ -113,6 +113,7 @@ pub struct Terminal {
     cols: u16,
     rows: u16,
     palette: Palette,
+    osc133: crate::osc133::Osc133Sniffer,
 }
 
 impl Terminal {
@@ -128,11 +129,22 @@ impl Terminal {
             cols,
             rows,
             palette: Palette::default(),
+            osc133: crate::osc133::Osc133Sniffer::new(),
         }
     }
 
     pub fn feed(&mut self, bytes: &[u8]) {
+        // Dual-feed: alacritty owns grid mutation, while the OSC 133 sniffer
+        // listens for shell-integration markers. The sniffer's VTE state
+        // machine is independent — both must see every byte to stay in sync.
         self.parser.advance(&mut self.term, bytes);
+        self.osc133.feed(bytes);
+    }
+
+    /// Pop the next pending OSC 133 event, or `None` if the queue is empty.
+    /// Cheap; safe to drain after every feed.
+    pub fn pop_osc133(&mut self) -> Option<crate::osc133::Osc133Event> {
+        self.osc133.pop()
     }
 
     pub fn resize(&mut self, cols: u16, rows: u16) {

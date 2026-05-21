@@ -128,10 +128,18 @@ struct TerminalScreen: View {
             if case .idle = session.state {
                 await session.connect(
                     credential: credential,
-                    initialPTY: .init(cols: 80, rows: 24)
+                    initialPTY: .init(cols: 80, rows: 24),
+                    bootstrapPayload: bootstrapPayload()
                 )
             }
         }
+    }
+
+    /// Resolve the shell-integration payload to push at connect time. Returns
+    /// `nil` when the user hasn't opted in, so the channel stays pristine.
+    private func bootstrapPayload() -> String? {
+        guard settings.installShellIntegrationOnConnect else { return nil }
+        return ShellIntegrationScript.bootstrapPayload()
     }
 
     @ViewBuilder
@@ -166,7 +174,11 @@ struct TerminalScreen: View {
     }
 
     private func reconnect() async {
-        await session.connect(credential: credential, initialPTY: .init(cols: 80, rows: 24))
+        await session.connect(
+            credential: credential,
+            initialPTY: .init(cols: 80, rows: 24),
+            bootstrapPayload: bootstrapPayload()
+        )
     }
 }
 
