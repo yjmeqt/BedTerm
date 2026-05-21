@@ -80,11 +80,17 @@ pub unsafe extern "C" fn bt_mock_tty_create(
         0 => Box::new(crate::mock_tty::programs::echo_shell::EchoShell::new()),
         1 => Box::new(crate::mock_tty::programs::vim_lite::VimLite::new()),
         2 => {
+            // Replay source priority:
+            //   "cast_inline" → literal cast text (used by unit tests)
+            //   "preset"      → one of the bundled fixtures embedded via include_str!
+            // No `cast_path` branch: bundled casts ship inside the rlib so the
+            // iOS app needs no second copy in its resources.
             let text = extract_opt(opts_json, "cast_inline")
                 .map(|s| unescape_inline(&s))
                 .or_else(|| {
-                    extract_opt(opts_json, "cast_path")
-                        .and_then(|p| std::fs::read_to_string(p).ok())
+                    extract_opt(opts_json, "preset").and_then(|name| {
+                        crate::mock_tty::programs::replay::preset_cast(&name).map(|s| s.to_string())
+                    })
                 })
                 .unwrap_or_default();
             Box::new(crate::mock_tty::programs::replay::Replay::from_cast_text(

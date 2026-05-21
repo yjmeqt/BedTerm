@@ -31,15 +31,10 @@
                     case .echoShell: return RustMockTTYClient(program: .echoShell)
                     case .vimLite: return RustMockTTYClient(program: .vimLite)
                     case .rawSink: return RustMockTTYClient(program: .rawSink)
-                    case .replay(let fixture):
-                        let bundleURL = Bundle.main.url(
-                            forResource: fixture,
-                            withExtension: "cast",
-                            subdirectory: "DebugFixtures"
-                        )
-                        let opts: String? = bundleURL.map { url in
-                            "{\"cast_path\":\"\(url.path)\"}"
-                        }
+                    case .replay(let preset):
+                        // The cast bytes are embedded into the Rust rlib via
+                        // include_str!; the FFI's `preset` opt picks which one.
+                        let opts = "{\"preset\":\"\(preset)\"}"
                         return RustMockTTYClient(program: .replay, opts: opts)
                     case .mockSSH:
                         preconditionFailure("handled above")
@@ -70,11 +65,11 @@
                     Divider().padding(.leading, 16)
                     entry("Vim-Lite", route: .vimLite)
                     Divider().padding(.leading, 16)
-                    entry("Replay: vim", route: .replay(fixture: "vim-edit"))
+                    entry("Replay: vim", route: .replay(preset: "vim"))
                     Divider().padding(.leading, 16)
-                    entry("Replay: codex", route: .replay(fixture: "codex-tui"))
+                    entry("Replay: codex", route: .replay(preset: "codex"))
                     Divider().padding(.leading, 16)
-                    entry("Replay: claude", route: .replay(fixture: "claude-code"))
+                    entry("Replay: claude", route: .replay(preset: "claude"))
                     Divider().padding(.leading, 16)
                     entry("Raw Sink", route: .rawSink)
                 }

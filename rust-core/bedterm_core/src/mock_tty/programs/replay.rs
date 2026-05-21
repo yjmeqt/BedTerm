@@ -71,6 +71,20 @@ fn header_is_v3(header: &str) -> bool {
     rest.starts_with('3')
 }
 
+/// Bundled cast fixtures, embedded into the rlib at compile time. The iOS app
+/// references these by name through the `preset` option on `bt_mock_tty_create`,
+/// so the same bytes serve both the in-shell `demo <name>` command (via
+/// `echo_shell`) and the "Replay: …" buttons on the Hosts screen — no second
+/// copy in `BedTerm/Resources/`.
+pub fn preset_cast(name: &str) -> Option<&'static str> {
+    match name {
+        "vim" | "vim-edit" => Some(include_str!("../../../fixtures/vim-edit.cast")),
+        "codex" | "codex-tui" => Some(include_str!("../../../fixtures/codex-tui.cast")),
+        "claude" | "claude-code" => Some(include_str!("../../../fixtures/claude-code.cast")),
+        _ => None,
+    }
+}
+
 impl Default for Replay {
     fn default() -> Self {
         Self::from_cast_text("")

@@ -140,18 +140,13 @@ impl Program for EchoShell {
             }
             cmd if cmd.starts_with("demo ") => {
                 let name = cmd.trim_start_matches("demo ").trim();
-                let cast_text: &str = match name {
-                    "vim" => include_str!("../../../fixtures/vim-edit.cast"),
-                    "codex" => include_str!("../../../fixtures/codex-tui.cast"),
-                    "claude" => include_str!("../../../fixtures/claude-code.cast"),
-                    _ => {
-                        let _ = std::io::Write::write_fmt(
-                            &mut *out,
-                            format_args!("demo: unknown fixture '{name}'\r\n"),
-                        );
-                        Self::prompt(out);
-                        return;
-                    }
+                let Some(cast_text) = crate::mock_tty::programs::replay::preset_cast(name) else {
+                    let _ = std::io::Write::write_fmt(
+                        &mut *out,
+                        format_args!("demo: unknown fixture '{name}'\r\n"),
+                    );
+                    Self::prompt(out);
+                    return;
                 };
                 self.pending = Some(ProgramKind::Replay {
                     cast_text: cast_text.to_string(),
