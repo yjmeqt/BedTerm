@@ -98,12 +98,9 @@ impl CliAgent {
         if basename == "vibe-acp" {
             return Some(Self::Vibe);
         }
-        for agent in Self::all() {
-            if basename == agent.command_prefix() {
-                return Some(agent);
-            }
-        }
-        None
+        Self::all()
+            .into_iter()
+            .find(|agent| basename == agent.command_prefix())
     }
 
     fn all() -> [Self; 13] {

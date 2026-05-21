@@ -129,7 +129,7 @@ impl DcsSniffer {
                 // Consume the trailing `\` through our parser too so its
                 // state returns to ground for subsequent input.
                 let end = if byte == 0x1B && bytes.get(i + 1) == Some(&b'\\') {
-                    self.parser.advance(&mut self.sink, &[b'\\']);
+                    self.parser.advance(&mut self.sink, b"\\");
                     i + 2
                 } else {
                     i + 1
@@ -741,15 +741,14 @@ mod tests {
         let located = scan_dcs_events(&bytes);
         assert!(located.is_empty());
     }
-}
 
-impl DcsEvent {
-    #[cfg(test)]
-    fn precmd_pwd(&self) -> Option<String> {
-        if let DcsEvent::Precmd { pwd, .. } = self {
-            pwd.clone()
-        } else {
-            None
+    impl DcsEvent {
+        fn precmd_pwd(&self) -> Option<String> {
+            if let DcsEvent::Precmd { pwd, .. } = self {
+                pwd.clone()
+            } else {
+                None
+            }
         }
     }
 }

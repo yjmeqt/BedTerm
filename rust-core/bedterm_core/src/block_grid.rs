@@ -162,7 +162,7 @@ impl BlockGrid {
         // composer.
         let history = (grid.total_lines() - grid.screen_lines()) as i32;
         let visible_used = self.last_content_row().map_or_else(
-            || ((self.cursor_row() + 1).clamp(1, self.rows as i32)) as i32,
+            || (self.cursor_row() + 1).clamp(1, self.rows as i32),
             |r| r + 1,
         );
         let total_rows = (history + visible_used) as u16;
@@ -304,7 +304,7 @@ mod tests {
         // final line, not 40 stacked rows.
         let mut g = BlockGrid::new(40, 5);
         for n in 1..=10 {
-            let bar: String = std::iter::repeat('#').take(n).collect();
+            let bar = "#".repeat(n);
             let line = format!("\r[{bar}] {n}%");
             g.feed(line.as_bytes());
         }
