@@ -29,17 +29,22 @@ Run a single test:
 
 ```sh
 xcodebuild test \
-  -project BedTerm.xcodeproj -scheme BedTerm \
+  -workspace BedTerm.xcworkspace -scheme BedTerm \
   -destination 'platform=iOS Simulator,name=iPhone 17' \
-  -only-testing:BedTermTests/<ClassName>/<testMethod> \
+  -only-testing:BedTermKitTests/<SuiteName>/<testFunc> \
   | mint run xcbeautify
 ```
+
+Tests live inside the `BedTermKit` Swift package (`BedTermKit/Tests/BedTermKitTests/`)
+and use the Swift Testing framework (`import Testing`, `@Suite`, `@Test`,
+`#expect`, `#require`). New test files don't need any Xcode project bookkeeping —
+SwiftPM picks them up automatically.
 
 Lint (both must pass):
 
 ```sh
 mint run swiftlint lint --strict
-xcrun swift-format lint -r --strict BedTerm BedTermTests
+xcrun swift-format lint -r --strict BedTerm BedTermKit/Sources BedTermKit/Tests
 ```
 
 `swift-format` ships with Xcode 26 — no install needed. SwiftLint also runs as a SwiftPM build-tool plugin on `BedTermKit` (configured in `BedTermKit/Package.swift`); `xcodebuild` is invoked with package-plugin validation skipped (see commit `58642e8`).

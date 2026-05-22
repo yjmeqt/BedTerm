@@ -47,10 +47,10 @@
             buildForAnalyzing = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "053533EBD78519D9A6032A8C"
-               BuildableName = "BedTermTests.xctest"
-               BlueprintName = "BedTermTests"
-               ReferencedContainer = "container:BedTerm.xcodeproj">
+               BlueprintIdentifier = "BedTermKitTests"
+               BuildableName = "BedTermKitTests"
+               BlueprintName = "BedTermKitTests"
+               ReferencedContainer = "container:BedTermKit">
             </BuildableReference>
          </BuildActionEntry>
          <BuildActionEntry
@@ -90,10 +90,10 @@
             parallelizable = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "053533EBD78519D9A6032A8C"
-               BuildableName = "BedTermTests.xctest"
-               BlueprintName = "BedTermTests"
-               ReferencedContainer = "container:BedTerm.xcodeproj">
+               BlueprintIdentifier = "BedTermKitTests"
+               BuildableName = "BedTermKitTests"
+               BlueprintName = "BedTermKitTests"
+               ReferencedContainer = "container:BedTermKit">
             </BuildableReference>
          </TestableReference>
          <TestableReference

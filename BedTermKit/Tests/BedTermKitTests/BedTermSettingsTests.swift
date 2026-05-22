@@ -1,38 +1,43 @@
-import XCTest
+import Foundation
+import Testing
 
 @testable import BedTermKit
 
 @MainActor
-final class BedTermSettingsTests: XCTestCase {
+@Suite("BedTermSettings")
+struct BedTermSettingsTests {
     private func makeDefaults(_ suite: String = UUID().uuidString) throws -> UserDefaults {
         // Each test gets a fresh suite so writes don't leak between cases or
         // into the device's standard defaults.
         UserDefaults().removePersistentDomain(forName: suite)
-        return try XCTUnwrap(UserDefaults(suiteName: suite))
+        return try #require(UserDefaults(suiteName: suite))
     }
 
-    func testDefaultsOnFirstLaunch() throws {
+    @Test("defaults on first launch")
+    func defaultsOnFirstLaunch() throws {
         let settings = BedTermSettings(defaults: try makeDefaults())
-        XCTAssertTrue(settings.reserveTopSafeAreaInAltScreen)
-        XCTAssertFalse(settings.showCommandBlocks)
+        #expect(settings.reserveTopSafeAreaInAltScreen)
+        #expect(!settings.showCommandBlocks)
     }
 
-    func testTogglePersists() throws {
+    @Test("toggle persists across reloads")
+    func togglePersists() throws {
         let defaults = try makeDefaults()
         let first = BedTermSettings(defaults: defaults)
         first.reserveTopSafeAreaInAltScreen = false
 
         let second = BedTermSettings(defaults: defaults)
-        XCTAssertFalse(second.reserveTopSafeAreaInAltScreen)
+        #expect(!second.reserveTopSafeAreaInAltScreen)
     }
 
-    func testToggleRestoresAfterFlip() throws {
+    @Test("toggle restores after flip")
+    func toggleRestoresAfterFlip() throws {
         let defaults = try makeDefaults()
         let settings = BedTermSettings(defaults: defaults)
         settings.reserveTopSafeAreaInAltScreen = false
         settings.reserveTopSafeAreaInAltScreen = true
 
         let reloaded = BedTermSettings(defaults: defaults)
-        XCTAssertTrue(reloaded.reserveTopSafeAreaInAltScreen)
+        #expect(reloaded.reserveTopSafeAreaInAltScreen)
     }
 }

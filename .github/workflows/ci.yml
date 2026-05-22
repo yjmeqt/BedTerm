@@ -25,7 +25,7 @@ jobs:
       - name: Bootstrap tools
         run: mint bootstrap
       - name: swift-format lint
-        run: xcrun swift-format lint -r --strict BedTerm BedTermTests BedTermKit/Sources
+        run: xcrun swift-format lint -r --strict BedTerm BedTermKit/Sources BedTermKit/Tests
       - name: SwiftLint
         run: mint run swiftlint lint --strict
 
