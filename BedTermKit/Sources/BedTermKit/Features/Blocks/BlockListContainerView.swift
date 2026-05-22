@@ -27,19 +27,6 @@ final class BlockListContainerViewController: UIViewController, UIScrollViewDele
     let contentView = UIView()
     private let metalView: TerminalBlocksMetalView
 
-    /// Section-header pinning: a single hosting controller floats above
-    /// `metalView` (in `view`, not `contentView`) and adopts the
-    /// currently-scrolling block's command/header content. Lets the user
-    /// see which command they're inside even when its output is taller
-    /// than the screen. Lazily created the first time a header needs to
-    /// be pinned; `pinnedBlockID` tracks which block is currently shown
-    /// (or nil when no block intersects the sticky band).
-    var pinnedHost: UIHostingController<BlockHeader>?
-    var pinnedBlockID: UInt64?
-    /// Solid backdrop strip behind `pinnedHost` so the floating header
-    /// occludes the body cells `metalView` paints beneath it.
-    var pinnedBackground: UIView?
-
     // Layout constants. headerHeightPt may clip at Dynamic Type XXL —
     // accepted v1 limitation per Phase B plan.
     let headerHeightPt: CGFloat = 56
@@ -106,15 +93,6 @@ final class BlockListContainerViewController: UIViewController, UIScrollViewDele
     func teardown() {
         displayLink?.invalidate()
         displayLink = nil
-        if let host = pinnedHost {
-            host.willMove(toParent: nil)
-            host.view.removeFromSuperview()
-            host.removeFromParent()
-        }
-        pinnedHost = nil
-        pinnedBackground?.removeFromSuperview()
-        pinnedBackground = nil
-        pinnedBlockID = nil
         scrollView.delegate = nil
     }
 
@@ -264,18 +242,10 @@ final class BlockListContainerViewController: UIViewController, UIScrollViewDele
         contentView.frame = CGRect(origin: .zero, size: scrollView.contentSize)
     }
 
-    /// Update the (still-SwiftUI) sticky pin host for the currently
-    /// pinned block. M5 will replace this with a renderer-drawn sticky
-    /// descriptor; for now M4 keeps the overlay so the visual change
-    /// is scoped to per-block headers only.
-    func syncHeaders() {
-        let blocks = session.blockStore.blocks
-        let width = view.bounds.width
-        let scrollY = scrollView.contentOffset.y
-        let gap = BlockPanelStyle.interBlockGapPt
-        let ranges = computeBlockRanges(blocks: blocks, gap: gap)
-        updateStickyHeader(ranges: ranges, scrollY: scrollY, width: width)
-    }
+    /// No-op shim retained because `refresh()` and `handleDisplayTick()`
+    /// already call it. Header / sticky updates now flow exclusively
+    /// through `pushLayoutToMetalView` (M5).
+    func syncHeaders() {}
 
     /// Per-block top + bottom Y in scroll-content coordinates. One pass.
     func computeBlockRanges(blocks: [Block], gap: CGFloat) -> [BlockRange] {
@@ -331,10 +301,26 @@ final class BlockListContainerViewController: UIViewController, UIScrollViewDele
                     panel_corner_radius_px: 0
                 ))
         }
-        let (headers, storage) = buildHeaderDescriptors(
+        var (headers, storage) = buildHeaderDescriptors(
             ranges: ranges, scale: Float(scale), widthPx: widthPx)
+
+        // Sticky band: emit a single is_sticky=1 entry and drop the
+        // matching natural header so we don't double-draw the block's
+        // command in two places at once.
+        let scrollY = scrollView.contentOffset.y
+        if let sticky = buildStickyDescriptor(
+            ranges: ranges, scrollY: scrollY, scale: Float(scale), widthPx: widthPx
+        ) {
+            if let idx = headers.firstIndex(where: { $0.block_id == sticky.blockID }) {
+                headers.remove(at: idx)
+                storage.remove(at: idx)
+            }
+            headers.append(sticky.entry)
+            storage.append(sticky.storage)
+        }
+
         metalView.update(
-            scrollOffset: scrollView.contentOffset.y,
+            scrollOffset: scrollY,
             layout: entries,
             headers: headers,
             storage: storage)

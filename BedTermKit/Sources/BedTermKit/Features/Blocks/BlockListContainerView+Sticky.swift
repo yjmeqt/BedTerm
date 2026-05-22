@@ -1,123 +1,84 @@
-import SwiftUI
+import BedTermCoreC
 import UIKit
 
-/// Section-style header pinning for the block list. The currently-scrolled
-/// block's `BlockHeader` floats above `metalView` at the top of the
-/// viewport so the user can always read which command's output they're
-/// looking at, even when that output is taller than the screen. When the
-/// next block's natural header starts scrolling into view it pushes the
-/// pinned header up off-screen — the standard iOS table-section feel.
+/// Section-style header pinning for the block list, rendered as part of
+/// the single Metal pass. We compute the pinned screen-space Y for the
+/// currently-scrolled block here, build a `BtBlockHeaderEntry` with
+/// `is_sticky = 1`, and the renderer paints it on top of everything
+/// else (z-order via second iteration in `Renderer::draw_block_list`).
 ///
-/// Implementation:
-/// - A dedicated `pinnedHost: UIHostingController<BlockHeader>` lives in
-///   `view` (not `scrollView.contentView`) so it sits above the Metal
-///   surface that paints the block bodies. A solid backdrop `pinnedBackground`
-///   sits behind it to occlude any cells the Metal surface would otherwise
-///   draw under the header.
-/// - The natural in-`contentView` header for the pinned block is hidden
-///   so they don't double-render.
+/// When a sticky entry is emitted, the same block's *natural* in-flow
+/// header descriptor is omitted from the headers array so the band
+/// doesn't double-draw.
 @MainActor
 extension BlockListContainerViewController {
-    func updateStickyHeader(ranges: [BlockRange], scrollY: CGFloat, width: CGFloat) {
-        guard let active = stickyActiveIndex(ranges: ranges, scrollY: scrollY) else {
-            dismissStickyHeader()
-            return
-        }
-        let range = ranges[active]
-        let nextTop = (active + 1 < ranges.count) ? ranges[active + 1].top : .infinity
-        // Pinned Y in `view` (screen) coordinates. Natural header in
-        // contentView is at (range.top - scrollY) on screen; once that's
-        // negative we want to clamp to 0 (pin), then push back down once
-        // the next block's natural header has entered the top band.
-        let naturalScreenY = range.top - scrollY
-        let pushUpLimit = (nextTop - scrollY) - headerHeightPt
-        let pinnedY = min(max(naturalScreenY, 0), pushUpLimit)
-        showStickyHeader(for: range.block, topY: pinnedY, width: width)
-    }
-
-    /// Find the block whose body region the viewport is currently scrolled
-    /// into — i.e. the block we want to label at the top of the screen.
-    /// Returns nil when scrolled above the first block (nothing to pin).
-    private func stickyActiveIndex(ranges: [BlockRange], scrollY: CGFloat) -> Int? {
+    /// Index of the block whose header should be pinned, or `nil` when
+    /// no block intersects the sticky band (scrolled above the first
+    /// block, or the list is empty).
+    func stickyActiveIndex(ranges: [BlockRange], scrollY: CGFloat) -> Int? {
         guard !ranges.isEmpty else { return nil }
-        // Last index whose top <= scrollY + headerHeightPt: the block whose
-        // header has already passed (or is just passing) the viewport top.
-        // We pin starting the moment the body would otherwise eat the
-        // header — i.e. once `scrollY > range.top`.
         var found: Int?
-        for (idx, range) in ranges.enumerated() {
-            if range.top <= scrollY && range.bot > scrollY {
-                found = idx
-            }
+        for (idx, range) in ranges.enumerated() where range.top <= scrollY && range.bot > scrollY {
+            found = idx
         }
         return found
     }
 
-    private func showStickyHeader(for block: Block, topY: CGFloat, width: CGFloat) {
-        let leftInset = BlockPanelStyle.cellLeftInsetPt
-        let frame = CGRect(
-            x: leftInset, y: topY,
-            width: width - leftInset, height: headerHeightPt)
-        let backdropFrame = CGRect(
-            x: 0, y: topY,
-            width: width, height: headerHeightPt)
+    /// Build a sticky header descriptor for the currently pinned block,
+    /// or `nil` when no sticky band is needed. Returned tuple carries
+    /// the same `(command, subtitle)` storage tuple the natural-header
+    /// path uses so the FFI call site sees a uniform interface.
+    func buildStickyDescriptor(
+        ranges: [BlockRange],
+        scrollY: CGFloat,
+        scale: Float,
+        widthPx: Float
+    ) -> (entry: BtBlockHeaderEntry, blockID: UInt64, storage: (Data, Data?))? {
+        guard let active = stickyActiveIndex(ranges: ranges, scrollY: scrollY) else { return nil }
+        let range = ranges[active]
+        let nextTop = (active + 1 < ranges.count) ? ranges[active + 1].top : .infinity
 
-        // Hide the natural header so we don't render twice.
-        if let id = pinnedBlockID, id != block.id {
-            // Block changed — un-hide the previously-pinned natural header.
-            // (No-op if it got recycled out of view.)
-        }
-        pinnedBlockID = block.id
+        // Screen-space pinned Y. naturalScreenY is where the in-flow
+        // header would sit; clamp at 0 to "pin" it once it scrolls past
+        // the top, then push back down once the next block's natural
+        // header has entered the top band (handoff).
+        let naturalScreenY = range.top - scrollY
+        let pushUpLimit = (nextTop - scrollY) - headerHeightPt
+        let pinnedY = min(max(naturalScreenY, 0), pushUpLimit)
 
-        let bg: UIView
-        if let existing = pinnedBackground {
-            bg = existing
-        } else {
-            bg = UIView()
-            bg.backgroundColor = resolveStickyBackground()
-            bg.isUserInteractionEnabled = false
-            view.addSubview(bg)
-            pinnedBackground = bg
-        }
-        bg.frame = backdropFrame
+        let traits = view.traitCollection
+        let bg = (UIColor(named: "ShadcnBackground", in: .module, compatibleWith: traits)
+            ?? UIColor.systemBackground).asRGBA32()
+        let fg = (UIColor(named: "ShadcnPrimary", in: .module, compatibleWith: traits)
+            ?? UIColor.label).asRGBA32()
+        let muted = (UIColor(named: "ShadcnMutedForeground", in: .module, compatibleWith: traits)
+            ?? UIColor.secondaryLabel).asRGBA32()
 
-        let host: UIHostingController<BlockHeader>
-        if let existing = pinnedHost {
-            existing.rootView = BlockHeader(block: block)
-            host = existing
-        } else {
-            let new = UIHostingController(rootView: BlockHeader(block: block))
-            new.view.backgroundColor = .clear
-            new.view.isUserInteractionEnabled = false
-            addChild(new)
-            view.addSubview(new.view)
-            new.didMove(toParent: self)
-            pinnedHost = new
-            host = new
-        }
-        host.view.frame = frame
-        host.view.isHidden = false
-        bg.isHidden = false
+        let cmdData = BlockHeaderModel.displayCommand(for: range.block)
+            .data(using: .utf8) ?? Data()
+        let subData = BlockHeaderModel.subtitle(for: range.block)?.data(using: .utf8)
 
-        // Keep z-order: backdrop sits beneath header host, both above
-        // metalView and any other sibling.
-        view.bringSubviewToFront(bg)
-        view.bringSubviewToFront(host.view)
-    }
-
-    private func dismissStickyHeader() {
-        pinnedHost?.view.isHidden = true
-        pinnedBackground?.isHidden = true
-        // Don't tear down the host — keep it warm for the next scroll
-        // that re-enters a block.
-        pinnedBlockID = nil
-    }
-
-    /// Match the scroll-view background so the floating header reads as
-    /// "part of the list", not a separate floating chip.
-    private func resolveStickyBackground() -> UIColor {
-        UIColor(
-            named: "ShadcnBackground", in: .module, compatibleWith: view.traitCollection
-        ) ?? UIColor.systemBackground
+        let entry = BtBlockHeaderEntry(
+            block_id: range.block.id,
+            header_y_top_px: Float(pinnedY) * scale,
+            header_height_px: Float(headerHeightPt) * scale,
+            panel_x_left_px: 0,
+            panel_width_px: widthPx,
+            command_utf8: nil,
+            command_len: UInt32(cmdData.count),
+            subtitle_utf8: nil,
+            subtitle_len: UInt32(subData?.count ?? 0),
+            agent_id: BlockHeaderModel.agentID(range.block.cliAgent),
+            _pad: (0, 0, 0),
+            badge_tint_rgba: BlockHeaderModel.tint(for: range.block.cliAgent),
+            header_bg_rgba: bg,
+            command_fg_rgba: fg,
+            subtitle_fg_rgba: muted,
+            divider_rgba: 0,
+            is_sticky: 1,
+            _pad2: (0, 0, 0),
+            body_clip_y_top_px: 0,
+            body_clip_height_px: 0)
+        return (entry, range.block.id, (cmdData, subData))
     }
 }
