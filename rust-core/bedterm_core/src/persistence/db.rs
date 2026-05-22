@@ -14,7 +14,29 @@ impl Database {
     pub fn open(path: impl AsRef<Path>) -> Result<Self> {
         let conn = Connection::open(path)?;
         schema::apply(&conn)?;
-        Ok(Self { conn })
+        let db = Self { conn };
+        db.sweep_orphans()?;
+        Ok(db)
+    }
+
+    /// Mark every snapshot with a NULL `killed_at` as `AppRelaunch` (3).
+    /// The `killed_at` is set to the latest `blocks.finished_at` for that
+    /// snapshot, or the current time if there are no blocks.
+    ///
+    /// NOTE: The literal `3` matches `KillReason::AppRelaunch as i32`.
+    /// If the enum order ever changes, this number must change with it.
+    pub fn sweep_orphans(&self) -> Result<()> {
+        self.conn.execute(
+            "UPDATE snapshots
+             SET kill_reason = 3,
+                 killed_at = COALESCE(
+                     (SELECT MAX(finished_at) FROM blocks WHERE blocks.snapshot_id = snapshots.id),
+                     unixepoch()
+                 )
+             WHERE killed_at IS NULL",
+            [],
+        )?;
+        Ok(())
     }
 
     pub fn open_in_memory() -> Result<Self> {

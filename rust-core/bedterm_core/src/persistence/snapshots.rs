@@ -5,6 +5,8 @@ use rusqlite::{params, Result};
 use super::db::Database;
 use super::types::{unix_seconds_now, KillReason, SnapshotRow};
 
+pub const MAX_SNAPSHOTS_PER_HOST: i64 = 10;
+
 impl Database {
     pub fn insert_snapshot(&self, row: &SnapshotRow) -> Result<()> {
         self.conn.execute(
@@ -52,6 +54,27 @@ impl Database {
                 last_command,
                 last_exit_code,
             ],
+        )?;
+        let host_id: String = self.conn.query_row(
+            "SELECT host_id FROM snapshots WHERE id = ?1",
+            params![snapshot_id],
+            |r| r.get(0),
+        )?;
+        self.enforce_host_cap(&host_id)?;
+        Ok(())
+    }
+
+    pub fn enforce_host_cap(&self, host_id: &str) -> Result<()> {
+        self.conn.execute(
+            "DELETE FROM snapshots
+             WHERE host_id = ?1
+             AND id NOT IN (
+                 SELECT id FROM snapshots
+                 WHERE host_id = ?1
+                 ORDER BY COALESCE(killed_at, created_at) DESC
+                 LIMIT ?2
+             )",
+            params![host_id, MAX_SNAPSHOTS_PER_HOST],
         )?;
         Ok(())
     }
