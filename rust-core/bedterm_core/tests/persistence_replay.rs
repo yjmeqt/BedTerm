@@ -122,3 +122,173 @@ fn replay_terminal_has_no_persistence_sink() {
     assert_eq!(replay.blocks().len(), 1);
     assert_eq!(replay.blocks()[0].command.trim(), "echo hi");
 }
+
+// ── Bug-fix regression tests ──────────────────────────────────────────────────
+
+/// Bug 1 regression: commands / paths containing quotes or backslashes must
+/// not break the DCS JSON parser during replay.
+///
+/// The fix in `persistence/ffi.rs` JSON-escapes `cwd` and `command` before
+/// interpolating them into the synthesized Precmd/Preexec frames. This test
+/// drives the path end-to-end through `bedterm_persistence_open_replay` and
+/// asserts the returned terminal is non-null (would be null if the parser
+/// failed) and contains at least one block with the correct command text.
+#[test]
+fn replay_handles_command_with_quotes_and_backslashes() {
+    use bedterm_core::blocks_ffi::{bt_term_block_at, bt_term_block_count, BtBlockView};
+    use bedterm_core::ffi::bt_term_free;
+    use bedterm_core::persistence::ffi::{
+        bedterm_persistence_close, bedterm_persistence_init, bedterm_persistence_open_replay,
+    };
+    use bedterm_core::persistence::{BlockRow, Database, SnapshotRow};
+    use std::ffi::CString;
+    use std::mem::MaybeUninit;
+
+    // Prepare a temp DB with one block whose command and cwd contain JSON-
+    // hostile characters: double-quotes and backslashes.
+    let tmp = tempfile::NamedTempFile::new().unwrap();
+    let path = tmp.path().to_str().unwrap();
+    {
+        let db = Database::open(path).unwrap();
+        db.insert_snapshot(&SnapshotRow {
+            id: "s1".into(),
+            host_id: "h1".into(),
+            kill_reason: None,
+            killed_at: None,
+            last_cwd: None,
+            last_command: None,
+            last_exit_code: None,
+            created_at: 0.0,
+            owner_pid: None,
+            owner_boot_time: None,
+        })
+        .unwrap();
+        db.insert_block(&BlockRow {
+            snapshot_id: "s1".into(),
+            block_seq: 1,
+            command: r#"echo "hello world""#.into(), // embedded double-quotes
+            stylized_command: vec![],
+            stylized_output: b"hello world\n".to_vec(),
+            exit_code: Some(0),
+            cwd: Some(r#"/path/with"weird\\stuff"#.into()), // quotes + backslash
+            git_branch: None,
+            started_at: 0.0,
+            finished_at: 1.0,
+        })
+        .unwrap();
+    }
+
+    let cpath = CString::new(path).unwrap();
+    let sid = CString::new("s1").unwrap();
+    let h = unsafe { bedterm_persistence_init(cpath.as_ptr()) };
+    assert!(!h.is_null());
+
+    let term = unsafe { bedterm_persistence_open_replay(h, sid.as_ptr()) };
+    assert!(
+        !term.is_null(),
+        "open_replay returned null — JSON injection likely broke the parser"
+    );
+
+    // Verify the block was reconstructed with the correct command text.
+    let count = unsafe { bt_term_block_count(term) };
+    assert_eq!(count, 1, "expected 1 replay block, got {count}");
+
+    let mut view = MaybeUninit::<BtBlockView>::uninit();
+    let rc = unsafe { bt_term_block_at(term, 0, view.as_mut_ptr()) };
+    assert_eq!(rc, 0);
+    let view = unsafe { view.assume_init() };
+    let cmd_bytes = unsafe { std::slice::from_raw_parts(view.command, view.command_len) };
+    let cmd_str = std::str::from_utf8(cmd_bytes).unwrap();
+    assert_eq!(
+        cmd_str.trim(),
+        r#"echo "hello world""#,
+        "command text was corrupted during replay"
+    );
+
+    unsafe { bt_term_free(term) };
+    unsafe { bedterm_persistence_close(h) };
+}
+
+/// Bug 2 regression: a block stored with `exit_code: None` (Ctrl-C path)
+/// must NOT produce a `CommandFinished` frame with `exit_code: 0` during
+/// replay. That would falsify the command's outcome.
+///
+/// The fix omits the `CommandFinished` frame entirely when `exit_code` is
+/// `None`. The next block's `Precmd` event seals the still-running block
+/// with `exit_code: None` via `BlockStore::seal_open` — which is exactly
+/// what happens in a live session when the user Ctrl-Cs.
+///
+/// For a single-block snapshot there is no following `Precmd`, so the block
+/// stays open (is_running == true). We assert `has_exit_code == 0`.
+#[test]
+fn replay_block_with_no_exit_code_does_not_show_zero() {
+    use bedterm_core::blocks_ffi::{bt_term_block_at, bt_term_block_count, BtBlockView};
+    use bedterm_core::ffi::bt_term_free;
+    use bedterm_core::persistence::ffi::{
+        bedterm_persistence_close, bedterm_persistence_init, bedterm_persistence_open_replay,
+    };
+    use bedterm_core::persistence::{BlockRow, Database, SnapshotRow};
+    use std::ffi::CString;
+    use std::mem::MaybeUninit;
+
+    let tmp = tempfile::NamedTempFile::new().unwrap();
+    let path = tmp.path().to_str().unwrap();
+    {
+        let db = Database::open(path).unwrap();
+        db.insert_snapshot(&SnapshotRow {
+            id: "s1".into(),
+            host_id: "h1".into(),
+            kill_reason: None,
+            killed_at: None,
+            last_cwd: None,
+            last_command: None,
+            last_exit_code: None,
+            created_at: 0.0,
+            owner_pid: None,
+            owner_boot_time: None,
+        })
+        .unwrap();
+        db.insert_block(&BlockRow {
+            snapshot_id: "s1".into(),
+            block_seq: 1,
+            command: "long-running-cmd".into(),
+            stylized_command: vec![],
+            stylized_output: b"some output\n".to_vec(),
+            exit_code: None, // Ctrl-C — no exit code recorded
+            cwd: None,
+            git_branch: None,
+            started_at: 0.0,
+            finished_at: 1.0,
+        })
+        .unwrap();
+    }
+
+    let cpath = CString::new(path).unwrap();
+    let sid = CString::new("s1").unwrap();
+    let h = unsafe { bedterm_persistence_init(cpath.as_ptr()) };
+    assert!(!h.is_null());
+
+    let term = unsafe { bedterm_persistence_open_replay(h, sid.as_ptr()) };
+    assert!(!term.is_null());
+
+    let count = unsafe { bt_term_block_count(term) };
+    assert_eq!(count, 1, "expected 1 replay block, got {count}");
+
+    let mut view = MaybeUninit::<BtBlockView>::uninit();
+    let rc = unsafe { bt_term_block_at(term, 0, view.as_mut_ptr()) };
+    assert_eq!(rc, 0);
+    let view = unsafe { view.assume_init() };
+
+    // The block must NOT carry a false exit_code of 0.
+    // Approach taken: skip CommandFinished entirely when exit_code is None.
+    // Without a following Precmd to seal it, the block stays running
+    // (is_running == 1) with no exit code recorded (has_exit_code == 0).
+    assert_eq!(
+        view.has_exit_code, 0,
+        "block with exit_code: None must not expose exit_code 0 — \
+         was falsely set to 0 before the fix"
+    );
+
+    unsafe { bt_term_free(term) };
+    unsafe { bedterm_persistence_close(h) };
+}

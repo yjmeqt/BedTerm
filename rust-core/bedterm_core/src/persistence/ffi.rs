@@ -353,21 +353,29 @@ pub unsafe extern "C" fn bedterm_persistence_open_replay(
             let mut block_bytes = Vec::new();
 
             // Build DCS JSON strings inline to avoid a serde_json dependency.
-            let cwd = row.cwd.as_deref().unwrap_or("/");
+            // String values from stored rows are JSON-escaped to prevent
+            // injection when commands or paths contain quotes or backslashes.
+            let cwd = json_escape(row.cwd.as_deref().unwrap_or("/"));
             let precmd = format!(r#"{{"hook":"Precmd","value":{{"pwd":"{cwd}"}}}}"#);
             block_bytes.extend_from_slice(&dcs_frame(precmd.as_bytes()));
 
-            let cmd = &row.command;
+            let cmd = json_escape(&row.command);
             let preexec = format!(r#"{{"hook":"Preexec","value":{{"command":"{cmd}"}}}}"#);
             block_bytes.extend_from_slice(&dcs_frame(preexec.as_bytes()));
 
             // Raw output bytes — no framing (captured verbatim).
             block_bytes.extend_from_slice(&row.stylized_output);
 
-            let exit = row.exit_code.unwrap_or(0);
-            let finished =
-                format!(r#"{{"hook":"CommandFinished","value":{{"exit_code":{exit}}}}}"#);
-            block_bytes.extend_from_slice(&dcs_frame(finished.as_bytes()));
+            // Only emit CommandFinished when an exit code was recorded.
+            // When exit_code is None (Ctrl-C path), omit the frame entirely:
+            // the next block's Precmd will seal this block with exit_code: None,
+            // which is the correct semantic (BlockStore.apply Precmd handler
+            // calls seal_open with None when a block is still running).
+            if let Some(exit) = row.exit_code {
+                let finished =
+                    format!(r#"{{"hook":"CommandFinished","value":{{"exit_code":{exit}}}}}"#);
+                block_bytes.extend_from_slice(&dcs_frame(finished.as_bytes()));
+            }
 
             term.feed_bytes(&block_bytes);
         }
@@ -375,6 +383,27 @@ pub unsafe extern "C" fn bedterm_persistence_open_replay(
         Some(term_ptr)
     }));
     result.ok().flatten().unwrap_or(std::ptr::null_mut())
+}
+
+/// Escape a string value for use inside a JSON string literal.
+///
+/// Handles `"`, `\`, the ASCII control characters (`\n`, `\r`, `\t`,
+/// and the remaining C0 range as `\uXXXX`) that would otherwise break the
+/// hand-rolled JSON fragments produced by `bedterm_persistence_open_replay`.
+fn json_escape(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() + 2);
+    for ch in s.chars() {
+        match ch {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if (c as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", c as u32)),
+            c => out.push(c),
+        }
+    }
+    out
 }
 
 /// Build a DCS JSON frame: `ESC P $ d <hex(json)> 0x9C`.
