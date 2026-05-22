@@ -98,6 +98,20 @@ extension PersistenceHandle {
         }
     }
 
+    /// Open a snapshot for read-only replay. Returns a `TerminalCore` that
+    /// has already replayed the stored block bytes; mount it in a
+    /// `TerminalReplayHostView` with `isInputDisabled: true`.
+    ///
+    /// Returns `nil` if the snapshot is missing or the FFI returns null.
+    func openReplay(snapshotID: UUID) -> TerminalCore? {
+        var result: OpaquePointer?
+        snapshotID.uuidString.withCString { cstr in
+            result = bedterm_persistence_open_replay(unsafeHandle, cstr)
+        }
+        guard let ptr = result else { return nil }
+        return TerminalCore(adoptedHandle: ptr)
+    }
+
     /// Close the snapshot row: sets `kill_reason` and `killed_at`; also
     /// updates `last_cwd / last_command / last_exit_code` from the
     /// last-finalized block if available.

@@ -1,11 +1,15 @@
 import SwiftUI
 
-/// Read-only view of a killed session: header metadata, the list of
-/// commands that ran, and two affordances to keep working — Resume here
+/// Read-only view of a killed session: header metadata, a Metal replay of
+/// the terminal output, and two affordances to keep working — Resume here
 /// (re-launch with `cd <cwd>` queued) or New shell (fresh `$HOME`).
 public struct KilledSessionDetailScreen: View {
     @Binding var path: NavigationPath
     @Environment(PersistedSessionSnapshotStore.self) private var store
+    @Environment(\.persistenceHandle) private var persistence: PersistenceHandle?
+
+    @State private var replayCore: TerminalCore?
+    @State private var loadFailed = false
 
     let snapshotID: UUID
     let host: SavedHost
@@ -35,6 +39,14 @@ public struct KilledSessionDetailScreen: View {
         .background(Color("ShadcnBackground", bundle: .module).ignoresSafeArea())
         .navigationTitle(Text("Killed session"))
         .navigationBarTitleDisplayMode(.inline)
+        .task {
+            guard let persistence else { loadFailed = true; return }
+            if let core = persistence.openReplay(snapshotID: snapshotID) {
+                replayCore = core
+            } else {
+                loadFailed = true
+            }
+        }
     }
 
     @ViewBuilder
@@ -43,7 +55,7 @@ public struct KilledSessionDetailScreen: View {
             header(snapshot)
             Divider()
                 .background(Color("ShadcnBorder", bundle: .module))
-            blockList(snapshot)
+            replayBody()
             actionBar(snapshot)
         }
     }
@@ -70,23 +82,21 @@ public struct KilledSessionDetailScreen: View {
         .padding(16)
     }
 
-    private func blockList(_ snapshot: SessionSnapshot) -> some View {
-        ScrollView {
-            LazyVStack(spacing: 8) {
-                if snapshot.blocks.isEmpty {
-                    Text("No commands were captured before this session ended.")
-                        .font(.footnote)
-                        .foregroundStyle(Color("ShadcnMutedForeground", bundle: .module))
-                        .padding(.top, 24)
-                } else {
-                    ForEach(snapshot.blocks) { block in
-                        SessionBlockRow(block: block)
-                    }
-                }
-            }
-            .padding(16)
+    @ViewBuilder
+    private func replayBody() -> some View {
+        if let core = replayCore {
+            TerminalReplayHostView(replayCore: core)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .ignoresSafeArea(edges: .horizontal)
+        } else if loadFailed {
+            Text("Session output no longer available.")
+                .font(.footnote)
+                .foregroundStyle(Color("ShadcnMutedForeground", bundle: .module))
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else {
+            ProgressView()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private func actionBar(_ snapshot: SessionSnapshot) -> some View {
@@ -179,88 +189,5 @@ enum SessionSnapshotPathAbbreviator {
             return "~" + path.dropFirst("/root".count)
         }
         return path
-    }
-}
-
-private struct SessionBlockRow: View {
-    let block: Block
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 8) {
-                exitChip
-                Text(verbatim: commandLabel)
-                    .font(.callout.monospaced())
-                    .foregroundStyle(Color("ShadcnPrimary", bundle: .module))
-                    .lineLimit(2)
-                    .truncationMode(.tail)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            if let metadata {
-                Text(verbatim: metadata)
-                    .font(.caption2.monospaced())
-                    .foregroundStyle(Color("ShadcnMutedForeground", bundle: .module))
-            }
-        }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color("ShadcnCard", bundle: .module))
-        .overlay(
-            RoundedRectangle(cornerRadius: 8)
-                .stroke(Color("ShadcnBorder", bundle: .module), lineWidth: 1)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-    }
-
-    private var commandLabel: String {
-        block.command.isEmpty ? "—" : block.command
-    }
-
-    private var exitChip: some View {
-        let exit = block.exitCode
-        let label: String
-        let bg: Color
-        if let exit {
-            label = "\(exit)"
-            bg =
-                exit == 0
-                ? Color("ShadcnMutedForeground", bundle: .module)
-                : Color("ShadcnDestructive", bundle: .module)
-        } else {
-            label = "—"
-            bg = Color("ShadcnMutedForeground", bundle: .module)
-        }
-        return Text(verbatim: label)
-            .font(.caption2.weight(.semibold).monospaced())
-            .foregroundStyle(Color("ShadcnPrimaryForeground", bundle: .module))
-            .padding(.horizontal, 8)
-            .frame(height: 18)
-            .background(bg)
-            .clipShape(RoundedRectangle(cornerRadius: 4))
-    }
-
-    private var metadata: String? {
-        var parts: [String] = []
-        if let cwd = block.workingDirectory, !cwd.isEmpty {
-            parts.append(SessionSnapshotPathAbbreviator.abbreviate(cwd))
-        }
-        if let branch = block.gitBranch, !branch.isEmpty {
-            parts.append("(\(branch))")
-        }
-        if let dur = block.duration {
-            parts.append(formatDuration(dur))
-        }
-        return parts.isEmpty ? nil : parts.joined(separator: " · ")
-    }
-
-    private func formatDuration(_ seconds: TimeInterval) -> String {
-        if seconds < 1 {
-            return String(format: "%dms", Int(seconds * 1000))
-        } else if seconds < 60 {
-            return String(format: "%.1fs", seconds)
-        }
-        let minutes = Int(seconds) / 60
-        let remSeconds = Int(seconds) % 60
-        return "\(minutes)m \(remSeconds)s"
     }
 }

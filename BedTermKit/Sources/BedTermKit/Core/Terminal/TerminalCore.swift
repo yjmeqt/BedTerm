@@ -49,6 +49,18 @@ public final class TerminalCore {
         self.screenRows = Int(rowsClamped)
     }
 
+    /// Wrap a Rust-allocated `BtTerm *` produced by a `bt_term_new*`-family
+    /// function (e.g. `bedterm_persistence_open_replay`). The new
+    /// `TerminalCore` takes ownership and will call `bt_term_free` on deinit.
+    ///
+    /// Internal-only: callers must guarantee the pointer was allocated by
+    /// the Rust core and not yet freed.
+    internal init(adoptedHandle raw: OpaquePointer, cols: Int = 80, rows: Int = 24) {
+        self.handle = raw
+        self.screenCols = cols
+        self.screenRows = rows
+    }
+
     deinit {
         bt_term_free(handle)
     }

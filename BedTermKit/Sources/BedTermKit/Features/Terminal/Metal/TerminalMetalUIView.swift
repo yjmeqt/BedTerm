@@ -9,10 +9,14 @@ final class TerminalMetalUIView: MTKView {
     let onSend: (Data) -> Void
     private let onResize: (Int, Int) -> Void
     private weak var session: TerminalSession?
+    /// When `true`, this view refuses first responder and drops all input
+    /// (hardware keys, IME, soft-keyboard). Selection and scroll gestures
+    /// still work so the user can copy from the read-only replay.
+    let isInputDisabled: Bool
 
     private var startTime = CACurrentMediaTime()
     private var consumeTask: Task<Void, Never>?
-    private var anchorTask: Task<Void, Never>?
+    var anchorTask: Task<Void, Never>?
     private var lastCols: Int = 0
     private var lastRows: Int = 0
     private(set) var cellSize = CGSize(width: 8, height: 16)
@@ -46,6 +50,7 @@ final class TerminalMetalUIView: MTKView {
         self.onSend = onSend
         self.onResize = onResize
         self.session = session
+        self.isInputDisabled = false
         super.init(frame: .zero, device: env.device)
 
         // Snap-on-input (R5.scroll_snap_on_input): one session hook covers
@@ -90,6 +95,35 @@ final class TerminalMetalUIView: MTKView {
                 }
             }
         }
+    }
+
+    /// Read-only replay init: mounts an externally-owned `TerminalCore`
+    /// (produced by `PersistenceHandle.openReplay`) without attaching a
+    /// live session feed. Input is disabled; scroll and selection work.
+    init(replayCore: TerminalCore) {
+        let env = MetalEnvironment.shared
+        self.terminalCore = replayCore
+        self.bridge = env.renderer
+        self.onSend = { _ in }
+        self.onResize = { _, _ in }
+        self.session = nil
+        self.isInputDisabled = true
+        super.init(frame: .zero, device: env.device)
+
+        self.framebufferOnly = false
+        self.colorPixelFormat = .bgra8Unorm
+        self.isPaused = true
+        self.enableSetNeedsDisplay = true
+        self.presentsWithTransaction = true
+
+        layer.addSublayer(cursorLayer)
+        layer.addSublayer(selectionLayer)
+        installGestureRecognizers()
+        refreshFontMetrics()
+        applyAppearance()
+        installTraitObservers()
+        // No consumeTask — no live feed; render once on appear.
+        setNeedsDisplay()
     }
 
     @available(*, unavailable)
@@ -276,6 +310,7 @@ final class TerminalMetalUIView: MTKView {
         // Tap during deceleration stops it immediately, even if the keyboard
         // is already showing — gives the user a brake on a flick.
         stopInertia()
+        guard !isInputDisabled else { return }
         if !isFirstResponder {
             _ = becomeFirstResponder()
             reloadInputViews()
@@ -284,12 +319,13 @@ final class TerminalMetalUIView: MTKView {
 
     override func didMoveToWindow() {
         super.didMoveToWindow()
+        guard !isInputDisabled else { return }
         if window != nil, !isFirstResponder {
             _ = becomeFirstResponder()
         }
     }
 
-    override var canBecomeFirstResponder: Bool { true }
+    override var canBecomeFirstResponder: Bool { !isInputDisabled }
 
     private func refreshFontMetrics() {
         let body = UIFontMetrics.default.scaledFont(
@@ -305,78 +341,6 @@ final class TerminalMetalUIView: MTKView {
         cellSize = bridge.cellSizeInPoints(scale: scale)
     }
 
-    // MARK: Bottom anchoring
-
-    // Standard "clear screen" CSI sequences emitted by `clear`, Ctrl+L,
-    // `tput clear`, `reset`, and the `ESC c` RIS code. We bottom-anchor
-    // only after one of these + a quiet period, so TUI apps that clear
-    // before drawing their own UI are not disrupted.
-    private static let screenClearPatterns: [[UInt8]] = [
-        Array("\u{1B}[2J".utf8),
-        Array("\u{1B}[3J".utf8),
-        [0x1B, 0x63]
-    ]
-
-    private static func containsScreenClear(_ chunk: Data) -> Bool {
-        guard !chunk.isEmpty else { return false }
-        let bytes = [UInt8](chunk)
-        for pattern in screenClearPatterns where indexOfSubsequence(of: pattern, in: bytes) != nil {
-            return true
-        }
-        return false
-    }
-
-    private static func indexOfSubsequence(of needle: [UInt8], in haystack: [UInt8]) -> Int? {
-        guard !needle.isEmpty, haystack.count >= needle.count else { return nil }
-        let last = haystack.count - needle.count
-        for offset in 0...last {
-            var match = true
-            for pos in 0..<needle.count where haystack[offset + pos] != needle[pos] {
-                match = false
-                break
-            }
-            if match { return offset }
-        }
-        return nil
-    }
-
-    private func scheduleBottomAnchorPass() {
-        anchorTask?.cancel()
-        anchorTask = Task { @MainActor [weak self] in
-            // Give the shell ~120 ms to finish emitting its new prompt before
-            // we decide. TUI apps keep streaming during this window, which
-            // keeps the post-flight emptiness check below failing and the
-            // anchor pass a no-op.
-            try? await Task.sleep(nanoseconds: 120_000_000)
-            if Task.isCancelled { return }
-            self?.applyBottomAnchorIfShellAtTop()
-        }
-    }
-
-    private func applyBottomAnchorIfShellAtTop() {
-        let snapshot = terminalCore.snapshot()
-        let rows = Int(snapshot.rows)
-        let cols = Int(snapshot.cols)
-        let row = Int(snapshot.cursorRow)
-        let col = Int(snapshot.cursorCol)
-        guard rows > 3, row >= 0, row < rows / 2 else { return }
-        // Only anchor when every visible row strictly below the cursor is blank.
-        for rowIndex in (row + 1)..<rows {
-            for col in 0..<cols {
-                if let cell = snapshot.cell(col: col, row: rowIndex), cell.ch != 0 {
-                    return
-                }
-            }
-        }
-        let linesToInsert = rows - 1 - row
-        guard linesToInsert > 0 else { return }
-        // Move to home, insert N blank lines (which pushes the existing prompt
-        // row down to the bottom), then re-park the cursor on the same column
-        // of the new bottom row.
-        let sequence = "\u{1B}[1;1H\u{1B}[\(linesToInsert)L\u{1B}[\(rows);\(col + 1)H"
-        terminalCore.feed(Data(sequence.utf8))
-        setNeedsDisplay()
-    }
 }
 
 extension TerminalMetalUIView: UIGestureRecognizerDelegate {

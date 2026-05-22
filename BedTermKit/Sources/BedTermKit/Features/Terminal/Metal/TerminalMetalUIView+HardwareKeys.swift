@@ -6,6 +6,10 @@ import UIKit
 extension TerminalMetalUIView {
 
     override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
+        guard !isInputDisabled else {
+            super.pressesBegan(presses, with: event)
+            return
+        }
         var handled = false
         for press in presses {
             guard let key = press.key else { continue }
