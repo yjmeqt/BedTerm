@@ -148,6 +148,7 @@ final class TerminalSession {
     /// whether the session is already closed — the pump task and `disconnect`
     /// could both fire in rapid succession on a bad network drop.
     private func recordKill(reason: SessionSnapshot.KillReason) {
+        guard case .open = state else { return }
         guard let persistence else { return }
         // Pull last-finalized block metadata for the snapshot row.
         let lastBlock = blockStore.blocks.last(where: { !$0.isRunning })
