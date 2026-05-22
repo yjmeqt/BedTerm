@@ -6,11 +6,7 @@ struct BedTermApp: App {
     @State private var path = NavigationPath()
     @State private var toaster = Toaster()
     @State private var settings = BedTermSettings()
-    @State private var persistenceHandle: PersistenceHandle? = {
-        let dbURL = URL.applicationSupportDirectory.appending(path: "BedTerm/sessions.sqlite")
-        return PersistenceHandle.open(at: dbURL)
-    }()
-
+    @State private var persistenceHandle: PersistenceHandle?
     @State private var persistedSnapshots: PersistedSessionSnapshotStore?
 
     @State private var sessionSnapshots = SessionSnapshotStore()
@@ -38,6 +34,10 @@ struct BedTermApp: App {
             .environment(settings)
             .environment(sessionSnapshots)
             .task {
+                if persistenceHandle == nil {
+                    let dbURL = URL.applicationSupportDirectory.appending(path: "BedTerm/sessions.sqlite")
+                    persistenceHandle = PersistenceHandle.open(at: dbURL)
+                }
                 if persistedSnapshots == nil, let handle = persistenceHandle {
                     persistedSnapshots = PersistedSessionSnapshotStore(handle: handle)
                 }

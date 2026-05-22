@@ -80,7 +80,10 @@ public final class PersistedSessionSnapshotStore {
         case 2: return .networkDrop
         case 3: return .appRelaunch
         case 4: return .swapEvicted
-        default: return .userKilled
+        // -1 (NULL in SQLite) happens for rows that escaped the Rust-side
+        // orphan sweep — treat as AppRelaunch rather than UserKilled so the
+        // detail screen doesn't claim the user ended a session they didn't.
+        default: return .appRelaunch
         }
     }
 }
