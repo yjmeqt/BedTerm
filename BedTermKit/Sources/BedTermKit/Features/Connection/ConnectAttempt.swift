@@ -28,8 +28,12 @@ final class ConnectAttempt {
     /// `bootstrapPayload` is the shell-integration heredoc to push after the
     /// remote shell emits its first byte; pass `nil` to keep the channel
     /// pristine (default).
+    /// `hostID` is the `SavedHost.id` — written into the SQLite snapshot row.
+    /// `persistence` is the process-wide handle; pass `nil` to skip persistence.
     func run(
         credential: HostCredential,
+        hostID: UUID,
+        persistence: PersistenceHandle?,
         bootstrapPayload: String? = nil,
         onPrewarm: (@MainActor (Bool) -> Void)? = nil
     ) async -> Outcome {
@@ -50,7 +54,11 @@ final class ConnectAttempt {
             // .unknown — fall through and let SSH surface the real failure.
         }
 
-        let session = TerminalSession(client: self.clientFactory())
+        let session = TerminalSession(
+            client: self.clientFactory(),
+            hostID: hostID,
+            persistence: persistence
+        )
         await session.connect(
             credential: credential,
             initialPTY: .init(cols: 80, rows: 24),

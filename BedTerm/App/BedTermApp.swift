@@ -33,6 +33,7 @@ struct BedTermApp: App {
             .environment(\.toaster, toaster)
             .environment(settings)
             .environment(sessionSnapshots)
+            .environment(\.persistenceHandle, persistenceHandle)
             .task {
                 if persistenceHandle == nil {
                     let dbURL = URL.applicationSupportDirectory.appending(path: "BedTerm/sessions.sqlite")

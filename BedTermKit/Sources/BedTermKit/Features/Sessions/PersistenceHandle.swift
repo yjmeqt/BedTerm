@@ -1,5 +1,6 @@
 import BedTermCoreC
 import Foundation
+import SwiftUI
 
 /// Process-wide handle to the SQLite persistence layer. One per app
 /// lifetime, initialized in BedTermKit setup before any `TerminalSession`
@@ -61,4 +62,83 @@ public final class PersistenceHandle {
 
     /// Internal-only — used by FFI call sites within BedTermKit.
     var unsafeHandle: OpaquePointer { raw }
+}
+
+// MARK: - SwiftUI environment key
+
+private struct PersistenceHandleKey: EnvironmentKey {
+    static let defaultValue: PersistenceHandle? = nil
+}
+
+extension EnvironmentValues {
+    /// Process-wide SQLite persistence handle. `nil` in contexts that have not
+    /// opened the database (tests, extensions, first-unlock race).
+    public var persistenceHandle: PersistenceHandle? {
+        get { self[PersistenceHandleKey.self] }
+        set { self[PersistenceHandleKey.self] = newValue }
+    }
+}
+
+extension PersistenceHandle {
+    /// Insert a `snapshots` row immediately and install the block-finalize
+    /// sink on the live terminal so each completed block writes a row.
+    ///
+    /// Lifetime contract: `terminal` (and the `PersistenceHandle` itself)
+    /// must outlive this call. Callers must invoke `recordKill` exactly
+    /// once before the terminal is freed.
+    func attach(terminal: TerminalCore, snapshotID: UUID, hostID: UUID) {
+        snapshotID.uuidString.withCString { sid in
+            hostID.uuidString.withCString { hid in
+                bt_term_attach_persistence(
+                    terminal.unsafeHandle,
+                    unsafeHandle,
+                    sid, hid
+                )
+            }
+        }
+    }
+
+    /// Close the snapshot row: sets `kill_reason` and `killed_at`; also
+    /// updates `last_cwd / last_command / last_exit_code` from the
+    /// last-finalized block if available.
+    func recordKill(
+        snapshotID: UUID,
+        reason: SessionSnapshot.KillReason,
+        lastCwd: String?,
+        lastCommand: String?,
+        lastExitCode: Int32?
+    ) {
+        let reasonInt: Int32
+        switch reason {
+        case .userKilled: reasonInt = 0
+        case .remoteLogout: reasonInt = 1
+        case .networkDrop: reasonInt = 2
+        case .appRelaunch: reasonInt = 3
+        case .swapEvicted: reasonInt = 4
+        }
+        snapshotID.uuidString.withCString { sid in
+            let cwdHandler: (UnsafePointer<CChar>?) -> Void = { cwdPtr in
+                let cmdHandler: (UnsafePointer<CChar>?) -> Void = { cmdPtr in
+                    bedterm_persistence_record_kill(
+                        self.unsafeHandle,
+                        sid,
+                        reasonInt,
+                        cwdPtr, cmdPtr,
+                        lastExitCode ?? 0,
+                        lastExitCode == nil ? 0 : 1
+                    )
+                }
+                if let cmd = lastCommand {
+                    cmd.withCString(cmdHandler)
+                } else {
+                    cmdHandler(nil)
+                }
+            }
+            if let cwd = lastCwd {
+                cwd.withCString(cwdHandler)
+            } else {
+                cwdHandler(nil)
+            }
+        }
+    }
 }

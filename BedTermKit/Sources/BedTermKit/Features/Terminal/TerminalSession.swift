@@ -35,6 +35,17 @@ final class TerminalSession {
     private let client: any SSHClient
     private var pumpTask: Task<Void, Never>?
 
+    /// SQLite snapshot row identifier for this session. Stable for the
+    /// session lifetime; used to record blocks and kill metadata.
+    let snapshotID: UUID
+    /// The SavedHost UUID this session belongs to — written into the
+    /// `snapshots` row at attach time.
+    let hostID: UUID
+    /// Weak reference to the process-wide persistence layer. Nil when
+    /// running in debug/test contexts that opt out of persistence.
+    @ObservationIgnored
+    private weak var persistence: PersistenceHandle?
+
     /// Optional hook fired before each `send(_:)` writes to the PTY. Set by
     /// the terminal view to implement R5.scroll_snap_on_input (snap back to
     /// the live bottom whenever the user produces a byte while scrolled up).
@@ -42,14 +53,23 @@ final class TerminalSession {
     @ObservationIgnored
     var onBeforeSend: (() -> Void)?
 
-    init(client: any SSHClient) {
+    init(
+        client: any SSHClient,
+        hostID: UUID,
+        persistence: PersistenceHandle?,
+        snapshotID: UUID = UUID()
+    ) {
         self.client = client
+        self.hostID = hostID
+        self.persistence = persistence
+        self.snapshotID = snapshotID
         var feedCont: AsyncStream<Data>.Continuation!
         self.feed = AsyncStream<Data> { feedCont = $0 }
         self.feedContinuation = feedCont
         // Default geometry; first layout pass in TerminalMetalUIView
         // resizes to the actual viewport before any bytes arrive.
         self.terminalCore = TerminalCore(cols: 80, rows: 24)
+        persistence?.attach(terminal: terminalCore, snapshotID: snapshotID, hostID: hostID)
     }
 
     func connect(
@@ -81,14 +101,17 @@ final class TerminalSession {
                     self.feedContinuation.yield(chunk)
                 }
                 if case .open = self.state {
+                    self.recordKill(reason: .remoteLogout)
                     self.state = .closed(reason: String(localized: "Connection ended"))
                 }
                 self.feedContinuation.finish()
             }
         } catch let err as SSHError {
             lastError = err
+            recordKill(reason: killReason(for: err))
             state = .closed(reason: Self.describe(err))
         } catch {
+            recordKill(reason: .userKilled)
             state = .closed(reason: String(describing: error))
         }
     }
@@ -111,11 +134,39 @@ final class TerminalSession {
     }
 
     func disconnect() {
+        recordKill(reason: .userKilled)
         pumpTask?.cancel()
         Task { await client.disconnect() }
         feedContinuation.finish()
         blockStore.reset()
         state = .closed(reason: String(localized: "Closed"))
+    }
+
+    // MARK: - Persistence helpers
+
+    /// Write kill metadata to SQLite. Guards against double-writes by checking
+    /// whether the session is already closed — the pump task and `disconnect`
+    /// could both fire in rapid succession on a bad network drop.
+    private func recordKill(reason: SessionSnapshot.KillReason) {
+        guard let persistence else { return }
+        // Pull last-finalized block metadata for the snapshot row.
+        let lastBlock = blockStore.blocks.last(where: { !$0.isRunning })
+        persistence.recordKill(
+            snapshotID: snapshotID,
+            reason: reason,
+            lastCwd: lastBlock?.workingDirectory,
+            lastCommand: lastBlock?.command,
+            lastExitCode: lastBlock?.exitCode
+        )
+    }
+
+    private func killReason(for error: SSHError) -> SessionSnapshot.KillReason {
+        switch error {
+        case .peerReset, .dnsResolution, .tcpRefused, .timeout:
+            return .networkDrop
+        default:
+            return .userKilled
+        }
     }
 
     nonisolated static func describe(_ error: SSHError) -> String {

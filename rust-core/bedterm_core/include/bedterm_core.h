@@ -446,6 +446,21 @@ void bt_term_snapshot_release(struct BtTerm *h);
 void bt_term_set_palette(struct BtTerm *h, const struct BtPaletteView *palette);
 
 /**
+ * Attach persistence to a `BtTerm` handle — a convenience shim over
+ * `bedterm_persistence_attach` that accepts the opaque `BtTerm *` Swift
+ * already owns rather than requiring Swift to materialise a bare `Terminal *`.
+ *
+ * # Safety
+ * `h` must be a valid `BtTerm *` returned by `bt_term_new`.
+ * `handle`, `snapshot_id`, and `host_id` follow the same safety contract
+ * as `bedterm_persistence_attach`.
+ */
+void bt_term_attach_persistence(struct BtTerm *h,
+                                struct PersistenceHandle *handle,
+                                const char *snapshot_id,
+                                const char *host_id);
+
+/**
  * # Safety
  * `db_path` must be a valid NUL-terminated UTF-8 C string or null.
  * The returned pointer must be freed with `bedterm_persistence_close`.

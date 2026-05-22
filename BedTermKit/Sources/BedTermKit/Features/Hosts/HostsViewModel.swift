@@ -66,6 +66,11 @@ public final class HostsViewModel {
     /// scrollback + last-CWD when a session ends (PRD R1.killed_keeps_snapshot).
     public weak var snapshotStore: SessionSnapshotStore?
 
+    /// Process-wide SQLite persistence layer. Set by the host screen from the
+    /// SwiftUI environment after init. When nil, sessions are created without
+    /// persistence (debug / first-unlock scenarios).
+    public weak var persistenceHandle: PersistenceHandle?
+
     public init(store: HostsStore = HostsStore()) {
         self.store = store
         self.connectFactory = { ConnectAttempt(clientFactory: { CitadelSSHClient() }) }
@@ -148,6 +153,8 @@ public final class HostsViewModel {
         let attempt = self.connectFactory()
         let outcome = await attempt.run(
             credential: entry.credential,
+            hostID: id,
+            persistence: self.persistenceHandle,
             bootstrapPayload: self.bootstrapPayloadProvider?())
         if Task.isCancelled { return }
 

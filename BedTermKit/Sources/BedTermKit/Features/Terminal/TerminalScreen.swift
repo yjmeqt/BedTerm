@@ -373,7 +373,7 @@ struct TerminalScreen: View {
             credential: HostCredential,
             onExit: @escaping () -> Void
         ) {
-            let session = TerminalSession(client: mockSSHClient)
+            let session = TerminalSession(client: mockSSHClient, hostID: UUID(), persistence: nil)
             self.init(
                 session: session,
                 credential: credential,

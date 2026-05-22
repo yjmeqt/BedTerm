@@ -6,6 +6,7 @@ public struct HostsScreen: View {
     @Environment(\.toaster) var toaster
     @Environment(BedTermSettings.self) private var settings
     @Environment(SessionSnapshotStore.self) var snapshotStore
+    @Environment(\.persistenceHandle) private var persistenceHandle
     @State var viewModel = HostsViewModel()
     @State private var didFirstAppear = false
     @State private var showingMismatchReview = false
@@ -327,6 +328,7 @@ public struct HostsScreen: View {
     private func onAppear() {
         viewModel.load()
         viewModel.snapshotStore = snapshotStore
+        viewModel.persistenceHandle = persistenceHandle
         // Settings env is unavailable at view-init time; wire the
         // bootstrap-payload resolver here so the saved-host Connect
         // path can push the shell-integration heredoc when the user

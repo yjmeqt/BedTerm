@@ -46,7 +46,7 @@ final class ShellIntegrationTests: XCTestCase {
 
     func testConnectPropagatesBootstrapPayloadToClient() async throws {
         let mock = MockSSHClient()
-        let session = TerminalSession(client: mock)
+        let session = TerminalSession(client: mock, hostID: UUID(), persistence: nil)
         let credential = HostCredential(host: "test.example.com", port: 22, username: "alice", auth: .password(""))
         let payload = try XCTUnwrap(ShellIntegrationScript.bootstrapPayload())
         await session.connect(
@@ -60,7 +60,7 @@ final class ShellIntegrationTests: XCTestCase {
 
     func testConnectOmitsBootstrapWhenNotProvided() async {
         let mock = MockSSHClient()
-        let session = TerminalSession(client: mock)
+        let session = TerminalSession(client: mock, hostID: UUID(), persistence: nil)
         let credential = HostCredential(host: "test.example.com", port: 22, username: "alice", auth: .password(""))
         await session.connect(
             credential: credential,

@@ -7,6 +7,7 @@
 //!   OR until `bt_term_snapshot_release` is called — whichever happens first.
 //!   Swift must copy out cells before mutating the terminal.
 
+use std::ffi::c_char;
 use std::os::raw::c_int;
 
 use crate::snapshot::{CellSnapshot, GridSnapshot};
@@ -291,4 +292,28 @@ pub unsafe extern "C" fn bt_term_set_palette(h: *mut BtTerm, palette: *const BtP
         default_bg: p.default_bg,
         ansi: p.ansi,
     });
+}
+
+/// Attach persistence to a `BtTerm` handle — a convenience shim over
+/// `bedterm_persistence_attach` that accepts the opaque `BtTerm *` Swift
+/// already owns rather than requiring Swift to materialise a bare `Terminal *`.
+///
+/// # Safety
+/// `h` must be a valid `BtTerm *` returned by `bt_term_new`.
+/// `handle`, `snapshot_id`, and `host_id` follow the same safety contract
+/// as `bedterm_persistence_attach`.
+#[no_mangle]
+pub unsafe extern "C" fn bt_term_attach_persistence(
+    h: *mut BtTerm,
+    handle: *mut crate::persistence::ffi::PersistenceHandle,
+    snapshot_id: *const c_char,
+    host_id: *const c_char,
+) {
+    if h.is_null() {
+        return;
+    }
+    // SAFETY: `BtTerm.inner` is the first field; we take a mutable reference
+    // to it and forward to `bedterm_persistence_attach` as `*mut Terminal`.
+    let term_ptr: *mut Terminal = &mut (*h).inner;
+    crate::persistence::ffi::bedterm_persistence_attach(handle, term_ptr, snapshot_id, host_id);
 }
