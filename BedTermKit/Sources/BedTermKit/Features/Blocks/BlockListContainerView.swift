@@ -1,37 +1,41 @@
 import BedTermCoreC
-import SwiftUI
+import QuartzCore
 import UIKit
 
-/// UIKit composition for the Phase B single Metal surface block list.
-/// Implemented as a `UIViewController` so per-block SwiftUI header strips
-/// (hosted via `UIHostingController`) get proper child-VC lifecycle
-/// (`addChild` / `didMove(toParent:)`) — that's what propagates trait
-/// changes, Dynamic Type, VoiceOver focus, and responder chain to the
-/// embedded SwiftUI.
+/// Single-Metal-pass block list. The renderer paints bodies, header
+/// bands, dividers, and the pinned sticky band in one
+/// `bt_renderer_draw_block_list` call. The Swift container owns:
 ///
-/// The view hosts:
-///   - `scrollView` (manages momentum + contentSize),
-///   - `contentView` inside scrollView holding the per-block header
-///     strips at absolute Y,
-///   - `metalView` pinned sibling **beneath** the scrollView, paints all
-///     visible block bodies via one `bt_renderer_draw_block_list` call
-///     per frame. Lives below the scroll view so the SwiftUI header
-///     hosts (inside `contentView`) render over its transparent regions
-///     — otherwise the Metal layer's opaque body cells were the only
-///     thing visible and every natural header got hidden, leaving only
-///     the floating pinned header at the top of the screen.
+///   - `metalView`: full-frame MTKView that draws everything.
+///   - `contentView`: transparent overlay whose frame.origin.y tracks
+///     `-contentOffsetY`. Hosts `selectionLayer` so long-press points
+///     resolve to content-space without per-frame translation.
+///   - `panGR` + own `MomentumState`: replaces the old UIScrollView.
+///     Mirrors Warp's `MomentumScroll` exactly (decay 0.968 per 8 ms).
 @MainActor
-final class BlockListContainerViewController: UIViewController, UIScrollViewDelegate {
+final class BlockListContainerViewController: UIViewController {
     let session: TerminalSession
-    let scrollView = UIScrollView()
+    /// Transparent overlay that scrolls in lockstep with contentOffsetY.
+    /// Hosts the selection highlight layer; nothing visible draws here.
     let contentView = UIView()
     private let metalView: TerminalBlocksMetalView
 
-    // Layout constants. headerHeightPt may clip at Dynamic Type XXL —
-    // accepted v1 limitation per Phase B plan.
+    // MARK: Scroll state
+
+    /// Current scroll position in content-pixel coordinates.
+    var contentOffsetY: CGFloat = 0
+    var contentHeight: CGFloat = 0
+    var maxOffsetY: CGFloat { max(0, contentHeight - view.bounds.height) }
+
+    let panGR = UIPanGestureRecognizer()
+    var panStartOffsetY: CGFloat = 0
+    var velocityEstimator = VelocityEstimator()
+    var momentum: MomentumState?
+
+    // MARK: Layout constants
+
     let headerHeightPt: CGFloat = 56
-    private let pinTolerancePt: CGFloat = 24
-    private let headerOverscanPt: CGFloat = 200
+    let pinTolerancePt: CGFloat = 24
 
     // Atlas-derived metrics; refreshed from the shared renderer each
     // layout pass. Fallbacks cover the early-launch race where atlas
@@ -42,6 +46,9 @@ final class BlockListContainerViewController: UIViewController, UIScrollViewDele
     private var displayLink: CADisplayLink?
     private var isPushingLayout = false
     private var lastLayoutBounds: CGSize = .zero
+
+    var scrollPosition: ScrollPosition = .followsBottom
+    var lastBlockCount: Int = 0
 
     // Selection lives on a dedicated controller; the container provides
     // its hit-resolver + text-resolver since both walk the same block
@@ -65,15 +72,16 @@ final class BlockListContainerViewController: UIViewController, UIScrollViewDele
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        scrollView.delegate = self
-        // Warp-style: no rubber-band overscroll. Top/bottom clamp hard.
-        scrollView.bounces = false
-        scrollView.alwaysBounceVertical = false
-        scrollView.backgroundColor = .clear
-        contentView.backgroundColor = .clear
         view.addSubview(metalView)
-        view.addSubview(scrollView)
-        scrollView.addSubview(contentView)
+        view.addSubview(contentView)
+        contentView.backgroundColor = .clear
+        contentView.isUserInteractionEnabled = false
+
+        panGR.delegate = self
+        panGR.addTarget(self, action: #selector(handlePan(_:)))
+        panGR.cancelsTouchesInView = false
+        view.addGestureRecognizer(panGR)
+
         selection = BlockListSelectionController(
             contentView: contentView,
             headerHeightPt: headerHeightPt,
@@ -88,20 +96,16 @@ final class BlockListContainerViewController: UIViewController, UIScrollViewDele
     /// Called explicitly by the SwiftUI representable's
     /// `dismantleUIViewController` so the CADisplayLink retain cycle
     /// (link → self) is broken before the controller drops out of the
-    /// SwiftUI hierarchy. Cannot rely on deinit — the link IS what would
-    /// be keeping us alive.
+    /// SwiftUI hierarchy. Cannot rely on deinit — the link IS what
+    /// would be keeping us alive.
     func teardown() {
         displayLink?.invalidate()
         displayLink = nil
-        scrollView.delegate = nil
     }
 
-    var scrollPosition: ScrollPosition = .followsBottom
-    var lastBlockCount: Int = 0
-
     /// Called by the SwiftUI wrapper's `updateUIViewController` whenever
-    /// observed state changes (BlockStore.blocks). Rebuilds header hosts,
-    /// content size, and the Metal layout table; honours the recorded
+    /// observed state changes (BlockStore.blocks). Rebuilds content
+    /// extents and the Metal layout table; honours the recorded
     /// `scrollPosition` so growing content doesn't yank a scrolled-back
     /// user.
     func refresh() {
@@ -116,49 +120,17 @@ final class BlockListContainerViewController: UIViewController, UIScrollViewDele
         }
         lastBlockCount = blockCount
         updateContentSize()
-        applyScrollPosition(animated: false)
-        // syncHeaders depends on the up-to-date contentOffset so it
-        // runs AFTER the pin adjustment, not before.
-        syncHeaders()
+        applyScrollPosition()
         pushLayoutToMetalView()
         updateDisplayLink()
     }
 
-    private func applyScrollPosition(animated: Bool) {
-        let maxOffset = max(0, scrollView.contentSize.height - scrollView.bounds.height)
-        guard scrollView.bounds.height > 0 else { return }
-        // While the user is dragging or the scroll view is decelerating
-        // from a flick, the gesture owns contentOffset. Calling
-        // `setContentOffset` here yanks the viewport back to our anchor
-        // and visibly fights the finger — symptom: "can't scroll while
-        // claude is running because the display link re-pins every
-        // frame". Defer until interaction ends.
-        guard !scrollView.isTracking, !scrollView.isDecelerating else { return }
-        switch scrollPosition {
-        case .followsBottom:
-            scrollView.setContentOffset(CGPoint(x: 0, y: maxOffset), animated: animated)
-        case .fixedAt(let anchorY):
-            // Clamp to the new max in case content shrank (a TUI cleared
-            // its block and the contentSize fell beneath the user's
-            // saved offset).
-            let clamped = min(max(0, anchorY), maxOffset)
-            // Avoid re-issuing the same offset every frame — that's a
-            // no-op for UIScrollView but it still flushes pending
-            // animations and causes minor jank in Instruments.
-            if abs(scrollView.contentOffset.y - clamped) > 0.5 {
-                scrollView.setContentOffset(CGPoint(x: 0, y: clamped), animated: animated)
-            }
-        }
-    }
+    // MARK: Display link
 
-    func isAtBottomEdge() -> Bool {
-        let maxOffset = max(0, scrollView.contentSize.height - scrollView.bounds.height)
-        return scrollView.contentOffset.y >= maxOffset - pinTolerancePt
-    }
-
-    private func updateDisplayLink() {
+    func updateDisplayLink() {
         let hasRunning = session.blockStore.blocks.contains(where: \.isRunning)
-        if hasRunning {
+        let needs = hasRunning || momentum != nil
+        if needs {
             if displayLink == nil {
                 let link = CADisplayLink(target: self, selector: #selector(handleDisplayTick))
                 link.add(to: .main, forMode: .common)
@@ -171,10 +143,13 @@ final class BlockListContainerViewController: UIViewController, UIScrollViewDele
     }
 
     @objc private func handleDisplayTick() {
+        if momentum != nil { advanceMomentum(now: CACurrentMediaTime()) }
         updateContentSize()
-        applyScrollPosition(animated: false)
-        syncHeaders()
+        applyScrollPosition()
         pushLayoutToMetalView()
+        if momentum == nil {
+            updateDisplayLink()  // shed the link when both reasons go away
+        }
     }
 
     private func refreshRowHeight() {
@@ -195,24 +170,12 @@ final class BlockListContainerViewController: UIViewController, UIScrollViewDele
     override func viewWillLayoutSubviews() {
         super.viewWillLayoutSubviews()
         let bounds = view.bounds
-        scrollView.frame = bounds
-        // Inset the Metal surface so cell column 0 starts inside the
-        // Warp panel chrome (left padding); Rust paints the rounded
-        // panel BG behind the inset region.
-        // Full-width metalView. We used to inset by `cellLeftInsetPt`,
-        // which made the GPU drawable 12pt narrower than what the PTY
-        // was sized from (Classic view computes cols from the unindented
-        // bounds), so the rightmost 1-2 cells were clipped off the
-        // edge — characters at col 45 of a 46-wide grid simply vanished.
-        // Headers/dividers already carry the visual left gutter via
-        // SwiftUI padding, so the metalView no longer needs to.
-        metalView.frame = CGRect(
-            x: 0, y: 0,
-            width: bounds.width,
-            height: bounds.height)
-        // Only re-run the heavy refresh path when bounds actually
-        // change. layoutSubviews fires repeatedly during scroll /
-        // rotation / keyboard transitions; rebuildHeaders() is O(N).
+        metalView.frame = bounds
+        // contentView's height tracks the full content extent so the
+        // selection layer can position itself in content-space.
+        contentView.frame = CGRect(
+            x: 0, y: -contentOffsetY,
+            width: bounds.width, height: contentHeight)
         if bounds.size != lastLayoutBounds {
             lastLayoutBounds = bounds.size
             refresh()
@@ -220,12 +183,6 @@ final class BlockListContainerViewController: UIViewController, UIScrollViewDele
     }
 
     func bodyHeightPt(for block: Block) -> CGFloat {
-        // `bodyRows` is Rust's `BlockGrid::used_rows()` for running
-        // blocks and `end_line - start_line` for sealed ones. Tracking
-        // it directly (instead of falling back to `core.screenRows`
-        // while running) keeps the block visually flush with the
-        // composer / next block as the TUI draws — no pre-allocated
-        // 39-row canvas, no jarring collapse at seal time.
         let rows = max(1, Int(block.bodyRows))
         return CGFloat(rows) * rowHeightPt
     }
@@ -237,15 +194,20 @@ final class BlockListContainerViewController: UIViewController, UIScrollViewDele
         for block in blocks {
             total += headerHeightPt + bodyHeightPt(for: block) + gap
         }
-        let width = view.bounds.width
-        scrollView.contentSize = CGSize(width: width, height: total)
-        contentView.frame = CGRect(origin: .zero, size: scrollView.contentSize)
+        contentHeight = total
+        // Re-frame contentView in case the height grew/shrank.
+        contentView.frame = CGRect(
+            x: 0, y: -contentOffsetY,
+            width: view.bounds.width, height: contentHeight)
     }
 
-    /// No-op shim retained because `refresh()` and `handleDisplayTick()`
-    /// already call it. Header / sticky updates now flow exclusively
-    /// through `pushLayoutToMetalView` (M5).
-    func syncHeaders() {}
+    /// (block, naturalTop, naturalBot) in scroll-content coordinates.
+    /// Shared between header descriptor building and sticky-pinning.
+    struct BlockRange {
+        let block: Block
+        let top: CGFloat
+        let bot: CGFloat
+    }
 
     /// Per-block top + bottom Y in scroll-content coordinates. One pass.
     func computeBlockRanges(blocks: [Block], gap: CGFloat) -> [BlockRange] {
@@ -261,17 +223,7 @@ final class BlockListContainerViewController: UIViewController, UIScrollViewDele
         return out
     }
 
-    /// (block, naturalTop, naturalBot) in scroll-content coordinates.
-    /// Shared between header mounting and sticky-pinning.
-    struct BlockRange {
-        let block: Block
-        let top: CGFloat
-        let bot: CGFloat
-    }
-
     func pushLayoutToMetalView() {
-        // Reentrancy guard: scrollToBottom() triggers
-        // scrollViewDidScroll → pushLayoutToMetalView.
         guard !isPushingLayout else { return }
         isPushingLayout = true
         defer { isPushingLayout = false }
@@ -304,12 +256,9 @@ final class BlockListContainerViewController: UIViewController, UIScrollViewDele
         var (headers, storage) = buildHeaderDescriptors(
             ranges: ranges, scale: Float(scale), widthPx: widthPx)
 
-        // Sticky band: emit a single is_sticky=1 entry and drop the
-        // matching natural header so we don't double-draw the block's
-        // command in two places at once.
-        let scrollY = scrollView.contentOffset.y
         if let sticky = buildStickyDescriptor(
-            ranges: ranges, scrollY: scrollY, scale: Float(scale), widthPx: widthPx
+            ranges: ranges, scrollY: contentOffsetY,
+            scale: Float(scale), widthPx: widthPx
         ) {
             if let idx = headers.firstIndex(where: { $0.block_id == sticky.blockID }) {
                 headers.remove(at: idx)
@@ -320,15 +269,15 @@ final class BlockListContainerViewController: UIViewController, UIScrollViewDele
         }
 
         metalView.update(
-            scrollOffset: scrollY,
+            scrollOffset: contentOffsetY,
             layout: entries,
             headers: headers,
             storage: storage)
     }
 
-    /// Resolve UI font pixel sizes from the current trait collection and
-    /// push them to the Rust renderer. Called on viewDidLoad,
-    /// traitCollectionDidChange, and viewWillTransition.
+    /// Resolve UI font pixel sizes from the current trait collection
+    /// and push them to the Rust renderer. Called on viewDidLoad and
+    /// traitCollectionDidChange.
     func pushUIFontSizes() {
         let scale = view.window?.screen.scale ?? UIScreen.main.scale
         let traits = view.traitCollection
@@ -344,5 +293,4 @@ final class BlockListContainerViewController: UIViewController, UIScrollViewDele
         super.traitCollectionDidChange(previous)
         pushUIFontSizes()
     }
-
 }

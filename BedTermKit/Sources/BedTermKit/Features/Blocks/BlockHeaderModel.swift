@@ -32,8 +32,8 @@ struct BlockHeaderModel {
     /// Default neutral grey for unmapped agents — preserves the
     /// "row stays visually consistent" rule from the old SwiftUI view.
     static func tint(for agent: CLIAgent?) -> UInt32 {
-        guard let a = agent else { return 0 }
-        return agentTints[a] ?? 0x8080_80FF
+        guard let agent else { return 0 }
+        return agentTints[agent] ?? 0x8080_80FF
     }
 
     /// Maps to Rust's `IconSlot` via `bedterm_core/icon_atlas.rs` —
@@ -41,8 +41,8 @@ struct BlockHeaderModel {
     /// when no agent is identified. Anything > 0 that isn't claude (1)
     /// or codex (3) falls back to the generic sparkle on the Rust side.
     static func agentID(_ agent: CLIAgent?) -> UInt8 {
-        guard let a = agent else { return 0 }
-        return a.rawValue
+        guard let agent else { return 0 }
+        return agent.rawValue
     }
 
     static func displayCommand(for block: Block) -> String {
@@ -67,9 +67,9 @@ struct BlockHeaderModel {
     private static func formatDuration(_ seconds: TimeInterval) -> String {
         if seconds < 1.0 { return String(format: "%.0fms", seconds * 1000) }
         if seconds < 60 { return String(format: "%.1fs", seconds) }
-        let m = Int(seconds) / 60
-        let s = Int(seconds) % 60
-        return "\(m)m \(s)s"
+        let minutes = Int(seconds) / 60
+        let secs = Int(seconds) % 60
+        return "\(minutes)m \(secs)s"
     }
 }
 
@@ -79,15 +79,15 @@ extension UIColor {
     /// collection first via `compatibleWith:`, so dark-mode tokens
     /// land with the right component values.
     func asRGBA32() -> UInt32 {
-        var r: CGFloat = 0
-        var g: CGFloat = 0
-        var b: CGFloat = 0
-        var a: CGFloat = 0
-        guard getRed(&r, green: &g, blue: &b, alpha: &a) else { return 0 }
-        let red = UInt32(max(0, min(255, Int((r * 255).rounded()))))
-        let green = UInt32(max(0, min(255, Int((g * 255).rounded()))))
-        let blue = UInt32(max(0, min(255, Int((b * 255).rounded()))))
-        let alpha = UInt32(max(0, min(255, Int((a * 255).rounded()))))
+        var rr: CGFloat = 0
+        var gg: CGFloat = 0
+        var bb: CGFloat = 0
+        var aa: CGFloat = 0
+        guard getRed(&rr, green: &gg, blue: &bb, alpha: &aa) else { return 0 }
+        let red = UInt32(max(0, min(255, Int((rr * 255).rounded()))))
+        let green = UInt32(max(0, min(255, Int((gg * 255).rounded()))))
+        let blue = UInt32(max(0, min(255, Int((bb * 255).rounded()))))
+        let alpha = UInt32(max(0, min(255, Int((aa * 255).rounded()))))
         return (red << 24) | (green << 16) | (blue << 8) | alpha
     }
 }

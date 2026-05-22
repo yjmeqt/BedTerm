@@ -10,6 +10,14 @@ import UIKit
 /// When a sticky entry is emitted, the same block's *natural* in-flow
 /// header descriptor is omitted from the headers array so the band
 /// doesn't double-draw.
+/// Output of `buildStickyDescriptor`. Wraps three fields rather than
+/// a bare tuple so SwiftLint's `large_tuple` rule doesn't complain.
+struct StickyHeaderDescriptor {
+    let entry: BtBlockHeaderEntry
+    let blockID: UInt64
+    let storage: (command: Data, subtitle: Data?)
+}
+
 @MainActor
 extension BlockListContainerViewController {
     /// Index of the block whose header should be pinned, or `nil` when
@@ -33,7 +41,7 @@ extension BlockListContainerViewController {
         scrollY: CGFloat,
         scale: Float,
         widthPx: Float
-    ) -> (entry: BtBlockHeaderEntry, blockID: UInt64, storage: (Data, Data?))? {
+    ) -> StickyHeaderDescriptor? {
         guard let active = stickyActiveIndex(ranges: ranges, scrollY: scrollY) else { return nil }
         let range = ranges[active]
         let nextTop = (active + 1 < ranges.count) ? ranges[active + 1].top : .infinity
@@ -47,14 +55,18 @@ extension BlockListContainerViewController {
         let pinnedY = min(max(naturalScreenY, 0), pushUpLimit)
 
         let traits = view.traitCollection
-        let bg = (UIColor(named: "ShadcnBackground", in: .module, compatibleWith: traits)
+        let bg =
+            (UIColor(named: "ShadcnBackground", in: .module, compatibleWith: traits)
             ?? UIColor.systemBackground).asRGBA32()
-        let fg = (UIColor(named: "ShadcnPrimary", in: .module, compatibleWith: traits)
+        let fg =
+            (UIColor(named: "ShadcnPrimary", in: .module, compatibleWith: traits)
             ?? UIColor.label).asRGBA32()
-        let muted = (UIColor(named: "ShadcnMutedForeground", in: .module, compatibleWith: traits)
+        let muted =
+            (UIColor(named: "ShadcnMutedForeground", in: .module, compatibleWith: traits)
             ?? UIColor.secondaryLabel).asRGBA32()
 
-        let cmdData = BlockHeaderModel.displayCommand(for: range.block)
+        let cmdData =
+            BlockHeaderModel.displayCommand(for: range.block)
             .data(using: .utf8) ?? Data()
         let subData = BlockHeaderModel.subtitle(for: range.block)?.data(using: .utf8)
 
@@ -79,6 +91,9 @@ extension BlockListContainerViewController {
             _pad2: (0, 0, 0),
             body_clip_y_top_px: 0,
             body_clip_height_px: 0)
-        return (entry, range.block.id, (cmdData, subData))
+        return StickyHeaderDescriptor(
+            entry: entry,
+            blockID: range.block.id,
+            storage: (cmdData, subData))
     }
 }

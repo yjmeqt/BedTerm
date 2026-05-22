@@ -110,6 +110,7 @@ final class RendererBridge {
     /// content (logical pixel) coordinate space; the renderer applies
     /// `scrollOffsetPx` to clip against the texture viewport.
     @discardableResult
+    // swiftlint:disable:next function_parameter_count
     func drawBlockList(
         term: TerminalCore,
         into texture: MTLTexture,

@@ -94,11 +94,11 @@ final class TerminalBlocksMetalView: MTKView {
         blob.withUnsafeBufferPointer { blobBuf in
             var patched = headers
             let base = blobBuf.baseAddress
-            for i in patched.indices where i < commandRanges.count {
-                let c = commandRanges[i]
-                patched[i].command_utf8 = base.map { $0.advanced(by: c.lowerBound) }
-                if let s = subtitleRanges[i] {
-                    patched[i].subtitle_utf8 = base.map { $0.advanced(by: s.lowerBound) }
+            for idx in patched.indices where idx < commandRanges.count {
+                let cmdRange = commandRanges[idx]
+                patched[idx].command_utf8 = base.map { $0.advanced(by: cmdRange.lowerBound) }
+                if let subRange = subtitleRanges[idx] {
+                    patched[idx].subtitle_utf8 = base.map { $0.advanced(by: subRange.lowerBound) }
                 }
             }
             _ = env.renderer.drawBlockList(
