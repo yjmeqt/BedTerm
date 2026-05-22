@@ -250,6 +250,13 @@ impl BlockStore {
         self.blocks.get_mut(idx)
     }
 
+    /// Whether there is currently an open (running) block. Used by
+    /// `Terminal::feed` to detect whether a `Precmd` event will seal an
+    /// existing block (true) or is arriving fresh (false).
+    pub fn has_open_block(&self) -> bool {
+        self.open_index.is_some()
+    }
+
     /// Resize every still-attached `BlockGrid` to the new PTY
     /// geometry — called by `Terminal::resize` so a running command
     /// inside a TUI doesn't get scrambled when the iOS view bounds
@@ -261,6 +268,13 @@ impl BlockStore {
                 grid.resize(cols, rows);
             }
         }
+    }
+
+    /// Return a reference to the most-recently-sealed (non-running) block.
+    /// Used by the persistence sink in `Terminal::feed` to fetch the block
+    /// that just finalized at `CommandFinished`.
+    pub fn last_finalized(&self) -> Option<&Block> {
+        self.blocks.iter().rev().find(|b| !b.is_running)
     }
 
     fn open_new(&mut self, current_line: i32, pwd: Option<String>, git_branch: Option<String>) {

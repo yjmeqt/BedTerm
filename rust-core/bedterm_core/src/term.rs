@@ -107,6 +107,15 @@ impl Dimensions for Dims {
     }
 }
 
+/// Callback invoked when a block is sealed (CommandFinished). The closure
+/// receives a shared reference to the just-finalized block. Mutable so
+/// the closure can update its own captured state (e.g. sequence counters).
+/// `Send` is required only so `Terminal` can be `Send`; in practice both
+/// the `Terminal` and the `Database` it references live on the same thread
+/// (Swift MainActor for live sessions, or the test thread for in-memory
+/// tests).
+type BlockSink = Box<dyn FnMut(&crate::blocks::Block) + Send + 'static>;
+
 pub struct Terminal {
     parser: Processor,
     term: Term<VoidListener>,
@@ -115,6 +124,7 @@ pub struct Terminal {
     palette: Palette,
     dcs: crate::dcs::DcsSniffer,
     blocks: crate::blocks::BlockStore,
+    block_sink: Option<BlockSink>,
 }
 
 impl Terminal {
@@ -132,7 +142,69 @@ impl Terminal {
             palette: Palette::default(),
             dcs: crate::dcs::DcsSniffer::new(),
             blocks: crate::blocks::BlockStore::new(),
+            block_sink: None,
         }
+    }
+
+    /// Wire this `Terminal` to a persistence `Database` so that every time a
+    /// command block finalizes (CommandFinished) a row is inserted into the
+    /// `blocks` table of `db`.
+    ///
+    /// # Ownership / lifetime contract
+    ///
+    /// **Raw-pointer pattern.** `Database` holds a `rusqlite::Connection`
+    /// which is `!Sync` — it cannot be placed inside an `Arc<Mutex<>>` without
+    /// paying unnecessary synchronisation overhead for what is intentionally a
+    /// single-threaded data path. Instead we capture a raw pointer to `db` and
+    /// document the invariant:
+    ///
+    /// > The caller (Swift's MainActor or the test thread) MUST ensure that
+    /// > `db` lives at least as long as `self`. The typical call site is
+    /// > `bedterm_persistence_attach` (FFI), which holds both `handle` (owns
+    /// > the `Database`) and `terminal` behind heap-allocated, opaque handles
+    /// > that are freed in order: terminal first, then handle.
+    ///
+    /// An alternative would be `Rc<RefCell<Database>>`, which makes the
+    /// single-threaded contract explicit in the type system but forces callers
+    /// to use `Rc` everywhere, complicating the FFI boundary with extra
+    /// indirection and Box-wrap cost. The raw-pointer approach is simpler and
+    /// matches the plan's recommended pattern.
+    ///
+    /// # `started_at` / `finished_at` timestamps
+    ///
+    /// `Block` does not store a wall-clock `started_at` timestamp — only
+    /// `duration_ms` (computed from `Instant` deltas). Therefore:
+    ///   - `finished_at` = `unix_seconds_now()` at the moment of sealing.
+    ///   - `started_at`  = `finished_at - duration_ms/1000.0` when
+    ///     `duration_ms` is `Some`, or `finished_at` when it is `None`
+    ///     (partial-integration path where no matching Preexec arrived).
+    pub fn attach_persistence(&mut self, db: &crate::persistence::Database, snapshot_id: &str) {
+        let snapshot_id = snapshot_id.to_string();
+        // SAFETY: `db_ptr` is valid for the lifetime of the
+        // Terminal/Database pairing — the caller guarantees that the
+        // `Database` (or its owning `PersistenceHandle`) outlives `self`.
+        let db_ptr = db as *const crate::persistence::Database as usize;
+        self.block_sink = Some(Box::new(move |block: &crate::blocks::Block| {
+            let db = unsafe { &*(db_ptr as *const crate::persistence::Database) };
+            let finished_at = crate::persistence::unix_seconds_now();
+            let started_at = match block.duration_ms {
+                Some(ms) => finished_at - ms as f64 / 1000.0,
+                None => finished_at,
+            };
+            let row = crate::persistence::BlockRow {
+                snapshot_id: snapshot_id.clone(),
+                block_seq: block.id as i64,
+                command: block.command.clone(),
+                stylized_command: block.stylized_command.clone(),
+                stylized_output: block.stylized_output.clone(),
+                exit_code: block.exit_code,
+                cwd: block.working_directory.clone(),
+                git_branch: block.git_branch.clone(),
+                started_at,
+                finished_at,
+            };
+            let _ = db.insert_block(&row);
+        }));
     }
 
     pub fn feed(&mut self, bytes: &[u8]) {
@@ -181,8 +253,36 @@ impl Terminal {
                 self.capture_output_bytes(&bytes[cursor..content_end]);
             }
             let current = self.current_grid_absolute_line();
+            // Detect whether this event will cause a block to be sealed
+            // BEFORE calling apply — `has_open_block` reflects the pre-apply
+            // state. `CommandFinished` always seals the open block (if any);
+            // `Precmd` seals an open block on the Ctrl-C path (i.e. when
+            // there IS an open block at the time Precmd fires).
+            let will_seal = match event {
+                crate::dcs::DcsEvent::CommandFinished { .. } => self.blocks.has_open_block(),
+                crate::dcs::DcsEvent::Precmd { .. } => self.blocks.has_open_block(),
+                crate::dcs::DcsEvent::Preexec { .. } => false,
+            };
             self.blocks
                 .apply(event, current, now, cols, rows, &self.palette);
+            // After apply, fire the persistence sink if a block was just
+            // sealed. The sink receives a shared reference to the sealed
+            // block, which is now fully populated (exit_code, stylized_output,
+            // frozen_snapshot all set by `seal_with`). We take-and-restore
+            // the sink to avoid a simultaneous mutable borrow of `self`.
+            if will_seal && self.block_sink.is_some() {
+                if let Some(block) = self.blocks.last_finalized() {
+                    // Safety valve against calling the sink with a stale
+                    // (previously sealed) block: `last_finalized` returns
+                    // the most-recently-sealed block. Since `will_seal` was
+                    // true and the last `apply` sealed exactly one block,
+                    // that is the correct block.
+                    if let Some(mut sink) = self.block_sink.take() {
+                        sink(block);
+                        self.block_sink = Some(sink);
+                    }
+                }
+            }
             cursor = *end_pos;
         }
         // Trailing bytes after the last event (or the entire chunk
