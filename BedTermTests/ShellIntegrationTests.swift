@@ -31,18 +31,14 @@ final class ShellIntegrationTests: XCTestCase {
 
     // MARK: - Bootstrap payload
 
-    func testBootstrapPayloadWrapsScriptInHeredoc() throws {
+    func testBootstrapPayloadMatchesRawScriptBody() throws {
+        // The SFTP path in CitadelSSHClient+Bootstrap writes the bootstrap
+        // payload verbatim to ~/.cache/bedterm/integration.sh — no heredoc
+        // wrapping, no HISTCONTROL prefix. So bootstrapPayload must equal
+        // the raw script body returned by load().
+        let body = try XCTUnwrap(ShellIntegrationScript.load())
         let payload = try XCTUnwrap(ShellIntegrationScript.bootstrapPayload())
-        // Leading space + HISTCONTROL=ignorespace keeps the bootstrap out of
-        // the user's shell history.
-        XCTAssertTrue(payload.hasPrefix(" HISTCONTROL=ignorespace"))
-        // Heredoc framing: sentinel appears twice (open + close) and the
-        // payload terminates with a newline so the remote shell executes it.
-        let parts = payload.components(
-            separatedBy: ShellIntegrationScript.heredocSentinel)
-        let sentinelCount = parts.count - 1
-        XCTAssertEqual(sentinelCount, 2)
-        XCTAssertTrue(payload.hasSuffix("\n"))
+        XCTAssertEqual(payload, body)
     }
 
     // MARK: - End-to-end: bootstrap flows through connect

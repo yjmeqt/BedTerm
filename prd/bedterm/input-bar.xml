@@ -422,6 +422,25 @@ The bottom-row input affordances that turn the iPhone keyboard into a usable ter
   </steps>
 </bug>
 
+<bug id="kbtoggle_noop_when_pty_input_focused" status="Fix Pending" date="2026-05-22" rule="R6.keybar_keyboard_toggle">
+  <current>
+    Tapping the keyboard-dismiss toggle does nothing while input is going into the PTY. The system keyboard stays up, the toolbar / composer row do not ride down, and the terminal viewport does not grow. The user has no way to put the keyboard away — they must drag the scrollback (R6.interactive_scroll_dismiss, also pending) or rotate / background the app.
+    <p><strong>Reproduces in:</strong> block-list mode (default Warp-style flow) and launcher mode while the composer is open. Once a command is running, the composer enters passthrough and the hidden text view holds first responder so PTY input still flows; the toggle remains broken in this state.</p>
+    <p><strong>Diagnosis:</strong> the toggle handler flips <code>keyboardHidden</code> on <code>TerminalScreen</code>, which is plumbed only through <code>TerminalMetalHostView.yieldFirstResponder</code>. In block-list and composer-open states the Metal view is already not the first responder — the composer's hidden <code>UITextView</code> is — so the resign branch is a no-op and the keyboard stays up. Nothing tells the composer's text view to resign.</p>
+  </current>
+  <expected>
+    Per R6.keybar_keyboard_toggle: tapping the toggle while the keyboard is shown puts it away regardless of which view currently holds first responder (Metal grid in inline mode, composer text view in block-list / launcher-open / passthrough). Tapping again brings the keyboard back and restores the same first responder.
+  </expected>
+  <steps>
+    1. Launch the app and connect to any host (default block-list mode).
+    2. Tap into the input row — the system keyboard rises and the composer text view holds first responder.
+    3. Tap the keyboard-dismiss chip on the trailing side of the composer footer.
+    4. Observe: the keyboard does not hide. The chevron flips state (so the model thinks it dismissed) but the system keyboard remains visible.
+    5. Type a long-running command (e.g. <code>sleep 30</code>) and press Run. The composer enters passthrough; keystrokes go to the PTY.
+    6. Tap the keyboard-dismiss chip again — still no effect.
+  </steps>
+</bug>
+
 <bug id="composer_focus_drops_on_open" status="Fix Pending" date="2026-05-17" rule="R4.composer_editor">
   <current>
     Tapping the floating compose pill produced two coupled defects on first open:
