@@ -9,6 +9,7 @@
 
 pub mod db;
 pub mod schema;
+pub mod snapshots;
 pub mod types;
 
 pub use db::Database;
