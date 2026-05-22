@@ -121,4 +121,28 @@ The terminal viewport: ANSI/VT100 emulation rendered by the Metal renderer, basi
   </steps>
 </bug>
 
+<bug id="cjk_ime_broken_in_block_passthrough" status="Open" date="2026-05-22" rule="R3.block_body_monospace">
+  <current>
+    When Block Mode is enabled <em>and</em> a long-running interactive command (the canonical case being <code>claude</code>, but also raw <code>cat</code>/<code>nc</code> etc. that don't switch to the alt-screen) is running as the active block, IME composition with the soft Pinyin / Japanese / 2-set Hangul keyboards does not work: each Latin keystroke ("n", "i", "h", "a", "o") is delivered to the PTY as a raw byte, instead of being held as marked text while the candidate strip composes 你好. The committed CJK characters never reach the running command's stdin.
+
+    Classic mode (Block Mode setting off) is unaffected — IME composes correctly via the terminal Metal view's <code>UITextInput</code> conformance, the preedit floats over the cursor, and committed bytes go to the PTY. The alt-screen path (vim / htop) is also unaffected, because <code>displayMode = .altScreen</code> already hands input back to the terminal Metal view.
+
+    The broken case is specifically: <code>showCommandBlocks = on</code>, no alt-screen flag set, a running block is reading stdin. The block list view captures input via its inner composer's <code>UITextView</code>, whose <code>shouldChangeTextIn</code> path forwards each replacementText fragment as raw bytes — bypassing iOS IME composition.
+  </current>
+  <expected>
+    With Block Mode on and a running interactive command, soft-keyboard IME composition behaves the same as in classic mode:
+    - typed Latin letters under a CJK IME show preedit (e.g. "ni" → "ni"/拼/拟 candidate strip) without leaking to the PTY,
+    - the floating preedit pill is anchored over the live cursor inside the running block's body (not over the hidden global cursor and not in the bottom status row),
+    - selecting a candidate sends the committed UTF-8 (你好) to the running command's stdin,
+    - cancelling the composition sends nothing.
+  </expected>
+  <steps>
+    1. Settings → enable "Show command blocks".
+    2. Connect to a host where <code>claude</code> (or any interactive read-stdin command) is available, and launch it from the block-mode composer.
+    3. Switch the iOS soft keyboard to Pinyin via the globe key.
+    4. Tap inside the block list area (running block visible) and type "nihao" on the soft keyboard.
+    5. Observe: "nihao" appears verbatim in the running command's input — no candidate composition, no 你好.
+  </steps>
+</bug>
+
 </prd>
