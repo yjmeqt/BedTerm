@@ -276,7 +276,7 @@ final class TerminalMetalUIView: MTKView {
             // initial banner + prompt land at the bottom of the new viewport
             // instead of the top. The anchor pass is a no-op when a TUI app
             // has drawn below the cursor.
-            if didGrow, rows > 3 {
+            if didGrow, rows > 3, !isInputDisabled {
                 scheduleBottomAnchorPass()
             }
         }
