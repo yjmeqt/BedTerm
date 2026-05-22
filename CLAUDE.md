@@ -15,31 +15,13 @@ rustup target add aarch64-apple-ios aarch64-apple-ios-sim aarch64-apple-darwin
 
 The Rust core (`rust-core/bedterm_core`) is packaged into `BedTermKit/BinaryFrameworks/BedTermCore.xcframework` (consumed as a SwiftPM `.binaryTarget`). The `BedTerm.xcscheme` build pre-action runs `scripts/build-rust-xcframework.sh ${CONFIGURATION}` automatically, so any `xcodebuild build|test` rebuilds the xcframework if Rust changed. The script is idempotent — a no-op build skips the `-create-xcframework` step entirely. Slice `.a` files are gitignored; only `Info.plist` is tracked.
 
-Build & test (iOS 26 simulator):
-
-```sh
-xcodebuild test \
-  -project BedTerm.xcodeproj \
-  -scheme BedTerm \
-  -destination 'platform=iOS Simulator,name=iPhone 17' \
-  | mint run xcbeautify
-```
-
-Run a single test:
-
-```sh
-xcodebuild test \
-  -project BedTerm.xcodeproj -scheme BedTerm \
-  -destination 'platform=iOS Simulator,name=iPhone 17' \
-  -only-testing:BedTermTests/<ClassName>/<testMethod> \
-  | mint run xcbeautify
-```
+Build & test go through the `worktree-ios-dev` skill (`worktree-ios-dev-tool build|test|run`); the skill picks the right simulator, wires the Rust xcframework pre-action, and pipes through `xcbeautify`. Tests live inside the `BedTermKit` Swift package (`BedTermKit/Tests/BedTermKitTests/`) and use the Swift Testing framework (`import Testing`, `@Suite`, `@Test`, `#expect`, `#require`). New test files don't need any Xcode project bookkeeping — SwiftPM picks them up automatically.
 
 Lint (both must pass):
 
 ```sh
 mint run swiftlint lint --strict
-xcrun swift-format lint -r --strict BedTerm BedTermTests
+xcrun swift-format lint -r --strict BedTerm BedTermKit/Sources BedTermKit/Tests
 ```
 
 `swift-format` ships with Xcode 26 — no install needed. SwiftLint also runs as a SwiftPM build-tool plugin on `BedTermKit` (configured in `BedTermKit/Package.swift`); `xcodebuild` is invoked with package-plugin validation skipped (see commit `58642e8`).

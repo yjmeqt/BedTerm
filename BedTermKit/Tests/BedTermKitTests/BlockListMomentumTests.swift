@@ -1,56 +1,65 @@
-import XCTest
+import Foundation
+import Testing
 
 @testable import BedTermKit
 
 /// Sanity-check the momentum decay + velocity arithmetic ported from
 /// Warp. Pure-value tests — no UIKit, no Metal, no main-actor needed.
-final class BlockListMomentumTests: XCTestCase {
-    func testVelocityFromLastTwoSamples() {
+@Suite("BlockListMomentum")
+struct BlockListMomentumTests {
+    @Test("velocity from last two samples")
+    func velocityFromLastTwoSamples() {
         var est = VelocityEstimator()
         est.push(ScrollSample(time: 0, offsetY: 0))
         est.push(ScrollSample(time: 0.01, offsetY: 10))
-        XCTAssertEqual(est.velocity(), 1000, accuracy: 1)
+        #expect(abs(est.velocity() - 1000) < 1)
     }
 
-    func testVelocityZeroWhenInsufficientSamples() {
+    @Test("velocity is zero with fewer than two samples")
+    func velocityZeroWhenInsufficientSamples() {
         var est = VelocityEstimator()
-        XCTAssertEqual(est.velocity(), 0)
+        #expect(est.velocity() == 0)
         est.push(ScrollSample(time: 0, offsetY: 0))
-        XCTAssertEqual(est.velocity(), 0)
+        #expect(est.velocity() == 0)
     }
 
-    func testRingDropsOldestSamples() {
+    @Test("ring buffer drops oldest samples past capacity")
+    func ringDropsOldestSamples() {
         var est = VelocityEstimator()
         est.push(ScrollSample(time: 0, offsetY: 0))
         est.push(ScrollSample(time: 0.01, offsetY: 5))
         est.push(ScrollSample(time: 0.02, offsetY: 10))
         est.push(ScrollSample(time: 0.03, offsetY: 100))  // fourth sample evicts the first
         // Velocity now from samples 2 and 3 (y=10 → 100 over 0.01s).
-        XCTAssertEqual(est.velocity(), 9000, accuracy: 1)
+        #expect(abs(est.velocity() - 9000) < 1)
     }
 
-    func testDecayMatchesWarpOverDecayWindow() {
+    @Test("decay matches Warp over the 8 ms decay window")
+    func decayMatchesWarpOverDecayWindow() {
         var state = MomentumState(velocityPxPerSec: 1000, lastTick: 0)
         _ = MomentumState.advance(offset: 0, state: &state, now: 0.008) { ($0, false) }
-        XCTAssertEqual(state.velocityPxPerSec, 968, accuracy: 1)
+        #expect(abs(state.velocityPxPerSec - 968) < 1)
     }
 
-    func testClampStopsMomentum() {
+    @Test("clamp signal stops momentum")
+    func clampStopsMomentum() {
         var state = MomentumState(velocityPxPerSec: 1000, lastTick: 0)
         let (_, done) = MomentumState.advance(offset: 0, state: &state, now: 0.008) { _ in (100, true) }
-        XCTAssertTrue(done)
+        #expect(done)
     }
 
-    func testLowVelocityFinishes() {
+    @Test("low velocity advances finish")
+    func lowVelocityFinishes() {
         var state = MomentumState(velocityPxPerSec: 0.5, lastTick: 0)
         let (_, done) = MomentumState.advance(offset: 0, state: &state, now: 0.008) { ($0, false) }
-        XCTAssertTrue(done)
+        #expect(done)
     }
 
-    func testOffsetAdvancesByVelocityTimesDelta() {
+    @Test("offset advances by velocity × dt")
+    func offsetAdvancesByVelocityTimesDelta() {
         var state = MomentumState(velocityPxPerSec: 200, lastTick: 0)
         let (newY, _) = MomentumState.advance(offset: 50, state: &state, now: 0.1) { ($0, false) }
         // 50 + 200 * 0.1 = 70 (clamp passthrough).
-        XCTAssertEqual(newY, 70, accuracy: 0.001)
+        #expect(abs(newY - 70) < 0.001)
     }
 }

@@ -19,7 +19,9 @@ struct ComposerControllerTests {
         #expect(controller.isOpen == true)
     }
 
-    @Test("submit without bracketed paste writes raw UTF-8 with CR line breaks and trailing CR; composer stays open")
+    @Test(
+        "submit without bracketed paste writes raw UTF-8 with CR line breaks and trailing CR; composer stays open in passthrough"
+    )
     func submitRaw() async {
         var captured: [Data] = []
         let controller = ComposerController(
@@ -30,9 +32,15 @@ struct ComposerControllerTests {
         controller.text = "echo hi\necho bye"
         controller.submit()
         #expect(captured == [Data("echo hi\recho bye\r".utf8)])
-        #expect(controller.text == "")
-        // R13.send_keeps_composer_open — Send clears the buffer but the composer stays open.
+        // R13.send_keeps_composer_open + Warp-style passthrough — submitted
+        // text stays visible (as a running-command label) and the editor
+        // flips into passthrough until `endPassthrough()`.
+        #expect(controller.text == "echo hi\necho bye")
         #expect(controller.isOpen == true)
+        #expect(controller.isPassthrough == true)
+        controller.endPassthrough()
+        #expect(controller.text == "")
+        #expect(controller.isPassthrough == false)
     }
 
     @Test("submit appends a trailing CR so the last line auto-executes")

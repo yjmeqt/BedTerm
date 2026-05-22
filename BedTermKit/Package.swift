@@ -41,6 +41,17 @@ let package = Package(
             plugins: [
                 .plugin(name: "SwiftLintBuildToolPlugin", package: "SwiftLint")
             ]
+        ),
+        .testTarget(
+            name: "BedTermKitTests",
+            dependencies: ["BedTermKit"],
+            path: "Tests/BedTermKitTests",
+            resources: [
+                // Renderer parity tests read raw byte-stream captures from
+                // disk; ship the folder verbatim so the on-disk layout the
+                // tests look for is preserved.
+                .copy("Fixtures")
+            ]
         )
     ],
     swiftLanguageModes: [.v6]

@@ -1,5 +1,6 @@
+import Foundation
 import Metal
-import XCTest
+import Testing
 
 @testable import BedTermKit
 
@@ -7,8 +8,9 @@ import XCTest
 /// texture and asserts the result is non-empty. If any regression makes
 /// `bridge.draw` produce an empty texture, this test catches it
 /// per-fixture with a clear error.
-final class TerminalRendererParityTests: XCTestCase {
-    private let fixtures = [
+@Suite("TerminalRenderer parity sweep")
+struct TerminalRendererParityTests {
+    static let fixtures = [
         "00_ascii_hello",
         "01_ls_color_always",
         "02_clear_then_prompt",
@@ -16,17 +18,11 @@ final class TerminalRendererParityTests: XCTestCase {
         "04_utf8_mixed"
     ]
 
-    func testFixturesProduceNonEmptyRender() throws {
-        guard let device = MTLCreateSystemDefaultDevice() else {
-            throw XCTSkip("no Metal device")
-        }
-        guard let queue = device.makeCommandQueue() else {
-            throw XCTSkip("no command queue")
-        }
-        guard let bridge = RendererBridge(device: device, queue: queue) else {
-            XCTFail("bridge init returned nil")
-            return
-        }
+    @Test("fixtures produce non-empty render", arguments: fixtures)
+    func fixturesProduceNonEmptyRender(name: String) throws {
+        let device = try #require(MTLCreateSystemDefaultDevice(), "no Metal device")
+        let queue = try #require(device.makeCommandQueue(), "no command queue")
+        let bridge = try #require(RendererBridge(device: device, queue: queue), "bridge init returned nil")
 
         let desc = MTLTextureDescriptor.texture2DDescriptor(
             pixelFormat: .bgra8Unorm,
@@ -36,38 +32,20 @@ final class TerminalRendererParityTests: XCTestCase {
         )
         desc.usage = [.shaderRead, .renderTarget]
 
-        for name in fixtures {
-            try renderFixtureAndAssert(name: name, device: device, queue: queue, bridge: bridge, desc: desc)
-        }
-    }
-
-    private func renderFixtureAndAssert(
-        name: String,
-        device: MTLDevice,
-        queue: MTLCommandQueue,
-        bridge: RendererBridge,
-        desc: MTLTextureDescriptor
-    ) throws {
-        guard let url = Self.fixtureURL(named: name) else {
-            XCTFail("missing fixture \(name).bin in test bundle")
-            return
-        }
+        let url = try #require(Self.fixtureURL(named: name), "missing fixture \(name).bin in test bundle")
         let payload = try Data(contentsOf: url)
 
         let term = TerminalCore(cols: 80, rows: 24)
         term.feed(payload)
 
-        guard let tex = device.makeTexture(descriptor: desc) else {
-            XCTFail("texture allocation failed for \(name)")
-            return
-        }
+        let tex = try #require(device.makeTexture(descriptor: desc), "texture allocation failed for \(name)")
         let rc = bridge.draw(
             term: term,
             into: tex,
             viewport: CGSize(width: 1024, height: 512),
             time: 0
         )
-        XCTAssertEqual(rc, 0, "metal draw failed on \(name) (rc=\(rc))")
+        #expect(rc == 0, "metal draw failed on \(name) (rc=\(rc))")
 
         // Drain GPU work before reading back pixels.
         let drain = queue.makeCommandBuffer()
@@ -92,28 +70,26 @@ final class TerminalRendererParityTests: XCTestCase {
             }
         }
         print("[ParitySweep] \(name): nonZeroRGB=\(nonZeroRGB)")
-        XCTAssertGreaterThan(
-            nonZeroRGB, 100,
+        #expect(
+            nonZeroRGB > 100,
             "renderer produced empty image for \(name) (nonZeroRGB=\(nonZeroRGB))"
         )
     }
 
-    /// Fixtures ship as a folder reference, so files sit under
-    /// `<bundle>/Fixtures/byte_streams/<name>.bin`.
+    /// Fixtures are shipped as a folder-reference via `.copy("Fixtures")`
+    /// in `Package.swift`, so look them up through `Bundle.module`.
     private static func fixtureURL(named name: String) -> URL? {
-        let bundle = Bundle(for: TerminalRendererParityTests.self)
-        let dir = bundle.bundleURL.appendingPathComponent("Fixtures/byte_streams")
-        let candidate = dir.appendingPathComponent("\(name).bin")
-        if FileManager.default.fileExists(atPath: candidate.path) {
-            return candidate
-        }
-        // Fallback: bundle resource lookup (in case Xcode flattens the folder).
+        let bundle = Bundle.module
         if let url = bundle.url(
             forResource: name,
             withExtension: "bin",
             subdirectory: "Fixtures/byte_streams"
         ) {
             return url
+        }
+        let candidate = bundle.bundleURL.appendingPathComponent("Fixtures/byte_streams/\(name).bin")
+        if FileManager.default.fileExists(atPath: candidate.path) {
+            return candidate
         }
         return bundle.url(forResource: name, withExtension: "bin")
     }

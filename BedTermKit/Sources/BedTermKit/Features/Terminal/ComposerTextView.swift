@@ -23,6 +23,12 @@ struct ComposerTextView: UIViewRepresentable {
     var isPassthrough: Bool = false
     var onPassthroughChars: ((String) -> Void)?
     var onPassthroughBackspace: (() -> Void)?
+    /// External override from the R6 keyboard-dismiss toggle. When true,
+    /// force-resign first responder so the system keyboard hides — even
+    /// while PTY input is flowing through this view. The parent's
+    /// `isFocused` is left untouched so flipping this back to false
+    /// restores focus (and the keyboard) without the user re-tapping.
+    var keyboardHidden: Bool = false
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
@@ -82,7 +88,12 @@ struct ComposerTextView: UIViewRepresentable {
                 report(height: rendered(height: uiView))
             }
         }
-        if isFocused, !uiView.isFirstResponder {
+        if keyboardHidden {
+            if uiView.isFirstResponder {
+                context.coordinator.suppressEndEditingPropagation = true
+                DispatchQueue.main.async { uiView.resignFirstResponder() }
+            }
+        } else if isFocused, !uiView.isFirstResponder {
             DispatchQueue.main.async { uiView.becomeFirstResponder() }
         } else if !isFocused, uiView.isFirstResponder {
             DispatchQueue.main.async { uiView.resignFirstResponder() }
@@ -104,6 +115,11 @@ struct ComposerTextView: UIViewRepresentable {
     final class Coordinator: NSObject, UITextViewDelegate {
         var parent: ComposerTextView
         weak var placeholderLabel: UILabel?
+        /// Set by `updateUIView` right before a toggle-driven
+        /// `resignFirstResponder`. Suppresses the matching
+        /// `textViewDidEndEditing` callback from clearing the parent's
+        /// `isFocused`, so re-showing the keyboard refocuses this view.
+        var suppressEndEditingPropagation = false
         init(_ parent: ComposerTextView) { self.parent = parent }
 
         func refreshPlaceholder(in textView: UITextView) {
@@ -146,6 +162,10 @@ struct ComposerTextView: UIViewRepresentable {
         }
 
         func textViewDidEndEditing(_ textView: UITextView) {
+            if suppressEndEditingPropagation {
+                suppressEndEditingPropagation = false
+                return
+            }
             parent.onFocusChange(false)
         }
     }
