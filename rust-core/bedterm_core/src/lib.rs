@@ -6,6 +6,7 @@ pub mod blocks_ffi;
 pub mod cli_agent;
 pub mod dcs;
 pub mod ffi;
+pub mod persistence;
 pub mod renderer;
 pub mod snapshot;
 pub mod term;
