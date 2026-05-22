@@ -34,6 +34,7 @@ final class TerminalSession {
     public let terminalCore: TerminalCore
     private let client: any SSHClient
     private var pumpTask: Task<Void, Never>?
+    private var killRecorded = false
 
     /// SQLite snapshot row identifier for this session. Stable for the
     /// session lifetime; used to record blocks and kill metadata.
@@ -144,11 +145,13 @@ final class TerminalSession {
 
     // MARK: - Persistence helpers
 
-    /// Write kill metadata to SQLite. Guards against double-writes by checking
-    /// whether the session is already closed — the pump task and `disconnect`
-    /// could both fire in rapid succession on a bad network drop.
+    /// Write kill metadata to SQLite. Guards against double-writes via a
+    /// one-shot boolean flag. This allows recordKill to be called from any
+    /// state (.idle, .connecting, .open) and ensures it runs exactly once,
+    /// blocking subsequent calls regardless of state.
     private func recordKill(reason: SessionSnapshot.KillReason) {
-        guard case .open = state else { return }
+        guard !killRecorded else { return }
+        killRecorded = true
         guard let persistence else { return }
         // Pull last-finalized block metadata for the snapshot row.
         let lastBlock = blockStore.blocks.last(where: { !$0.isRunning })
