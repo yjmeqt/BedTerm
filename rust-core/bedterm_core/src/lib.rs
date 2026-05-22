@@ -19,6 +19,7 @@ pub use blocks_ffi::{
     BT_CLI_AGENT_GEMINI, BT_CLI_AGENT_GOOSE, BT_CLI_AGENT_HERMES, BT_CLI_AGENT_NONE,
     BT_CLI_AGENT_OPENCODE, BT_CLI_AGENT_PI, BT_CLI_AGENT_VIBE,
 };
+pub use persistence::ffi::{bedterm_persistence_close, bedterm_persistence_init};
 pub use term::{
     BT_MODE_ALT_SCREEN, BT_MODE_APP_CURSOR, BT_MODE_APP_KEYPAD, BT_MODE_BRACKETED_PASTE,
     BT_MODE_FOCUS_IN_OUT, BT_MODE_MOUSE_REPORT,

@@ -15,3 +15,5 @@ pub mod types;
 
 pub use db::Database;
 pub use types::{unix_seconds_now, BlockRow, KillReason, SnapshotRow};
+
+pub mod ffi;

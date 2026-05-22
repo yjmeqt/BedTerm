@@ -15,6 +15,7 @@ fn main() {
     println!("cargo:rerun-if-changed=src/dcs.rs");
     println!("cargo:rerun-if-changed=src/renderer/ffi.rs");
     println!("cargo:rerun-if-changed=src/renderer/block_list_ffi.rs");
+    println!("cargo:rerun-if-changed=src/persistence/ffi.rs");
     println!("cargo:rerun-if-changed=src/snapshot.rs");
     println!("cargo:rerun-if-changed=src/term.rs");
     println!("cargo:rerun-if-changed=cbindgen.toml");

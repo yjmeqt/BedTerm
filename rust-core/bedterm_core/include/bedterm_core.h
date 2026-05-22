@@ -11,6 +11,14 @@
 #include <stdlib.h>
 
 /**
+ * Maximum number of newline characters stored in `stylized_command` or
+ * `stylized_output`. Bytes beyond this limit are silently dropped so a
+ * long-running command with voluminous output doesn't grow the in-memory
+ * capture without bound.
+ */
+#define MAX_BLOCK_OUTPUT_LINES 5000
+
+/**
  * Sentinel for a still-running block's `end_line`. Picked outside the legal
  * `i32` grid-line range alacritty produces. Public so the FFI layer can
  * surface it to Swift.
@@ -47,6 +55,12 @@
 
 #define BT_CLI_AGENT_VIBE 13
 
+#define MAX_BLOCKS_PER_SNAPSHOT 100
+
+#define CURRENT_VERSION 1
+
+#define MAX_SNAPSHOTS_PER_HOST 10
+
 /**
  * Two triangles per cell.
  */
@@ -72,6 +86,11 @@
 typedef struct BtRenderer BtRenderer;
 
 typedef struct BtTerm BtTerm;
+
+/**
+ * Opaque handle. Allocated by `init`, freed by `close`.
+ */
+typedef struct PersistenceHandle PersistenceHandle;
 
 typedef struct BtBlockView {
   uint64_t id;
@@ -378,6 +397,20 @@ void bt_term_snapshot_release(struct BtTerm *h);
  * aligned `BtPaletteView`, or be null (a null palette is a no-op).
  */
 void bt_term_set_palette(struct BtTerm *h, const struct BtPaletteView *palette);
+
+/**
+ * # Safety
+ * `db_path` must be a valid NUL-terminated UTF-8 C string or null.
+ * The returned pointer must be freed with `bedterm_persistence_close`.
+ */
+struct PersistenceHandle *bedterm_persistence_init(const char *db_path);
+
+/**
+ * # Safety
+ * `handle` must be a pointer previously returned by
+ * `bedterm_persistence_init` and not yet freed.
+ */
+void bedterm_persistence_close(struct PersistenceHandle *handle);
 
 /**
  * Paint visible block bodies into `texture` for one frame. First
