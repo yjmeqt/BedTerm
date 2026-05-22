@@ -422,7 +422,7 @@ The bottom-row input affordances that turn the iPhone keyboard into a usable ter
   </steps>
 </bug>
 
-<bug id="kbtoggle_noop_when_pty_input_focused" status="Fix Pending" date="2026-05-22" rule="R6.keybar_keyboard_toggle">
+<bug id="kbtoggle_noop_when_pty_input_focused" status="Fixed" date="2026-05-22" rule="R6.keybar_keyboard_toggle">
   <current>
     Tapping the keyboard-dismiss toggle does nothing while input is going into the PTY. The system keyboard stays up, the toolbar / composer row do not ride down, and the terminal viewport does not grow. The user has no way to put the keyboard away — they must drag the scrollback (R6.interactive_scroll_dismiss, also pending) or rotate / background the app.
     <p><strong>Reproduces in:</strong> block-list mode (default Warp-style flow) and launcher mode while the composer is open. Once a command is running, the composer enters passthrough and the hidden text view holds first responder so PTY input still flows; the toggle remains broken in this state.</p>
