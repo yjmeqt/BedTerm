@@ -3,11 +3,51 @@
 //! all string pointers are NUL-terminated UTF-8; functions never
 //! panic across the FFI boundary (wrapped in `catch_unwind`).
 
-use std::ffi::{c_char, CStr};
+use std::ffi::{c_char, CStr, CString};
 use std::panic::{catch_unwind, AssertUnwindSafe};
 
 use super::Database;
 use crate::term::Terminal;
+
+// ── C-ABI snapshot list types ─────────────────────────────────────────────────
+
+/// A single snapshot row as seen from Swift / C.
+#[repr(C)]
+pub struct CSnapshot {
+    pub id: *const c_char,
+    pub host_id: *const c_char,
+    /// -1 if no kill_reason was recorded.
+    pub kill_reason: i32,
+    /// 0.0 if no killed_at was recorded.
+    pub killed_at: f64,
+    /// null if no last_cwd was recorded.
+    pub last_cwd: *const c_char,
+    /// null if no last_command was recorded.
+    pub last_command: *const c_char,
+    /// `i32::MIN` if no exit code was recorded.
+    pub last_exit_code: i32,
+    pub block_count: i64,
+}
+
+/// Heap-allocated list returned by `bedterm_persistence_list`.
+/// Free with `bedterm_persistence_free_list`.
+#[repr(C)]
+pub struct CSnapshotList {
+    pub items: *const CSnapshot,
+    pub count: usize,
+    pub(crate) _owned: *mut OwnedListBacking,
+}
+
+/// Backing storage that keeps the `CString` allocations alive for as long as
+/// the `CSnapshotList` is live.
+pub(crate) struct OwnedListBacking {
+    pub items: Vec<CSnapshot>,
+    // `strings` is never read after construction; it exists solely to keep
+    // the heap allocations alive so that the raw pointers in `items` remain
+    // valid.
+    #[allow(dead_code)]
+    pub strings: Vec<CString>,
+}
 
 /// Opaque handle. Allocated by `init`, freed by `close`.
 pub struct PersistenceHandle {
@@ -103,5 +143,188 @@ pub unsafe extern "C" fn bedterm_persistence_attach(
         };
         let _ = h.db.insert_snapshot(&row);
         term.attach_persistence(&h.db, sid);
+    }));
+}
+
+// ── record_kill / list / free_list / discard ──────────────────────────────────
+
+/// Record that a session was killed.
+///
+/// - `reason`: a `KillReason` discriminant (0–4).
+/// - `last_cwd`, `last_command`: NUL-terminated UTF-8 or null.
+/// - `last_exit_code` / `has_exit_code`: use `has_exit_code != 0` to pass a
+///   real exit code; `i32::MIN` is a legal exit code so a sentinel is not safe.
+///
+/// # Safety
+/// All non-null pointer arguments must point to valid NUL-terminated UTF-8.
+#[no_mangle]
+pub unsafe extern "C" fn bedterm_persistence_record_kill(
+    handle: *mut PersistenceHandle,
+    snapshot_id: *const c_char,
+    reason: i32,
+    last_cwd: *const c_char,
+    last_command: *const c_char,
+    last_exit_code: i32,
+    has_exit_code: i32,
+) {
+    if handle.is_null() || snapshot_id.is_null() {
+        return;
+    }
+    let _ = catch_unwind(AssertUnwindSafe(|| {
+        let h = unsafe { &mut *handle };
+        let sid = unsafe { CStr::from_ptr(snapshot_id) }
+            .to_str()
+            .unwrap_or("");
+        let kill_reason = crate::persistence::KillReason::from_i32(reason)
+            .unwrap_or(crate::persistence::KillReason::UserKilled);
+        let cwd = if last_cwd.is_null() {
+            None
+        } else {
+            unsafe { CStr::from_ptr(last_cwd) }.to_str().ok()
+        };
+        let cmd = if last_command.is_null() {
+            None
+        } else {
+            unsafe { CStr::from_ptr(last_command) }.to_str().ok()
+        };
+        let exit = if has_exit_code != 0 {
+            Some(last_exit_code)
+        } else {
+            None
+        };
+        let _ = h.db.record_kill(sid, kill_reason, cwd, cmd, exit);
+    }));
+}
+
+/// List all killed snapshots for a host, ordered newest-first.
+///
+/// Returns a heap-allocated `CSnapshotList` that must be freed with
+/// `bedterm_persistence_free_list`. Returns null on error.
+///
+/// # Safety
+/// `handle` and `host_id` must be valid non-null pointers.
+#[no_mangle]
+pub unsafe extern "C" fn bedterm_persistence_list(
+    handle: *mut PersistenceHandle,
+    host_id: *const c_char,
+) -> *mut CSnapshotList {
+    if handle.is_null() || host_id.is_null() {
+        return std::ptr::null_mut();
+    }
+    let result = catch_unwind(AssertUnwindSafe(|| {
+        let h = unsafe { &mut *handle };
+        let hid = unsafe { CStr::from_ptr(host_id) }.to_str().ok()?;
+        let rows = h.db.list_snapshots(hid).ok()?;
+
+        // Pass 1 — build every CString and push into `strings`.
+        // CString heap-allocates its content; `as_ptr` returns a pointer to
+        // that heap content, which stays valid even if `strings` reallocates.
+        let mut strings: Vec<CString> = Vec::new();
+        for r in &rows {
+            strings.push(CString::new(r.id.clone()).ok()?);
+            strings.push(CString::new(r.host_id.clone()).ok()?);
+            if let Some(ref s) = r.last_cwd {
+                strings.push(CString::new(s.clone()).ok()?);
+            }
+            if let Some(ref s) = r.last_command {
+                strings.push(CString::new(s.clone()).ok()?);
+            }
+        }
+
+        // Pass 2 — build CSnapshot items by walking `strings` in the same
+        // order they were pushed.
+        let mut sidx = 0usize;
+        let mut items: Vec<CSnapshot> = Vec::with_capacity(rows.len());
+        for r in &rows {
+            let id_ptr = strings[sidx].as_ptr();
+            sidx += 1;
+            let host_ptr = strings[sidx].as_ptr();
+            sidx += 1;
+            let cwd_ptr = if r.last_cwd.is_some() {
+                let p = strings[sidx].as_ptr();
+                sidx += 1;
+                p
+            } else {
+                std::ptr::null()
+            };
+            let cmd_ptr = if r.last_command.is_some() {
+                let p = strings[sidx].as_ptr();
+                sidx += 1;
+                p
+            } else {
+                std::ptr::null()
+            };
+
+            let block_count: i64 =
+                h.db.conn
+                    .query_row(
+                        "SELECT COUNT(*) FROM blocks WHERE snapshot_id = ?1",
+                        rusqlite::params![r.id],
+                        |x| x.get(0),
+                    )
+                    .unwrap_or(0);
+
+            items.push(CSnapshot {
+                id: id_ptr,
+                host_id: host_ptr,
+                kill_reason: r.kill_reason.map(|k| k as i32).unwrap_or(-1),
+                killed_at: r.killed_at.unwrap_or(0.0),
+                last_cwd: cwd_ptr,
+                last_command: cmd_ptr,
+                last_exit_code: r.last_exit_code.unwrap_or(i32::MIN),
+                block_count,
+            });
+        }
+
+        let owned = Box::new(OwnedListBacking { items, strings });
+        let items_ptr = owned.items.as_ptr();
+        let count = owned.items.len();
+        let owned_raw = Box::into_raw(owned);
+        Some(Box::into_raw(Box::new(CSnapshotList {
+            items: items_ptr,
+            count,
+            _owned: owned_raw,
+        })))
+    }));
+    result.ok().flatten().unwrap_or(std::ptr::null_mut())
+}
+
+/// Free a list previously returned by `bedterm_persistence_list`.
+///
+/// # Safety
+/// `list` must have been returned by `bedterm_persistence_list` and not yet
+/// freed.
+#[no_mangle]
+pub unsafe extern "C" fn bedterm_persistence_free_list(list: *mut CSnapshotList) {
+    if list.is_null() {
+        return;
+    }
+    let _ = catch_unwind(AssertUnwindSafe(|| {
+        let l = unsafe { Box::from_raw(list) };
+        if !l._owned.is_null() {
+            drop(unsafe { Box::from_raw(l._owned) });
+        }
+    }));
+}
+
+/// Delete a snapshot (and its blocks) from the database.
+///
+/// # Safety
+/// `handle` and `snapshot_id` must be valid non-null pointers; `snapshot_id`
+/// must be a NUL-terminated UTF-8 C string.
+#[no_mangle]
+pub unsafe extern "C" fn bedterm_persistence_discard(
+    handle: *mut PersistenceHandle,
+    snapshot_id: *const c_char,
+) {
+    if handle.is_null() || snapshot_id.is_null() {
+        return;
+    }
+    let _ = catch_unwind(AssertUnwindSafe(|| {
+        let h = unsafe { &mut *handle };
+        let sid = unsafe { CStr::from_ptr(snapshot_id) }
+            .to_str()
+            .unwrap_or("");
+        let _ = h.db.discard_snapshot(sid);
     }));
 }

@@ -88,9 +88,17 @@ typedef struct BtRenderer BtRenderer;
 typedef struct BtTerm BtTerm;
 
 /**
+ * Backing storage that keeps the `CString` allocations alive for as long as
+ * the `CSnapshotList` is live.
+ */
+typedef struct OwnedListBacking OwnedListBacking;
+
+/**
  * Opaque handle. Allocated by `init`, freed by `close`.
  */
 typedef struct PersistenceHandle PersistenceHandle;
+
+typedef struct Terminal Terminal;
 
 typedef struct BtBlockView {
   uint64_t id;
@@ -206,6 +214,45 @@ typedef struct BtPaletteView {
   struct BtRgb24 default_bg;
   struct BtRgb24 ansi[16];
 } BtPaletteView;
+
+/**
+ * A single snapshot row as seen from Swift / C.
+ */
+typedef struct CSnapshot {
+  const char *id;
+  const char *host_id;
+  /**
+   * -1 if no kill_reason was recorded.
+   */
+  int32_t kill_reason;
+  /**
+   * 0.0 if no killed_at was recorded.
+   */
+  double killed_at;
+  /**
+   * null if no last_cwd was recorded.
+   */
+  const char *last_cwd;
+  /**
+   * null if no last_command was recorded.
+   */
+  const char *last_command;
+  /**
+   * `i32::MIN` if no exit code was recorded.
+   */
+  int32_t last_exit_code;
+  int64_t block_count;
+} CSnapshot;
+
+/**
+ * Heap-allocated list returned by `bedterm_persistence_list`.
+ * Free with `bedterm_persistence_free_list`.
+ */
+typedef struct CSnapshotList {
+  const struct CSnapshot *items;
+  uintptr_t count;
+  struct OwnedListBacking *_owned;
+} CSnapshotList;
 
 /**
  * One entry per block: the BODY cell region + the surrounding Warp-style
@@ -411,6 +458,87 @@ struct PersistenceHandle *bedterm_persistence_init(const char *db_path);
  * `bedterm_persistence_init` and not yet freed.
  */
 void bedterm_persistence_close(struct PersistenceHandle *handle);
+
+/**
+ * Wire `terminal` to the persistence database held in `handle`, scoped to
+ * `snapshot_id`. This function also ensures a `snapshots` row exists for
+ * `snapshot_id` (idempotent — harmlessly fails with a constraint error if
+ * the row was already inserted).
+ *
+ * After this call, every `CommandFinished` event processed by `terminal`
+ * inserts a row into the `blocks` table. Blocks sealed by Ctrl-C
+ * (Precmd-over-running-command path) are also persisted, with `exit_code`
+ * set to NULL.
+ *
+ * # Safety
+ *
+ * - `handle`, `terminal`, `snapshot_id`, and `host_id` must all be valid
+ *   non-null pointers.
+ * - `snapshot_id` and `host_id` must be NUL-terminated UTF-8 C strings.
+ * - The caller MUST keep `handle` alive until `terminal` is freed. The
+ *   persistence sink installed by this function holds a raw pointer into
+ *   `handle.db` — if the handle is freed while the terminal is still live,
+ *   any subsequent block finalization will access freed memory.
+ *
+ * The intended call order is:
+ *   1. `bedterm_persistence_attach(handle, term, sid, hid)` — on session open.
+ *   2. Feed PTY bytes to `term` via `bedterm_feed` as usual.
+ *   3. Free `term` (e.g. `bedterm_free`).
+ *   4. `bedterm_persistence_close(handle)` — after the terminal is gone.
+ */
+void bedterm_persistence_attach(struct PersistenceHandle *handle,
+                                struct Terminal *terminal,
+                                const char *snapshot_id,
+                                const char *host_id);
+
+/**
+ * Record that a session was killed.
+ *
+ * - `reason`: a `KillReason` discriminant (0–4).
+ * - `last_cwd`, `last_command`: NUL-terminated UTF-8 or null.
+ * - `last_exit_code` / `has_exit_code`: use `has_exit_code != 0` to pass a
+ *   real exit code; `i32::MIN` is a legal exit code so a sentinel is not safe.
+ *
+ * # Safety
+ * All non-null pointer arguments must point to valid NUL-terminated UTF-8.
+ */
+void bedterm_persistence_record_kill(struct PersistenceHandle *handle,
+                                     const char *snapshot_id,
+                                     int32_t reason,
+                                     const char *last_cwd,
+                                     const char *last_command,
+                                     int32_t last_exit_code,
+                                     int32_t has_exit_code);
+
+/**
+ * List all killed snapshots for a host, ordered newest-first.
+ *
+ * Returns a heap-allocated `CSnapshotList` that must be freed with
+ * `bedterm_persistence_free_list`. Returns null on error.
+ *
+ * # Safety
+ * `handle` and `host_id` must be valid non-null pointers.
+ */
+struct CSnapshotList *bedterm_persistence_list(struct PersistenceHandle *handle,
+                                               const char *host_id);
+
+/**
+ * Free a list previously returned by `bedterm_persistence_list`.
+ *
+ * # Safety
+ * `list` must have been returned by `bedterm_persistence_list` and not yet
+ * freed.
+ */
+void bedterm_persistence_free_list(struct CSnapshotList *list);
+
+/**
+ * Delete a snapshot (and its blocks) from the database.
+ *
+ * # Safety
+ * `handle` and `snapshot_id` must be valid non-null pointers; `snapshot_id`
+ * must be a NUL-terminated UTF-8 C string.
+ */
+void bedterm_persistence_discard(struct PersistenceHandle *handle, const char *snapshot_id);
 
 /**
  * Paint visible block bodies into `texture` for one frame. First
