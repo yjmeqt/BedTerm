@@ -7,6 +7,7 @@
 //! of the live terminal — it only takes already-buffered byte ranges
 //! plus metadata.
 
+pub mod blocks;
 pub mod db;
 pub mod schema;
 pub mod snapshots;
