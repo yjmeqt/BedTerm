@@ -1,9 +1,11 @@
-import XCTest
+import Foundation
+import Testing
 
 @testable import BedTermKit
 
 @MainActor
-final class BlockStoreTests: XCTestCase {
+@Suite("BlockStore")
+struct BlockStoreTests {
     /// Push a DCS byte stream through a fresh terminal + store pair and
     /// return the resulting (core, store).
     private func feed(_ bytes: Data) -> (TerminalCore, BlockStore) {
@@ -48,91 +50,109 @@ final class BlockStoreTests: XCTestCase {
 
     // MARK: - Lifecycle
 
-    func testEmptyOnInit() {
+    @Test("empty on init")
+    func emptyOnInit() {
         let store = BlockStore()
-        XCTAssertTrue(store.blocks.isEmpty)
+        #expect(store.blocks.isEmpty)
     }
 
-    func testFirstPrecmdOpensRunningBlock() {
+    @Test("Precmd alone opens a pending block that BlockStore hides until Preexec")
+    func precmdOpensPendingBlockHiddenUntilPreexec() {
+        // Pending blocks (no command yet) are filtered out — drawing them
+        // would put a permanent "(no command)" card under the live prompt.
         let (_, store) = feed(precmd())
-        XCTAssertEqual(store.blocks.count, 1)
-        XCTAssertTrue(store.blocks[0].isRunning)
-        XCTAssertNil(store.blocks[0].endLine)
-        XCTAssertFalse(store.blocks[0].hasFrozenSnapshot)
+        #expect(store.blocks.isEmpty)
     }
 
-    func testPwdParsedFromPrecmd() {
+    @Test("pwd from Precmd flows into latestPwd even while the block is pending")
+    func pwdParsedFromPrecmd() {
         let (_, store) = feed(precmd(pwd: "/home/alice"))
-        XCTAssertEqual(store.blocks.first?.workingDirectory, "/home/alice")
+        // The block itself is hidden (pending), but its pwd surfaces via
+        // `latestPwd` so the prompt strip stays live.
+        #expect(store.blocks.isEmpty)
+        #expect(store.latestPwd == "/home/alice")
     }
 
-    func testPreexecFillsCommand() {
+    @Test("Preexec fills command and the block becomes visible")
+    func preexecFillsCommand() {
         let (_, store) = feed(bytes(precmd(), preexec("ls")))
-        XCTAssertEqual(store.blocks.first?.command, "ls")
+        #expect(store.blocks.count == 1)
+        #expect(store.blocks.first?.command == "ls")
+        #expect(store.blocks.first?.isRunning == true)
+        #expect(store.blocks.first?.endLine == nil)
+        #expect(store.blocks.first?.hasFrozenSnapshot == false)
     }
 
-    func testCommandFinishedSealsAndFreezes() throws {
+    @Test("CommandFinished seals and freezes")
+    func commandFinishedSealsAndFreezes() throws {
         let (_, store) = feed(
             bytes(
                 precmd(pwd: "/tmp"),
                 preexec("ls"),
                 commandFinished(exit: 0)
             ))
-        let first = try XCTUnwrap(store.blocks.first)
-        XCTAssertFalse(first.isRunning)
-        XCTAssertNotNil(first.endLine)
-        XCTAssertEqual(first.exitCode, 0)
+        let first = try #require(store.blocks.first)
+        #expect(!first.isRunning)
+        #expect(first.endLine != nil)
+        #expect(first.exitCode == 0)
         // Duration is wall-clock — just assert it's measured.
-        XCTAssertNotNil(first.duration)
-        XCTAssertTrue(first.hasFrozenSnapshot)
+        #expect(first.duration != nil)
+        #expect(first.hasFrozenSnapshot)
     }
 
-    func testNonzeroExitCarried() {
+    @Test("non-zero exit code is carried")
+    func nonzeroExitCarried() {
         let (_, store) = feed(
             bytes(precmd(), preexec("false"), commandFinished(exit: 127)))
-        XCTAssertEqual(store.blocks.first?.exitCode, 127)
+        #expect(store.blocks.first?.exitCode == 127)
     }
 
-    func testCtrlCPathSealsWithoutExit() {
+    @Test("Ctrl-C path seals without exit (and the new pending block is hidden)")
+    func ctrlCPathSealsWithoutExit() {
         // Precmd-following-Precmd (no CommandFinished in between) seals the
         // first block with no exit code — the Ctrl-C / partial-integration
-        // path.
+        // path. The follow-up Precmd opens a fresh pending block which the
+        // store filters out, so we expect only the sealed one to be visible.
         let (_, store) = feed(bytes(precmd(), preexec("sleep 100"), precmd()))
-        XCTAssertEqual(store.blocks.count, 2)
-        XCTAssertFalse(store.blocks[0].isRunning)
-        XCTAssertNil(store.blocks[0].exitCode)
-        XCTAssertNil(store.blocks[0].duration)
+        #expect(store.blocks.count == 1)
+        #expect(!store.blocks[0].isRunning)
+        #expect(store.blocks[0].exitCode == nil)
+        #expect(store.blocks[0].duration == nil)
     }
 
-    func testPreexecWithoutPrecmdSynthesisesOpen() {
+    @Test("Preexec without Precmd synthesises an open block")
+    func preexecWithoutPrecmdSynthesisesOpen() {
         let (_, store) = feed(preexec("date"))
-        XCTAssertEqual(store.blocks.count, 1)
-        XCTAssertEqual(store.blocks.first?.command, "date")
+        #expect(store.blocks.count == 1)
+        #expect(store.blocks.first?.command == "date")
     }
 
-    func testResetClearsAll() {
+    @Test("reset clears all blocks")
+    func resetClearsAll() {
         let (_, store) = feed(
             bytes(precmd(), preexec("ls"), commandFinished(exit: 0)))
-        XCTAssertFalse(store.blocks.isEmpty)
+        #expect(!store.blocks.isEmpty)
         store.reset()
-        XCTAssertTrue(store.blocks.isEmpty)
+        #expect(store.blocks.isEmpty)
     }
 
-    func testFrozenSnapshotFetchableAfterSeal() throws {
+    @Test("frozen snapshot fetchable after seal")
+    func frozenSnapshotFetchableAfterSeal() throws {
         let (core, store) = feed(
             bytes(precmd(), preexec("ls"), commandFinished(exit: 0)))
-        let block = try XCTUnwrap(store.blocks.first)
-        XCTAssertTrue(block.hasFrozenSnapshot)
+        let block = try #require(store.blocks.first)
+        #expect(block.hasFrozenSnapshot)
         let snap = core.frozenSnapshot(forBlockAt: 0)
-        XCTAssertNotNil(snap)
+        #expect(snap != nil)
     }
 
-    func testOtherDcsTrafficIsIgnored() {
+    @Test("other DCS traffic is ignored")
+    func otherDcsTrafficIsIgnored() {
         // A Sixel-shaped DCS (`q` final byte) must NOT produce a block.
         let core = TerminalCore(cols: 80, rows: 24)
         let store = BlockStore()
         core.feed(Data([0x1B, 0x50, 0x71, 0x31, 0x3B, 0x1B, 0x5C]))
         store.refresh(from: core)
-        XCTAssertTrue(store.blocks.isEmpty)
+        #expect(store.blocks.isEmpty)
     }
 }

@@ -6,8 +6,43 @@ enum KeychainError: Error, Equatable {
     case status(OSStatus)
 }
 
+protocol KeychainBackend: Sendable {
+    func save(service: String, account: String, data: Data) throws
+    func load(service: String, account: String) throws -> Data
+    func delete(service: String, account: String)
+    func allAccounts(service: String) -> [String]
+}
+
 enum Keychain {
+    // The backend is a static seam so production code calls remain
+    // `Keychain.save(...)` while tests can install an in-memory fake.
+    // SPM xctest bundles run without a host app and therefore have no
+    // keychain-access-group entitlement, so `SecItem*` calls fail with
+    // errSecMissingEntitlement (-34018). Tests replace this with
+    // `InMemoryKeychainBackend` to exercise the same store logic.
+    nonisolated(unsafe) static var backend: any KeychainBackend = SecItemKeychainBackend()
+
     static func save(service: String, account: String, data: Data) throws {
+        try backend.save(service: service, account: account, data: data)
+    }
+
+    static func load(service: String, account: String) throws -> Data {
+        try backend.load(service: service, account: account)
+    }
+
+    static func delete(service: String, account: String) {
+        backend.delete(service: service, account: account)
+    }
+
+    /// Returns every account name currently stored under the given service.
+    /// Used by `HostsStore` to reconcile its UserDefaults index against the Keychain.
+    static func allAccounts(service: String) -> [String] {
+        backend.allAccounts(service: service)
+    }
+}
+
+struct SecItemKeychainBackend: KeychainBackend {
+    func save(service: String, account: String, data: Data) throws {
         let base: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -21,7 +56,7 @@ enum Keychain {
         guard status == errSecSuccess else { throw KeychainError.status(status) }
     }
 
-    static func load(service: String, account: String) throws -> Data {
+    func load(service: String, account: String) throws -> Data {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -38,7 +73,7 @@ enum Keychain {
         return data
     }
 
-    static func delete(service: String, account: String) {
+    func delete(service: String, account: String) {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -47,9 +82,7 @@ enum Keychain {
         SecItemDelete(query as CFDictionary)
     }
 
-    /// Returns every account name currently stored under the given service.
-    /// Used by `HostsStore` to reconcile its UserDefaults index against the Keychain.
-    static func allAccounts(service: String) -> [String] {
+    func allAccounts(service: String) -> [String] {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,

@@ -3,12 +3,12 @@ import Testing
 
 @testable import BedTermKit
 
-@Suite("HostKeyStore")
+@Suite("HostKeyStore", .serialized)
 struct HostKeyStoreTests {
     private let service = "com.applovin.yi.bedterm.tests.hostkeys"
 
     init() {
-        Keychain.delete(service: self.service, account: "example.com:22")
+        TestKeychain.installInMemory()
     }
 
     @Test("first lookup returns nil (no fingerprint stored yet)")

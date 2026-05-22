@@ -1,63 +1,70 @@
-import XCTest
+import Foundation
+import Testing
 
 @testable import BedTermKit
 
 @MainActor
-final class ShellIntegrationTests: XCTestCase {
+@Suite("ShellIntegration")
+struct ShellIntegrationTests {
     // MARK: - Resource loading
 
-    func testScriptResourceLoads() {
+    @Test("script resource loads via Bundle.module")
+    func scriptResourceLoads() {
         // The bundled bedterm-integration.sh must always be reachable via
         // Bundle.module. If this fails, the resource was dropped from the
         // SPM target — a packaging accident, not a runtime concern.
-        XCTAssertNotNil(ShellIntegrationScript.load())
+        #expect(ShellIntegrationScript.load() != nil)
     }
 
-    func testScriptEmitsDcsSequences() throws {
-        let body = try XCTUnwrap(ShellIntegrationScript.load())
+    @Test("script emits the DCS sequences the parser expects")
+    func scriptEmitsDcsSequences() throws {
+        let body = try #require(ShellIntegrationScript.load())
         // The DCS opener — `ESC P $ d` — that wraps every hex-encoded JSON
         // payload must be present as a literal printf format string.
-        XCTAssertTrue(body.contains(#"\033P$d"#))
+        #expect(body.contains(#"\033P$d"#))
         // Warp-tagged JSON shapes for the three hook variants we ship.
-        XCTAssertTrue(body.contains(#"{"hook":"Precmd","value":{"pwd":"#))
-        XCTAssertTrue(body.contains(#"{"hook":"Preexec","value":{"command":"#))
-        XCTAssertTrue(body.contains(#"{"hook":"CommandFinished","value":{"exit_code":"#))
+        #expect(body.contains(#"{"hook":"Precmd","value":{"pwd":"#))
+        #expect(body.contains(#"{"hook":"Preexec","value":{"command":"#))
+        #expect(body.contains(#"{"hook":"CommandFinished","value":{"exit_code":"#))
         // The zsh + bash hook entry points.
-        XCTAssertTrue(body.contains("__bedterm_precmd"))
-        XCTAssertTrue(body.contains("__bedterm_preexec"))
+        #expect(body.contains("__bedterm_precmd"))
+        #expect(body.contains("__bedterm_preexec"))
         // Idempotence guard so re-source doesn't double-install hooks.
-        XCTAssertTrue(body.contains("__BEDTERM_INTEGRATION_INSTALLED"))
+        #expect(body.contains("__BEDTERM_INTEGRATION_INSTALLED"))
     }
 
     // MARK: - Bootstrap payload
 
-    func testBootstrapPayloadMatchesRawScriptBody() throws {
+    @Test("bootstrap payload matches raw script body")
+    func bootstrapPayloadMatchesRawScriptBody() throws {
         // The SFTP path in CitadelSSHClient+Bootstrap writes the bootstrap
         // payload verbatim to ~/.cache/bedterm/integration.sh — no heredoc
         // wrapping, no HISTCONTROL prefix. So bootstrapPayload must equal
         // the raw script body returned by load().
-        let body = try XCTUnwrap(ShellIntegrationScript.load())
-        let payload = try XCTUnwrap(ShellIntegrationScript.bootstrapPayload())
-        XCTAssertEqual(payload, body)
+        let body = try #require(ShellIntegrationScript.load())
+        let payload = try #require(ShellIntegrationScript.bootstrapPayload())
+        #expect(payload == body)
     }
 
     // MARK: - End-to-end: bootstrap flows through connect
 
-    func testConnectPropagatesBootstrapPayloadToClient() async throws {
+    @Test("connect propagates bootstrap payload to client")
+    func connectPropagatesBootstrapPayloadToClient() async throws {
         let mock = MockSSHClient()
         let session = TerminalSession(client: mock)
         let credential = HostCredential(host: "test.example.com", port: 22, username: "alice", auth: .password(""))
-        let payload = try XCTUnwrap(ShellIntegrationScript.bootstrapPayload())
+        let payload = try #require(ShellIntegrationScript.bootstrapPayload())
         await session.connect(
             credential: credential,
             initialPTY: .init(cols: 80, rows: 24),
             bootstrapPayload: payload
         )
-        let captured = try XCTUnwrap(mock.lastConnectRequest)
-        XCTAssertEqual(captured.bootstrapPayload, payload)
+        let captured = try #require(mock.lastConnectRequest)
+        #expect(captured.bootstrapPayload == payload)
     }
 
-    func testConnectOmitsBootstrapWhenNotProvided() async {
+    @Test("connect omits bootstrap when not provided")
+    func connectOmitsBootstrapWhenNotProvided() async {
         let mock = MockSSHClient()
         let session = TerminalSession(client: mock)
         let credential = HostCredential(host: "test.example.com", port: 22, username: "alice", auth: .password(""))
@@ -65,22 +72,23 @@ final class ShellIntegrationTests: XCTestCase {
             credential: credential,
             initialPTY: .init(cols: 80, rows: 24)
         )
-        XCTAssertNil(mock.lastConnectRequest?.bootstrapPayload)
+        #expect(mock.lastConnectRequest?.bootstrapPayload == nil)
     }
 
     // MARK: - Settings gating
 
-    func testSettingsToggleControlsBootstrap() throws {
+    @Test("settings toggle controls bootstrap default")
+    func settingsToggleControlsBootstrap() throws {
         let suite = UUID().uuidString
         UserDefaults().removePersistentDomain(forName: suite)
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        let defaults = try #require(UserDefaults(suiteName: suite))
         let settings = BedTermSettings(defaults: defaults)
         // Default — opt-in: off
-        XCTAssertFalse(settings.installShellIntegrationOnConnect)
+        #expect(!settings.installShellIntegrationOnConnect)
         settings.installShellIntegrationOnConnect = true
-        XCTAssertTrue(settings.installShellIntegrationOnConnect)
+        #expect(settings.installShellIntegrationOnConnect)
         // Persists
         let reloaded = BedTermSettings(defaults: defaults)
-        XCTAssertTrue(reloaded.installShellIntegrationOnConnect)
+        #expect(reloaded.installShellIntegrationOnConnect)
     }
 }
