@@ -5,6 +5,13 @@ enum AppRoute: Hashable {
     /// means "edit the existing entry with this id" (resolved by the form screen
     /// from `HostsStore`).
     case hostForm(SavedHost.ID?)
+    /// Per-host list of running + killed sessions
+    /// (PRD bedterm/background-sessions R2).
+    case sessionsPanel(SavedHost.ID)
+    /// Frozen view of a killed session (PRD R4). Carries the
+    /// `SessionSnapshot.id` so the destination resolves the snapshot
+    /// from `SessionSnapshotStore`.
+    case killedSessionDetail(UUID)
     case terminal
     #if DEBUG
         case debugTerminal(DebugTTYProgramSelection)

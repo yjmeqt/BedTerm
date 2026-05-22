@@ -53,7 +53,7 @@ The terminal viewport: ANSI/VT100 emulation rendered by the Metal renderer, basi
   <rule id="block_copy" status="❌" context="block view">Each block exposes a one-tap "Copy output" action that copies the block's full output (or full command + output) to the system clipboard. R5.copy continues to apply for arbitrary text selection within a block.</rule>
   <rule id="claude_cli_is_remote" status="❌">"Claude support" in BedTerm means first-class support for the Claude Code CLI (`claude`) running as a remote process over SSH, not calling the Anthropic API from the app. BedTerm never holds an Anthropic API key, never makes network calls to `api.anthropic.com`, and never sends terminal contents to any AI service. All AI capability is whatever the user has installed on the remote host.</rule>
   <rule id="claude_cli_detection" status="❌" context="block view">When the foreground process on the remote PTY is detected as `claude` (via OSC 133 command capture, or via a recognisable banner / title sequence emitted by Claude Code), the active block is tagged as a Claude session and rendered with a distinct accent so the user can tell at a glance that they are talking to Claude, not the shell.</rule>
-  <rule id="claude_cli_alt_screen" status="❌" context="claude session active">Because Claude Code's interactive TUI uses alt-screen, R15.alt_screen_collapse applies: Block view collapses to a single fullscreen grid for the duration of the Claude session and restores to Block mode on exit. The whole session is captured as one Claude-tagged block in the history.</rule>
+  <rule id="claude_cli_alt_screen" status="❌" context="claude session active">Because Claude Code's interactive TUI uses alt-screen, R3.alt_screen_collapse applies: Block view collapses to a single fullscreen grid for the duration of the Claude session and restores to Block mode on exit. The whole session is captured as one Claude-tagged block in the history.</rule>
   <rule id="claude_cli_composer" status="❌" context="claude session active">The R13 composer (and its R14 voice input) is the recommended input path for sending long natural-language prompts to `claude`. Send uses bracketed paste when the remote advertises it so multi-line prompts arrive as a single message rather than per-keystroke input — preserving Claude Code's own input handling.</rule>
   <rule id="claude_cli_quick_launch" status="❌" context="block view">Block view offers a quick-launch affordance (e.g. a "Start Claude" button surfaced when no Claude session is active) that sends `claude` (or a user-configured launch command) to the PTY. The launch command is editable per host so users with custom invocations (`claude --model …`, `npx @anthropic-ai/claude-code`, etc.) can override it.</rule>
   <rule id="claude_cli_no_app_keys" status="❌">BedTerm never prompts for, stores, or transmits an Anthropic API key. Authentication for Claude Code lives entirely on the remote host (its own config / login flow). This is a security guarantee: the app has no AI credentials to leak.</rule>
@@ -118,6 +118,21 @@ The terminal viewport: ANSI/VT100 emulation rendered by the Metal renderer, basi
     1. Connect to an SSH host and get a shell prompt.
     2. Type several commands and observe the terminal output after each press of enter.
     3. Notice: on some lines, the bottom portion of characters is visibly cut off.
+  </steps>
+</bug>
+
+<bug id="cjk_input_blocked_in_claude_mode" status="Open" date="2026-05-22" rule="R3.claude_cli_alt_screen">
+  <current>
+    In Block view's Claude session (the `claude` CLI running in alt-screen, where R3.alt_screen_collapse routes keystrokes directly to the PTY), the user cannot input CJK / IME text. The system keyboard is forced to ASCII-only passthrough: the globe key does not cycle into Pinyin / Zhuyin / Kana / Hangul, marked-text composition is not committed, and only ASCII characters reach the remote `claude` prompt. The composer (R4) — which handles CJK correctly per the fix to `composer_blocks_language_switch` — is bypassed in this mode because R6.composer_is_only_input is suspended while alt-screen is active.
+  </current>
+  <expected>
+    The user can compose and send CJK / IME text to `claude` while it is running in alt-screen, with the same fidelity as the composer in normal Block view: IME candidate UI works, marked text commits on selection, UTF-8 bytes reach the PTY verbatim (wrapped in bracketed paste per R4.send_uses_bracketed_paste when the remote advertises it). One reasonable shape: in Claude alt-screen sessions, keep the composer (R4) active instead of falling back to raw passthrough, since `claude` reads its prompt as line-buffered text rather than per-keystroke chords.
+  </expected>
+  <steps>
+    1. Add a CJK input source (e.g. Simplified Chinese — Pinyin) in iOS Settings → General → Keyboard.
+    2. Open Block view and start a Claude session (R18.claude_cli_quick_launch, or run `claude` manually).
+    3. With the Claude TUI active (alt-screen), tap the keyboard and press the globe key to switch to Pinyin.
+    4. Observe: the keyboard does not switch, or switches but candidate UI / marked text never commits into the `claude` prompt — only ASCII characters appear.
   </steps>
 </bug>
 

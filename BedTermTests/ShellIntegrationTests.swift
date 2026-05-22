@@ -31,17 +31,14 @@ final class ShellIntegrationTests: XCTestCase {
 
     // MARK: - Bootstrap payload
 
-    func testBootstrapPayloadWrapsScriptInHeredoc() throws {
+    func testBootstrapPayloadIsScriptBody() throws {
         let payload = try XCTUnwrap(ShellIntegrationScript.bootstrapPayload())
-        // Leading space + HISTCONTROL=ignorespace keeps the bootstrap out of
-        // the user's shell history.
-        XCTAssertTrue(payload.hasPrefix(" HISTCONTROL=ignorespace"))
-        // Heredoc framing: sentinel appears twice (open + close) and the
-        // payload terminates with a newline so the remote shell executes it.
-        let parts = payload.components(
-            separatedBy: ShellIntegrationScript.heredocSentinel)
-        let sentinelCount = parts.count - 1
-        XCTAssertEqual(sentinelCount, 2)
+        // Today's shape: SFTP writes the body to the remote and the
+        // PTY just `source`s it — so bootstrapPayload() returns the raw
+        // script body itself. The DCS opener appears verbatim and the
+        // installation guard is present so re-source is idempotent.
+        XCTAssertTrue(payload.contains(#"\033P$d"#))
+        XCTAssertTrue(payload.contains("__BEDTERM_INTEGRATION_INSTALLED"))
         XCTAssertTrue(payload.hasSuffix("\n"))
     }
 

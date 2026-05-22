@@ -6,6 +6,7 @@ struct BedTermApp: App {
     @State private var path = NavigationPath()
     @State private var toaster = Toaster()
     @State private var settings = BedTermSettings()
+    @State private var sessionSnapshots = SessionSnapshotStore()
     @State private var onboardingDone: Bool =
         OnboardingViewModel.hasCompleted
         || ProcessInfo.processInfo.arguments.contains("-uitest-skipOnboarding")
@@ -28,6 +29,7 @@ struct BedTermApp: App {
             }
             .environment(\.toaster, toaster)
             .environment(settings)
+            .environment(sessionSnapshots)
         }
     }
 }

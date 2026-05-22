@@ -56,6 +56,15 @@ public final class HostsViewModel {
     private let store: HostsStore
     private let connectFactory: @MainActor () -> ConnectAttempt
     private var inFlightTask: Task<Void, Never>?
+    /// Initial input to send after the SSH channel opens — used to
+    /// implement "Resume here" (PRD R4.detail_resume_action), which
+    /// queues `cd <quoted-cwd>\n` to land the new shell in the killed
+    /// session's last CWD. Cleared as soon as it's been sent.
+    private var pendingInitialInput: [UUID: String] = [:]
+    /// Killed-session snapshot store. Set after init by the host screen
+    /// from the SwiftUI environment so this view model can preserve
+    /// scrollback + last-CWD when a session ends (PRD R1.killed_keeps_snapshot).
+    public weak var snapshotStore: SessionSnapshotStore?
 
     public init(store: HostsStore = HostsStore()) {
         self.store = store
@@ -146,6 +155,18 @@ public final class HostsViewModel {
         case .session(let session):
             self.lastSession = session
             self.currentSessionID = id
+            if let initialCommand = self.pendingInitialInput.removeValue(forKey: id) {
+                // Brief delay so the bootstrap heredoc (if any) finishes
+                // sourcing and the next prompt is drawn before we queue
+                // the resume `cd` into the PTY.
+                Task { [weak session] in
+                    try? await Task.sleep(for: .milliseconds(400))
+                    guard let session else { return }
+                    await MainActor.run {
+                        session.send(Data(initialCommand.utf8))
+                    }
+                }
+            }
         case .mismatch(let stored, let remote, let host, let port):
             self.pendingMismatch = PendingMismatch(
                 stored: stored, remote: remote, host: host, port: port, sourceID: id
@@ -172,6 +193,47 @@ public final class HostsViewModel {
     public func sessionEnded() {
         self.lastSession = nil
         self.currentSessionID = nil
+    }
+
+    /// Snapshot the current session into the killed-session store and
+    /// tear it down (PRD R1.killed_keeps_snapshot, R3.kill_button).
+    /// Safe to call even when there is no live session — it just falls
+    /// through to `sessionEnded()`.
+    public func snapshotAndEnd(reason: SessionSnapshot.KillReason) {
+        guard
+            let session = self.lastSession,
+            let hostID = self.currentSessionID,
+            let snapshotStore = self.snapshotStore
+        else {
+            self.sessionEnded()
+            return
+        }
+        let blocks = session.blockStore.blocks
+        let lastCwd = session.blockStore.latestPwd
+        let lastCompleted = blocks.last(where: { !$0.isRunning && !$0.command.isEmpty })
+        let snapshot = SessionSnapshot(
+            hostID: hostID,
+            blocks: blocks,
+            lastCwd: lastCwd,
+            lastCommand: lastCompleted?.command,
+            lastExitCode: lastCompleted?.exitCode,
+            killReason: reason
+        )
+        snapshotStore.record(snapshot)
+        session.disconnect()
+        self.lastSession = nil
+        self.currentSessionID = nil
+    }
+
+    /// Re-launch a fresh session for the given host with an optional
+    /// initial command to send after the channel opens (PRD R4.detail_resume_action).
+    /// Used by `KilledSessionDetailScreen` to land the new shell in
+    /// the killed session's last CWD via a queued `cd`.
+    public func requestResume(hostID: UUID, initialCommand: String?) {
+        if let cmd = initialCommand, !cmd.isEmpty {
+            self.pendingInitialInput[hostID] = cmd
+        }
+        self.requestConnect(id: hostID)
     }
 
     // MARK: - Delete

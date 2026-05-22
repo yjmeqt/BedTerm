@@ -1,0 +1,200 @@
+import SwiftUI
+
+/// The Warp-style left-pane equivalent: a vertical list of killed
+/// sessions under a single host (PRD R2). v1 lists killed sessions
+/// only — running sessions don't survive the navigation pop yet (P3).
+public struct SessionsPanelScreen: View {
+    @Binding var path: NavigationPath
+    @Environment(SessionSnapshotStore.self) private var store
+
+    let host: SavedHost
+    let onStartNew: () -> Void
+
+    public init(
+        path: Binding<NavigationPath>,
+        host: SavedHost,
+        onStartNew: @escaping () -> Void
+    ) {
+        self._path = path
+        self.host = host
+        self.onStartNew = onStartNew
+    }
+
+    public var body: some View {
+        let snapshots = store.snapshots(forHost: host.id)
+        Group {
+            if snapshots.isEmpty {
+                emptyState
+            } else {
+                listContent(snapshots)
+            }
+        }
+        .background(Color("ShadcnBackground", bundle: .module).ignoresSafeArea())
+        .navigationTitle(Text(verbatim: panelTitle))
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    onStartNew()
+                } label: {
+                    Image(systemName: "plus")
+                }
+                .accessibilityLabel(Text("New session"))
+                .accessibilityIdentifier("sessions.panel.new")
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func listContent(_ snapshots: [SessionSnapshot]) -> some View {
+        ScrollView {
+            LazyVStack(spacing: 12) {
+                ForEach(snapshots) { snapshot in
+                    Button {
+                        path.append(AppRoute.killedSessionDetail(snapshot.id))
+                    } label: {
+                        SessionSnapshotRow(snapshot: snapshot)
+                    }
+                    .buttonStyle(.plain)
+                    .contextMenu {
+                        Button(
+                            String(localized: "Discard"),
+                            systemImage: "trash",
+                            role: .destructive
+                        ) {
+                            store.discard(id: snapshot.id)
+                        }
+                    }
+                }
+            }
+            .padding(16)
+        }
+    }
+
+    private var emptyState: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "rectangle.stack")
+                .font(.title)
+                .foregroundStyle(Color("ShadcnMutedForeground", bundle: .module))
+                .frame(width: 56, height: 56)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color("ShadcnCard", bundle: .module))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(
+                                    Color("ShadcnBorder", bundle: .module), lineWidth: 1)
+                        )
+                )
+            VStack(spacing: 4) {
+                Text("No past sessions")
+                    .font(.headline)
+                    .foregroundStyle(Color("ShadcnPrimary", bundle: .module))
+                Text("Start a session — when it ends, it'll show up here.")
+                    .font(.subheadline)
+                    .foregroundStyle(Color("ShadcnMutedForeground", bundle: .module))
+                    .multilineTextAlignment(.center)
+            }
+            Button {
+                onStartNew()
+            } label: {
+                Text("New session")
+                    .font(.footnote.weight(.medium))
+                    .padding(.horizontal, 16)
+                    .frame(height: 36)
+                    .foregroundStyle(Color("ShadcnPrimaryForeground", bundle: .module))
+                    .background(Color("ShadcnPrimary", bundle: .module))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("sessions.panel.emptyState.new")
+        }
+        .padding(32)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var panelTitle: String {
+        if !host.label.isEmpty { return host.label }
+        return "\(host.credential.username)@\(host.credential.host)"
+    }
+}
+
+private struct SessionSnapshotRow: View {
+    let snapshot: SessionSnapshot
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 12) {
+            statusBadge
+            VStack(alignment: .leading, spacing: 2) {
+                Text(verbatim: lastCommandLabel)
+                    .font(.callout.weight(.medium))
+                    .foregroundStyle(Color("ShadcnPrimary", bundle: .module))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                if let cwd = abbreviatedCwd {
+                    Text(verbatim: cwd)
+                        .font(.footnote)
+                        .foregroundStyle(Color("ShadcnMutedForeground", bundle: .module))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+                Text(verbatim: relativeTimestamp)
+                    .font(.caption2)
+                    .foregroundStyle(Color("ShadcnMutedForeground", bundle: .module))
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(Color("ShadcnMutedForeground", bundle: .module))
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .contentShape(Rectangle())
+        .background(Color("ShadcnCard", bundle: .module))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(Color("ShadcnBorder", bundle: .module), lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(Text(verbatim: accessibilityLabel))
+    }
+
+    private var statusBadge: some View {
+        let isError = (snapshot.lastExitCode ?? 0) != 0
+        let color =
+            isError
+            ? Color("ShadcnDestructive", bundle: .module)
+            : Color("ShadcnMutedForeground", bundle: .module)
+        return Circle()
+            .strokeBorder(color, lineWidth: 1.5)
+            .background(Circle().fill(isError ? color : Color.clear))
+            .frame(width: 10, height: 10)
+    }
+
+    private var lastCommandLabel: String {
+        if let cmd = snapshot.lastCommand, !cmd.isEmpty { return cmd }
+        return "—"
+    }
+
+    private var abbreviatedCwd: String? {
+        guard let cwd = snapshot.lastCwd, !cwd.isEmpty else { return nil }
+        return Self.abbreviate(cwd)
+    }
+
+    static func abbreviate(_ path: String) -> String {
+        SessionSnapshotPathAbbreviator.abbreviate(path)
+    }
+
+    private var relativeTimestamp: String {
+        let fmt = RelativeDateTimeFormatter()
+        fmt.unitsStyle = .short
+        return fmt.localizedString(for: snapshot.killedAt, relativeTo: .now)
+    }
+
+    private var accessibilityLabel: String {
+        let cmd = lastCommandLabel
+        let when = relativeTimestamp
+        let reason = snapshot.killReason.localizedReason
+        return "\(cmd), killed \(when), \(reason)"
+    }
+}
