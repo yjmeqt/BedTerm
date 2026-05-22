@@ -133,6 +133,8 @@ fn draw_block_list_paints_first_visible_block() {
             0.0,
             &entry as *const _,
             1,
+            std::ptr::null(),
+            0,
         )
     };
     assert_eq!(rc, 0);
@@ -150,6 +152,8 @@ fn draw_block_list_paints_first_visible_block() {
             256,
             128,
             0.0,
+            std::ptr::null(),
+            0,
             std::ptr::null(),
             0,
         )

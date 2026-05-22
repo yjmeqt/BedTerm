@@ -6,8 +6,10 @@ pub mod cells;
 pub mod ffi;
 pub(crate) mod font_system;
 pub(crate) mod glyph_raster;
+pub mod icon_atlas;
 pub mod pipeline;
 pub mod shaders;
+pub(crate) mod ui_text;
 
 use atlas::GlyphAtlas;
 use cells::{CellVertex, PanelVertex, VERTICES_PER_CELL, VERTICES_PER_PANEL};
@@ -238,6 +240,7 @@ impl Renderer {
     /// # Safety
     /// `term` must be a valid `&mut BtTerm`. `texture_ptr` must be a live
     /// `id<MTLTexture>` borrowed for the call.
+    #[allow(clippy::too_many_arguments)]
     pub(crate) unsafe fn draw_block_list(
         &mut self,
         term: &mut crate::ffi::BtTerm,
