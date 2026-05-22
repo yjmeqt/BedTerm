@@ -56,25 +56,31 @@ struct BlockStoreTests {
         #expect(store.blocks.isEmpty)
     }
 
-    @Test("first Precmd opens a running block")
-    func firstPrecmdOpensRunningBlock() {
+    @Test("Precmd alone opens a pending block that BlockStore hides until Preexec")
+    func precmdOpensPendingBlockHiddenUntilPreexec() {
+        // Pending blocks (no command yet) are filtered out — drawing them
+        // would put a permanent "(no command)" card under the live prompt.
         let (_, store) = feed(precmd())
-        #expect(store.blocks.count == 1)
-        #expect(store.blocks[0].isRunning)
-        #expect(store.blocks[0].endLine == nil)
-        #expect(!store.blocks[0].hasFrozenSnapshot)
+        #expect(store.blocks.isEmpty)
     }
 
-    @Test("pwd parsed from Precmd")
+    @Test("pwd from Precmd flows into latestPwd even while the block is pending")
     func pwdParsedFromPrecmd() {
         let (_, store) = feed(precmd(pwd: "/home/alice"))
-        #expect(store.blocks.first?.workingDirectory == "/home/alice")
+        // The block itself is hidden (pending), but its pwd surfaces via
+        // `latestPwd` so the prompt strip stays live.
+        #expect(store.blocks.isEmpty)
+        #expect(store.latestPwd == "/home/alice")
     }
 
-    @Test("Preexec fills command")
+    @Test("Preexec fills command and the block becomes visible")
     func preexecFillsCommand() {
         let (_, store) = feed(bytes(precmd(), preexec("ls")))
+        #expect(store.blocks.count == 1)
         #expect(store.blocks.first?.command == "ls")
+        #expect(store.blocks.first?.isRunning == true)
+        #expect(store.blocks.first?.endLine == nil)
+        #expect(store.blocks.first?.hasFrozenSnapshot == false)
     }
 
     @Test("CommandFinished seals and freezes")
@@ -101,13 +107,14 @@ struct BlockStoreTests {
         #expect(store.blocks.first?.exitCode == 127)
     }
 
-    @Test("Ctrl-C path seals without exit")
+    @Test("Ctrl-C path seals without exit (and the new pending block is hidden)")
     func ctrlCPathSealsWithoutExit() {
         // Precmd-following-Precmd (no CommandFinished in between) seals the
         // first block with no exit code — the Ctrl-C / partial-integration
-        // path.
+        // path. The follow-up Precmd opens a fresh pending block which the
+        // store filters out, so we expect only the sealed one to be visible.
         let (_, store) = feed(bytes(precmd(), preexec("sleep 100"), precmd()))
-        #expect(store.blocks.count == 2)
+        #expect(store.blocks.count == 1)
         #expect(!store.blocks[0].isRunning)
         #expect(store.blocks[0].exitCode == nil)
         #expect(store.blocks[0].duration == nil)
