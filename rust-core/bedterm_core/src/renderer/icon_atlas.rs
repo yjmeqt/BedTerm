@@ -51,13 +51,15 @@ pub fn decode(slot: IconSlot) -> DecodedIcon {
     let (w, h) = img.dimensions();
     let mut bgra = Vec::with_capacity((w * h * 4) as usize);
     for px in img.pixels() {
-        let [r, g, b, a] = px.0;
-        // Premultiply alpha so the atlas's blend pipeline composites
-        // correctly. Matches `glyph_raster::rasterize` output.
-        let af = a as f32 / 255.0;
-        bgra.push((b as f32 * af) as u8);
-        bgra.push((g as f32 * af) as u8);
-        bgra.push((r as f32 * af) as u8);
+        // Template render: we want a coverage mask, not the SVG's brand
+        // colour, so the cell-pipeline alpha-mask path can tint by the
+        // shader's `fg` (white in our case, over the brand-tinted badge
+        // circle). Emit (a, a, a, a) so the texture behaves identically
+        // to a monochrome glyph rasterized via swash.
+        let a = px.0[3];
+        bgra.push(a);
+        bgra.push(a);
+        bgra.push(a);
         bgra.push(a);
     }
     DecodedIcon {

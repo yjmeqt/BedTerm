@@ -22,8 +22,45 @@ use std::collections::HashMap;
 use metal::{Device, MTLPixelFormat, MTLRegion, MTLTextureUsage, Texture, TextureDescriptor};
 
 use crate::renderer::glyph_raster::{measure_cell, rasterize, CellMetrics};
+use crate::renderer::icon_atlas::{decode as decode_icon, IconSlot};
+use crate::renderer::ui_text::rasterize_ui;
 
 const ATLAS_PX: u32 = 2048;
+/// Y-pixel at which the UI / icon section of the atlas begins. Terminal
+/// cells pack starting from y=0; UI glyphs + icons pack from this row
+/// down. With a 2048-tall atlas, terminal cells get the top 1024 rows
+/// (≈ 50 rows × 20 px tall = thousands of glyphs) and UI/icon content
+/// gets the bottom 1024.
+const UI_SECTION_Y: u32 = 1024;
+
+/// Key for the proportional-font glyph cache. `font_px_hundredths` is
+/// the font size in 0.01 px units so floats round-trip through `Hash`.
+#[derive(Eq, PartialEq, Hash, Clone, Copy, Debug)]
+pub struct UIGlyphKey {
+    /// First codepoint of the grapheme. For single-codepoint glyphs this
+    /// is everything; multi-codepoint clusters (combining marks, ZWJ
+    /// sequences) get keyed by their lead codepoint, accepting a rare
+    /// cache miss on perfect re-look-up. M3 covers ASCII + common CJK;
+    /// future work can extend to grapheme strings if needed.
+    pub codepoint: u32,
+    pub font_px_hundredths: u32,
+}
+
+/// One UI glyph or icon's location + offsets inside the shared atlas
+/// texture. Mirrors the bits of `GlyphInfo` we need plus baseline /
+/// origin offsets (terminal glyphs share a single baseline so they get
+/// away without these fields).
+#[derive(Clone, Copy, Debug)]
+pub struct UISlot {
+    pub uv_origin: (f32, f32),
+    pub uv_size: (f32, f32),
+    pub pixel_size: (u32, u32),
+    /// Horizontal offset from pen position to slot's left edge (px).
+    pub left: i32,
+    /// Vertical offset from pen baseline to slot's top edge (px).
+    /// Positive means the slot sits above the baseline.
+    pub top: i32,
+}
 
 #[derive(Clone, Copy, Debug)]
 pub struct GlyphInfo {
@@ -47,6 +84,18 @@ pub struct GlyphAtlas {
     cursor_x: u32,
     cursor_y: u32,
     font_size_px: f32,
+    /// UI glyph cache. Keyed by (codepoint, font_px) so the same
+    /// codepoint at subheadline vs caption2 size each get their own
+    /// slot.
+    ui_glyphs: HashMap<UIGlyphKey, UISlot>,
+    /// Icon (agent badge) cache. Keyed by slot enum so re-lookups are
+    /// O(1) without re-decoding the PNG.
+    icons: HashMap<IconSlot, UISlot>,
+    /// Bin-packing cursor for the UI section. Increments per-row; row
+    /// height is the tallest glyph placed in that row.
+    ui_cursor_x: u32,
+    ui_cursor_y: u32,
+    ui_row_height: u32,
 }
 
 impl GlyphAtlas {
@@ -77,9 +126,26 @@ impl GlyphAtlas {
             cursor_x: 0,
             cursor_y: 0,
             font_size_px: scaled,
+            ui_glyphs: HashMap::new(),
+            icons: HashMap::new(),
+            ui_cursor_x: 0,
+            ui_cursor_y: UI_SECTION_Y,
+            ui_row_height: 0,
         };
         me.preload_ascii();
         me
+    }
+
+    /// Drop the UI / icon caches so M7's Dynamic Type re-rasterization
+    /// path can repopulate at the new font sizes without leaking the
+    /// old slots. The texture itself is intentionally kept — over-paint
+    /// is fine, the new slots just claim fresh atlas pixels.
+    pub fn reset_ui_caches(&mut self) {
+        self.ui_glyphs.clear();
+        self.icons.clear();
+        self.ui_cursor_x = 0;
+        self.ui_cursor_y = UI_SECTION_Y;
+        self.ui_row_height = 0;
     }
 
     fn preload_ascii(&mut self) {
@@ -166,6 +232,94 @@ impl GlyphAtlas {
             pixel_size: (slot_w, slot_h),
             wide,
             is_color: raster.is_color,
+        })
+    }
+
+    /// Ensure a UI-font glyph for `text` at `font_size_px` is present
+    /// in the atlas. Returns its slot or `None` if rasterization failed
+    /// (whitespace / no inked pixels) or the atlas section is full.
+    pub fn ensure_ui(&mut self, text: &str, font_size_px: f32) -> Option<UISlot> {
+        // Key on the lead codepoint — sufficient for ASCII / single-CJK
+        // grapheme clusters which is everything header text exercises.
+        let lead = text.chars().next()?;
+        let key = UIGlyphKey {
+            codepoint: lead as u32,
+            font_px_hundredths: (font_size_px * 100.0) as u32,
+        };
+        if let Some(slot) = self.ui_glyphs.get(&key) {
+            return Some(*slot);
+        }
+        let raster = rasterize_ui(text, font_size_px)?;
+        let slot = self.pack_ui_bitmap(
+            &raster.pixels,
+            raster.width,
+            raster.height,
+            raster.left,
+            raster.top,
+        )?;
+        self.ui_glyphs.insert(key, slot);
+        Some(slot)
+    }
+
+    /// Ensure an icon slot is present in the atlas. Decodes the embedded
+    /// PNG on first use and uploads it at native pixel resolution; the
+    /// caller scales it via quad geometry at draw time.
+    pub fn ensure_icon(&mut self, slot_id: IconSlot) -> Option<UISlot> {
+        if let Some(slot) = self.icons.get(&slot_id) {
+            return Some(*slot);
+        }
+        let decoded = decode_icon(slot_id);
+        // Icons treat their alpha channel as a coverage mask (see
+        // `icon_atlas::decode`) — they emit (a, a, a, a) bytes and the
+        // cell shader tints them via `fg`. `left`/`top` are zero since
+        // icons render at the quad's exact rect, not relative to a
+        // text baseline.
+        let slot = self.pack_ui_bitmap(&decoded.bgra, decoded.width, decoded.height, 0, 0)?;
+        self.icons.insert(slot_id, slot);
+        Some(slot)
+    }
+
+    /// Bin-pack a raster bitmap into the UI section. Returns `None` if
+    /// the bitmap is empty or the section is full.
+    fn pack_ui_bitmap(
+        &mut self,
+        pixels: &[u8],
+        w: u32,
+        h: u32,
+        left: i32,
+        top: i32,
+    ) -> Option<UISlot> {
+        if w == 0 || h == 0 {
+            return None;
+        }
+        // Wrap to the next row when this glyph won't fit horizontally.
+        if self.ui_cursor_x + w > ATLAS_PX {
+            self.ui_cursor_y += self.ui_row_height.max(1);
+            self.ui_cursor_x = 0;
+            self.ui_row_height = 0;
+        }
+        // Fail safe when the section is exhausted — caller skips the
+        // glyph rather than panicking.
+        if self.ui_cursor_y + h > ATLAS_PX {
+            return None;
+        }
+        let dst_x = self.ui_cursor_x;
+        let dst_y = self.ui_cursor_y;
+        self.ui_cursor_x += w;
+        self.ui_row_height = self.ui_row_height.max(h);
+
+        let bytes_per_row = (w as usize) * 4;
+        let region = MTLRegion::new_2d(dst_x as u64, dst_y as u64, w as u64, h as u64);
+        self.texture
+            .replace_region(region, 0, pixels.as_ptr() as *const _, bytes_per_row as u64);
+
+        let atlas_pxf = ATLAS_PX as f32;
+        Some(UISlot {
+            uv_origin: (dst_x as f32 / atlas_pxf, dst_y as f32 / atlas_pxf),
+            uv_size: (w as f32 / atlas_pxf, h as f32 / atlas_pxf),
+            pixel_size: (w, h),
+            left,
+            top,
         })
     }
 }

@@ -1,7 +1,3 @@
-// M3 wires these into `header_band::emit_header`; silence clippy until
-// then so M2 lands as a self-contained, fully-tested module.
-#![allow(dead_code)]
-
 //! Proportional (UI) text rasterization via cosmic-text + swash.
 //!
 //! Mirrors `glyph_raster::rasterize` but
@@ -29,9 +25,6 @@ use super::glyph_raster::RasterizedGlyph;
 pub struct ShapedGlyph {
     /// UTF-8 slice borrowed from the input string. Caller is expected
     /// to hold the input alive for as long as it uses these.
-    /// M3 uses this when emitting per-glyph quads; currently only
-    /// `advance_px` is consumed by `fit_prefix`.
-    #[allow(dead_code)]
     pub text: String,
     /// Horizontal advance in pixels at the requested size.
     pub advance_px: f32,

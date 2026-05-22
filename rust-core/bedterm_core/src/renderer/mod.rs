@@ -6,6 +6,7 @@ pub mod cells;
 pub mod ffi;
 pub(crate) mod font_system;
 pub(crate) mod glyph_raster;
+pub(crate) mod header_band;
 pub mod icon_atlas;
 pub mod pipeline;
 pub mod shaders;
@@ -249,10 +250,8 @@ impl Renderer {
         viewport_h: u32,
         scroll_y_px: f32,
         entries: &[crate::renderer::block_list_ffi::BtBlockLayoutEntry],
-        _headers: &[crate::renderer::block_list_ffi::BtBlockHeaderEntry],
+        headers: &[crate::renderer::block_list_ffi::BtBlockHeaderEntry],
     ) -> i32 {
-        // M1: header slice accepted but not drawn. Milestones 3/5 wire
-        // `header_band::emit_header(...)` into this loop.
         if texture_ptr.is_null() {
             return -1;
         }
@@ -327,6 +326,41 @@ impl Renderer {
                 body_top_in_view,
                 &mut cell_verts,
             );
+        }
+
+        // Header bands. Order: non-sticky first, sticky last — sticky
+        // descriptors paint on top of everything (z-order via append
+        // order, not depth testing). Same vertex buffers as block
+        // bodies / panels so the existing two-pipeline pass handles
+        // everything in one render encode.
+        if !headers.is_empty() {
+            let mut ctx = crate::renderer::header_band::HeaderDrawContext {
+                subheadline_px: self.ui_subheadline_px,
+                caption2_px: self.ui_caption2_px,
+                scale: self.ui_scale,
+                viewport_w: viewport_w as f32,
+                viewport_h: viewport_h as f32,
+                scroll_y_px,
+                atlas: &mut self.atlas,
+            };
+            // Two passes so sticky always z-sorts on top, regardless
+            // of input order. Cheap — usually ≤ 10 headers.
+            for h in headers.iter().filter(|h| h.is_sticky == 0) {
+                crate::renderer::header_band::emit_header(
+                    &mut ctx,
+                    h,
+                    &mut panel_verts,
+                    &mut cell_verts,
+                );
+            }
+            for h in headers.iter().filter(|h| h.is_sticky != 0) {
+                crate::renderer::header_band::emit_header(
+                    &mut ctx,
+                    h,
+                    &mut panel_verts,
+                    &mut cell_verts,
+                );
+            }
         }
 
         // One render pass — Clear once, panels first (so cells paint on
