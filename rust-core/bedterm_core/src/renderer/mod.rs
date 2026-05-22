@@ -94,10 +94,25 @@ impl Renderer {
 
     /// Push UI font sizes resolved from `UIFont.preferredFont(forTextStyle:)`.
     /// Values arrive in pixels (Swift multiplies point × screen scale).
+    /// Invalidates the UI-glyph atlas cache whenever the sizes actually
+    /// change so a Dynamic Type bump re-rasterizes at the new pixel
+    /// size on the next frame.
     pub fn set_ui_font_sizes(&mut self, sub: f32, cap: f32, scale: f32) {
-        self.ui_subheadline_px = sub.max(1.0);
-        self.ui_caption2_px = cap.max(1.0);
-        self.ui_scale = scale.max(1.0);
+        let new_sub = sub.max(1.0);
+        let new_cap = cap.max(1.0);
+        let new_scale = scale.max(1.0);
+        // Float compare via hundredths-of-px equality — same precision the
+        // atlas's hash key uses, so we invalidate IFF a different cache
+        // key would result for any glyph at the same codepoint.
+        let changed = ((self.ui_subheadline_px - new_sub).abs() > 0.005)
+            || ((self.ui_caption2_px - new_cap).abs() > 0.005)
+            || ((self.ui_scale - new_scale).abs() > 0.005);
+        self.ui_subheadline_px = new_sub;
+        self.ui_caption2_px = new_cap;
+        self.ui_scale = new_scale;
+        if changed {
+            self.atlas.reset_ui_caches();
+        }
     }
 
     pub fn set_clear_color(&mut self, r: f32, g: f32, b: f32, a: f32) {

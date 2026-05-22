@@ -225,12 +225,16 @@ fn emit_text_run(
 
     let mut x = start_x;
     for g in glyphs.iter().take(take) {
-        emit_glyph_quad(ctx, &g.text, font_px, x, baseline_y, fg_rgba, bg_rgba, cell_verts);
+        emit_glyph_quad(
+            ctx, &g.text, font_px, x, baseline_y, fg_rgba, bg_rgba, cell_verts,
+        );
         x += g.advance_px;
     }
     if needs_ellipsis {
         for g in ellipsis_glyphs.iter() {
-            emit_glyph_quad(ctx, &g.text, font_px, x, baseline_y, fg_rgba, bg_rgba, cell_verts);
+            emit_glyph_quad(
+                ctx, &g.text, font_px, x, baseline_y, fg_rgba, bg_rgba, cell_verts,
+            );
             x += g.advance_px;
         }
     }
