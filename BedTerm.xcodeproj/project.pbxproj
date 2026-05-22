@@ -8,7 +8,6 @@
 
 /* Begin PBXBuildFile section */
 		3BA0EC8B2788B75A6BCFD1FD /* BedTermTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43021D79E9E48C17C8DE52A7 /* BedTermTests.swift */; };
-		D5D5D5D500000000000000A1 /* RustMockTTYClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D5D5D5D500000000000000F1 /* RustMockTTYClientTests.swift */; };
 		89E7D796F5E95867BF23555D /* BedTermApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79DC149F8161013AB2412CF9 /* BedTermApp.swift */; };
 		B1B1B1B100000000000000A3 /* KeyBarStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B1B1B100000000000000F3 /* KeyBarStateTests.swift */; };
 		B1B1B1B100000000000000A4 /* ByteSequenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B1B1B100000000000000F4 /* ByteSequenceTests.swift */; };
@@ -81,7 +80,6 @@
 		B8B8B8B800000000000000F1 /* ShellIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShellIntegrationTests.swift; sourceTree = "<group>"; };
 		BABABABA00000000000000F1 /* SessionSnapshotTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionSnapshotTests.swift; sourceTree = "<group>"; };
 		B9B9B9B900000000000000F1 /* BlockStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlockStoreTests.swift; sourceTree = "<group>"; };
-		D5D5D5D500000000000000F1 /* RustMockTTYClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RustMockTTYClientTests.swift; sourceTree = "<group>"; };
 		F3F3F3F300000000000000F2 /* Fixtures */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Fixtures; sourceTree = "<group>"; };
 		C1C1C1C100000000000000E1 /* BedTermUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = BedTermUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		C1C1C1C100000000000000F1 /* ConnectionSmokeUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionSmokeUITests.swift; sourceTree = "<group>"; };
@@ -150,7 +148,6 @@
 				B8B8B8B800000000000000F1 /* ShellIntegrationTests.swift */,
 				B9B9B9B900000000000000F1 /* BlockStoreTests.swift */,
 				BABABABA00000000000000F1 /* SessionSnapshotTests.swift */,
-				D5D5D5D500000000000000F1 /* RustMockTTYClientTests.swift */,
 			);
 			path = BedTermTests;
 			sourceTree = "<group>";
@@ -344,7 +341,6 @@
 				B8B8B8B800000000000000A1 /* ShellIntegrationTests.swift in Sources */,
 				B9B9B9B900000000000000A1 /* BlockStoreTests.swift in Sources */,
 				BABABABA00000000000000A1 /* SessionSnapshotTests.swift in Sources */,
-				D5D5D5D500000000000000A1 /* RustMockTTYClientTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

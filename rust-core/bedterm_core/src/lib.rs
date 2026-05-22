@@ -10,9 +10,6 @@ pub mod renderer;
 pub mod snapshot;
 pub mod term;
 
-#[cfg(feature = "mock-tty")]
-pub mod mock_tty;
-
 // Re-export FFI mode constants at crate root so cbindgen emits them into the
 // generated C header.
 pub use blocks_ffi::{

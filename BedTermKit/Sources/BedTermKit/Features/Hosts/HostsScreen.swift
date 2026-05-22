@@ -108,8 +108,6 @@ public struct HostsScreen: View {
                 #if DEBUG
                     debugMockSSHRow
                         .padding(.horizontal, 16)
-                    DebugTTYSection(path: $path)
-                        .padding(.top, 8)
                 #endif
                 ForEach(viewModel.entries) { entry in
                     VStack(alignment: .leading, spacing: 8) {
@@ -214,8 +212,8 @@ public struct HostsScreen: View {
         case .killedSessionDetail(let snapshotID):
             killedSessionDetailDestination(snapshotID: snapshotID)
         #if DEBUG
-            case .debugTerminal(let selection):
-                debugTerminalScreen(for: selection)
+            case .mockSSH:
+                mockSSHDestination
         #endif
         }
     }
@@ -226,33 +224,6 @@ public struct HostsScreen: View {
         guard let id = viewModel.currentSessionID else { return nil }
         return viewModel.entries.first { $0.id == id }
     }
-
-    #if DEBUG
-        /// Ephemeral debug-only host row: connects to the loopback
-        /// `bedterm-mock-ssh` server on 127.0.0.1:2222 with hard-coded
-        /// credentials. Not persisted — the entry only exists for the
-        /// duration of the running DEBUG app.
-        @ViewBuilder
-        private var debugMockSSHRow: some View {
-            let credential = HostCredential(
-                host: "127.0.0.1", port: 2222, username: "test",
-                auth: .password("x"))
-            // Stable UUID derived from the credential so the row's
-            // identity doesn't churn across SwiftUI body re-evals.
-            let id =
-                UUID(uuidString: "0000DEBC-0001-0000-0000-000027C2DD22")
-                ?? UUID()
-            let entry = SavedHost(
-                id: id, label: "Mock SSH (loopback)", credential: credential)
-            HostRow(
-                entry: entry,
-                inFlight: false,
-                isCurrentSession: false,
-                onTapBody: { path.append(AppRoute.debugTerminal(.mockSSH)) },
-                onConnect: { path.append(AppRoute.debugTerminal(.mockSSH)) }
-            )
-        }
-    #endif
 
     private func handleFormOutcome(_ outcome: ConnectionFormScreen.Outcome) {
         viewModel.refresh()

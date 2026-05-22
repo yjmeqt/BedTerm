@@ -19,18 +19,19 @@ final class TerminalSession {
     private(set) var mode: BedTermMode = []
     private(set) var feed: AsyncStream<Data>
     private let feedContinuation: AsyncStream<Data>.Continuation
-    /// Observable mirror of the Rust-owned block list. The renderer view
+    /// Observable mirror of the Rust-owned block list. The session pump
     /// calls `blockStore.refresh(from: terminalCore)` after each
     /// `TerminalCore.feed(_:)`; canonical state (ids, boundaries, frozen
     /// snapshots) lives in Rust.
     public let blockStore = BlockStore()
 
-    /// The renderer view's `TerminalCore`, surfaced on the session so views
-    /// outside the renderer hierarchy (Block list, future Block view) can
-    /// read live grid state. Set by `TerminalMetalUIView` on init. Weak so
-    /// we don't extend the renderer view's lifetime through this back-edge.
+    /// Authoritative terminal grid + scrollback. Owned by the session
+    /// strongly so it outlives the Metal renderer view — re-entering a
+    /// backgrounded session restores the previously drawn content
+    /// (background-sessions P1: TerminalCore strong-ownership).
+    /// The renderer view borrows this via the init and only displays it.
     @ObservationIgnored
-    public weak var terminalCore: TerminalCore?
+    public let terminalCore: TerminalCore
     private let client: any SSHClient
     private var pumpTask: Task<Void, Never>?
 
@@ -46,6 +47,9 @@ final class TerminalSession {
         var feedCont: AsyncStream<Data>.Continuation!
         self.feed = AsyncStream<Data> { feedCont = $0 }
         self.feedContinuation = feedCont
+        // Default geometry; first layout pass in TerminalMetalUIView
+        // resizes to the actual viewport before any bytes arrive.
+        self.terminalCore = TerminalCore(cols: 80, rows: 24)
     }
 
     func connect(
@@ -62,16 +66,24 @@ final class TerminalSession {
                     initialPTY: initialPTY,
                     bootstrapPayload: bootstrapPayload))
             state = .open
-            pumpTask = Task { [feedContinuation, client] in
-                for await chunk in client.output {
-                    feedContinuation.yield(chunk)
+            pumpTask = Task { @MainActor [weak self] in
+                guard let self else { return }
+                for await chunk in self.client.output {
+                    // Authoritative: feed the session-owned core so the
+                    // grid + scrollback keep advancing even when the
+                    // renderer view is unmounted (Back keeps session
+                    // alive). The yield below is a redraw signal for
+                    // the mounted view; bytes are not re-applied to
+                    // core there.
+                    self.terminalCore.feed(chunk)
+                    self.updateMode(self.terminalCore.mode)
+                    self.blockStore.refresh(from: self.terminalCore)
+                    self.feedContinuation.yield(chunk)
                 }
-                await MainActor.run { [weak self] in
-                    if case .open = self?.state {
-                        self?.state = .closed(reason: String(localized: "Connection ended"))
-                    }
-                    self?.feedContinuation.finish()
+                if case .open = self.state {
+                    self.state = .closed(reason: String(localized: "Connection ended"))
                 }
+                self.feedContinuation.finish()
             }
         } catch let err as SSHError {
             lastError = err

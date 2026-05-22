@@ -22,6 +22,3 @@ swash = "0.1.18"
 
 [build-dependencies]
 cbindgen = "0.27"
-
-[features]
-mock-tty = []

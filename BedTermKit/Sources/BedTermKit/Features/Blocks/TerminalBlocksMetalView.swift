@@ -42,10 +42,8 @@ final class TerminalBlocksMetalView: MTKView {
     }
 
     override func draw(_ rect: CGRect) {
-        guard let drawable = currentDrawable, let session, let core = session.terminalCore
-        else {
-            return
-        }
+        guard let drawable = currentDrawable, let session else { return }
+        let core = session.terminalCore
         let env = MetalEnvironment.shared
         // Block-list pane sits over a SwiftUI background — clear transparent.
         env.renderer.setClearColor(red: 0, green: 0, blue: 0, alpha: 0)

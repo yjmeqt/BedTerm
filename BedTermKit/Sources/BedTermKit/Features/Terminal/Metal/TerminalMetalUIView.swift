@@ -38,7 +38,10 @@ final class TerminalMetalUIView: MTKView {
         // Shared Metal context across the terminal pane and every Block view —
         // one atlas + pipeline state for the whole app. See MetalEnvironment.
         let env = MetalEnvironment.shared
-        self.terminalCore = TerminalCore(cols: 80, rows: 24)
+        // Borrow the session-owned core; the session keeps it alive across
+        // view tear-downs so Back→re-open restores the existing grid
+        // (background-sessions P1: TerminalCore strong-ownership).
+        self.terminalCore = session.terminalCore
         self.bridge = env.renderer
         self.onSend = onSend
         self.onResize = onResize
@@ -55,10 +58,6 @@ final class TerminalMetalUIView: MTKView {
             self?.stopInertia()
             self?.setNeedsDisplay()
         }
-        // Back-ref so Block view can read live grid + the Rust-owned block
-        // list directly. BlockStore mirrors that list via `refresh(from:)`
-        // after each feed; no Swift-side state machine.
-        session.terminalCore = core
 
         // framebufferOnly=false: we hand the drawable's texture across FFI as a
         // raw pointer, so the GPU pipeline must allow CPU-readable access.
@@ -79,20 +78,16 @@ final class TerminalMetalUIView: MTKView {
         applyAppearance()
         installTraitObservers()
 
+        // The session pump is authoritative for feeding the core, mode,
+        // and block-store — it runs whether or not this view is mounted.
+        // The view's loop is purely a redraw + screen-clear-anchor signal.
         consumeTask = Task { @MainActor [weak self] in
             for await chunk in feed {
                 guard let self else { return }
-                let hadScreenClear = Self.containsScreenClear(chunk)
-                self.terminalCore.feed(chunk)
-                self.session?.updateMode(self.terminalCore.mode)
-                // Rust owns the block list now — pull a fresh mirror after
-                // each feed. The store skips the rebuild when nothing
-                // observable changed (fast scalar diff).
-                if let session = self.session {
-                    session.blockStore.refresh(from: self.terminalCore)
-                }
                 self.setNeedsDisplay()
-                if hadScreenClear { self.scheduleBottomAnchorPass() }
+                if Self.containsScreenClear(chunk) {
+                    self.scheduleBottomAnchorPass()
+                }
             }
         }
     }

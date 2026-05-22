@@ -72,9 +72,7 @@ struct TerminalScreen: View {
         /// a TUI exits means we leaked the bit; FPS spots renderer stalls.
         private var geomHUD: some View {
             VStack(alignment: .trailing, spacing: 2) {
-                if let core = session.terminalCore {
-                    debugChip(text: "\(core.screenCols)×\(core.screenRows)")
-                }
+                debugChip(text: "\(session.terminalCore.screenCols)×\(session.terminalCore.screenRows)")
                 debugChip(text: debugModeIndicator ?? "")
                 debugChip(text: "\(fpsMeter.fps) fps")
             }
@@ -367,29 +365,19 @@ struct TerminalScreen: View {
 
 #if DEBUG
     extension TerminalScreen {
-        init(debugClient: any SSHClient, onExit: @escaping () -> Void) {
-            let placeholder = HostCredential(
-                host: "debug",
-                port: 0,
-                username: "debug",
-                auth: .password("")
-            )
-            self.init(debugClient: debugClient, credential: placeholder, onExit: onExit)
-        }
-
-        /// Variant for SSH-backed debug routes (e.g. `bedterm-mock-ssh`)
-        /// that need a real host/port/auth on the credential — the
-        /// session will hand these to the SSH client during connect.
+        /// Debug-only: build a TerminalScreen against a caller-supplied SSH
+        /// client (e.g. CitadelSSHClient pointed at the loopback
+        /// `bedterm-mock-ssh` server). Bypasses the hosts list / view model.
         init(
-            debugClient: any SSHClient,
+            mockSSHClient: any SSHClient,
             credential: HostCredential,
             onExit: @escaping () -> Void
         ) {
-            let session = TerminalSession(client: debugClient)
+            let session = TerminalSession(client: mockSSHClient)
             self.init(
                 session: session,
                 credential: credential,
-                hostName: "debug",
+                hostName: "mock-ssh",
                 onBack: onExit,
                 onKill: { _ in onExit() }
             )
