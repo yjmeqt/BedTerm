@@ -21,6 +21,15 @@ import UIKit
 @Observable
 final class KeyboardLayoutObserver {
     private(set) var overlap: CGFloat = 0
+    /// Mirrors the system keyboard's actual visibility, derived from
+    /// `keyboardWillShow` / `keyboardWillHide`. Flips at the start of
+    /// each transition (not the end), so views that react to "the
+    /// keyboard is going away" — e.g. the R6 dismiss chevron icon —
+    /// settle in lockstep with the keyboard's own slide. Sourced from
+    /// the OS, so it stays correct regardless of *why* the keyboard
+    /// moved (toggle tap, drag-down dismiss, focus change, app
+    /// background, hardware-keyboard attach, …).
+    private(set) var isHidden: Bool = true
 
     init() {
         let center = NotificationCenter.default
@@ -38,13 +47,23 @@ final class KeyboardLayoutObserver {
             MainActor.assumeIsolated { self?.update(endFrame: endFrame, duration: duration) }
         }
         center.addObserver(
+            forName: UIResponder.keyboardWillShowNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.isHidden = false }
+        }
+        center.addObserver(
             forName: UIResponder.keyboardWillHideNotification,
             object: nil,
             queue: .main
         ) { [weak self] note in
             let duration =
                 (note.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double) ?? 0.25
-            MainActor.assumeIsolated { self?.write(0, duration: duration) }
+            MainActor.assumeIsolated {
+                self?.isHidden = true
+                self?.write(0, duration: duration)
+            }
         }
     }
 
@@ -52,6 +71,7 @@ final class KeyboardLayoutObserver {
         guard let endFrame, let window = Self.keyWindow else { return }
         let intersection = window.bounds.intersection(endFrame)
         let value = max(0, intersection.height - window.safeAreaInsets.bottom)
+        if value > 0 { isHidden = false }
         write(value, duration: duration)
     }
 

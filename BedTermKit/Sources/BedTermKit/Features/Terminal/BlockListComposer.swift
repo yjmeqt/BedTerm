@@ -214,7 +214,8 @@ struct BlockListComposer: View {
                         controller.sendPassthrough(chars)
                     }
                 },
-                onPassthroughBackspace: { controller.sendBackspace() }
+                onPassthroughBackspace: { controller.sendBackspace() },
+                keyboardHidden: !keyboardShown
             )
             .frame(height: bodyHeight)
         }
