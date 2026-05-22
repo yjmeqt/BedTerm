@@ -307,6 +307,89 @@ pub unsafe extern "C" fn bedterm_persistence_free_list(list: *mut CSnapshotList)
     }));
 }
 
+/// Open a replay terminal pre-loaded with the stored blocks for `snapshot_id`.
+///
+/// Returns a newly-allocated `BtTerm` that has been fed all stored block bytes
+/// for the given snapshot. The terminal has no PTY backing and no persistence
+/// sink — it is read-only and renders the session history via the normal Metal
+/// renderer. Free the returned pointer with `bt_term_free`.
+///
+/// Returns null if `snapshot_id` is unknown, has no blocks, or an error occurs.
+///
+/// # Safety
+/// `handle` and `snapshot_id` must be valid non-null pointers.
+/// `snapshot_id` must be a NUL-terminated UTF-8 C string.
+/// The returned `BtTerm *` must be freed with `bt_term_free` (existing FFI).
+#[no_mangle]
+pub unsafe extern "C" fn bedterm_persistence_open_replay(
+    handle: *mut PersistenceHandle,
+    snapshot_id: *const c_char,
+) -> *mut crate::ffi::BtTerm {
+    if handle.is_null() || snapshot_id.is_null() {
+        return std::ptr::null_mut();
+    }
+    let result = catch_unwind(AssertUnwindSafe(|| {
+        let h = unsafe { &mut *handle };
+        let sid = unsafe { CStr::from_ptr(snapshot_id) }.to_str().ok()?;
+        let rows = h.db.load_blocks(sid).ok()?;
+        if rows.is_empty() {
+            return None;
+        }
+
+        // Allocate a replay-only BtTerm.
+        let term_ptr = crate::ffi::bt_term_new_replay(80, 24);
+        if term_ptr.is_null() {
+            return None;
+        }
+        let term = unsafe { &mut *term_ptr };
+
+        // Re-wrap each stored block in minimal DCS frames so the DCS sniffer
+        // in `Terminal::feed` can advance its state machine and seal blocks.
+        // `stylized_command` is always empty in the DCS protocol (command text
+        // arrives via the Preexec JSON payload). `stylized_output` holds raw
+        // output bytes without DCS framing (captured between Preexec and
+        // CommandFinished).
+        for row in &rows {
+            let mut block_bytes = Vec::new();
+
+            // Build DCS JSON strings inline to avoid a serde_json dependency.
+            let cwd = row.cwd.as_deref().unwrap_or("/");
+            let precmd = format!(r#"{{"hook":"Precmd","value":{{"pwd":"{cwd}"}}}}"#);
+            block_bytes.extend_from_slice(&dcs_frame(precmd.as_bytes()));
+
+            let cmd = &row.command;
+            let preexec = format!(r#"{{"hook":"Preexec","value":{{"command":"{cmd}"}}}}"#);
+            block_bytes.extend_from_slice(&dcs_frame(preexec.as_bytes()));
+
+            // Raw output bytes — no framing (captured verbatim).
+            block_bytes.extend_from_slice(&row.stylized_output);
+
+            let exit = row.exit_code.unwrap_or(0);
+            let finished =
+                format!(r#"{{"hook":"CommandFinished","value":{{"exit_code":{exit}}}}}"#);
+            block_bytes.extend_from_slice(&dcs_frame(finished.as_bytes()));
+
+            term.feed_bytes(&block_bytes);
+        }
+
+        Some(term_ptr)
+    }));
+    result.ok().flatten().unwrap_or(std::ptr::null_mut())
+}
+
+/// Build a DCS JSON frame: `ESC P $ d <hex(json)> 0x9C`.
+fn dcs_frame(json: &[u8]) -> Vec<u8> {
+    use std::fmt::Write as _;
+    let mut hex = String::with_capacity(json.len() * 2);
+    for b in json {
+        write!(hex, "{b:02x}").unwrap();
+    }
+    let mut v = vec![0x1B, b'P', b'$', b'd'];
+    v.extend_from_slice(hex.as_bytes());
+    v.push(0x9C);
+    v
+}
+
 /// Delete a snapshot (and its blocks) from the database.
 ///
 /// # Safety

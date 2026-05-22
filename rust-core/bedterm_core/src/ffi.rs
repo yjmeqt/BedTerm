@@ -63,6 +63,13 @@ impl BtTerm {
     pub(crate) fn clear_block_snapshot_cached(&mut self) {
         self.block_snapshot_cached = None;
     }
+
+    /// Feed raw bytes into the inner terminal. Used by the persistence replay
+    /// path (`bedterm_persistence_open_replay`) to pre-load stored blocks.
+    pub(crate) fn feed_bytes(&mut self, bytes: &[u8]) {
+        self.cached = None;
+        self.inner.feed(bytes);
+    }
 }
 
 #[no_mangle]
@@ -71,6 +78,24 @@ pub extern "C" fn bt_term_new(cols: u16, rows: u16) -> *mut BtTerm {
     let rows = rows.max(1);
     Box::into_raw(Box::new(BtTerm {
         inner: Terminal::new(cols, rows),
+        cached: None,
+        block_string_scratch: Vec::new(),
+        block_snapshot_cached: None,
+    }))
+}
+
+/// Construct a replay-only `BtTerm` — no PTY backing, no persistence sink.
+/// Feed stored block bytes into this terminal to reconstruct the block list.
+/// Caller owns the returned pointer; release via `bt_term_free`.
+///
+/// # Safety
+/// Same as `bt_term_new`. The returned pointer must be freed with `bt_term_free`.
+#[no_mangle]
+pub extern "C" fn bt_term_new_replay(cols: u16, rows: u16) -> *mut BtTerm {
+    let cols = cols.max(1);
+    let rows = rows.max(1);
+    Box::into_raw(Box::new(BtTerm {
+        inner: Terminal::new_replay(cols, rows),
         cached: None,
         block_string_scratch: Vec::new(),
         block_snapshot_cached: None,

@@ -22,7 +22,7 @@ pub use blocks_ffi::{
 pub use persistence::ffi::{
     bedterm_persistence_attach, bedterm_persistence_close, bedterm_persistence_discard,
     bedterm_persistence_free_list, bedterm_persistence_init, bedterm_persistence_list,
-    bedterm_persistence_record_kill, CSnapshot, CSnapshotList,
+    bedterm_persistence_open_replay, bedterm_persistence_record_kill, CSnapshot, CSnapshotList,
 };
 pub use term::{
     BT_MODE_ALT_SCREEN, BT_MODE_APP_CURSOR, BT_MODE_APP_KEYPAD, BT_MODE_BRACKETED_PASTE,

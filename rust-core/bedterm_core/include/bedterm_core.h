@@ -340,6 +340,16 @@ void bt_term_block_snapshot_release(struct BtTerm *h);
 struct BtTerm *bt_term_new(uint16_t cols, uint16_t rows);
 
 /**
+ * Construct a replay-only `BtTerm` — no PTY backing, no persistence sink.
+ * Feed stored block bytes into this terminal to reconstruct the block list.
+ * Caller owns the returned pointer; release via `bt_term_free`.
+ *
+ * # Safety
+ * Same as `bt_term_new`. The returned pointer must be freed with `bt_term_free`.
+ */
+struct BtTerm *bt_term_new_replay(uint16_t cols, uint16_t rows);
+
+/**
  * # Safety
  * `h` must be a pointer returned by `bt_term_new` that has not yet been freed.
  */
@@ -545,6 +555,24 @@ struct CSnapshotList *bedterm_persistence_list(struct PersistenceHandle *handle,
  * freed.
  */
 void bedterm_persistence_free_list(struct CSnapshotList *list);
+
+/**
+ * Open a replay terminal pre-loaded with the stored blocks for `snapshot_id`.
+ *
+ * Returns a newly-allocated `BtTerm` that has been fed all stored block bytes
+ * for the given snapshot. The terminal has no PTY backing and no persistence
+ * sink — it is read-only and renders the session history via the normal Metal
+ * renderer. Free the returned pointer with `bt_term_free`.
+ *
+ * Returns null if `snapshot_id` is unknown, has no blocks, or an error occurs.
+ *
+ * # Safety
+ * `handle` and `snapshot_id` must be valid non-null pointers.
+ * `snapshot_id` must be a NUL-terminated UTF-8 C string.
+ * The returned `BtTerm *` must be freed with `bt_term_free` (existing FFI).
+ */
+struct BtTerm *bedterm_persistence_open_replay(struct PersistenceHandle *handle,
+                                               const char *snapshot_id);
 
 /**
  * Delete a snapshot (and its blocks) from the database.

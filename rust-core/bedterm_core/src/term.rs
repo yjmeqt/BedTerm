@@ -146,6 +146,18 @@ impl Terminal {
         }
     }
 
+    /// Construct a Terminal for replaying stored block bytes. Identical to
+    /// `Terminal::new` for parsing/feed purposes but has no PTY, no block-
+    /// capture sink, and no persistence attachment. The caller feeds the
+    /// stored `stylized_output` (wrapped in the appropriate DCS envelope)
+    /// to reconstruct the block list in read-only mode.
+    pub fn new_replay(cols: u16, rows: u16) -> Self {
+        let mut t = Self::new(cols, rows);
+        // Paranoia: `new` never installs a sink, but be explicit.
+        t.block_sink = None;
+        t
+    }
+
     /// Wire this `Terminal` to a persistence `Database` so that every time a
     /// command block finalizes (CommandFinished) a row is inserted into the
     /// `blocks` table of `db`.
