@@ -43,14 +43,12 @@ extension BlockListContainerViewController: UIGestureRecognizerDelegate {
         }
     }
 
-    /// Single point of mutation for `contentOffsetY`. Keeps `contentView`
-    /// translated in lockstep so the selection layer's content-space
-    /// coordinates land at the right pixel.
+    /// Single point of mutation for `contentOffsetY`. contentView is
+    /// viewport-sized; the selection controller is told to re-anchor
+    /// the highlight layer in viewport space so it tracks scroll.
     func setContentOffsetY(_ newOffset: CGFloat) {
         contentOffsetY = newOffset
-        contentView.frame = CGRect(
-            x: 0, y: -newOffset,
-            width: view.bounds.width, height: contentHeight)
+        selectionController?.notifyScrollOffsetChanged()
     }
 
     /// Clamp a raw offset to `[0, maxOffsetY]` and report whether the

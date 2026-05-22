@@ -57,6 +57,18 @@
  */
 #define VERTICES_PER_PANEL 6
 
+#define HORIZONTAL_PADDING_PT 12.0
+
+#define BADGE_DIAMETER_PT 28.0
+
+#define ICON_SIZE_PT 14.0
+
+#define BADGE_TEXT_GAP_PT 8.0
+
+#define ROW_GAP_PT 2.0
+
+#define DIVIDER_THICKNESS_PT 1.0
+
 #define BT_MODE_ALT_SCREEN (1 << 0)
 
 #define BT_MODE_BRACKETED_PASTE (1 << 1)

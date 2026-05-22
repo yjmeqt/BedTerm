@@ -53,7 +53,7 @@ final class BlockListContainerViewController: UIViewController {
     // Selection lives on a dedicated controller; the container provides
     // its hit-resolver + text-resolver since both walk the same block
     // cumulative-Y the layout pipeline already computes.
-    private var selection: BlockListSelectionController!
+    var selectionController: BlockListSelectionController!
 
     init(session: TerminalSession) {
         self.session = session
@@ -82,14 +82,15 @@ final class BlockListContainerViewController: UIViewController {
         panGR.cancelsTouchesInView = false
         view.addGestureRecognizer(panGR)
 
-        selection = BlockListSelectionController(
+        selectionController = BlockListSelectionController(
             contentView: contentView,
             headerHeightPt: headerHeightPt,
             hitResolver: { [weak self] point in self?.blockHitTest(at: point) },
             textResolver: { [weak self] id, range in
                 self?.extractText(blockID: id, range: range)
-            })
-        view.addGestureRecognizer(selection.longPressGR)
+            },
+            scrollOffsetProvider: { [weak self] in self?.contentOffsetY ?? 0 })
+        view.addGestureRecognizer(selectionController.longPressGR)
         pushUIFontSizes()
     }
 
@@ -161,7 +162,7 @@ final class BlockListContainerViewController: UIViewController {
         if metrics.width >= 4 && metrics.width <= 32 {
             cellWidthPt = metrics.width
         }
-        selection?.updateMetrics(
+        selectionController?.updateMetrics(
             cellWidth: cellWidthPt, rowHeight: rowHeightPt,
             containerWidth: view.bounds.width,
             leftInset: BlockPanelStyle.cellLeftInsetPt)
@@ -171,11 +172,10 @@ final class BlockListContainerViewController: UIViewController {
         super.viewWillLayoutSubviews()
         let bounds = view.bounds
         metalView.frame = bounds
-        // contentView's height tracks the full content extent so the
-        // selection layer can position itself in content-space.
-        contentView.frame = CGRect(
-            x: 0, y: -contentOffsetY,
-            width: bounds.width, height: contentHeight)
+        // contentView is viewport-sized — Warp-style. It hosts only the
+        // selection layer, which the controller repositions in
+        // view-space per frame. No giant content-space overlay.
+        contentView.frame = bounds
         if bounds.size != lastLayoutBounds {
             lastLayoutBounds = bounds.size
             refresh()
@@ -183,7 +183,7 @@ final class BlockListContainerViewController: UIViewController {
     }
 
     func bodyHeightPt(for block: Block) -> CGFloat {
-        let rows = max(1, Int(block.bodyRows))
+        let rows = Int(block.bodyRows)
         return CGFloat(rows) * rowHeightPt
     }
 
@@ -195,10 +195,6 @@ final class BlockListContainerViewController: UIViewController {
             total += headerHeightPt + bodyHeightPt(for: block) + gap
         }
         contentHeight = total
-        // Re-frame contentView in case the height grew/shrank.
-        contentView.frame = CGRect(
-            x: 0, y: -contentOffsetY,
-            width: view.bounds.width, height: contentHeight)
     }
 
     /// (block, naturalTop, naturalBot) in scroll-content coordinates.
@@ -292,5 +288,9 @@ final class BlockListContainerViewController: UIViewController {
     override func traitCollectionDidChange(_ previous: UITraitCollection?) {
         super.traitCollectionDidChange(previous)
         pushUIFontSizes()
+        // Header bg / command fg / divider tokens are resolved against
+        // the trait collection each layout pass — re-push so colours
+        // follow a light↔dark flip without waiting for the next refresh.
+        pushLayoutToMetalView()
     }
 }

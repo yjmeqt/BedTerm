@@ -130,7 +130,11 @@ pub unsafe extern "C" fn bt_term_block_at(
                 .map(|g| u32::from(g.used_rows()))
                 .unwrap_or(1)
         } else {
-            (block.end_line - block.start_line).max(1) as u32
+            // Sealed blocks: honour the captured row count exactly.
+            // Commands like `cd /tmp` produce zero output and should
+            // collapse their body, not leave a blank gap below the
+            // header. The (end - start) span is non-negative.
+            (block.end_line - block.start_line).max(0) as u32
         };
         (
             block.id,

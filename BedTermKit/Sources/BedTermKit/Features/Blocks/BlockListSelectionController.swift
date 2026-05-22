@@ -22,6 +22,10 @@ final class BlockListSelectionController {
     /// pull the right snapshot.
     typealias TextResolver = @MainActor (UInt64, SelectionRange) -> String?
 
+    /// Pulls the current scroll offset so the highlight layer can sit
+    /// in viewport space (contentView is no longer content-sized).
+    typealias ScrollOffsetProvider = @MainActor () -> CGFloat
+
     struct BlockHit {
         let blockID: UInt64
         let bodyTop: CGFloat
@@ -40,6 +44,7 @@ final class BlockListSelectionController {
     private weak var contentView: UIView?
     private let hitResolver: HitResolver
     private let textResolver: TextResolver
+    private let scrollOffsetProvider: ScrollOffsetProvider
     private let headerHeightPt: CGFloat
     private var rowHeightPt: CGFloat
     private var cellWidthPt: CGFloat
@@ -53,17 +58,27 @@ final class BlockListSelectionController {
         contentView: UIView,
         headerHeightPt: CGFloat,
         hitResolver: @escaping HitResolver,
-        textResolver: @escaping TextResolver
+        textResolver: @escaping TextResolver,
+        scrollOffsetProvider: @escaping ScrollOffsetProvider
     ) {
         self.contentView = contentView
         self.hitResolver = hitResolver
         self.textResolver = textResolver
+        self.scrollOffsetProvider = scrollOffsetProvider
         self.headerHeightPt = headerHeightPt
         self.rowHeightPt = 18
         self.cellWidthPt = 9
         contentView.layer.addSublayer(selectionLayer)
         longPressGR.minimumPressDuration = 0.4
         longPressGR.addTarget(self, action: #selector(handleLongPress(_:)))
+    }
+
+    /// Called by the container when `contentOffsetY` changes so the
+    /// active highlight repositions in viewport space without waiting
+    /// for the next gesture event.
+    func notifyScrollOffsetChanged() {
+        guard active != nil else { return }
+        refreshLayer()
     }
 
     /// Container pushes fresh cell metrics each layout pass. Width drives
@@ -81,7 +96,12 @@ final class BlockListSelectionController {
 
     @objc private func handleLongPress(_ gr: UILongPressGestureRecognizer) {
         guard let contentView else { return }
-        let point = gr.location(in: contentView)
+        let viewportPoint = gr.location(in: contentView)
+        // contentView is viewport-sized; resolve to content-space so the
+        // hit-resolver's cumulative-Y walk matches.
+        let point = CGPoint(
+            x: viewportPoint.x,
+            y: viewportPoint.y + scrollOffsetProvider())
         switch gr.state {
         case .began:
             begin(at: point)
@@ -139,10 +159,13 @@ final class BlockListSelectionController {
             return
         }
         let bodyHeight = CGFloat(sel.rows) * rowHeightPt
+        // Translate the content-space body top into viewport space so
+        // the layer rides on a viewport-sized contentView.
+        let viewportY = sel.bodyTopInContent - scrollOffsetProvider()
         // Inset the layer so its column-0 rect aligns with the Metal
         // pane's first cell, which is itself inset by the accent bar.
         selectionLayer.frame = CGRect(
-            x: leftInsetPt, y: sel.bodyTopInContent,
+            x: leftInsetPt, y: viewportY,
             width: max(0, containerWidth - leftInsetPt), height: bodyHeight)
         selectionLayer.update(
             sel.range,

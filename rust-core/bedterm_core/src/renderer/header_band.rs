@@ -28,8 +28,8 @@ use crate::renderer::ui_text::{fit_prefix, shape_advances};
 /// values so the visual layout is byte-identical to today.
 mod c {
     pub const HORIZONTAL_PADDING_PT: f32 = 12.0;
-    pub const BADGE_DIAMETER_PT: f32 = 24.0;
-    pub const ICON_SIZE_PT: f32 = 16.0;
+    pub const BADGE_DIAMETER_PT: f32 = 28.0;
+    pub const ICON_SIZE_PT: f32 = 14.0;
     pub const BADGE_TEXT_GAP_PT: f32 = 8.0;
     pub const ROW_GAP_PT: f32 = 2.0;
     pub const DIVIDER_THICKNESS_PT: f32 = 1.0;
