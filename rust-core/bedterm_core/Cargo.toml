@@ -19,6 +19,7 @@ objc2-metal-kit = "0.2"
 objc2-quartz-core = "0.2"
 cosmic-text = "0.12"
 swash = "0.1.18"
+rusqlite = { version = "0.32", default-features = false, features = [] }
 
 [build-dependencies]
 cbindgen = "0.27"
