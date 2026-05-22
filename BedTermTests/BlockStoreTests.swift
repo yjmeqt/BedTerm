@@ -54,7 +54,13 @@ final class BlockStoreTests: XCTestCase {
     }
 
     func testFirstPrecmdOpensRunningBlock() {
-        let (_, store) = feed(precmd())
+        // Pending blocks (Precmd without a matching Preexec) are hidden
+        // from `BlockStore.blocks` so the prompt cycle's empty card
+        // doesn't sit under the live grid — the visible block list only
+        // exposes the block once a command has actually been issued.
+        // Verify the precmd by following it with a preexec; once the
+        // command lands, the running block becomes visible.
+        let (_, store) = feed(bytes(precmd(), preexec("ls")))
         XCTAssertEqual(store.blocks.count, 1)
         XCTAssertTrue(store.blocks[0].isRunning)
         XCTAssertNil(store.blocks[0].endLine)
@@ -62,8 +68,11 @@ final class BlockStoreTests: XCTestCase {
     }
 
     func testPwdParsedFromPrecmd() {
+        // Precmd-only state is pending → not in `blocks`. The freshest
+        // pwd lives on `latestPwd`, which observers (composer prompt
+        // strip) read directly.
         let (_, store) = feed(precmd(pwd: "/home/alice"))
-        XCTAssertEqual(store.blocks.first?.workingDirectory, "/home/alice")
+        XCTAssertEqual(store.latestPwd, "/home/alice")
     }
 
     func testPreexecFillsCommand() {
@@ -96,9 +105,11 @@ final class BlockStoreTests: XCTestCase {
     func testCtrlCPathSealsWithoutExit() {
         // Precmd-following-Precmd (no CommandFinished in between) seals the
         // first block with no exit code — the Ctrl-C / partial-integration
-        // path.
+        // path. The trailing Precmd opens a new pending block which is
+        // hidden from `blocks` until the next Preexec; we just verify the
+        // first block sealed cleanly.
         let (_, store) = feed(bytes(precmd(), preexec("sleep 100"), precmd()))
-        XCTAssertEqual(store.blocks.count, 2)
+        XCTAssertEqual(store.blocks.count, 1)
         XCTAssertFalse(store.blocks[0].isRunning)
         XCTAssertNil(store.blocks[0].exitCode)
         XCTAssertNil(store.blocks[0].duration)

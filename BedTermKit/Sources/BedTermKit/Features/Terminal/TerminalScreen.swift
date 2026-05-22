@@ -14,7 +14,15 @@ struct TerminalScreen: View {
         @State private var fpsMeter = FPSMeter()
     #endif
     let credential: HostCredential
-    let onExit: () -> Void
+    /// Display name surfaced in the top bar centre title (PRD R3.title_shows_host_and_count).
+    let hostName: String
+    /// Leading Back chevron: pops without killing. `TerminalSession`
+    /// stays alive on the view model so re-entry resumes the same
+    /// shell (PRD R3.back_button).
+    let onBack: () -> Void
+    /// × Kill confirm: snapshots + tears down (PRD R3.kill_button).
+    let onKill: (SessionSnapshot.KillReason) -> Void
+    @State private var showingKillConfirm = false
 
     /// True when a full-screen TUI (vim, htop, claude) is on the remote side
     /// AND the user has the "Keep first row visible in full-screen apps"
@@ -59,12 +67,9 @@ struct TerminalScreen: View {
     }
 
     #if DEBUG
-        /// Floating debug chip at the top-right corner: live PTY geometry
-        /// + resolved display mode + frame rate. Diagnostic only — if
-        /// `cols=32` shows up here, claude isn't getting what it needs;
-        /// if `mode=alt` lingers after a TUI exits we've leaked the
-        /// alt-screen bit; the FPS column flags renderer stalls during
-        /// long scrollback.
+        /// Floating debug chip: live PTY geometry + display mode + FPS.
+        /// `cols=32` means claude is starved; `mode=alt` lingering after
+        /// a TUI exits means we leaked the bit; FPS spots renderer stalls.
         private var geomHUD: some View {
             VStack(alignment: .trailing, spacing: 2) {
                 if let core = session.terminalCore {
@@ -110,7 +115,13 @@ struct TerminalScreen: View {
         )
     }
 
-    init(session: TerminalSession, credential: HostCredential, onExit: @escaping () -> Void) {
+    init(
+        session: TerminalSession,
+        credential: HostCredential,
+        hostName: String = "",
+        onBack: @escaping () -> Void,
+        onKill: @escaping (SessionSnapshot.KillReason) -> Void
+    ) {
         _session = State(initialValue: session)
         _keyBar = State(initialValue: KeyBarController { [weak session] data in session?.send(data) })
         let focusHandle = TerminalMetalHostView.FocusHandle()
@@ -126,7 +137,12 @@ struct TerminalScreen: View {
                 }
             ))
         self.credential = credential
-        self.onExit = onExit
+        self.hostName =
+            hostName.isEmpty
+            ? "\(credential.username)@\(credential.host)"
+            : hostName
+        self.onBack = onBack
+        self.onKill = onKill
     }
 
     var body: some View {
@@ -228,12 +244,42 @@ struct TerminalScreen: View {
             if !isRunning { composer.endPassthrough() }
         }
         .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-                Button("Disconnect") {
-                    session.disconnect()
-                    onExit()
+            // Back + × cluster on the leading side; trailing reserved
+            // for a future per-session action (PRD R3).
+            ToolbarItemGroup(placement: .topBarLeading) {
+                Button {
+                    onBack()
+                } label: {
+                    Image(systemName: "chevron.left")
                 }
+                .accessibilityLabel(Text("Back"))
+                .accessibilityIdentifier("terminal.back")
+                Button(role: .destructive) {
+                    showingKillConfirm = true
+                } label: {
+                    Image(systemName: "xmark")
+                        .foregroundStyle(Color("ShadcnDestructive", bundle: .module))
+                }
+                .accessibilityLabel(Text("Kill session"))
+                .accessibilityIdentifier("terminal.kill")
             }
+            ToolbarItem(placement: .principal) {
+                Text(verbatim: hostName)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Color("ShadcnPrimary", bundle: .module))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+        }
+        .confirmationDialog(
+            Text("End this session?"),
+            isPresented: $showingKillConfirm,
+            titleVisibility: .visible
+        ) {
+            Button(String(localized: "End session"), role: .destructive) {
+                onKill(.userKilled)
+            }
+            Button(String(localized: "Cancel"), role: .cancel) {}
         }
         .navigationBarBackButtonHidden(true)
         .task {
@@ -340,7 +386,13 @@ struct TerminalScreen: View {
             onExit: @escaping () -> Void
         ) {
             let session = TerminalSession(client: debugClient)
-            self.init(session: session, credential: credential, onExit: onExit)
+            self.init(
+                session: session,
+                credential: credential,
+                hostName: "debug",
+                onBack: onExit,
+                onKill: { _ in onExit() }
+            )
         }
     }
 #endif

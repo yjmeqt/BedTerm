@@ -3,9 +3,10 @@ import UIKit
 
 public struct HostsScreen: View {
     @Binding var path: NavigationPath
-    @Environment(\.toaster) private var toaster
+    @Environment(\.toaster) var toaster
     @Environment(BedTermSettings.self) private var settings
-    @State private var viewModel = HostsViewModel()
+    @Environment(SessionSnapshotStore.self) var snapshotStore
+    @State var viewModel = HostsViewModel()
     @State private var didFirstAppear = false
     @State private var showingMismatchReview = false
     @State private var showingSettings = false
@@ -111,16 +112,36 @@ public struct HostsScreen: View {
                         .padding(.top, 8)
                 #endif
                 ForEach(viewModel.entries) { entry in
-                    HostRow(
-                        entry: entry,
-                        inFlight: viewModel.inFlightID == entry.id,
-                        isCurrentSession: viewModel.currentSessionID == entry.id,
-                        onEdit: { path.append(AppRoute.hostForm(entry.id)) },
-                        onConnect: {
-                            viewModel.onConnectError = handleConnectError
-                            viewModel.requestConnect(id: entry.id)
-                        }
-                    )
+                    VStack(alignment: .leading, spacing: 8) {
+                        HostRow(
+                            entry: entry,
+                            inFlight: viewModel.inFlightID == entry.id,
+                            isCurrentSession: viewModel.currentSessionID == entry.id,
+                            // Tapping the row body opens the full panel
+                            // unconditionally; the inline list below
+                            // covers the common low-count case so most
+                            // users won't reach for the body tap.
+                            onTapBody: { path.append(AppRoute.sessionsPanel(entry.id)) },
+                            onConnect: {
+                                viewModel.onConnectError = handleConnectError
+                                viewModel.requestConnect(id: entry.id)
+                            }
+                        )
+                        HostSessionsInlineList(
+                            host: entry,
+                            runningSessionID: viewModel.currentSessionID,
+                            snapshots: snapshotStore.snapshots(forHost: entry.id),
+                            onTapRunning: {
+                                path.append(AppRoute.terminal)
+                            },
+                            onTapKilled: { snapshot in
+                                path.append(AppRoute.killedSessionDetail(snapshot.id))
+                            },
+                            onViewAll: {
+                                path.append(AppRoute.sessionsPanel(entry.id))
+                            }
+                        )
+                    }
                     .contextMenu {
                         Button(String(localized: "Edit"), systemImage: "pencil") {
                             path.append(AppRoute.hostForm(entry.id))
@@ -187,24 +208,11 @@ public struct HostsScreen: View {
                 onFinish: handleFormOutcome
             )
         case .terminal:
-            if let session = viewModel.lastSession, let entry = currentSessionEntry() {
-                TerminalScreen(
-                    session: session,
-                    credential: entry.credential,
-                    onExit: {
-                        let label = viewModel.displayName(for: entry.id)
-                        viewModel.sessionEnded()
-                        path = NavigationPath()
-                        toaster.show(
-                            .info,
-                            title: String(localized: "Session ended"),
-                            description: String(localized: "Disconnected from \(label).")
-                        )
-                    }
-                )
-            } else {
-                Text("No session.")
-            }
+            terminalDestination
+        case .sessionsPanel(let hostID):
+            sessionsPanelDestination(hostID: hostID)
+        case .killedSessionDetail(let snapshotID):
+            killedSessionDetailDestination(snapshotID: snapshotID)
         #if DEBUG
             case .debugTerminal(let selection):
                 debugTerminalScreen(for: selection)
@@ -212,7 +220,9 @@ public struct HostsScreen: View {
         }
     }
 
-    private func currentSessionEntry() -> SavedHost? {
+    // Destination helpers live in HostsScreen+Destinations.swift.
+
+    func currentSessionEntry() -> SavedHost? {
         guard let id = viewModel.currentSessionID else { return nil }
         return viewModel.entries.first { $0.id == id }
     }
@@ -238,7 +248,7 @@ public struct HostsScreen: View {
                 entry: entry,
                 inFlight: false,
                 isCurrentSession: false,
-                onEdit: { path.append(AppRoute.debugTerminal(.mockSSH)) },
+                onTapBody: { path.append(AppRoute.debugTerminal(.mockSSH)) },
                 onConnect: { path.append(AppRoute.debugTerminal(.mockSSH)) }
             )
         }
@@ -271,7 +281,7 @@ public struct HostsScreen: View {
 
     // MARK: - Toast wiring
 
-    private func handleConnectError(id: UUID, message: String, permissionDenied: Bool) {
+    func handleConnectError(id: UUID, message: String, permissionDenied: Bool) {
         let name = viewModel.displayName(for: id)
         var actions: [Toaster.Action] = []
         if permissionDenied {
@@ -345,6 +355,7 @@ public struct HostsScreen: View {
 
     private func onAppear() {
         viewModel.load()
+        viewModel.snapshotStore = snapshotStore
         // Settings env is unavailable at view-init time; wire the
         // bootstrap-payload resolver here so the saved-host Connect
         // path can push the shell-integration heredoc when the user

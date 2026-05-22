@@ -1,0 +1,192 @@
+<prd name="Background Sessions">
+
+<overview>
+The terminal screen today is a single live session: the top-bar "Disconnect" button is the only way out, and pressing it kills the PTY and drops the user back to the Hosts list. That model fights how people actually use a phone — flipping to another app, jumping between two hosts, checking a long-running build — because every detour requires tearing the shell down and starting from scratch.
+
+This feature reshapes the terminal around a multi-session model inspired by Warp's left pane. Each saved host owns a list of sessions. A session can be **running** (PTY alive, shell still consuming output in the background) or **killed** (shell exited or torn down by the user — scrollback + last CWD preserved as a read-only snapshot). The user can leave a session without ending it, switch between sessions under the same host, re-enter a killed session to inspect what it last printed, and re-launch from a killed session straight back into its last working directory.
+
+The top of the terminal screen splits the single "Disconnect" button into two: a leading "Back" that returns to the Hosts list while leaving the PTY running, and a trailing "×" that explicitly kills the session. A new sessions panel — opened from the Hosts list and from the terminal screen — lists every session under the active host so the user can pick which one to focus.
+
+The feature deliberately does <em>not</em> attempt to revive a killed SSH session's actual process tree (the remote shell is gone — that's what "killed" means). What it preserves is the visual record (scrollback) and the operational context (last CWD, last command, exit code) so the user can pick up where they left off in a fresh shell with one tap.
+</overview>
+<implementation platform="iOS" spec="bedterm/docs/specs/background-sessions.md" />
+
+<requirement id="R1" name="Session model and lifecycle">
+  <description>
+    A "session" is the unit the user navigates and the panel lists. Each session belongs to exactly one saved host and has a state machine that the rest of the UI reads from.
+
+    States:
+    <ul>
+    <li><strong>running</strong> — SSH channel is open, the Rust terminal core is consuming PTY bytes in the background. The session may or may not be the foreground view; that's a UI concern, not a state concern.</li>
+    <li><strong>killed</strong> — the SSH channel has ended (user-requested, remote logout, network drop, app relaunch). The Rust core is gone but the last block snapshot, last CWD, and last exit code are retained in memory.</li>
+    </ul>
+
+    A session never moves from killed back to running — re-engaging a killed session always creates a <em>new</em> sibling session under the same host (R4). This keeps the snapshot of what the user saw last time immutable.
+  </description>
+  <rule id="session_id" status="❌">Every session has an opaque, stable identifier assigned at creation. The identifier is used by the panel (R2), the top bar (R3), and routing so the foreground session can be addressed unambiguously when there are multiple sessions under the same host.</rule>
+  <rule id="session_belongs_to_host" status="❌">Every session is associated with exactly one saved host. The session inherits its host's connection parameters (host, port, user, auth) — the user does not pick a host again when re-launching from a killed session (R4).</rule>
+  <rule id="single_live_session_superseded" status="❌">This PRD supersedes <a href="prd:bedterm/saved-connections#R2">Hosts R2.single_live_session</a>: more than one running session may exist simultaneously, but at most one of them is foregrounded in the terminal screen at a time. Tapping Connect on a row whose host already has a running session focuses that session instead of prompting to swap.</rule>
+  <rule id="killed_keeps_snapshot" status="❌" context="session transitions to killed">When a session transitions from running to killed, its last block snapshot (the frozen <code>BlockStore</code> contents, including each block's command, exit code, duration, and rendered grid), its last CWD (R5), and the kill reason (user × button, remote logout, network drop) are retained on the session record. The session stays visible in the panel (R2) with a "killed" badge.</rule>
+  <rule id="kill_reason_recorded" status="❌">Each killed session records why it ended: <code>user_killed</code>, <code>remote_logout</code>, <code>network_drop</code>, <code>app_relaunch</code>, or <code>swap_evicted</code>. The reason surfaces in the panel row's accessibility label and is available for the kill banner copy.</rule>
+  <rule id="ordering_by_recency" status="❌">Sessions are listed newest-activity-first under their host — a running session that just produced output sorts above an older running session that hasn't, and both sort above killed sessions whose order is frozen at the moment they were killed.</rule>
+</requirement>
+
+<requirement id="R2" name="Sessions panel">
+  <description>
+    A new panel lists every session under a host. The panel exists as a secondary destination for hosts that have accumulated many sessions; in the common case where a host has only a handful of sessions, those sessions are surfaced inline on the host row in the Hosts list so the user never has to push into a separate screen.
+
+    Reachability:
+    <ol>
+    <li>From the <a href="prd:bedterm/saved-connections">Hosts list</a>, each row expands inline to show that host's sessions when the count is small (see R2.inline_sessions_on_host_row). Tapping the row body when sessions are listed inline is a no-op on the body itself — interaction happens on the listed session rows or the Connect button. When the session count exceeds the inline threshold, the row collapses to a "View all <em>N</em> sessions" affordance that pushes the full panel.</li>
+    <li>From inside the terminal screen, a "sessions" affordance in the top bar (R3) opens the same panel for the currently-focused session's host.</li>
+    </ol>
+
+    The panel is a vertical list. Each row represents one session and shows enough context for the user to pick the right one without first opening it.
+  </description>
+  <rule id="inline_sessions_on_host_row" status="❌">When a host has between 1 and 5 sessions (running or killed) inclusive, the host's sessions list renders inline beneath that host's row on the <a href="prd:bedterm/saved-connections">Hosts list</a> — the user does not push a separate screen to see them. Each inline session row uses the same compact metadata as the panel (last command, abbreviated CWD, relative timestamp, status badge per R2.row_status_badge) and shares the R2.row_tap_focuses_or_revives behaviour. When the count exceeds 5, the inline list collapses to a single "View all <em>N</em> sessions" affordance that pushes the full sessions panel destination. Hosts with zero sessions render no inline list and no affordance — the user starts a session via the row's Connect button.</rule>
+  <rule id="panel_per_host" status="❌">A sessions panel is scoped to a single host. Sessions belonging to other hosts are not shown — switching hosts is done by leaving the panel and entering another host from the Hosts list.</rule>
+  <rule id="row_label" status="❌">Each session row shows three lines of metadata: (1) the last command run in that session (or "—" if no command has run yet), (2) the last CWD (R5) shown with the user's home directory abbreviated to <code>~</code>, (3) a relative timestamp ("2m ago", "yesterday") of the session's last activity.</rule>
+  <rule id="row_status_badge" status="❌">Each row carries a status badge: a small filled dot in the success color for running sessions, a hollow circle in the muted color for killed sessions with exit code 0, and a filled dot in the error color for killed sessions with a non-zero exit code.</rule>
+  <rule id="row_tap_focuses_or_revives" status="❌">Tapping a running session's row foregrounds that session in the terminal screen. Tapping a killed session's row opens the killed-session detail view (R4), not the live terminal.</rule>
+  <rule id="row_swipe_remove" status="❌">Each row has a leading swipe action labelled "Discard" that removes the session from the panel. For a running session, Discard first kills it (same code path as the × button, R3); for an already-killed session, Discard drops the snapshot.</rule>
+  <rule id="new_session_button" status="❌">The panel's top-trailing toolbar carries a "New session" button. Tapping it creates a new running session under that host (same connect flow as the Hosts row's Connect button) and foregrounds it.</rule>
+  <rule id="empty_state" status="❌" context="host has zero sessions">When a host has no sessions yet, the panel shows an empty state with a single primary "New session" action that reuses R2.new_session_button's behavior.</rule>
+  <rule id="row_unread_indicator" status="❌" context="running session backgrounded with new output">When a backgrounded running session produces output that the user has not yet seen (output that arrived after the last foregrounding), its panel row shows a small unread badge — a coloured dot adjacent to the status badge (R2.row_status_badge). The dot clears when the session is next foregrounded (R6.foreground_clears_unread_indicator).</rule>
+  <rule id="panel_accessible_name" status="❌">The panel's navigation title is the host's display name (label, or "username@host" per <a href="prd:bedterm/saved-connections#R1">Hosts R1.row_primary_label</a>) so screen-reader users know which host they're inspecting.</rule>
+</requirement>
+
+<requirement id="R3" name="Terminal top bar: back vs. kill">
+  <description>
+    The terminal screen's top bar today shows a single "Disconnect" control on the leading side that ends the session and pops to the Hosts list. This requirement replaces that control with two distinct affordances.
+
+    <p>Closed state (current):</p>
+    <div style="display:flex;align-items:center;background:#000;color:#fff;border:1px solid #333;border-radius:12px;padding:10px 14px;font-family:-apple-system,system-ui,sans-serif;max-width:340px;justify-content:space-between;">
+    <span style="font-size:14px;color:#0A84FF;">Disconnect</span>
+    <span style="font-size:13px;color:#888;">user@host</span>
+    </div>
+
+    <p>New state (this requirement):</p>
+    <div style="display:flex;align-items:center;background:#000;color:#fff;border:1px solid #333;border-radius:12px;padding:10px 14px;font-family:-apple-system,system-ui,sans-serif;max-width:340px;gap:12px;">
+    <span style="font-size:18px;">‹</span>
+    <span style="font-size:18px;color:#FF453A;">×</span>
+    <span style="font-size:13px;color:#bbb;flex:1;text-align:center;">user@host · 2 sessions</span>
+    <span style="font-size:13px;color:#bbb;">(reserved)</span>
+    </div>
+    <p>Both lifecycle controls sit on the leading side, paired so the user reads them as a related cluster (<em>leave</em> vs. <em>end</em>). The trailing slot is intentionally left free for a future per-session action (sessions menu, share, etc.); we do not park × on the right just to balance the bar.</p>
+  </description>
+  <rule id="back_button" status="❌">The leading top-bar control is a Back chevron. Tapping it pops the user to the Hosts list (or to the sessions panel if that was the entry point) <em>without</em> killing the foreground session — the PTY stays alive, the SSH channel stays open, and the Rust terminal core keeps consuming output in the background. The session remains "running" in R1 terms.</rule>
+  <rule id="kill_button" status="❌">A × glyph in the error color sits immediately to the right of the Back chevron — both lifecycle controls live on the leading side so the user reads them as a paired cluster ("leave" + "end"). Tapping × shows a confirmation ("End this session?") and on confirm transitions the session to killed (R1.killed_keeps_snapshot) and pops to the sessions panel (R2) so the user immediately sees the panel updated. The trailing slot is reserved for a future per-session action and must not host the kill control.</rule>
+  <rule id="kill_keeps_snapshot" status="❌">The × kill path does not erase the session from the panel — it leaves a killed-session entry visible (R1.killed_keeps_snapshot, R4). Removing a session from the panel entirely is a separate, explicit action (R2.row_swipe_remove).</rule>
+  <rule id="title_shows_host_and_count" status="❌">The top bar's centre title shows the host's display name and, when more than one session under that host exists, the count of sessions ("2 sessions"). Tapping the title opens the sessions panel (R2) for the current host.</rule>
+  <rule id="back_keeps_keyboard_state" status="❌" context="keyboard up when Back tapped">When the user taps Back with the keyboard up, the keyboard dismisses as part of the pop. Coming back into the same running session (R6) does not auto-raise the keyboard — the user must tap the composer or the viewport to bring it back, matching iOS standard navigation idioms.</rule>
+  <rule id="connection_lost_no_silent_kill" status="❌" context="SSH channel drops while session is backgrounded">If the SSH channel drops while a session is backgrounded (network loss, server-side close), the session transitions to killed with reason <code>remote_logout</code> or <code>network_drop</code> (R1.kill_reason_recorded) and the user discovers it the next time they open the panel — there is no foreground alert, because by definition they are not looking.</rule>
+</requirement>
+
+<requirement id="R4" name="Killed-session detail view">
+  <description>
+    Tapping a killed session in the panel opens a read-only detail view that surfaces what the session showed at the moment it ended, plus two affordances to continue working: re-launch in the same CWD, or re-launch fresh.
+    
+    The detail view is not a live terminal — there is no PTY, no keyboard input, no composer. It is a frozen rendering of the last block snapshot, scrollable so the user can read the final output.
+  </description>
+  <rule id="detail_renders_snapshot" status="❌">The detail view renders the session's frozen block snapshot (R1.killed_keeps_snapshot) using the same block-mode layout as the live terminal — same monospace font, same ANSI palette, same block boundaries — so the user perceives it as a paused screenshot of their last terminal, not a transcript log.</rule>
+  <rule id="detail_header_metadata" status="❌">The detail view's header shows: host display name, "Killed &lt;relative time&gt;", kill reason in human-readable form ("you ended this session", "server closed the connection", "network drop"), and the last CWD (R5).</rule>
+  <rule id="detail_resume_action" status="❌">The detail view's primary action is "Resume here". Tapping it creates a new running session under the same host, prepends a <code>cd &lt;last-cwd&gt;</code> command to the new shell's input on first prompt, and foregrounds the new session. The new session is a sibling, not a continuation — the original killed session stays in the panel unchanged.</rule>
+  <rule id="detail_resume_fresh" status="❌">Alongside Resume here, a secondary "New shell" action creates a new running session under the same host without the <code>cd</code> prepend, for cases where the user wants to start over in <code>$HOME</code>.</rule>
+  <rule id="detail_copy_supports_selection" status="❌">Text selection inside the detail view follows <a href="prd:bedterm/terminal-view#R2">Terminal View R2.copy</a> so the user can copy any output they saw before the kill. Block-level "Copy output" actions per <a href="prd:bedterm/terminal-view#R3">Terminal View R3.block_copy</a> also apply.</rule>
+  <rule id="detail_no_input" status="❌">The detail view has no composer, no special-keys toolbar, and no direction pad — input affordances are intentionally absent so the user cannot mistakenly believe they are typing into a live shell.</rule>
+  <rule id="detail_back_returns_to_panel" status="❌">The detail view's leading Back chevron returns to the sessions panel (R2), not to the Hosts list, because the panel is the natural sibling context.</rule>
+</requirement>
+
+<requirement id="R5" name="Last CWD capture">
+  <description>
+    To make Resume here (R4.detail_resume_action) work, every session must record the working directory the shell was in at the moment of kill. The capture path piggybacks on the existing OSC 133 shell-integration sniffer (<a href="prd:bedterm/terminal-view#R3">Terminal View R3.osc133_detection</a>) which already emits a per-prompt event carrying the shell's CWD.
+
+    No new Rust work is required for the capture itself — only Swift-side retention of the latest captured value on the session record.
+  </description>
+  <rule id="cwd_from_osc133" status="❌">Each session tracks a <code>lastCwd</code> field updated on every OSC 133 prompt event the shell-integration sniffer emits. The value is the absolute path string reported by the shell.</rule>
+  <rule id="cwd_fallback_when_missing" status="❌" context="OSC 133 unavailable">If the remote shell has not been instrumented with OSC 133 (matching <a href="prd:bedterm/terminal-view#R3">Terminal View R3.shell_integration_fallback</a>), <code>lastCwd</code> remains <code>nil</code>. The detail view's Resume here action is hidden in this case and only New shell is offered.</rule>
+  <rule id="cwd_shown_abbreviated" status="❌">Wherever the panel (R2.row_label) or detail view (R4.detail_header_metadata) renders a CWD, the user's home directory prefix is abbreviated to <code>~</code> so paths fit on a phone-width row.</rule>
+  <rule id="cwd_resume_quoting" status="❌" context="Resume here invoked">When R4.detail_resume_action prepends a <code>cd</code> command, the path is shell-quoted (single quotes around the absolute path, with embedded single quotes escaped as <code>'\''</code>) so paths containing spaces or special characters survive the round trip into the new shell.</rule>
+</requirement>
+
+<requirement id="R6" name="Re-foregrounding a running session">
+  <description>
+    When the user taps a running session's row in the panel (R2.row_tap_focuses_or_revives), the terminal screen reappears with that session as the foreground. From the user's perspective, the screen looks the same as it did when they tapped Back — the prompt is in the same place, the scrollback is intact, output that arrived while they were away is visible.
+    
+    Mechanically, the Rust terminal core stayed alive and kept consuming PTY bytes in the background while the Metal view was unmounted. Re-foregrounding mounts a fresh Metal view onto the same Rust core; the core's current grid renders as the first frame.
+  </description>
+  <rule id="foreground_shows_current_grid" status="❌">Foregrounding a backgrounded running session renders the Rust terminal core's current grid as the first frame — any output that arrived while the session was backgrounded is already in scrollback and visible if the user scrolls up.</rule>
+  <rule id="foreground_does_not_resize" status="❌" context="device orientation unchanged while backgrounded">If the device orientation and split-screen geometry have not changed while the session was backgrounded, foregrounding does not issue a PTY resize — the remote shell sees no <code>SIGWINCH</code> and TUIs running under it (vim, less) are not disturbed.</rule>
+  <rule id="foreground_resizes_on_geometry_change" status="❌" context="geometry changed while backgrounded">If the viewport size has changed while the session was backgrounded (rotation, split-screen toggle, sessions panel width), the foreground transition issues a single PTY resize to the new geometry, identical to a live rotation.</rule>
+  <rule id="foreground_clears_unread_indicator" status="❌">Once a session is foregrounded, any "unread output" indicator the panel row was showing is cleared.</rule>
+</requirement>
+
+<requirement id="R7" name="Resource bounds and app-lifecycle behavior">
+  <description>
+    Running sessions in the background still consume memory (Rust grid, scrollback ring) and battery (the SSH channel emits keepalives, the PTY may still be producing output). The app does not let this grow unbounded.
+  </description>
+  <rule id="running_session_cap" status="❌">The app retains at most a small number of concurrently-running sessions across all hosts (target: 4). When the user starts a new session that would exceed the cap, the oldest-idle running session is killed first with reason <code>swap_evicted</code> (R1.kill_reason_recorded) and a non-blocking toast notes which session was evicted.</rule>
+  <rule id="killed_snapshot_cap" status="❌">The app retains at most a bounded number of killed-session snapshots per host (target: 10). Older snapshots are dropped FIFO when a new one is added.</rule>
+  <rule id="snapshots_in_memory_only_mvp" status="❌">In v1, killed-session snapshots are kept in memory only. Cold app launches start with zero sessions for every host — sessions do not persist across launches. Persistence to disk is a follow-up.</rule>
+  <rule id="app_relaunch_marks_killed" status="❌" context="app process restarted while sessions were running">Because in-memory state is lost on relaunch, the running sessions from the previous run are not recoverable. They surface as nothing — there is no zombie "killed by relaunch" entry on cold start. (This rule exists so future versions can change it without breaking expectations.)</rule>
+  <rule id="background_app_keeps_sessions_briefly" status="❌" context="app backgrounded by OS">When iOS backgrounds the app process (user swiped up, switched apps), running sessions remain alive for as long as the OS keeps the process resident. If iOS terminates the app, sessions follow R7.app_relaunch_marks_killed — there is no special wake-on-output handling in v1.</rule>
+</requirement>
+
+<bug id="back_button_ends_session" status="Open" date="2026-05-22" rule="R3.back_button">
+  <current>
+    Tapping the leading Back chevron on the terminal screen runs the same teardown path as the × kill button: it calls `onExit(.userKilled)`, which snapshots the BlockStore, disconnects the SSH client, and shows a "Session ended" toast. The user lands on the sessions panel with a fresh killed-session entry — the exact opposite of "leave the session running in the background". Pressing Back to flip over to another host briefly and come back forces a full reconnect.
+  </current>
+  <expected>
+    Back pops the navigation stack and leaves the session in the registry as `running`. The PTY stays alive, the SSH channel stays open, the Rust terminal core keeps consuming output, and re-entering the same session (R6) renders the live grid as the first frame. Only × kills.
+  </expected>
+  <steps>
+    1. Connect to a saved host and run a couple of commands.
+    2. Tap the leading Back chevron.
+    3. Observe: a "Session ended" toast appears and the session is now in the panel as a killed snapshot.
+    4. Expected: no toast, the session row in the inline list (or panel) shows a running badge, tapping it returns to the same shell with scrollback intact.
+  </steps>
+</bug>
+
+<bug id="kill_button_on_trailing_side" status="Open" date="2026-05-22" rule="R3.kill_button">
+  <current>
+    The × kill button is anchored to the top-trailing slot of the terminal toolbar (`ToolbarItem(placement: .topBarTrailing)`), separated from the leading Back chevron by the full width of the navigation bar. The two lifecycle controls do not read as a paired cluster, and the trailing slot — which the user wants free for an upcoming per-session action — is occupied.
+  </current>
+  <expected>
+    The × glyph sits immediately to the right of the Back chevron on the leading side (R3.kill_button updated), so the user reads "leave" and "end" as a paired cluster. The trailing slot is empty and reserved for a future per-session action.
+  </expected>
+  <steps>
+    1. Open any session.
+    2. Observe the top bar: Back is on the left, × is on the right.
+    3. Expected: Back and × are adjacent on the left; the right side has no kill control.
+  </steps>
+</bug>
+
+<bug id="sessions_not_inline_on_host_row" status="Open" date="2026-05-22" rule="R2.inline_sessions_on_host_row">
+  <current>
+    The Hosts list does not surface a host's sessions inline. Tapping the row body always pushes the sessions panel destination, even when the host has zero, one, or two sessions — forcing the user through an extra screen for the common low-count case.
+  </current>
+  <expected>
+    Hosts with 1–5 sessions render those sessions inline beneath the row (R2.inline_sessions_on_host_row). The user only pushes into the full sessions panel when there are more than 5 sessions for a host, via a "View all N sessions" affordance.
+  </expected>
+  <steps>
+    1. Connect to a saved host so it has at least one running session, then tap Back.
+    2. Observe the Hosts list: the host row shows no sessions; tapping the body pushes a separate panel.
+    3. Expected: the row expands inline to list the host's sessions (running and killed) with tap behaviour identical to the panel rows.
+  </steps>
+</bug>
+
+<bug id="disconnect_button_kills_silently" status="Open" date="2026-05-22" rule="R3.back_button">
+  <current>
+    The terminal screen's only top-bar control is a single "Disconnect" button. Tapping it tears down the SSH channel and the Rust terminal core, drops the user back to the Hosts list with no preserved state. If the user wants to flip to another host briefly and return, they must reconnect from scratch — losing scrollback, losing the shell's CWD, restarting any environment setup, and waiting through the prewarm + SSH handshake again. There is no affordance to leave the session running in the background.
+  </current>
+  <expected>
+    The top bar exposes Back and × as two separate controls (R3.back_button, R3.kill_button). Back leaves the session running and pops to the Hosts list; × kills the session with a confirmation and pops to the sessions panel. Users can flip between hosts without paying the reconnect cost on every detour.
+  </expected>
+  <steps>
+    1. Connect to a saved host and run a couple of commands so there is scrollback.
+    2. Tap "Disconnect".
+    3. Observe: the shell is gone; reconnecting starts a brand-new session with an empty terminal.
+  </steps>
+</bug>
+
+</prd>
