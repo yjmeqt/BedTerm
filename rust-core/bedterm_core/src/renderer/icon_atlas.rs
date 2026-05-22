@@ -69,14 +69,15 @@ pub fn decode(slot: IconSlot) -> DecodedIcon {
     }
 }
 
-/// Map a `BtBlockHeaderEntry::agent_id` to an `IconSlot`. `agent_id == 0`
-/// means "no badge"; anything else uses a branded icon when one exists
-/// (Claude=1, Codex=2) or falls back to the generic sparkle.
+/// Map a `BtBlockHeaderEntry::agent_id` to an `IconSlot`. The byte
+/// mirrors the Swift `CLIAgent` enum's `rawValue` (none=0, claude=1,
+/// gemini=2, codex=3, …). Branded icons exist for Claude (1) and Codex
+/// (3); everything else falls back to the generic sparkle.
 pub fn slot_for_agent(agent_id: u8) -> Option<IconSlot> {
     match agent_id {
         0 => None,
         1 => Some(IconSlot::Claude),
-        2 => Some(IconSlot::Codex),
+        3 => Some(IconSlot::Codex),
         _ => Some(IconSlot::Generic),
     }
 }
@@ -96,9 +97,11 @@ mod tests {
 
     #[test]
     fn slot_mapping_matches_swift_enum() {
+        // Mirrors CLIAgent.rawValue: none=0, claude=1, gemini=2, codex=3.
         assert_eq!(slot_for_agent(0), None);
         assert_eq!(slot_for_agent(1), Some(IconSlot::Claude));
-        assert_eq!(slot_for_agent(2), Some(IconSlot::Codex));
+        assert_eq!(slot_for_agent(2), Some(IconSlot::Generic)); // gemini -> generic
+        assert_eq!(slot_for_agent(3), Some(IconSlot::Codex));
         assert_eq!(slot_for_agent(99), Some(IconSlot::Generic));
     }
 }

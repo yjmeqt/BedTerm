@@ -26,12 +26,6 @@ final class BlockListContainerViewController: UIViewController, UIScrollViewDele
     let scrollView = UIScrollView()
     let contentView = UIView()
     private let metalView: TerminalBlocksMetalView
-    var headerHosts: [UInt64: UIHostingController<BlockHeader>] = [:]
-    /// Thin hairline UIViews drawn in the gap above each block (skipped
-    /// for the first block). Live in `contentView` so they scroll with
-    /// the list; sit beneath `metalView` but show through where the
-    /// metal surface has no body content to paint (transparent BG).
-    var dividerHosts: [UInt64: UIView] = [:]
 
     /// Section-header pinning: a single hosting controller floats above
     /// `metalView` (in `view`, not `contentView`) and adopts the
@@ -112,14 +106,6 @@ final class BlockListContainerViewController: UIViewController, UIScrollViewDele
     func teardown() {
         displayLink?.invalidate()
         displayLink = nil
-        for (_, host) in headerHosts {
-            host.willMove(toParent: nil)
-            host.view.removeFromSuperview()
-            host.removeFromParent()
-        }
-        headerHosts.removeAll()
-        for (_, divider) in dividerHosts { divider.removeFromSuperview() }
-        dividerHosts.removeAll()
         if let host = pinnedHost {
             host.willMove(toParent: nil)
             host.view.removeFromSuperview()
@@ -278,36 +264,21 @@ final class BlockListContainerViewController: UIViewController, UIScrollViewDele
         contentView.frame = CGRect(origin: .zero, size: scrollView.contentSize)
     }
 
-    /// Mount UIHostingControllers only for blocks whose vertical range
-    /// intersects the visible viewport ± `headerOverscanPt`. With long
-    /// sessions (hundreds of blocks) this caps the active host count at
-    /// roughly the visible block count instead of growing unbounded.
+    /// Update the (still-SwiftUI) sticky pin host for the currently
+    /// pinned block. M5 will replace this with a renderer-drawn sticky
+    /// descriptor; for now M4 keeps the overlay so the visual change
+    /// is scoped to per-block headers only.
     func syncHeaders() {
         let blocks = session.blockStore.blocks
         let width = view.bounds.width
         let scrollY = scrollView.contentOffset.y
-        let viewportTop = scrollY - headerOverscanPt
-        let viewportBot = scrollY + scrollView.bounds.height + headerOverscanPt
         let gap = BlockPanelStyle.interBlockGapPt
         let ranges = computeBlockRanges(blocks: blocks, gap: gap)
-
-        var keepIDs = Set<UInt64>()
-        keepIDs.reserveCapacity(blocks.count)
-        let dividerColor = resolveDividerColor()
-        for (idx, range) in ranges.enumerated() {
-            let intersects = range.bot >= viewportTop && range.top <= viewportBot
-            if intersects {
-                keepIDs.insert(range.block.id)
-                mountHeader(for: range.block, blockTop: range.top, width: width)
-                placeDividerForRange(range, idx: idx, width: width, gap: gap, color: dividerColor)
-            }
-        }
-        recycleHostsAndDividers(keep: keepIDs)
         updateStickyHeader(ranges: ranges, scrollY: scrollY, width: width)
     }
 
     /// Per-block top + bottom Y in scroll-content coordinates. One pass.
-    private func computeBlockRanges(blocks: [Block], gap: CGFloat) -> [BlockRange] {
+    func computeBlockRanges(blocks: [Block], gap: CGFloat) -> [BlockRange] {
         var out: [BlockRange] = []
         out.reserveCapacity(blocks.count)
         var yPt: CGFloat = 0
@@ -318,20 +289,6 @@ final class BlockListContainerViewController: UIViewController, UIScrollViewDele
             yPt = bot + gap
         }
         return out
-    }
-
-    private func placeDividerForRange(
-        _ range: BlockRange, idx: Int, width: CGFloat,
-        gap: CGFloat, color: UIColor
-    ) {
-        let inset = BlockPanelStyle.dividerHorizontalInsetPt
-        let thickness = BlockPanelStyle.dividerThicknessPt
-        let rect = CGRect(
-            x: inset,
-            y: range.top - gap / 2 - thickness / 2,
-            width: max(0, width - inset * 2),
-            height: thickness)
-        placeDivider(for: range.block, isFirst: idx == 0, rect: rect, color: color)
     }
 
     /// (block, naturalTop, naturalBot) in scroll-content coordinates.
@@ -353,38 +310,34 @@ final class BlockListContainerViewController: UIViewController, UIScrollViewDele
         let scale = view.window?.screen.scale ?? 3.0
         let gap = BlockPanelStyle.interBlockGapPt
         let metalViewWidth = metalView.bounds.width
-        var yPt: CGFloat = 0
+        let widthPx = Float(metalViewWidth * scale)
+        let ranges = computeBlockRanges(blocks: blocks, gap: gap)
+
         var entries: [BtBlockLayoutEntry] = []
         entries.reserveCapacity(blocks.count)
-        for block in blocks {
-            let bodyTop = yPt + headerHeightPt
-            let bodyPt = bodyHeightPt(for: block)
-            // We dropped the rounded panel chrome — pass `panel_bg_rgba=0`
-            // and `panel_corner_radius_px=0` so Rust skips the panel draw
-            // entirely. The hairline divider between blocks is painted on
-            // the Swift side as a UIView in `syncHeaders`.
+        for range in ranges {
+            let bodyTop = range.top + headerHeightPt
+            let bodyPt = range.bot - bodyTop
             entries.append(
                 BtBlockLayoutEntry(
-                    block_id: block.id,
+                    block_id: range.block.id,
                     body_y_top_px: Float(bodyTop * scale),
                     body_height_px: Float(bodyPt * scale),
-                    panel_y_top_px: Float(yPt * scale),
-                    panel_height_px: Float((headerHeightPt + bodyPt) * scale),
+                    panel_y_top_px: Float(range.top * scale),
+                    panel_height_px: Float((range.bot - range.top) * scale),
                     panel_x_left_px: 0,
-                    panel_width_px: Float(metalViewWidth * scale),
+                    panel_width_px: widthPx,
                     panel_bg_rgba: 0,
                     panel_corner_radius_px: 0
                 ))
-            yPt += headerHeightPt + bodyPt + gap
         }
-        // M1: pass empty headers — natural headers still hosted by
-        // SwiftUI UIHostingControllers in `contentView`. Milestone 4
-        // replaces those with renderer-drawn header bands.
+        let (headers, storage) = buildHeaderDescriptors(
+            ranges: ranges, scale: Float(scale), widthPx: widthPx)
         metalView.update(
             scrollOffset: scrollView.contentOffset.y,
             layout: entries,
-            headers: [],
-            storage: [])
+            headers: headers,
+            storage: storage)
     }
 
     /// Resolve UI font pixel sizes from the current trait collection and
