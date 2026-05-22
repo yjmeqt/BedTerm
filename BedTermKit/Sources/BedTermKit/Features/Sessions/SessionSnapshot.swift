@@ -2,12 +2,12 @@ import Foundation
 
 /// Frozen record of a session that ended. Survives the SSH channel /
 /// `TerminalSession` it came from so the sessions panel can list it and
-/// the killed-session detail view can render its command history.
+/// the killed-session detail view can render its command history via
+/// the Rust replay terminal (PersistenceHandle.openReplay, Task 5.x).
 ///
-/// Output rows are *not* snapshotted in v1 — only block metadata
-/// (command, exit code, duration, cwd, branch). Preserving the rendered
-/// grid requires the `TerminalCore` strong-ownership refactor (P3 in
-/// `BedTerm/docs/specs/background-sessions.md`).
+/// `blocks` carries metadata only (command, exit code, duration, cwd,
+/// branch). Stylized output bytes never enter Swift — they live in
+/// SQLite and are streamed to a no-PTY TerminalCore by Rust on restore.
 public struct SessionSnapshot: Identifiable, Sendable, Equatable {
     public enum KillReason: String, Sendable, Equatable {
         case userKilled

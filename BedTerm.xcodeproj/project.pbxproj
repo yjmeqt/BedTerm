@@ -28,6 +28,7 @@
 		B6B6B6B600000000000000A1 /* BedTermSettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6B6B6B600000000000000F1 /* BedTermSettingsTests.swift */; };
 		B8B8B8B800000000000000A1 /* ShellIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8B8B8B800000000000000F1 /* ShellIntegrationTests.swift */; };
 		BABABABA00000000000000A1 /* SessionSnapshotTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BABABABA00000000000000F1 /* SessionSnapshotTests.swift */; };
+		BCBCBCBC00000000000000A1 /* PersistedSessionSnapshotStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BCBCBCBC00000000000000F1 /* PersistedSessionSnapshotStoreTests.swift */; };
 		B9B9B9B900000000000000A1 /* BlockStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9B9B9B900000000000000F1 /* BlockStoreTests.swift */; };
 		F3F3F3F300000000000000A2 /* Fixtures in Resources */ = {isa = PBXBuildFile; fileRef = F3F3F3F300000000000000F2 /* Fixtures */; };
 		C1C1C1C100000000000000A1 /* ConnectionSmokeUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1C1C1C100000000000000F1 /* ConnectionSmokeUITests.swift */; };
@@ -79,6 +80,7 @@
 		B6B6B6B600000000000000F1 /* BedTermSettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BedTermSettingsTests.swift; sourceTree = "<group>"; };
 		B8B8B8B800000000000000F1 /* ShellIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShellIntegrationTests.swift; sourceTree = "<group>"; };
 		BABABABA00000000000000F1 /* SessionSnapshotTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionSnapshotTests.swift; sourceTree = "<group>"; };
+		BCBCBCBC00000000000000F1 /* PersistedSessionSnapshotStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersistedSessionSnapshotStoreTests.swift; sourceTree = "<group>"; };
 		B9B9B9B900000000000000F1 /* BlockStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlockStoreTests.swift; sourceTree = "<group>"; };
 		F3F3F3F300000000000000F2 /* Fixtures */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Fixtures; sourceTree = "<group>"; };
 		C1C1C1C100000000000000E1 /* BedTermUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = BedTermUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -148,6 +150,7 @@
 				B8B8B8B800000000000000F1 /* ShellIntegrationTests.swift */,
 				B9B9B9B900000000000000F1 /* BlockStoreTests.swift */,
 				BABABABA00000000000000F1 /* SessionSnapshotTests.swift */,
+				BCBCBCBC00000000000000F1 /* PersistedSessionSnapshotStoreTests.swift */,
 			);
 			path = BedTermTests;
 			sourceTree = "<group>";
@@ -341,6 +344,7 @@
 				B8B8B8B800000000000000A1 /* ShellIntegrationTests.swift in Sources */,
 				B9B9B9B900000000000000A1 /* BlockStoreTests.swift in Sources */,
 				BABABABA00000000000000A1 /* SessionSnapshotTests.swift in Sources */,
+				BCBCBCBC00000000000000A1 /* PersistedSessionSnapshotStoreTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

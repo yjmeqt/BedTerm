@@ -6,6 +6,13 @@ struct BedTermApp: App {
     @State private var path = NavigationPath()
     @State private var toaster = Toaster()
     @State private var settings = BedTermSettings()
+    @State private var persistenceHandle: PersistenceHandle? = {
+        let dbURL = URL.applicationSupportDirectory.appending(path: "BedTerm/sessions.sqlite")
+        return PersistenceHandle.open(at: dbURL)
+    }()
+
+    @State private var persistedSnapshots: PersistedSessionSnapshotStore?
+
     @State private var sessionSnapshots = SessionSnapshotStore()
     @State private var onboardingDone: Bool =
         OnboardingViewModel.hasCompleted
@@ -30,6 +37,11 @@ struct BedTermApp: App {
             .environment(\.toaster, toaster)
             .environment(settings)
             .environment(sessionSnapshots)
+            .task {
+                if persistedSnapshots == nil, let handle = persistenceHandle {
+                    persistedSnapshots = PersistedSessionSnapshotStore(handle: handle)
+                }
+            }
         }
     }
 }
