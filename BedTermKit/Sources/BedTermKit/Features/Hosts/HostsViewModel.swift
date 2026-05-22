@@ -64,7 +64,7 @@ public final class HostsViewModel {
     /// Killed-session snapshot store. Set after init by the host screen
     /// from the SwiftUI environment so this view model can preserve
     /// scrollback + last-CWD when a session ends (PRD R1.killed_keeps_snapshot).
-    public weak var snapshotStore: SessionSnapshotStore?
+    public weak var snapshotStore: PersistedSessionSnapshotStore?
 
     /// Process-wide SQLite persistence layer. Set by the host screen from the
     /// SwiftUI environment after init. When nil, sessions are created without
@@ -202,34 +202,27 @@ public final class HostsViewModel {
         self.currentSessionID = nil
     }
 
-    /// Snapshot the current session into the killed-session store and
-    /// tear it down (PRD R1.killed_keeps_snapshot, R3.kill_button).
+    /// Disconnect the current session and reload the persisted snapshot
+    /// store so the killed-session entry becomes visible in the UI
+    /// (PRD R1.killed_keeps_snapshot, R3.kill_button). The `TerminalSession`
+    /// writes kill metadata to SQLite directly via `recordKill`; this
+    /// method just triggers the subsequent UI reload.
     /// Safe to call even when there is no live session — it just falls
     /// through to `sessionEnded()`.
     public func snapshotAndEnd(reason: SessionSnapshot.KillReason) {
         guard
             let session = self.lastSession,
-            let hostID = self.currentSessionID,
-            let snapshotStore = self.snapshotStore
+            let hostID = self.currentSessionID
         else {
             self.sessionEnded()
             return
         }
-        let blocks = session.blockStore.blocks
-        let lastCwd = session.blockStore.latestPwd
-        let lastCompleted = blocks.last(where: { !$0.isRunning && !$0.command.isEmpty })
-        let snapshot = SessionSnapshot(
-            hostID: hostID,
-            blocks: blocks,
-            lastCwd: lastCwd,
-            lastCommand: lastCompleted?.command,
-            lastExitCode: lastCompleted?.exitCode,
-            killReason: reason
-        )
-        snapshotStore.record(snapshot)
         session.disconnect()
         self.lastSession = nil
         self.currentSessionID = nil
+        // Reload so the new SQLite row appears in the sessions panel
+        // immediately after the navigation transition completes.
+        snapshotStore?.reload(forHost: hostID)
     }
 
     /// Re-launch a fresh session for the given host with an optional

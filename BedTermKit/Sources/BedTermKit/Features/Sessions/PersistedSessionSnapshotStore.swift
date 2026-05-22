@@ -2,8 +2,8 @@ import BedTermCoreC
 import Foundation
 import Observation
 
-/// Rust-backed snapshot store. Mirrors the in-memory `SessionSnapshotStore`
-/// API so existing UI consumers can swap without code changes.
+/// Rust-backed snapshot store. Reads killed-session metadata from SQLite
+/// via the `PersistenceHandle` FFI layer.
 @MainActor
 @Observable
 public final class PersistedSessionSnapshotStore {

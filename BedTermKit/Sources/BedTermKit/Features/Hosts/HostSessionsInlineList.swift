@@ -11,7 +11,7 @@ import SwiftUI
 ///     that pushes the full `SessionsPanelScreen` destination.
 ///
 /// The running session (if any) appears first; killed snapshots follow
-/// in newest-first order (matching `SessionSnapshotStore` insertion).
+/// in newest-first order (matching `PersistedSessionSnapshotStore` insertion).
 struct HostSessionsInlineList: View {
     static let inlineThreshold = 5
 

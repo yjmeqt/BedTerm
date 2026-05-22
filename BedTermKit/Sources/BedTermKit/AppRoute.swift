@@ -10,7 +10,7 @@ enum AppRoute: Hashable {
     case sessionsPanel(SavedHost.ID)
     /// Frozen view of a killed session (PRD R4). Carries the
     /// `SessionSnapshot.id` so the destination resolves the snapshot
-    /// from `SessionSnapshotStore`.
+    /// from `PersistedSessionSnapshotStore`.
     case killedSessionDetail(UUID)
     case terminal
     #if DEBUG

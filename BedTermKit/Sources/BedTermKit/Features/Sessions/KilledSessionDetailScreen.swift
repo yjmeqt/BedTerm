@@ -5,7 +5,7 @@ import SwiftUI
 /// (re-launch with `cd <cwd>` queued) or New shell (fresh `$HOME`).
 public struct KilledSessionDetailScreen: View {
     @Binding var path: NavigationPath
-    @Environment(SessionSnapshotStore.self) private var store
+    @Environment(PersistedSessionSnapshotStore.self) private var store
 
     let snapshotID: UUID
     let host: SavedHost

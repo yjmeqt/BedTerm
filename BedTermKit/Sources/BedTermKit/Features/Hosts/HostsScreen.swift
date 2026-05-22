@@ -5,7 +5,7 @@ public struct HostsScreen: View {
     @Binding var path: NavigationPath
     @Environment(\.toaster) var toaster
     @Environment(BedTermSettings.self) private var settings
-    @Environment(SessionSnapshotStore.self) var snapshotStore
+    @Environment(PersistedSessionSnapshotStore.self) var snapshotStore
     @Environment(\.persistenceHandle) private var persistenceHandle
     @State var viewModel = HostsViewModel()
     @State private var didFirstAppear = false

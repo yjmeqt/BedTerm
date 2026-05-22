@@ -5,7 +5,7 @@ import SwiftUI
 /// only — running sessions don't survive the navigation pop yet (P3).
 public struct SessionsPanelScreen: View {
     @Binding var path: NavigationPath
-    @Environment(SessionSnapshotStore.self) private var store
+    @Environment(PersistedSessionSnapshotStore.self) private var store
 
     let host: SavedHost
     let onStartNew: () -> Void
