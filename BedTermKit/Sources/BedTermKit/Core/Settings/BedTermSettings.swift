@@ -69,7 +69,7 @@ public final class BedTermSettings {
         self.reserveTopSafeAreaInAltScreen =
             defaults.object(forKey: Key.reserveTopSafeAreaInAltScreen) as? Bool ?? true
         self.installShellIntegrationOnConnect =
-            defaults.object(forKey: Key.installShellIntegrationOnConnect) as? Bool ?? false
+            defaults.object(forKey: Key.installShellIntegrationOnConnect) as? Bool ?? true
         self.showCommandBlocks =
             defaults.object(forKey: Key.showCommandBlocks) as? Bool ?? true
         // Sweep obsolete debug-toggle keys from earlier builds so they don't
