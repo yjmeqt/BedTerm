@@ -166,16 +166,31 @@ impl Terminal {
         let events = self.dcs.feed_with_positions(bytes);
 
         let mut cursor = 0usize;
-        for (end_pos, event) in events {
-            self.dispatch_chunk(&bytes[cursor..end_pos]);
+        for (frame_start, end_pos, event) in &events {
+            // Dispatch the full chunk including the DCS frame to the VTE
+            // grid parser (alacritty silently swallows `$d`-final DCS).
+            self.dispatch_chunk(&bytes[cursor..*end_pos]);
+            // Capture raw content bytes — but NOT the DCS frame itself.
+            // `frame_start` is the offset of the ESC introducer within
+            // this call's `bytes`. Bytes before the frame are genuine
+            // output content; the frame is protocol signalling and must
+            // be excluded so the stylized buffer doesn't accumulate DCS
+            // overhead on every Precmd/CommandFinished boundary.
+            let content_end = frame_start.unwrap_or(*end_pos);
+            if content_end > cursor {
+                self.capture_output_bytes(&bytes[cursor..content_end]);
+            }
             let current = self.current_grid_absolute_line();
             self.blocks
-                .apply(&event, current, now, cols, rows, &self.palette);
-            cursor = end_pos;
+                .apply(event, current, now, cols, rows, &self.palette);
+            cursor = *end_pos;
         }
         // Trailing bytes after the last event (or the entire chunk
         // if no event completed this call — most chunks).
         self.dispatch_chunk(&bytes[cursor..]);
+        if cursor < bytes.len() {
+            self.capture_output_bytes(&bytes[cursor..]);
+        }
     }
 
     /// Feed `bytes` to the currently-active target — the open block's
@@ -211,6 +226,21 @@ impl Terminal {
         }
         if also_global {
             self.parser.advance(&mut self.term, bytes);
+        }
+    }
+
+    /// Append `bytes` to the open block's `stylized_output` buffer, if a
+    /// block is currently running (i.e. `Preexec` has fired and
+    /// `CommandFinished` has not). DCS frame bytes must be excluded by the
+    /// caller — this method appends whatever it receives verbatim.
+    fn capture_output_bytes(&mut self, bytes: &[u8]) {
+        if bytes.is_empty() {
+            return;
+        }
+        if let Some(block) = self.blocks.open_block_mut() {
+            if block.grid.is_some() {
+                block.append_output_bytes(bytes);
+            }
         }
     }
 
