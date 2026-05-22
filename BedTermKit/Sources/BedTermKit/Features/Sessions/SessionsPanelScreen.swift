@@ -122,32 +122,33 @@ private struct SessionSnapshotRow: View {
     let snapshot: SessionSnapshot
 
     var body: some View {
-        HStack(alignment: .center, spacing: 12) {
-            statusBadge
-            VStack(alignment: .leading, spacing: 2) {
-                Text(verbatim: lastCommandLabel)
-                    .font(.callout.weight(.medium))
+        VStack(alignment: .leading, spacing: 0) {
+            // Reuse BlockHeader for command + exit code + duration —
+            // same visual language as the live block list.
+            if let block = lastBlock {
+                BlockHeader(block: block)
+            } else {
+                // No blocks captured: fall back to a plain label.
+                Text(verbatim: "—")
+                    .font(.system(.subheadline, design: .monospaced))
                     .foregroundStyle(Color("ShadcnPrimary", bundle: .module))
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                if let cwd = abbreviatedCwd {
-                    Text(verbatim: cwd)
-                        .font(.footnote)
-                        .foregroundStyle(Color("ShadcnMutedForeground", bundle: .module))
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 10)
+            }
+            Divider()
+                .padding(.horizontal, 12)
+            HStack {
                 Text(verbatim: relativeTimestamp)
                     .font(.caption2)
                     .foregroundStyle(Color("ShadcnMutedForeground", bundle: .module))
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(Color("ShadcnMutedForeground", bundle: .module))
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            Image(systemName: "chevron.right")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(Color("ShadcnMutedForeground", bundle: .module))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
         .contentShape(Rectangle())
         .background(Color("ShadcnCard", bundle: .module))
         .overlay(
@@ -159,30 +160,9 @@ private struct SessionSnapshotRow: View {
         .accessibilityLabel(Text(verbatim: accessibilityLabel))
     }
 
-    private var statusBadge: some View {
-        let isError = (snapshot.lastExitCode ?? 0) != 0
-        let color =
-            isError
-            ? Color("ShadcnDestructive", bundle: .module)
-            : Color("ShadcnMutedForeground", bundle: .module)
-        return Circle()
-            .strokeBorder(color, lineWidth: 1.5)
-            .background(Circle().fill(isError ? color : Color.clear))
-            .frame(width: 10, height: 10)
-    }
-
-    private var lastCommandLabel: String {
-        if let cmd = snapshot.lastCommand, !cmd.isEmpty { return cmd }
-        return "—"
-    }
-
-    private var abbreviatedCwd: String? {
-        guard let cwd = snapshot.lastCwd, !cwd.isEmpty else { return nil }
-        return Self.abbreviate(cwd)
-    }
-
-    static func abbreviate(_ path: String) -> String {
-        SessionSnapshotPathAbbreviator.abbreviate(path)
+    private var lastBlock: Block? {
+        snapshot.blocks.last(where: { !$0.isRunning })
+            ?? snapshot.blocks.last
     }
 
     private var relativeTimestamp: String {
@@ -192,7 +172,7 @@ private struct SessionSnapshotRow: View {
     }
 
     private var accessibilityLabel: String {
-        let cmd = lastCommandLabel
+        let cmd = lastBlock.flatMap { $0.command.isEmpty ? nil : $0.command } ?? "—"
         let when = relativeTimestamp
         let reason = snapshot.killReason.localizedReason
         return "\(cmd), killed \(when), \(reason)"
