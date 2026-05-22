@@ -199,10 +199,8 @@ typedef struct BtPaletteView {
 } BtPaletteView;
 
 /**
- * One entry per block: the BODY cell region + the surrounding Warp-style
- * panel chrome. Rust draws a rounded-rect panel for each visible block,
- * then paints cell quads inside. Header text remains a SwiftUI overlay
- * on top of the panel.
+ * One entry per block: the BODY cell region plus the panel chrome
+ * rect. Headers are emitted separately via `BtBlockHeaderEntry`.
  */
 typedef struct BtBlockLayoutEntry {
   /**
@@ -245,6 +243,73 @@ typedef struct BtBlockLayoutEntry {
    */
   float panel_corner_radius_px;
 } BtBlockLayoutEntry;
+
+/**
+ * One entry per visible block header band. Sticky descriptors use the
+ * same struct with `is_sticky = 1` and `header_y_top_px` in
+ * **screen-space** (post-scroll) rather than content-space.
+ */
+typedef struct BtBlockHeaderEntry {
+  uint64_t block_id;
+  /**
+   * For natural headers: top Y in **content** coords (pre-scroll).
+   * For sticky (is_sticky=1): top Y in **screen** coords.
+   */
+  float header_y_top_px;
+  float header_height_px;
+  float panel_x_left_px;
+  float panel_width_px;
+  /**
+   * UTF-8 bytes of the command string. Nullable when `command_len == 0`.
+   */
+  const uint8_t *command_utf8;
+  uint32_t command_len;
+  /**
+   * UTF-8 bytes of the subtitle string (e.g. "exit 0 · 1.2s").
+   * Nullable when `subtitle_len == 0`.
+   */
+  const uint8_t *subtitle_utf8;
+  uint32_t subtitle_len;
+  /**
+   * 0 = no badge; nonzero values mirror the Swift `CLIAgent` enum.
+   * Branded slots known to the icon atlas (Claude=1, Codex=2);
+   * everything else falls back to the generic glyph.
+   */
+  uint8_t agent_id;
+  uint8_t _pad[3];
+  /**
+   * Badge circle fill (0xRRGGBBAA).
+   */
+  uint32_t badge_tint_rgba;
+  /**
+   * Header background fill.
+   */
+  uint32_t header_bg_rgba;
+  /**
+   * Command text colour.
+   */
+  uint32_t command_fg_rgba;
+  /**
+   * Subtitle text colour.
+   */
+  uint32_t subtitle_fg_rgba;
+  /**
+   * Hairline divider rgba painted ABOVE this header. Pass 0 to skip.
+   */
+  uint32_t divider_rgba;
+  /**
+   * 1 = this is the pinned sticky band (z-sorted on top, no divider).
+   */
+  uint8_t is_sticky;
+  uint8_t _pad2[3];
+  /**
+   * Body clip rect — cells whose Y falls outside this band are
+   * clipped. Lets the sticky band occlude body content without
+   * alpha bleed. Pass 0 / 0 to disable clipping for this body.
+   */
+  float body_clip_y_top_px;
+  float body_clip_height_px;
+} BtBlockHeaderEntry;
 
 
 
@@ -394,14 +459,17 @@ void bt_term_snapshot_release(struct BtTerm *h);
 void bt_term_set_palette(struct BtTerm *h, const struct BtPaletteView *palette);
 
 /**
- * Paint visible block bodies into `texture` for one frame. First
- * visible block clears the viewport; subsequent calls use Load. If no
- * block intersects the viewport, the viewport is still cleared.
+ * Paint visible block bodies + header bands into `texture` for one
+ * frame. First visible block clears the viewport; subsequent calls use
+ * Load. If no block intersects the viewport, the viewport is still
+ * cleared.
  *
  * # Safety
  * `r`, `term`, `texture_ptr` must be valid live pointers. `entries`
  * must point to at least `entry_count` `BtBlockLayoutEntry` values
- * (or be null with `entry_count == 0`).
+ * (or be null with `entry_count == 0`). Same for `headers` /
+ * `header_count`. UTF-8 pointers inside header entries must outlive
+ * the call.
  */
 int bt_renderer_draw_block_list(struct BtRenderer *r,
                                 struct BtTerm *term,
@@ -410,7 +478,22 @@ int bt_renderer_draw_block_list(struct BtRenderer *r,
                                 uint32_t viewport_h,
                                 float scroll_y_px,
                                 const struct BtBlockLayoutEntry *entries,
-                                uintptr_t entry_count);
+                                uintptr_t entry_count,
+                                const struct BtBlockHeaderEntry *headers,
+                                uintptr_t header_count);
+
+/**
+ * Push current UI font sizes into the renderer. Called by Swift on
+ * init and whenever the trait collection changes (Dynamic Type, scale).
+ * `*_px` are in **pixels** (point size × screen scale).
+ *
+ * # Safety
+ * `r` must be a valid live pointer.
+ */
+int bt_renderer_set_ui_font_sizes_px(struct BtRenderer *r,
+                                     float subheadline_px,
+                                     float caption2_px,
+                                     float scale);
 
 /**
  * # Safety

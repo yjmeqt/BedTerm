@@ -28,6 +28,15 @@ pub struct Renderer {
     pub(crate) pixel_size: f32,
     pub(crate) dpr: f32,
     pub(crate) clear_color: [f32; 4],
+    /// Subheadline font size in **pixels** (point × scale). Pushed
+    /// from Swift via `bt_renderer_set_ui_font_sizes_px`. Used for
+    /// per-block header command text.
+    pub(crate) ui_subheadline_px: f32,
+    /// Caption2 font size in pixels — used for header subtitle.
+    pub(crate) ui_caption2_px: f32,
+    /// Current UI scale (UIScreen.scale). Fallback 3.0 covers initial
+    /// frames before Swift has a window.
+    pub(crate) ui_scale: f32,
 }
 
 impl Renderer {
@@ -74,7 +83,18 @@ impl Renderer {
             pixel_size: 14.0,
             dpr: 3.0,
             clear_color: [0.0, 0.0, 0.0, 1.0],
+            ui_subheadline_px: 0.0,
+            ui_caption2_px: 0.0,
+            ui_scale: 3.0,
         })
+    }
+
+    /// Push UI font sizes resolved from `UIFont.preferredFont(forTextStyle:)`.
+    /// Values arrive in pixels (Swift multiplies point × screen scale).
+    pub fn set_ui_font_sizes(&mut self, sub: f32, cap: f32, scale: f32) {
+        self.ui_subheadline_px = sub.max(1.0);
+        self.ui_caption2_px = cap.max(1.0);
+        self.ui_scale = scale.max(1.0);
     }
 
     pub fn set_clear_color(&mut self, r: f32, g: f32, b: f32, a: f32) {
@@ -226,7 +246,10 @@ impl Renderer {
         viewport_h: u32,
         scroll_y_px: f32,
         entries: &[crate::renderer::block_list_ffi::BtBlockLayoutEntry],
+        _headers: &[crate::renderer::block_list_ffi::BtBlockHeaderEntry],
     ) -> i32 {
+        // M1: header slice accepted but not drawn. Milestones 3/5 wire
+        // `header_band::emit_header(...)` into this loop.
         if texture_ptr.is_null() {
             return -1;
         }

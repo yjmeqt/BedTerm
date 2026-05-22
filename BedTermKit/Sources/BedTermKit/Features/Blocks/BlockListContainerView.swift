@@ -101,6 +101,7 @@ final class BlockListContainerViewController: UIViewController, UIScrollViewDele
                 self?.extractText(blockID: id, range: range)
             })
         view.addGestureRecognizer(selection.longPressGR)
+        pushUIFontSizes()
     }
 
     /// Called explicitly by the SwiftUI representable's
@@ -376,7 +377,33 @@ final class BlockListContainerViewController: UIViewController, UIScrollViewDele
                 ))
             yPt += headerHeightPt + bodyPt + gap
         }
-        metalView.update(scrollOffset: scrollView.contentOffset.y, layout: entries)
+        // M1: pass empty headers — natural headers still hosted by
+        // SwiftUI UIHostingControllers in `contentView`. Milestone 4
+        // replaces those with renderer-drawn header bands.
+        metalView.update(
+            scrollOffset: scrollView.contentOffset.y,
+            layout: entries,
+            headers: [],
+            storage: [])
+    }
+
+    /// Resolve UI font pixel sizes from the current trait collection and
+    /// push them to the Rust renderer. Called on viewDidLoad,
+    /// traitCollectionDidChange, and viewWillTransition.
+    func pushUIFontSizes() {
+        let scale = view.window?.screen.scale ?? UIScreen.main.scale
+        let traits = view.traitCollection
+        let sub = UIFont.preferredFont(forTextStyle: .subheadline, compatibleWith: traits).pointSize
+        let cap = UIFont.preferredFont(forTextStyle: .caption2, compatibleWith: traits).pointSize
+        MetalEnvironment.shared.renderer.setUIFontSizes(
+            subheadlinePx: Float(sub * scale),
+            caption2Px: Float(cap * scale),
+            scale: Float(scale))
+    }
+
+    override func traitCollectionDidChange(_ previous: UITraitCollection?) {
+        super.traitCollectionDidChange(previous)
+        pushUIFontSizes()
     }
 
 }

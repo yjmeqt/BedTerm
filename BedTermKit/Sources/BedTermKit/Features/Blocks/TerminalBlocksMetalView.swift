@@ -15,6 +15,13 @@ final class TerminalBlocksMetalView: MTKView {
     private weak var session: TerminalSession?
     private var scrollOffset: CGFloat = 0
     private var layout: [BtBlockLayoutEntry] = []
+    /// Header descriptors for the current frame. UTF-8 pointers inside
+    /// each entry are mutated at FFI call time from `headerStorage` —
+    /// see `update(scrollOffset:layout:headers:storage:)`.
+    private var headers: [BtBlockHeaderEntry] = []
+    /// Backing UTF-8 storage that keeps `headers[i].command_utf8` /
+    /// `subtitle_utf8` pointers alive across the FFI call.
+    private var headerStorage: [(command: Data, subtitle: Data?)] = []
 
     init(session: TerminalSession) {
         self.session = session
@@ -34,10 +41,19 @@ final class TerminalBlocksMetalView: MTKView {
     @available(*, unavailable)
     required init(coder: NSCoder) { fatalError("not used") }
 
-    /// Pump fresh scroll offset + layout table; triggers redraw.
-    func update(scrollOffset: CGFloat, layout: [BtBlockLayoutEntry]) {
+    /// Pump fresh scroll offset + layout table + header descriptors;
+    /// triggers redraw. `storage` keeps UTF-8 bytes alive while `headers`
+    /// references them through raw pointers patched in at draw time.
+    func update(
+        scrollOffset: CGFloat,
+        layout: [BtBlockLayoutEntry],
+        headers: [BtBlockHeaderEntry],
+        storage: [(command: Data, subtitle: Data?)]
+    ) {
         self.scrollOffset = scrollOffset
         self.layout = layout
+        self.headers = headers
+        self.headerStorage = storage
         setNeedsDisplay()
     }
 
@@ -51,13 +67,49 @@ final class TerminalBlocksMetalView: MTKView {
         env.renderer.setClearColor(red: 0, green: 0, blue: 0, alpha: 0)
         let size = drawableSize
         let scrollPx = scrollOffset * contentScaleFactor
-        _ = env.renderer.drawBlockList(
-            term: core,
-            into: drawable.texture,
-            viewport: size,
-            scrollOffsetPx: scrollPx,
-            layout: layout
-        )
+
+        // Flatten every header's UTF-8 into a single contiguous buffer
+        // and patch `command_utf8` / `subtitle_utf8` to point into it.
+        // Pinning the entire blob through `withUnsafeBufferPointer`
+        // gives a single, stable base address for the duration of the
+        // FFI call — Swift's `Data.withUnsafeBytes` would only stabilise
+        // each pointer per-closure, which is fragile for N strings.
+        var blob: [UInt8] = []
+        var commandRanges: [Range<Int>] = []
+        commandRanges.reserveCapacity(headerStorage.count)
+        var subtitleRanges: [Range<Int>?] = []
+        subtitleRanges.reserveCapacity(headerStorage.count)
+        for entry in headerStorage {
+            let cStart = blob.count
+            blob.append(contentsOf: entry.command)
+            commandRanges.append(cStart..<blob.count)
+            if let sub = entry.subtitle, !sub.isEmpty {
+                let sStart = blob.count
+                blob.append(contentsOf: sub)
+                subtitleRanges.append(sStart..<blob.count)
+            } else {
+                subtitleRanges.append(nil)
+            }
+        }
+        blob.withUnsafeBufferPointer { blobBuf in
+            var patched = headers
+            let base = blobBuf.baseAddress
+            for i in patched.indices where i < commandRanges.count {
+                let c = commandRanges[i]
+                patched[i].command_utf8 = base.map { $0.advanced(by: c.lowerBound) }
+                if let s = subtitleRanges[i] {
+                    patched[i].subtitle_utf8 = base.map { $0.advanced(by: s.lowerBound) }
+                }
+            }
+            _ = env.renderer.drawBlockList(
+                term: core,
+                into: drawable.texture,
+                viewport: size,
+                scrollOffsetPx: scrollPx,
+                layout: layout,
+                headers: patched
+            )
+        }
         let fence = env.renderer.queue.makeCommandBuffer()
         fence?.commit()
         fence?.waitUntilScheduled()

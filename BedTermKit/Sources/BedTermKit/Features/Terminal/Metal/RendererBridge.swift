@@ -115,20 +115,33 @@ final class RendererBridge {
         into texture: MTLTexture,
         viewport: CGSize,
         scrollOffsetPx: CGFloat,
-        layout: [BtBlockLayoutEntry]
+        layout: [BtBlockLayoutEntry],
+        headers: [BtBlockHeaderEntry]
     ) -> Int32 {
         let texPtr = Unmanaged.passUnretained(texture as AnyObject).toOpaque()
-        return layout.withUnsafeBufferPointer { buf in
-            bt_renderer_draw_block_list(
-                handle,
-                term.unsafeHandle,
-                texPtr,
-                UInt32(viewport.width),
-                UInt32(viewport.height),
-                Float(scrollOffsetPx),
-                buf.baseAddress,
-                UInt(buf.count)
-            )
+        return layout.withUnsafeBufferPointer { lbuf in
+            headers.withUnsafeBufferPointer { hbuf in
+                bt_renderer_draw_block_list(
+                    handle,
+                    term.unsafeHandle,
+                    texPtr,
+                    UInt32(viewport.width),
+                    UInt32(viewport.height),
+                    Float(scrollOffsetPx),
+                    lbuf.baseAddress,
+                    UInt(lbuf.count),
+                    hbuf.baseAddress,
+                    UInt(hbuf.count)
+                )
+            }
         }
+    }
+
+    /// Push current UI font sizes (resolved from Dynamic Type) into the
+    /// renderer so the header band uses the right pixel sizes when it
+    /// rasterizes command + subtitle glyphs. Values must be in pixels
+    /// (point × screen scale).
+    func setUIFontSizes(subheadlinePx: Float, caption2Px: Float, scale: Float) {
+        _ = bt_renderer_set_ui_font_sizes_px(handle, subheadlinePx, caption2Px, scale)
     }
 }
