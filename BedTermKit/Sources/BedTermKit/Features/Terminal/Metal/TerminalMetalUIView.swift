@@ -354,7 +354,8 @@ final class TerminalMetalUIView: MTKView {
     override func didMoveToWindow() {
         super.didMoveToWindow()
         guard !isInputDisabled, displayMode != .blockList,
-            window != nil, !isFirstResponder else { return }
+            window != nil, !isFirstResponder
+        else { return }
         _ = becomeFirstResponder()
     }
 
