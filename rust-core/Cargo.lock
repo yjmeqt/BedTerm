@@ -218,6 +218,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "bedterm-record"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bedterm_core",
+ "portable-pty",
+ "tempfile",
+]
+
+[[package]]
 name = "bedterm_core"
 version = "0.1.0"
 dependencies = [
