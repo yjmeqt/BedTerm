@@ -130,7 +130,11 @@ pub unsafe extern "C" fn bt_term_block_at(
                 .map(|g| u32::from(g.used_rows()))
                 .unwrap_or(1)
         } else {
-            (block.end_line - block.start_line).max(1) as u32
+            // Sealed blocks: honour the captured row count exactly.
+            // Commands like `cd /tmp` produce zero output and should
+            // collapse their body, not leave a blank gap below the
+            // header. The (end - start) span is non-negative.
+            (block.end_line - block.start_line).max(0) as u32
         };
         (
             block.id,
@@ -232,12 +236,16 @@ pub unsafe extern "C" fn bt_term_block_snapshot(
         return -1;
     }
     let term = &mut *h;
-    // Clone the snapshot out so the immutable borrow on `term` ends
-    // before we cache it.
-    let Some(snap) = term
-        .inner_ref()
+    // Resolve the palette-agnostic frozen snapshot to RGBA against the
+    // terminal's current palette before handing it to Swift — Swift's
+    // cell type still consumes 32-bit-RGBA fg/bg. Light↔dark flips
+    // re-resolve naturally because the host pushes a new palette via
+    // `bt_term_set_palette` before re-reading.
+    let inner = term.inner_ref();
+    let Some(snap) = inner
         .block_at(idx)
-        .and_then(|b| b.frozen_snapshot.clone())
+        .and_then(|b| b.frozen_snapshot.as_ref())
+        .map(|raw| raw.resolve(inner.palette()))
     else {
         return -1;
     };

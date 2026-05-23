@@ -1,65 +1,73 @@
-import SwiftUI
+import BedTermCoreC
 import UIKit
 
 /// Layout helpers split off the main controller for SwiftLint
-/// `file_length`. The methods own no state of their own — they read /
-/// mutate the controller's stored host dictionaries and content view.
+/// `file_length`. M4+ owns building the per-frame `BtBlockHeaderEntry`
+/// table; per-block UIHostingController mounts and divider UIViews
+/// are gone — Rust paints both.
 @MainActor
 extension BlockListContainerViewController {
-    func mountHeader(for block: Block, blockTop: CGFloat, width: CGFloat) {
-        let host: UIHostingController<BlockHeader>
-        if let existing = headerHosts[block.id] {
-            existing.rootView = BlockHeader(block: block)
-            host = existing
-        } else {
-            host = UIHostingController(rootView: BlockHeader(block: block))
-            host.view.backgroundColor = .clear
-            headerHosts[block.id] = host
-            addChild(host)
-            contentView.addSubview(host.view)
-            host.didMove(toParent: self)
+    /// Build per-block header descriptors. UTF-8 bytes are returned in
+    /// the parallel `storage` array; the Metal view patches pointers
+    /// at the FFI call site (pointers can't survive across the call
+    /// otherwise). Sticky descriptors are added later by
+    /// `BlockListContainerView+Sticky` (M5); this method handles only
+    /// natural in-flow headers.
+    func buildHeaderDescriptors(
+        ranges: [BlockRange],
+        scale: Float,
+        widthPx: Float
+    ) -> ([BtBlockHeaderEntry], [(command: Data, subtitle: Data?)]) {
+        let traits = view.traitCollection
+        func token(_ name: String, fallback: UIColor) -> UInt32 {
+            let raw = UIColor(named: name, in: .module, compatibleWith: traits) ?? fallback
+            return raw.resolvedColor(with: traits).asRGBA32()
         }
-        let leftInset = BlockPanelStyle.cellLeftInsetPt
-        host.view.frame = CGRect(
-            x: leftInset, y: blockTop,
-            width: width - leftInset, height: headerHeightPt)
-    }
+        // Header bg intentionally omitted: the band sits directly on the
+        // terminal palette's surface fill (the MTKView clear colour).
+        // The Rust renderer sources the surface colour from `clear_color`,
+        // so this Swift code can't introduce a colour-mismatch bug.
+        let fg = token("ShadcnPrimary", fallback: .label)
+        let muted = token("ShadcnMutedForeground", fallback: .secondaryLabel)
+        let divider = resolveDividerColor().resolvedColor(with: traits).asRGBA32()
+        let headerHpx = Float(headerHeightPt) * scale
 
-    /// Place (or remove) the hairline divider that sits in the gap
-    /// above `block`. The very first block has no divider.
-    func placeDivider(
-        for block: Block, isFirst: Bool, rect: CGRect, color: UIColor
-    ) {
-        guard !isFirst else {
-            if let stale = dividerHosts.removeValue(forKey: block.id) {
-                stale.removeFromSuperview()
-            }
-            return
-        }
-        let divider: UIView
-        if let existing = dividerHosts[block.id] {
-            divider = existing
-        } else {
-            divider = UIView()
-            divider.isUserInteractionEnabled = false
-            contentView.addSubview(divider)
-            dividerHosts[block.id] = divider
-        }
-        divider.backgroundColor = color
-        divider.frame = rect
-    }
+        var entries: [BtBlockHeaderEntry] = []
+        var storage: [(command: Data, subtitle: Data?)] = []
+        entries.reserveCapacity(ranges.count)
+        storage.reserveCapacity(ranges.count)
 
-    func recycleHostsAndDividers(keep: Set<UInt64>) {
-        for (id, host) in headerHosts where !keep.contains(id) {
-            host.willMove(toParent: nil)
-            host.view.removeFromSuperview()
-            host.removeFromParent()
-            headerHosts.removeValue(forKey: id)
+        for (idx, range) in ranges.enumerated() {
+            let block = range.block
+            let cmdData =
+                BlockHeaderModel.displayCommand(for: block)
+                .data(using: .utf8) ?? Data()
+            let subData = BlockHeaderModel.subtitle(for: block)?.data(using: .utf8)
+            storage.append((cmdData, subData))
+
+            let yTopPx = Float(range.top) * scale
+            entries.append(
+                BtBlockHeaderEntry(
+                    block_id: block.id,
+                    header_y_top_px: yTopPx,
+                    header_height_px: headerHpx,
+                    panel_x_left_px: 0,
+                    panel_width_px: widthPx,
+                    command_utf8: nil,
+                    command_len: UInt32(cmdData.count),
+                    subtitle_utf8: nil,
+                    subtitle_len: UInt32(subData?.count ?? 0),
+                    agent_id: BlockHeaderModel.agentID(block.cliAgent),
+                    _pad: (0, 0, 0),
+                    badge_tint_rgba: BlockHeaderModel.tint(for: block.cliAgent),
+                    command_fg_rgba: fg,
+                    subtitle_fg_rgba: muted,
+                    divider_rgba: idx == 0 ? 0 : divider,
+                    is_sticky: 0,
+                    _pad2: (0, 0, 0)
+                ))
         }
-        for (id, divider) in dividerHosts where !keep.contains(id) {
-            divider.removeFromSuperview()
-            dividerHosts.removeValue(forKey: id)
-        }
+        return (entries, storage)
     }
 
     func resolveDividerColor() -> UIColor {

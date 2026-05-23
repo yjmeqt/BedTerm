@@ -22,5 +22,15 @@ final class MetalEnvironment {
         self.device = device
         self.queue = queue
         self.renderer = renderer
+        // Hand the host monospace face (SF Mono → Menlo) to the Rust
+        // rasterizer. Must run after the renderer is built so the
+        // FontSystem singleton exists; a failure here is silent — Rust
+        // falls back to bundled JetBrains Mono.
+        let picked = TerminalFontBootstrap.registerHostMonospace()
+        if let picked {
+            print("[BedTerm] terminal font: \(picked)")
+        } else {
+            print("[BedTerm] terminal font: bundled JetBrains Mono (host load failed)")
+        }
     }
 }

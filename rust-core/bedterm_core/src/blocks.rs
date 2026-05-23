@@ -10,7 +10,7 @@
 use crate::block_grid::BlockGrid;
 use crate::cli_agent::CliAgent;
 use crate::dcs::DcsEvent;
-use crate::snapshot::GridSnapshot;
+use crate::snapshot::RawGridSnapshot;
 use crate::term::Palette;
 use std::time::Instant;
 
@@ -31,8 +31,10 @@ pub struct Block {
     pub start_line: i32,
     /// `BLOCK_END_LINE_RUNNING` while the block is still running.
     pub end_line: i32,
-    /// `None` while running.
-    pub frozen_snapshot: Option<GridSnapshot>,
+    /// `None` while running. Stored palette-agnostic so a system
+    /// light↔dark flip after seal re-resolves the cells via the live
+    /// `Palette` rather than locking them to the freeze-time RGBA.
+    pub frozen_snapshot: Option<RawGridSnapshot>,
     /// `None` if the block sealed without a `CommandFinished` (Ctrl-C path,
     /// partial integration).
     pub exit_code: Option<i32>,
@@ -252,8 +254,11 @@ impl BlockStore {
         // (e.g.) 5. Must match the row count produced by
         // `BlockGrid::snapshot()` so the renderer's body extent and
         // the host's body height agree.
+        // Palette is no longer consulted at seal — we freeze the raw
+        // colour intent so light↔dark flips after seal can re-resolve.
+        let _ = palette;
         let (snap, used_rows) = match self.blocks[idx].grid.as_ref() {
-            Some(g) => (Some(g.snapshot(palette)), g.used_rows() as i32),
+            Some(g) => (Some(g.snapshot_raw()), g.used_rows() as i32),
             None => (
                 None,
                 current_line.saturating_add(1) - self.blocks[idx].start_line,

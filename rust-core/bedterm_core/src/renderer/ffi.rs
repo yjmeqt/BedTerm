@@ -152,3 +152,79 @@ pub unsafe extern "C" fn bt_renderer_draw_cells(
         time_seconds,
     )
 }
+
+/// Register a host-supplied font face (TTF / TTC / OTF bytes) and
+/// promote it to the primary terminal family. Used by Swift to wire
+/// iOS's SF Mono / Menlo into the Rust rasterizer at app launch.
+///
+/// **The family name is sourced from the sfnt `name` table by fontdb**,
+/// not from the caller — this closes the trap where iOS's CTFont
+/// surface name (`.AppleSystemUIFontMonospaced`) doesn't match what
+/// the font file actually declares (`SF Mono`), which would otherwise
+/// make `Family::Name(...)` at shape time silently fall through to
+/// the bundled JetBrains Mono.
+///
+/// The resolved family is written back into `out_family_ptr` (up to
+/// `out_family_capacity` bytes, no NUL terminator) so the caller can
+/// log it. If `out_family_ptr` is null or capacity is 0, registration
+/// still happens and the return value just reports the length that
+/// would have been written.
+///
+/// Returns the family name length on success (≥ 0), or `-1` if
+/// `bytes_ptr` is null / `bytes_len == 0`, or fontdb couldn't extract
+/// any face from the bytes.
+///
+/// # Safety
+/// `bytes_ptr` must point to `bytes_len` readable bytes for the
+/// duration of the call. `out_family_ptr`, if non-null, must point to
+/// `out_family_capacity` writable bytes.
+#[no_mangle]
+pub unsafe extern "C" fn bt_font_register_terminal_face(
+    bytes_ptr: *const u8,
+    bytes_len: usize,
+    out_family_ptr: *mut u8,
+    out_family_capacity: usize,
+) -> c_int {
+    if bytes_ptr.is_null() || bytes_len == 0 {
+        return -1;
+    }
+    let data = std::slice::from_raw_parts(bytes_ptr, bytes_len).to_vec();
+    let Some(family) = crate::renderer::font_system::register_terminal_face(data) else {
+        return -1;
+    };
+    let bytes = family.as_bytes();
+    if !out_family_ptr.is_null() && out_family_capacity > 0 {
+        let n = bytes.len().min(out_family_capacity);
+        std::ptr::copy_nonoverlapping(bytes.as_ptr(), out_family_ptr, n);
+    }
+    bytes.len() as c_int
+}
+
+/// Register an **auxiliary** font face (Bold / Italic / BoldItalic
+/// companions of the primary terminal family). Unlike
+/// `bt_font_register_terminal_face`, this does **not** promote the
+/// face to the primary family — cosmic-text resolves the weight/style
+/// variant by matching `Attrs::weight` / `Attrs::style` against fontdb
+/// after the family lookup. Use this for every non-Regular Menlo cut.
+///
+/// Returns 0 on success, -1 if `bytes_ptr` is null / `bytes_len == 0`,
+/// or fontdb couldn't extract any face from the bytes.
+///
+/// # Safety
+/// `bytes_ptr` must point to `bytes_len` readable bytes for the
+/// duration of the call.
+#[no_mangle]
+pub unsafe extern "C" fn bt_font_register_aux_face(
+    bytes_ptr: *const u8,
+    bytes_len: usize,
+) -> c_int {
+    if bytes_ptr.is_null() || bytes_len == 0 {
+        return -1;
+    }
+    let data = std::slice::from_raw_parts(bytes_ptr, bytes_len).to_vec();
+    if crate::renderer::font_system::register_aux_face(data) {
+        0
+    } else {
+        -1
+    }
+}

@@ -19,6 +19,9 @@ objc2-metal-kit = "0.2"
 objc2-quartz-core = "0.2"
 cosmic-text = "0.12"
 swash = "0.1.18"
+# PNG decode for embedded agent badge assets. We only need PNG; disable
+# default features so the dep stays small (avoids JPEG/GIF/BMP/etc.).
+image = { version = "0.25", default-features = false, features = ["png"] }
 
 [build-dependencies]
 cbindgen = "0.27"
