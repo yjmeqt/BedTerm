@@ -19,16 +19,17 @@ extension BlockListContainerViewController {
         widthPx: Float
     ) -> ([BtBlockHeaderEntry], [(command: Data, subtitle: Data?)]) {
         let traits = view.traitCollection
-        let bg =
-            (UIColor(named: "ShadcnBackground", in: .module, compatibleWith: traits)
-            ?? UIColor.systemBackground).asRGBA32()
-        let fg =
-            (UIColor(named: "ShadcnPrimary", in: .module, compatibleWith: traits)
-            ?? UIColor.label).asRGBA32()
-        let muted =
-            (UIColor(named: "ShadcnMutedForeground", in: .module, compatibleWith: traits)
-            ?? UIColor.secondaryLabel).asRGBA32()
-        let divider = resolveDividerColor().asRGBA32()
+        func token(_ name: String, fallback: UIColor) -> UInt32 {
+            let raw = UIColor(named: name, in: .module, compatibleWith: traits) ?? fallback
+            return raw.resolvedColor(with: traits).asRGBA32()
+        }
+        // Header bg intentionally omitted: the band sits directly on the
+        // terminal palette's surface fill (the MTKView clear colour).
+        // The Rust renderer sources the surface colour from `clear_color`,
+        // so this Swift code can't introduce a colour-mismatch bug.
+        let fg = token("ShadcnPrimary", fallback: .label)
+        let muted = token("ShadcnMutedForeground", fallback: .secondaryLabel)
+        let divider = resolveDividerColor().resolvedColor(with: traits).asRGBA32()
         let headerHpx = Float(headerHeightPt) * scale
 
         var entries: [BtBlockHeaderEntry] = []
@@ -59,14 +60,11 @@ extension BlockListContainerViewController {
                     agent_id: BlockHeaderModel.agentID(block.cliAgent),
                     _pad: (0, 0, 0),
                     badge_tint_rgba: BlockHeaderModel.tint(for: block.cliAgent),
-                    header_bg_rgba: bg,
                     command_fg_rgba: fg,
                     subtitle_fg_rgba: muted,
                     divider_rgba: idx == 0 ? 0 : divider,
                     is_sticky: 0,
-                    _pad2: (0, 0, 0),
-                    body_clip_y_top_px: yTopPx + headerHpx,
-                    body_clip_height_px: Float(range.bot - range.top) * scale - headerHpx
+                    _pad2: (0, 0, 0)
                 ))
         }
         return (entries, storage)

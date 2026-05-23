@@ -92,6 +92,34 @@ final class BlockListContainerViewController: UIViewController {
             scrollOffsetProvider: { [weak self] in self?.contentOffsetY ?? 0 })
         view.addGestureRecognizer(selectionController.longPressGR)
         pushUIFontSizes()
+        installTraitObservers()
+    }
+
+    /// iOS 17+ trait observers. The deprecated `traitCollectionDidChange`
+    /// fires unreliably under SwiftUI hosting in iOS 17+ (especially when
+    /// the host view is `.opacity(0)`-hidden), so subscribe to the new
+    /// `UITraitUserInterfaceStyle` channel directly.
+    ///
+    /// Why we also re-push the terminal palette from here: the block
+    /// list shares `session.terminalCore` with `TerminalMetalUIView`,
+    /// which has its own trait observer that pushes the palette. But
+    /// when block-list mode is active, the terminal pane sits at
+    /// `opacity(0)`. Its observer may or may not fire before the
+    /// block-list controller's, leaving `terminalCore.palette` stale
+    /// for one frame. Pushing here makes the block list self-sufficient
+    /// — `frozen_snapshot.resolve(palette)` and `clearColor` agree.
+    private func installTraitObservers() {
+        registerForTraitChanges(
+            [UITraitUserInterfaceStyle.self]
+        ) { (self: BlockListContainerViewController, prev: UITraitCollection) in
+            guard prev.userInterfaceStyle != self.traitCollection.userInterfaceStyle else {
+                return
+            }
+            self.session.terminalCore?.setPalette(
+                TerminalPalette.resolve(for: self.view.traitCollection))
+            self.pushUIFontSizes()
+            self.pushLayoutToMetalView()
+        }
     }
 
     /// Called explicitly by the SwiftUI representable's
@@ -264,6 +292,13 @@ final class BlockListContainerViewController: UIViewController {
             storage.append(sticky.storage)
         }
 
+        // Sync the metal view's clear colour to the same palette the
+        // header descriptors were just resolved against, then push the
+        // layout. Both updates land in one `setNeedsDisplay` so the
+        // next frame paints header bands AND cell-surface clear in
+        // lock-step — no transient frame where one has flipped but the
+        // other hasn't.
+        metalView.syncSurfaceColor()
         metalView.update(
             scrollOffset: contentOffsetY,
             layout: entries,
@@ -285,12 +320,4 @@ final class BlockListContainerViewController: UIViewController {
             scale: Float(scale))
     }
 
-    override func traitCollectionDidChange(_ previous: UITraitCollection?) {
-        super.traitCollectionDidChange(previous)
-        pushUIFontSizes()
-        // Header bg / command fg / divider tokens are resolved against
-        // the trait collection each layout pass — re-push so colours
-        // follow a light↔dark flip without waiting for the next refresh.
-        pushLayoutToMetalView()
-    }
 }

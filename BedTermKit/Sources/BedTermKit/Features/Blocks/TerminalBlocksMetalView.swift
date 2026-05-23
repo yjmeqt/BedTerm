@@ -32,10 +32,39 @@ final class TerminalBlocksMetalView: MTKView {
         isPaused = true
         enableSetNeedsDisplay = true
         presentsWithTransaction = true
-        backgroundColor = .clear
-        layer.isOpaque = false
-        clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 0)
         isUserInteractionEnabled = false
+        layer.isOpaque = true
+        installTraitObservers()
+    }
+
+    /// Minimal trait observer: on a Light↔Dark flip, just request a
+    /// redraw. The heavy lifting (palette re-resolution, clearColor,
+    /// backgroundColor) happens at the top of `draw(_:)` against the
+    /// current trait collection, so the next paint is always in-sync.
+    private func installTraitObservers() {
+        registerForTraitChanges(
+            [UITraitUserInterfaceStyle.self]
+        ) { (self: TerminalBlocksMetalView, prev: UITraitCollection) in
+            guard prev.userInterfaceStyle != self.traitCollection.userInterfaceStyle else {
+                return
+            }
+            self.setNeedsDisplay()
+        }
+    }
+
+    /// Resolve the terminal palette's background for the current trait
+    /// collection and shove it into `clearColor` + `backgroundColor`.
+    /// Called from the controller right before each `update(...)` push,
+    /// so the next `draw(_:)` clears against the same palette that the
+    /// freshly-built header descriptors were resolved against — header
+    /// band + cell surface flip in lock-step on a Light↔Dark change.
+    func syncSurfaceColor() {
+        let palette = TerminalPalette.resolve(for: traitCollection)
+        let bgR = CGFloat(palette.defaultBg.r) / 255.0
+        let bgG = CGFloat(palette.defaultBg.g) / 255.0
+        let bgB = CGFloat(palette.defaultBg.b) / 255.0
+        clearColor = MTLClearColor(red: Double(bgR), green: Double(bgG), blue: Double(bgB), alpha: 1)
+        backgroundColor = UIColor(red: bgR, green: bgG, blue: bgB, alpha: 1)
     }
 
     @available(*, unavailable)
@@ -57,14 +86,44 @@ final class TerminalBlocksMetalView: MTKView {
         setNeedsDisplay()
     }
 
+    /// Resolve the design-token terminal palette against this view's
+    /// current trait collection, push it to `terminalCore`, and write
+    /// `clearColor` / `backgroundColor`. Called every `draw(_:)` so a
+    /// system Light↔Dark flip can never leave the block-list pane out
+    /// of sync — even if the trait observer didn't fire (we've seen
+    /// SwiftUI hosting drop observer callbacks intermittently). Cheap:
+    /// 18 asset lookups + one FFI struct copy per redraw, and the view
+    /// only redraws on `setNeedsDisplay`.
+    private func syncPaletteFromTraits(core: TerminalCore) {
+        let palette = TerminalPalette.resolve(for: traitCollection)
+        core.setPalette(palette)
+        let bgR = CGFloat(palette.defaultBg.r) / 255.0
+        let bgG = CGFloat(palette.defaultBg.g) / 255.0
+        let bgB = CGFloat(palette.defaultBg.b) / 255.0
+        clearColor = MTLClearColor(red: Double(bgR), green: Double(bgG), blue: Double(bgB), alpha: 1)
+        backgroundColor = UIColor(red: bgR, green: bgG, blue: bgB, alpha: 1)
+    }
+
+    /// Push our resolved palette bg back to the shared bridge before
+    /// each draw — the terminal pane shares the bridge and overwrites
+    /// the clear when it draws, so we need to reclaim per-frame.
+    private func reclaimSharedClearColor(_ bridge: RendererBridge) {
+        bridge.setClearColor(
+            red: Float(clearColor.red),
+            green: Float(clearColor.green),
+            blue: Float(clearColor.blue),
+            alpha: Float(clearColor.alpha))
+    }
+
     override func draw(_ rect: CGRect) {
         guard let drawable = currentDrawable, let session, let core = session.terminalCore
         else {
             return
         }
         let env = MetalEnvironment.shared
-        // Block-list pane sits over a SwiftUI background — clear transparent.
-        env.renderer.setClearColor(red: 0, green: 0, blue: 0, alpha: 0)
+        // Defensive per-frame palette re-sync — see `syncPaletteFromTraits`.
+        syncPaletteFromTraits(core: core)
+        reclaimSharedClearColor(env.renderer)
         let size = drawableSize
         let scrollPx = scrollOffset * contentScaleFactor
 

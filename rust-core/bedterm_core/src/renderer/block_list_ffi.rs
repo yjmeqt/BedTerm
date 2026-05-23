@@ -68,22 +68,20 @@ pub struct BtBlockHeaderEntry {
     pub _pad: [u8; 3],
     /// Badge circle fill (0xRRGGBBAA).
     pub badge_tint_rgba: u32,
-    /// Header background fill.
-    pub header_bg_rgba: u32,
     /// Command text colour.
     pub command_fg_rgba: u32,
     /// Subtitle text colour.
     pub subtitle_fg_rgba: u32,
-    /// Hairline divider rgba painted ABOVE this header. Pass 0 to skip.
+    /// Hairline divider rgba. For natural headers, painted ABOVE the
+    /// band; for sticky headers, painted BELOW (so the pinned chrome
+    /// reads as a section header floating above the scrolling body).
+    /// Pass 0 to skip.
     pub divider_rgba: u32,
-    /// 1 = this is the pinned sticky band (z-sorted on top, no divider).
+    /// 1 = this is the pinned sticky band. Drawn last (z-sorted on top)
+    /// and given an opaque surface-coloured fill so scrolling body
+    /// cells underneath don't bleed through.
     pub is_sticky: u8,
     pub _pad2: [u8; 3],
-    /// Body clip rect — cells whose Y falls outside this band are
-    /// clipped. Lets the sticky band occlude body content without
-    /// alpha bleed. Pass 0 / 0 to disable clipping for this body.
-    pub body_clip_y_top_px: f32,
-    pub body_clip_height_px: f32,
 }
 
 // Pointers in `BtBlockHeaderEntry` are borrowed for the duration of the

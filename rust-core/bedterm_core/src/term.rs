@@ -686,7 +686,7 @@ fn legacy_default_named(
 /// Fallback for indexed colors not in the terminal palette.
 /// The first 16 indices map to named colors; 16–255 are the 6×6×6 colour cube
 /// and greyscale ramp — approximate them rather than produce black.
-fn default_indexed(i: u8) -> alacritty_terminal::vte::ansi::Rgb {
+pub(crate) fn default_indexed(i: u8) -> alacritty_terminal::vte::ansi::Rgb {
     use alacritty_terminal::vte::ansi::{NamedColor, Rgb};
     if i < 16 {
         // SAFETY: NamedColor is repr(usize) with values 0..15 being the standard 16 colors.
@@ -868,7 +868,7 @@ mod block_integration_tests {
         // The global terminal should have BEFORE + AFTER but never
         // INSIDE (that went to the block grid).
         let global = term.snapshot();
-        let global_text = snapshot_to_string(&global);
+        let global_text = resolved_snapshot_to_string(&global);
         assert!(
             global_text.contains("BEFORE"),
             "global term missing pre-Preexec bytes — got {global_text:?}"
@@ -937,7 +937,20 @@ mod block_integration_tests {
         );
     }
 
-    fn snapshot_to_string(snap: &crate::snapshot::GridSnapshot) -> String {
+    fn snapshot_to_string(snap: &crate::snapshot::RawGridSnapshot) -> String {
+        snap.cells
+            .iter()
+            .map(|c| {
+                if c.ch == 0 {
+                    ' '
+                } else {
+                    char::from_u32(c.ch).unwrap_or('?')
+                }
+            })
+            .collect()
+    }
+
+    fn resolved_snapshot_to_string(snap: &crate::snapshot::GridSnapshot) -> String {
         snap.cells
             .iter()
             .map(|c| {

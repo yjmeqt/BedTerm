@@ -69,6 +69,42 @@
 
 #define DIVIDER_THICKNESS_PT 1.0
 
+#define FOREGROUND 0
+
+#define BACKGROUND 1
+
+#define BLACK 2
+
+#define RED 3
+
+#define GREEN 4
+
+#define YELLOW 5
+
+#define BLUE 6
+
+#define MAGENTA 7
+
+#define CYAN 8
+
+#define WHITE 9
+
+#define BRIGHT_BLACK 10
+
+#define BRIGHT_RED 11
+
+#define BRIGHT_GREEN 12
+
+#define BRIGHT_YELLOW 13
+
+#define BRIGHT_BLUE 14
+
+#define BRIGHT_MAGENTA 15
+
+#define BRIGHT_CYAN 16
+
+#define BRIGHT_WHITE 17
+
 #define BT_MODE_ALT_SCREEN (1 << 0)
 
 #define BT_MODE_BRACKETED_PASTE (1 << 1)
@@ -294,10 +330,6 @@ typedef struct BtBlockHeaderEntry {
    */
   uint32_t badge_tint_rgba;
   /**
-   * Header background fill.
-   */
-  uint32_t header_bg_rgba;
-  /**
    * Command text colour.
    */
   uint32_t command_fg_rgba;
@@ -306,21 +338,19 @@ typedef struct BtBlockHeaderEntry {
    */
   uint32_t subtitle_fg_rgba;
   /**
-   * Hairline divider rgba painted ABOVE this header. Pass 0 to skip.
+   * Hairline divider rgba. For natural headers, painted ABOVE the
+   * band; for sticky headers, painted BELOW (so the pinned chrome
+   * reads as a section header floating above the scrolling body).
+   * Pass 0 to skip.
    */
   uint32_t divider_rgba;
   /**
-   * 1 = this is the pinned sticky band (z-sorted on top, no divider).
+   * 1 = this is the pinned sticky band. Drawn last (z-sorted on top)
+   * and given an opaque surface-coloured fill so scrolling body
+   * cells underneath don't bleed through.
    */
   uint8_t is_sticky;
   uint8_t _pad2[3];
-  /**
-   * Body clip rect — cells whose Y falls outside this band are
-   * clipped. Lets the sticky band occlude body content without
-   * alpha bleed. Pass 0 / 0 to disable clipping for this body.
-   */
-  float body_clip_y_top_px;
-  float body_clip_height_px;
 } BtBlockHeaderEntry;
 
 

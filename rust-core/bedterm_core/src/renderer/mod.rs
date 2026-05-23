@@ -320,7 +320,13 @@ impl Renderer {
                 let block = blocks.iter().find(|b| b.id == entry.block_id);
                 match block {
                     Some(b) if b.grid.is_some() => b.grid.as_ref().map(|g| g.snapshot(palette)),
-                    Some(b) if b.frozen_snapshot.is_some() => b.frozen_snapshot.clone(),
+                    // Frozen blocks store palette-agnostic colours;
+                    // re-resolve every frame so the body adopts the
+                    // live light↔dark palette instead of the colours
+                    // baked at seal-time.
+                    Some(b) if b.frozen_snapshot.is_some() => {
+                        b.frozen_snapshot.as_ref().map(|raw| raw.resolve(palette))
+                    }
                     Some(b) => {
                         let start = b.start_line;
                         let end = inner.current_line() + 1;
@@ -356,6 +362,7 @@ impl Renderer {
                 viewport_w: viewport_w as f32,
                 viewport_h: viewport_h as f32,
                 scroll_y_px,
+                surface_bg_rgba: rgba_f32_to_u32(self.clear_color),
                 atlas: &mut self.atlas,
             };
             // Two passes so sticky always z-sorts on top, regardless
@@ -645,6 +652,13 @@ fn rgba_to_float(rgba: u32) -> [f32; 4] {
         ((rgba >> 8) & 0xFF) as f32 / 255.0,
         (rgba & 0xFF) as f32 / 255.0,
     ]
+}
+
+/// Pack a [r,g,b,a] f32 tuple (the renderer's `clear_color` storage
+/// format) back into the 0xRRGGBBAA word the header pipeline expects.
+fn rgba_f32_to_u32(rgba: [f32; 4]) -> u32 {
+    let to_u8 = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u32;
+    (to_u8(rgba[0]) << 24) | (to_u8(rgba[1]) << 16) | (to_u8(rgba[2]) << 8) | to_u8(rgba[3])
 }
 
 /// Same as `rgba_to_float` but multiplies RGB by alpha so the panel

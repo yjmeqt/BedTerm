@@ -55,15 +55,13 @@ extension BlockListContainerViewController {
         let pinnedY = min(max(naturalScreenY, 0), pushUpLimit)
 
         let traits = view.traitCollection
-        let bg =
-            (UIColor(named: "ShadcnBackground", in: .module, compatibleWith: traits)
-            ?? UIColor.systemBackground).asRGBA32()
-        let fg =
-            (UIColor(named: "ShadcnPrimary", in: .module, compatibleWith: traits)
-            ?? UIColor.label).asRGBA32()
-        let muted =
-            (UIColor(named: "ShadcnMutedForeground", in: .module, compatibleWith: traits)
-            ?? UIColor.secondaryLabel).asRGBA32()
+        func token(_ name: String, fallback: UIColor) -> UInt32 {
+            let raw = UIColor(named: name, in: .module, compatibleWith: traits) ?? fallback
+            return raw.resolvedColor(with: traits).asRGBA32()
+        }
+        let fg = token("ShadcnPrimary", fallback: .label)
+        let muted = token("ShadcnMutedForeground", fallback: .secondaryLabel)
+        let divider = resolveDividerColor().resolvedColor(with: traits).asRGBA32()
 
         let cmdData =
             BlockHeaderModel.displayCommand(for: range.block)
@@ -83,14 +81,11 @@ extension BlockListContainerViewController {
             agent_id: BlockHeaderModel.agentID(range.block.cliAgent),
             _pad: (0, 0, 0),
             badge_tint_rgba: BlockHeaderModel.tint(for: range.block.cliAgent),
-            header_bg_rgba: bg,
             command_fg_rgba: fg,
             subtitle_fg_rgba: muted,
-            divider_rgba: 0,
+            divider_rgba: divider,
             is_sticky: 1,
-            _pad2: (0, 0, 0),
-            body_clip_y_top_px: 0,
-            body_clip_height_px: 0)
+            _pad2: (0, 0, 0))
         return StickyHeaderDescriptor(
             entry: entry,
             blockID: range.block.id,

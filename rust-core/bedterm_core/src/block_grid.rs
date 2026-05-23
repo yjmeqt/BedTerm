@@ -18,7 +18,9 @@ use alacritty_terminal::term::Config;
 use alacritty_terminal::vte::ansi::Processor;
 use alacritty_terminal::Term;
 
-use crate::snapshot::{CellSnapshot, GridSnapshot};
+use crate::snapshot::{
+    cell_color_from_alacritty, CellSnapshot, GridSnapshot, RawCellSnapshot, RawGridSnapshot,
+};
 use crate::term::{color_to_rgba, Dims, Palette};
 
 pub struct BlockGrid {
@@ -215,6 +217,74 @@ impl BlockGrid {
             total_rows
         };
         GridSnapshot {
+            cols,
+            rows: total_rows,
+            cursor_col: cursor.column.0 as u16,
+            cursor_row,
+            display_offset: 0,
+            cells,
+        }
+    }
+
+    /// Palette-agnostic snapshot — same shape as `snapshot` but stores
+    /// the cell's colour intent (Named / Indexed / Spec) instead of a
+    /// resolved RGBA. The renderer flattens on the fly using whichever
+    /// palette is current, so a frozen block keeps re-painting against
+    /// the live light↔dark palette long after seal.
+    pub fn snapshot_raw(&self) -> RawGridSnapshot {
+        let grid = self.term.grid();
+        let cols = self.cols;
+        let history = (grid.total_lines() - grid.screen_lines()) as i32;
+        let visible_used = self.last_content_row().map_or_else(
+            || (self.cursor_row() + 1).clamp(1, self.rows as i32),
+            |r| r + 1,
+        );
+        let total_rows = (history + visible_used) as u16;
+        let mut cells = Vec::with_capacity(cols as usize * total_rows as usize);
+        for row in -history..visible_used {
+            for col in 0..cols as usize {
+                let cell = &grid[Line(row)][Column(col)];
+                let f = cell.flags;
+                let mut flags: u16 = 0;
+                if f.contains(CellFlags::BOLD) {
+                    flags |= 1;
+                }
+                if f.intersects(CellFlags::ALL_UNDERLINES) {
+                    flags |= 2;
+                }
+                if f.contains(CellFlags::INVERSE) {
+                    flags |= 4;
+                }
+                if f.contains(CellFlags::ITALIC) {
+                    flags |= 8;
+                }
+                if f.contains(CellFlags::WIDE_CHAR) {
+                    flags |= 16;
+                }
+                if f.contains(CellFlags::WIDE_CHAR_SPACER) {
+                    flags |= 32;
+                }
+                let ch =
+                    if f.contains(CellFlags::WIDE_CHAR_SPACER) || (cell.c == ' ' && f.is_empty()) {
+                        0
+                    } else {
+                        cell.c as u32
+                    };
+                cells.push(RawCellSnapshot {
+                    ch,
+                    fg: cell_color_from_alacritty(cell.fg),
+                    bg: cell_color_from_alacritty(cell.bg),
+                    flags,
+                });
+            }
+        }
+        let cursor = grid.cursor.point;
+        let cursor_row = if (0..visible_used).contains(&cursor.line.0) {
+            (history + cursor.line.0) as u16
+        } else {
+            total_rows
+        };
+        RawGridSnapshot {
             cols,
             rows: total_rows,
             cursor_col: cursor.column.0 as u16,

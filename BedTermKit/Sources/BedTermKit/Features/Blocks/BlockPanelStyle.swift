@@ -6,9 +6,11 @@ import CoreGraphics
 /// sits in the gap between them.
 @MainActor
 enum BlockPanelStyle {
-    /// Vertical gap between adjacent blocks (header above sits inside
-    /// the next gap's top half; divider hairline sits dead-centre).
-    static let interBlockGapPt: CGFloat = 16
+    /// Vertical gap between adjacent blocks. Blocks now butt against
+    /// each other; the hairline divider above each header is the only
+    /// thing separating one block from the next, so a non-zero gap
+    /// would read as an unexplained vacant strip.
+    static let interBlockGapPt: CGFloat = 0
 
     /// Horizontal inset between the panel's left edge and cell column 0.
     /// Kept so the Metal text indents nicely from the screen edge even

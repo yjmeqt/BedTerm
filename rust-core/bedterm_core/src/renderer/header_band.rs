@@ -46,6 +46,12 @@ pub(crate) struct HeaderDrawContext<'a> {
     pub viewport_w: f32,
     pub viewport_h: f32,
     pub scroll_y_px: f32,
+    /// Surface bg the renderer clears to (terminal palette default bg).
+    /// Sticky bands paint this as an opaque fill to occlude scrolling
+    /// body cells underneath; text runs use it as the glyph alpha-mask
+    /// `bg` so anti-aliasing blends against the real surface — no
+    /// chance of the header colour drifting from the body colour.
+    pub surface_bg_rgba: u32,
     pub atlas: &'a mut GlyphAtlas,
 }
 
@@ -71,14 +77,23 @@ pub(crate) fn emit_header(
         return;
     }
 
-    // Divider hairline above (only for natural headers — the sticky
-    // band has no divider so it reads as floating chrome).
-    if header.divider_rgba != 0 && header.is_sticky == 0 {
+    // Divider hairline.
+    //   - Natural header: above the band — separates this block from
+    //     the one above it in the list.
+    //   - Sticky header: below the band — separates the pinned chrome
+    //     from the body content scrolling underneath, so the sticky
+    //     band reads as a section header floating above the list.
+    if header.divider_rgba != 0 {
         let thickness = c::DIVIDER_THICKNESS_PT * ctx.scale;
+        let divider_y = if header.is_sticky != 0 {
+            y_screen + h
+        } else {
+            y_screen - thickness
+        };
         append_panel(
             panel_verts,
             header.panel_x_left_px,
-            y_screen - thickness,
+            divider_y,
             header.panel_width_px,
             thickness,
             0.0,
@@ -86,16 +101,22 @@ pub(crate) fn emit_header(
         );
     }
 
-    // Header background.
-    append_panel(
-        panel_verts,
-        header.panel_x_left_px,
-        y_screen,
-        header.panel_width_px,
-        h,
-        0.0,
-        header.header_bg_rgba,
-    );
+    // Sticky band only: opaque surface-coloured fill so body cells
+    // scrolling beneath the pinned chrome don't bleed through. Natural
+    // headers sit directly on the cleared surface — no fill needed,
+    // and skipping it guarantees the band colour can never diverge
+    // from the body colour.
+    if header.is_sticky != 0 {
+        append_panel(
+            panel_verts,
+            header.panel_x_left_px,
+            y_screen,
+            header.panel_width_px,
+            h,
+            0.0,
+            ctx.surface_bg_rgba,
+        );
+    }
 
     // Badge (circle + icon).
     let pad_left = c::HORIZONTAL_PADDING_PT * ctx.scale;
@@ -169,7 +190,7 @@ pub(crate) fn emit_header(
             baseline,
             max_text_w,
             header.command_fg_rgba,
-            header.header_bg_rgba,
+            ctx.surface_bg_rgba,
             cell_verts,
         );
     }
@@ -184,7 +205,7 @@ pub(crate) fn emit_header(
                 baseline,
                 max_text_w,
                 header.subtitle_fg_rgba,
-                header.header_bg_rgba,
+                ctx.surface_bg_rgba,
                 cell_verts,
             );
         }
