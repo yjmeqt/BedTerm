@@ -18,9 +18,7 @@ fn dcs(json: &str) -> Vec<u8> {
 /// → `output` bytes → CommandFinished (with `exit`).
 fn dcs_block(command: &str, output: &[u8], exit: i32) -> Vec<u8> {
     let mut v = Vec::new();
-    v.extend_from_slice(&dcs(&format!(
-        r#"{{"hook":"Precmd","value":{{"pwd":"/tmp"}}}}"#
-    )));
+    v.extend_from_slice(&dcs(r#"{"hook":"Precmd","value":{"pwd":"/tmp"}}"#));
     v.extend_from_slice(&dcs(&format!(
         r#"{{"hook":"Preexec","value":{{"command":"{command}"}}}}"#
     )));

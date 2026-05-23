@@ -49,7 +49,7 @@ struct SessionSnapshotTests {
     @Test
     func killReasonLocalizedReasonNonEmpty() {
         let reasons: [SessionSnapshot.KillReason] = [
-            .userKilled, .remoteLogout, .networkDrop, .appRelaunch, .swapEvicted,
+            .userKilled, .remoteLogout, .networkDrop, .appRelaunch, .swapEvicted
         ]
         for reason in reasons {
             #expect(!reason.localizedReason.isEmpty)
