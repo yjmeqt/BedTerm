@@ -51,29 +51,7 @@ final class TerminalMetalUIView: MTKView {
     }
 
     // MARK: Block-list layout (pushed by BlockListContainerViewController)
-
-    private var blockScrollOffsetPx: CGFloat = 0
-    private var blockEntries: [BtBlockLayoutEntry] = []
-    private var blockHeaders: [BtBlockHeaderEntry] = []
-    /// Contiguous UTF-8 blob that keeps `blockHeaders[*].command_utf8` /
-    /// `subtitle_utf8` pointers alive across the FFI call in `draw(_:)`.
-    private var blockHeaderBlob: [UInt8] = []
-
-    /// Called by the block-list interaction controller before each redraw.
-    /// `headers` must have their UTF-8 pointers already patched into
-    /// `headerBlob` — the blob is retained here so pointers stay live
-    /// through `draw(_:)`.
-    func updateBlockLayout(
-        scrollOffsetPx: CGFloat,
-        entries: [BtBlockLayoutEntry],
-        headers: [BtBlockHeaderEntry],
-        headerBlob: [UInt8]
-    ) {
-        blockScrollOffsetPx = scrollOffsetPx
-        blockEntries = entries
-        blockHeaders = headers
-        blockHeaderBlob = headerBlob
-    }
+    var blockLayout = BlockLayoutState()
 
     init(
         session: TerminalSession,
@@ -271,15 +249,15 @@ final class TerminalMetalUIView: MTKView {
 
         switch displayMode {
         case .blockList:
-            // blockHeaderBlob keeps header UTF-8 pointers alive.
-            _ = blockHeaderBlob
+            // blockLayout.headerBlob keeps header UTF-8 pointers alive.
+            _ = blockLayout.headerBlob
             _ = bridge.drawBlockList(
                 term: terminalCore,
                 into: drawable.texture,
                 viewport: size,
-                scrollOffsetPx: blockScrollOffsetPx,
-                layout: blockEntries,
-                headers: blockHeaders
+                scrollOffsetPx: blockLayout.scrollOffsetPx,
+                layout: blockLayout.entries,
+                headers: blockLayout.headers
             )
 
         case .inline, .altScreen:
