@@ -289,6 +289,7 @@ struct TerminalScreen: View {
             Button(String(localized: "Cancel"), role: .cancel) {}
         }
         .navigationBarBackButtonHidden(true)
+        .navigationBarTitleDisplayMode(.inline)
         .task {
             if case .idle = session.state {
                 await session.connect(
