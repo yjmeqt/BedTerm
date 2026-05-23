@@ -241,6 +241,15 @@ struct TerminalScreen: View {
         .onChange(of: hasRunningBlock) { _, isRunning in
             if !isRunning { composer.endPassthrough() }
         }
+        // Mirror the system keyboard's real visibility into our toggle
+        // state so the chevron icon (and Metal view yield logic) tracks
+        // whatever caused the show/hide — toggle tap, drag-down dismiss,
+        // hardware-keyboard attach, app backgrounding, focus change to
+        // a non-text view, etc. Without this the chevron would only
+        // mirror the last toggle press and could disagree with reality.
+        .onChange(of: keyboard.isHidden) { _, hidden in
+            if keyboardHidden != hidden { keyboardHidden = hidden }
+        }
         .toolbar {
             // Back + × cluster on the leading side; trailing reserved
             // for a future per-session action (PRD R3).

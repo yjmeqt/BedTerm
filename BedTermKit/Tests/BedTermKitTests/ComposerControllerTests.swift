@@ -19,7 +19,9 @@ struct ComposerControllerTests {
         #expect(controller.isOpen == true)
     }
 
-    @Test("submit without bracketed paste writes raw UTF-8 with CR line breaks and trailing CR; composer stays open and locks until the running command ends")
+    @Test(
+        "submit without bracketed paste writes raw UTF-8 with CR line breaks and trailing CR; composer stays open in passthrough"
+    )
     func submitRaw() async {
         var captured: [Data] = []
         let controller = ComposerController(
@@ -30,12 +32,12 @@ struct ComposerControllerTests {
         controller.text = "echo hi\necho bye"
         controller.submit()
         #expect(captured == [Data("echo hi\recho bye\r".utf8)])
-        // Submit keeps the just-sent command visible and locks the editor
-        // (passthrough mode); endPassthrough() — fired when the running
-        // block transitions to none-running — clears the buffer.
+        // R13.send_keeps_composer_open + Warp-style passthrough — submitted
+        // text stays visible (as a running-command label) and the editor
+        // flips into passthrough until `endPassthrough()`.
         #expect(controller.text == "echo hi\necho bye")
-        #expect(controller.isPassthrough == true)
         #expect(controller.isOpen == true)
+        #expect(controller.isPassthrough == true)
         controller.endPassthrough()
         #expect(controller.text == "")
         #expect(controller.isPassthrough == false)

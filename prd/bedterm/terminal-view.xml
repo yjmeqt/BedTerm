@@ -53,7 +53,7 @@ The terminal viewport: ANSI/VT100 emulation rendered by the Metal renderer, basi
   <rule id="block_copy" status="❌" context="block view">Each block exposes a one-tap "Copy output" action that copies the block's full output (or full command + output) to the system clipboard. R5.copy continues to apply for arbitrary text selection within a block.</rule>
   <rule id="claude_cli_is_remote" status="❌">"Claude support" in BedTerm means first-class support for the Claude Code CLI (`claude`) running as a remote process over SSH, not calling the Anthropic API from the app. BedTerm never holds an Anthropic API key, never makes network calls to `api.anthropic.com`, and never sends terminal contents to any AI service. All AI capability is whatever the user has installed on the remote host.</rule>
   <rule id="claude_cli_detection" status="❌" context="block view">When the foreground process on the remote PTY is detected as `claude` (via OSC 133 command capture, or via a recognisable banner / title sequence emitted by Claude Code), the active block is tagged as a Claude session and rendered with a distinct accent so the user can tell at a glance that they are talking to Claude, not the shell.</rule>
-  <rule id="claude_cli_alt_screen" status="❌" context="claude session active">Because Claude Code's interactive TUI uses alt-screen, R3.alt_screen_collapse applies: Block view collapses to a single fullscreen grid for the duration of the Claude session and restores to Block mode on exit. The whole session is captured as one Claude-tagged block in the history.</rule>
+  <rule id="claude_cli_alt_screen" status="❌" context="claude session active">Because Claude Code's interactive TUI uses alt-screen, R15.alt_screen_collapse applies: Block view collapses to a single fullscreen grid for the duration of the Claude session and restores to Block mode on exit. The whole session is captured as one Claude-tagged block in the history.</rule>
   <rule id="claude_cli_composer" status="❌" context="claude session active">The R13 composer (and its R14 voice input) is the recommended input path for sending long natural-language prompts to `claude`. Send uses bracketed paste when the remote advertises it so multi-line prompts arrive as a single message rather than per-keystroke input — preserving Claude Code's own input handling.</rule>
   <rule id="claude_cli_quick_launch" status="❌" context="block view">Block view offers a quick-launch affordance (e.g. a "Start Claude" button surfaced when no Claude session is active) that sends `claude` (or a user-configured launch command) to the PTY. The launch command is editable per host so users with custom invocations (`claude --model …`, `npx @anthropic-ai/claude-code`, etc.) can override it.</rule>
   <rule id="claude_cli_no_app_keys" status="❌">BedTerm never prompts for, stores, or transmits an Anthropic API key. Authentication for Claude Code lives entirely on the remote host (its own config / login flow). This is a security guarantee: the app has no AI credentials to leak.</rule>
@@ -118,6 +118,30 @@ The terminal viewport: ANSI/VT100 emulation rendered by the Metal renderer, basi
     1. Connect to an SSH host and get a shell prompt.
     2. Type several commands and observe the terminal output after each press of enter.
     3. Notice: on some lines, the bottom portion of characters is visibly cut off.
+  </steps>
+</bug>
+
+<bug id="cjk_ime_broken_in_block_passthrough" status="Open" date="2026-05-22" rule="R3.block_body_monospace">
+  <current>
+    When Block Mode is enabled <em>and</em> a long-running interactive command (the canonical case being <code>claude</code>, but also raw <code>cat</code>/<code>nc</code> etc. that don't switch to the alt-screen) is running as the active block, IME composition with the soft Pinyin / Japanese / 2-set Hangul keyboards does not work: each Latin keystroke ("n", "i", "h", "a", "o") is delivered to the PTY as a raw byte, instead of being held as marked text while the candidate strip composes 你好. The committed CJK characters never reach the running command's stdin.
+
+    Classic mode (Block Mode setting off) is unaffected — IME composes correctly via the terminal Metal view's <code>UITextInput</code> conformance, the preedit floats over the cursor, and committed bytes go to the PTY. The alt-screen path (vim / htop) is also unaffected, because <code>displayMode = .altScreen</code> already hands input back to the terminal Metal view.
+
+    The broken case is specifically: <code>showCommandBlocks = on</code>, no alt-screen flag set, a running block is reading stdin. The block list view captures input via its inner composer's <code>UITextView</code>, whose <code>shouldChangeTextIn</code> path forwards each replacementText fragment as raw bytes — bypassing iOS IME composition.
+  </current>
+  <expected>
+    With Block Mode on and a running interactive command, soft-keyboard IME composition behaves the same as in classic mode:
+    - typed Latin letters under a CJK IME show preedit (e.g. "ni" → "ni"/拼/拟 candidate strip) without leaking to the PTY,
+    - the floating preedit pill is anchored over the live cursor inside the running block's body (not over the hidden global cursor and not in the bottom status row),
+    - selecting a candidate sends the committed UTF-8 (你好) to the running command's stdin,
+    - cancelling the composition sends nothing.
+  </expected>
+  <steps>
+    1. Settings → enable "Show command blocks".
+    2. Connect to a host where <code>claude</code> (or any interactive read-stdin command) is available, and launch it from the block-mode composer.
+    3. Switch the iOS soft keyboard to Pinyin via the globe key.
+    4. Tap inside the block list area (running block visible) and type "nihao" on the soft keyboard.
+    5. Observe: "nihao" appears verbatim in the running command's input — no candidate composition, no 你好.
   </steps>
 </bug>
 

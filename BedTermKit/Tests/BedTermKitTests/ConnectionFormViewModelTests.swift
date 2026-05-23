@@ -4,7 +4,7 @@ import Testing
 @testable import BedTermKit
 
 @MainActor
-@Suite("ConnectionFormViewModel")
+@Suite("ConnectionFormViewModel", .serialized)
 struct ConnectionFormViewModelTests {
     private let service = "com.applovin.yi.bedterm.tests.formvm"
     private let orderKey: String
@@ -12,14 +12,12 @@ struct ConnectionFormViewModelTests {
     private let defaults: UserDefaults
 
     init() {
+        TestKeychain.installInMemory()
         let suite = "BedTermTests.FormVM." + UUID().uuidString
         defaults = UserDefaults(suiteName: suite) ?? .standard
         defaults.removePersistentDomain(forName: suite)
         orderKey = "tests.formvm.order"
         migrationKey = "tests.formvm.migrationDone"
-        for account in Keychain.allAccounts(service: service) {
-            Keychain.delete(service: service, account: account)
-        }
     }
 
     private func makeStore() -> HostsStore {

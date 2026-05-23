@@ -1,51 +1,44 @@
-import XCTest
+import Foundation
+import Testing
 
 @testable import BedTermKit
 
+@Suite("KilledSession restore")
 @MainActor
-final class KilledSessionRestoreTests: XCTestCase {
+struct KilledSessionRestoreTests {
     private func tempDBURL() -> URL {
         FileManager.default.temporaryDirectory
             .appending(path: "bedterm-restore-test-\(UUID().uuidString).sqlite")
     }
 
-    // MARK: - Nil-for-missing-snapshot
-
     /// `openReplay` must return `nil` for a snapshot that was never inserted.
-    func testOpenReplayReturnsNilForUnknownSnapshot() throws {
+    @Test
+    func openReplayReturnsNilForUnknownSnapshot() throws {
         let url = tempDBURL()
         defer { try? FileManager.default.removeItem(at: url) }
-
-        let handle = try XCTUnwrap(PersistenceHandle.open(at: url))
-        let result = handle.openReplay(snapshotID: UUID())
-        XCTAssertNil(result, "openReplay must return nil for a never-inserted snapshot")
+        let handle = try #require(PersistenceHandle.open(at: url))
+        #expect(handle.openReplay(snapshotID: UUID()) == nil)
     }
 
-    // MARK: - Round-trip: attach → feed DCS block → kill → openReplay
-
-    /// Feeds one complete OSC-133-style DCS block through a `TerminalCore`
-    /// that has `PersistenceHandle.attach` called on it, then calls
-    /// `openReplay` and asserts a non-nil `TerminalCore` comes back.
-    func testOpenReplayReturnsTerminalCoreAfterBlockCapture() throws {
+    /// Feeds one complete DCS-JSON block through a `TerminalCore` that has
+    /// `PersistenceHandle.attach` called on it, then calls `openReplay` and
+    /// asserts a non-nil `TerminalCore` with one block comes back.
+    @Test
+    func openReplayReturnsTerminalCoreAfterBlockCapture() throws {
         let url = tempDBURL()
         defer { try? FileManager.default.removeItem(at: url) }
 
-        let handle = try XCTUnwrap(PersistenceHandle.open(at: url))
+        let handle = try #require(PersistenceHandle.open(at: url))
         let snapshotID = UUID()
         let hostID = UUID()
 
-        // Create and attach a TerminalCore directly — bypass TerminalSession
-        // so we don't need a real SSH client.
         let core = TerminalCore(cols: 80, rows: 24)
         handle.attach(terminal: core, snapshotID: snapshotID, hostID: hostID)
 
-        // Feed one complete DCS block so the persistence sink captures it.
-        // Format: ESC P $ d <hex-encoded-JSON> 0x9C
         core.feed(dcsBlock(pwd: "/tmp", command: "echo hi", output: b("hi\n"), exit: 0))
-        // A second Precmd seals the first block in the DB.
+        // A second Precmd seals the first block via the sink.
         core.feed(dcsFrame(json: #"{"hook":"Precmd","value":{"pwd":"/tmp"}}"#))
 
-        // Record the kill so the snapshot row is complete.
         handle.recordKill(
             snapshotID: snapshotID,
             reason: .userKilled,
@@ -54,12 +47,8 @@ final class KilledSessionRestoreTests: XCTestCase {
             lastExitCode: 0
         )
 
-        // Now replay — should return a non-nil TerminalCore with blocks.
-        let replayCore = handle.openReplay(snapshotID: snapshotID)
-        XCTAssertNotNil(replayCore, "openReplay must return a TerminalCore for a snapshot with captured blocks")
-        if let replayCore {
-            XCTAssertEqual(replayCore.blockCount, 1, "Replayed TerminalCore must have exactly one block")
-        }
+        let replayCore = try #require(handle.openReplay(snapshotID: snapshotID))
+        #expect(replayCore.blockCount == 1)
     }
 }
 
@@ -71,14 +60,13 @@ private func dcsFrame(json: String) -> Data {
     for byte in json.utf8 {
         let hi = (byte >> 4) & 0x0F
         let lo = byte & 0x0F
-        bytes.append(hi < 10 ? hi + 48 : hi + 87)  // hex digit
+        bytes.append(hi < 10 ? hi + 48 : hi + 87)
         bytes.append(lo < 10 ? lo + 48 : lo + 87)
     }
-    bytes.append(0x9C)  // ST (String Terminator)
+    bytes.append(0x9C)
     return Data(bytes)
 }
 
-/// Build Precmd → Preexec → output → CommandFinished block.
 private func dcsBlock(pwd: String, command: String, output: Data, exit: Int) -> Data {
     var data = Data()
     data.append(dcsFrame(json: #"{"hook":"Precmd","value":{"pwd":"\#(pwd)"}}"#))
@@ -88,5 +76,4 @@ private func dcsBlock(pwd: String, command: String, output: Data, exit: Int) -> 
     return data
 }
 
-/// Convenience to turn a string literal into Data.
 private func b(_ str: String) -> Data { Data(str.utf8) }

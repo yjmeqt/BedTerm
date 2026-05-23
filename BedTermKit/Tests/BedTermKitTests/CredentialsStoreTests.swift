@@ -3,13 +3,14 @@ import Testing
 
 @testable import BedTermKit
 
-@Suite("CredentialsStore")
+@Suite("CredentialsStore", .serialized)
 struct CredentialsStoreTests {
     private let testService = "com.applovin.yi.bedterm.tests.credentials"
 
     init() {
-        // Clean slate per test instance.
-        Keychain.delete(service: self.testService, account: "default")
+        // SPM test bundles have no host-app entitlement, so install an
+        // in-memory Keychain backend; gives each test a clean slate too.
+        TestKeychain.installInMemory()
     }
 
     @Test("save then load round-trips a password credential")

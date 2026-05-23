@@ -3,7 +3,7 @@ import Testing
 
 @testable import BedTermKit
 
-@Suite("HostsStore")
+@Suite("HostsStore", .serialized)
 struct HostsStoreTests {
     private let testService = "com.applovin.yi.bedterm.tests.savedHosts"
     private let legacyService = "com.applovin.yi.bedterm.tests.savedHosts.legacy"
@@ -12,15 +12,14 @@ struct HostsStoreTests {
     private let defaults: UserDefaults
 
     init() {
-        // Each test instance gets its own ephemeral UserDefaults suite and its
-        // own Keychain services, so suites do not bleed into each other.
+        // Fresh in-memory keychain per test instance — SPM xctest bundles have
+        // no host-app entitlement, so the real SecItem* path returns
+        // errSecMissingEntitlement.
+        TestKeychain.installInMemory()
+        // Each test instance also gets its own ephemeral UserDefaults suite.
         let suite = "BedTermTests.HostsStore." + UUID().uuidString
         defaults = UserDefaults(suiteName: suite) ?? .standard
         defaults.removePersistentDomain(forName: suite)
-        for account in Keychain.allAccounts(service: testService) {
-            Keychain.delete(service: testService, account: account)
-        }
-        Keychain.delete(service: legacyService, account: "default")
     }
 
     private func makeStore() -> HostsStore {
