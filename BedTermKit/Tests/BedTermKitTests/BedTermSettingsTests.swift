@@ -17,7 +17,7 @@ struct BedTermSettingsTests {
     func defaultsOnFirstLaunch() throws {
         let settings = BedTermSettings(defaults: try makeDefaults())
         #expect(settings.reserveTopSafeAreaInAltScreen)
-        #expect(!settings.showCommandBlocks)
+        #expect(settings.showCommandBlocks)
     }
 
     @Test("toggle persists across reloads")
