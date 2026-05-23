@@ -71,6 +71,54 @@
  */
 #define VERTICES_PER_PANEL 6
 
+#define HORIZONTAL_PADDING_PT 12.0
+
+#define BADGE_DIAMETER_PT 28.0
+
+#define ICON_SIZE_PT 14.0
+
+#define BADGE_TEXT_GAP_PT 8.0
+
+#define ROW_GAP_PT 2.0
+
+#define DIVIDER_THICKNESS_PT 1.0
+
+#define FOREGROUND 0
+
+#define BACKGROUND 1
+
+#define BLACK 2
+
+#define RED 3
+
+#define GREEN 4
+
+#define YELLOW 5
+
+#define BLUE 6
+
+#define MAGENTA 7
+
+#define CYAN 8
+
+#define WHITE 9
+
+#define BRIGHT_BLACK 10
+
+#define BRIGHT_RED 11
+
+#define BRIGHT_GREEN 12
+
+#define BRIGHT_YELLOW 13
+
+#define BRIGHT_BLUE 14
+
+#define BRIGHT_MAGENTA 15
+
+#define BRIGHT_CYAN 16
+
+#define BRIGHT_WHITE 17
+
 #define BT_MODE_ALT_SCREEN (1 << 0)
 
 #define BT_MODE_BRACKETED_PASTE (1 << 1)
@@ -174,7 +222,7 @@ typedef struct CellSnapshot {
    */
   uint32_t bg_rgba;
   /**
-   * Bitfield: 1=bold, 2=underline, 4=inverse, 8=italic, 16=wide_leading, 32=wide_trailing.
+   * Bitfield: 1=bold, 2=underline, 4=inverse, 8=italic, 16=wide_leading, 32=wide_trailing, 64=strikethrough.
    */
   uint16_t flags;
 } CellSnapshot;
@@ -255,10 +303,8 @@ typedef struct CSnapshotList {
 } CSnapshotList;
 
 /**
- * One entry per block: the BODY cell region + the surrounding Warp-style
- * panel chrome. Rust draws a rounded-rect panel for each visible block,
- * then paints cell quads inside. Header text remains a SwiftUI overlay
- * on top of the panel.
+ * One entry per block: the BODY cell region plus the panel chrome
+ * rect. Headers are emitted separately via `BtBlockHeaderEntry`.
  */
 typedef struct BtBlockLayoutEntry {
   /**
@@ -301,6 +347,67 @@ typedef struct BtBlockLayoutEntry {
    */
   float panel_corner_radius_px;
 } BtBlockLayoutEntry;
+
+/**
+ * One entry per visible block header band. Sticky descriptors use the
+ * same struct with `is_sticky = 1` and `header_y_top_px` in
+ * **screen-space** (post-scroll) rather than content-space.
+ */
+typedef struct BtBlockHeaderEntry {
+  uint64_t block_id;
+  /**
+   * For natural headers: top Y in **content** coords (pre-scroll).
+   * For sticky (is_sticky=1): top Y in **screen** coords.
+   */
+  float header_y_top_px;
+  float header_height_px;
+  float panel_x_left_px;
+  float panel_width_px;
+  /**
+   * UTF-8 bytes of the command string. Nullable when `command_len == 0`.
+   */
+  const uint8_t *command_utf8;
+  uint32_t command_len;
+  /**
+   * UTF-8 bytes of the subtitle string (e.g. "exit 0 · 1.2s").
+   * Nullable when `subtitle_len == 0`.
+   */
+  const uint8_t *subtitle_utf8;
+  uint32_t subtitle_len;
+  /**
+   * 0 = no badge; nonzero values mirror the Swift `CLIAgent` enum.
+   * Branded slots known to the icon atlas (Claude=1, Codex=2);
+   * everything else falls back to the generic glyph.
+   */
+  uint8_t agent_id;
+  uint8_t _pad[3];
+  /**
+   * Badge circle fill (0xRRGGBBAA).
+   */
+  uint32_t badge_tint_rgba;
+  /**
+   * Command text colour.
+   */
+  uint32_t command_fg_rgba;
+  /**
+   * Subtitle text colour.
+   */
+  uint32_t subtitle_fg_rgba;
+  /**
+   * Hairline divider rgba. For natural headers, painted ABOVE the
+   * band; for sticky headers, painted BELOW (so the pinned chrome
+   * reads as a section header floating above the scrolling body).
+   * Pass 0 to skip.
+   */
+  uint32_t divider_rgba;
+  /**
+   * 1 = this is the pinned sticky band. Drawn last (z-sorted on top)
+   * and given an opaque surface-coloured fill so scrolling body
+   * cells underneath don't bleed through.
+   */
+  uint8_t is_sticky;
+  uint8_t _pad2[3];
+} BtBlockHeaderEntry;
 
 #ifdef __cplusplus
 extern "C" {
@@ -584,14 +691,17 @@ struct BtTerm *bedterm_persistence_open_replay(struct PersistenceHandle *handle,
 void bedterm_persistence_discard(struct PersistenceHandle *handle, const char *snapshot_id);
 
 /**
- * Paint visible block bodies into `texture` for one frame. First
- * visible block clears the viewport; subsequent calls use Load. If no
- * block intersects the viewport, the viewport is still cleared.
+ * Paint visible block bodies + header bands into `texture` for one
+ * frame. First visible block clears the viewport; subsequent calls use
+ * Load. If no block intersects the viewport, the viewport is still
+ * cleared.
  *
  * # Safety
  * `r`, `term`, `texture_ptr` must be valid live pointers. `entries`
  * must point to at least `entry_count` `BtBlockLayoutEntry` values
- * (or be null with `entry_count == 0`).
+ * (or be null with `entry_count == 0`). Same for `headers` /
+ * `header_count`. UTF-8 pointers inside header entries must outlive
+ * the call.
  */
 int bt_renderer_draw_block_list(struct BtRenderer *r,
                                 struct BtTerm *term,
@@ -600,7 +710,22 @@ int bt_renderer_draw_block_list(struct BtRenderer *r,
                                 uint32_t viewport_h,
                                 float scroll_y_px,
                                 const struct BtBlockLayoutEntry *entries,
-                                uintptr_t entry_count);
+                                uintptr_t entry_count,
+                                const struct BtBlockHeaderEntry *headers,
+                                uintptr_t header_count);
+
+/**
+ * Push current UI font sizes into the renderer. Called by Swift on
+ * init and whenever the trait collection changes (Dynamic Type, scale).
+ * `*_px` are in **pixels** (point size × screen scale).
+ *
+ * # Safety
+ * `r` must be a valid live pointer.
+ */
+int bt_renderer_set_ui_font_sizes_px(struct BtRenderer *r,
+                                     float subheadline_px,
+                                     float caption2_px,
+                                     float scale);
 
 /**
  * # Safety
@@ -683,6 +808,55 @@ int bt_renderer_draw_cells(struct BtRenderer *r,
                            uint32_t viewport_width_px,
                            uint32_t viewport_height_px,
                            double time_seconds);
+
+/**
+ * Register a host-supplied font face (TTF / TTC / OTF bytes) and
+ * promote it to the primary terminal family. Used by Swift to wire
+ * iOS's SF Mono / Menlo into the Rust rasterizer at app launch.
+ *
+ * **The family name is sourced from the sfnt `name` table by fontdb**,
+ * not from the caller — this closes the trap where iOS's CTFont
+ * surface name (`.AppleSystemUIFontMonospaced`) doesn't match what
+ * the font file actually declares (`SF Mono`), which would otherwise
+ * make `Family::Name(...)` at shape time silently fall through to
+ * the bundled JetBrains Mono.
+ *
+ * The resolved family is written back into `out_family_ptr` (up to
+ * `out_family_capacity` bytes, no NUL terminator) so the caller can
+ * log it. If `out_family_ptr` is null or capacity is 0, registration
+ * still happens and the return value just reports the length that
+ * would have been written.
+ *
+ * Returns the family name length on success (≥ 0), or `-1` if
+ * `bytes_ptr` is null / `bytes_len == 0`, or fontdb couldn't extract
+ * any face from the bytes.
+ *
+ * # Safety
+ * `bytes_ptr` must point to `bytes_len` readable bytes for the
+ * duration of the call. `out_family_ptr`, if non-null, must point to
+ * `out_family_capacity` writable bytes.
+ */
+int bt_font_register_terminal_face(const uint8_t *bytes_ptr,
+                                   uintptr_t bytes_len,
+                                   uint8_t *out_family_ptr,
+                                   uintptr_t out_family_capacity);
+
+/**
+ * Register an **auxiliary** font face (Bold / Italic / BoldItalic
+ * companions of the primary terminal family). Unlike
+ * `bt_font_register_terminal_face`, this does **not** promote the
+ * face to the primary family — cosmic-text resolves the weight/style
+ * variant by matching `Attrs::weight` / `Attrs::style` against fontdb
+ * after the family lookup. Use this for every non-Regular Menlo cut.
+ *
+ * Returns 0 on success, -1 if `bytes_ptr` is null / `bytes_len == 0`,
+ * or fontdb couldn't extract any face from the bytes.
+ *
+ * # Safety
+ * `bytes_ptr` must point to `bytes_len` readable bytes for the
+ * duration of the call.
+ */
+int bt_font_register_aux_face(const uint8_t *bytes_ptr, uintptr_t bytes_len);
 
 #ifdef __cplusplus
 }  // extern "C"

@@ -123,10 +123,33 @@ private struct SessionSnapshotRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Reuse BlockHeader for command + exit code + duration —
-            // same visual language as the live block list.
+            // Inline summary of the snapshot's last block (BlockHeader
+            // the SwiftUI view was retired when the live block list went
+            // pure-Metal; we only need a static thumbnail here).
             if let block = lastBlock {
-                BlockHeader(block: block)
+                HStack(spacing: 8) {
+                    Text(verbatim: block.command.isEmpty ? "—" : block.command)
+                        .font(.system(.subheadline, design: .monospaced))
+                        .foregroundStyle(Color("ShadcnPrimary", bundle: .module))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    if let exit = block.exitCode {
+                        Text(verbatim: "\(exit)")
+                            .font(.caption2.weight(.semibold).monospaced())
+                            .foregroundStyle(Color("ShadcnPrimaryForeground", bundle: .module))
+                            .padding(.horizontal, 6)
+                            .frame(height: 18)
+                            .background(
+                                exit == 0
+                                    ? Color("ShadcnMutedForeground", bundle: .module)
+                                    : Color("ShadcnDestructive", bundle: .module)
+                            )
+                            .clipShape(RoundedRectangle(cornerRadius: 4))
+                    }
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
             } else {
                 // No blocks captured: fall back to a plain label.
                 Text(verbatim: "—")

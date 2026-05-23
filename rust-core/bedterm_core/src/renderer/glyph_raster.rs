@@ -25,7 +25,7 @@
 //!   sense at column boundaries in a terminal grid (and produces the
 //!   `SubpixelMask` content type we'd just have to collapse anyway).
 
-use cosmic_text::{Attrs, AttrsList, BufferLine, Family, LineEnding, Shaping, Wrap};
+use cosmic_text::{Attrs, AttrsList, BufferLine, Family, LineEnding, Shaping, Style, Weight, Wrap};
 use swash::scale::image::Content;
 use swash::scale::{Render, ScaleContext, Source, StrikeWith};
 use swash::zeno::Format;
@@ -64,12 +64,26 @@ pub struct RasterizedGlyph {
 /// Rasterize a single codepoint at the given pixel size. Returns `None` when
 /// no font in cosmic-text's fallback cascade actually covers the codepoint
 /// (private-use scalars, lone surrogates, malformed input).
-pub fn rasterize(ch: char, font_size_px: f32) -> Option<RasterizedGlyph> {
+///
+/// `bold` / `italic` request a face with matching weight/style from the
+/// fontdb cascade. fontdb matches family-then-attribute, so a bold cell
+/// in family `Menlo` resolves to `Menlo-Bold` if it's been registered;
+/// otherwise cosmic-text picks the closest available face — which may
+/// be the regular face with no synthetic boldening, i.e. the cell ends
+/// up looking unstyled. Loading the bold companion face at startup is
+/// what makes the request actually take effect.
+pub fn rasterize(ch: char, font_size_px: f32, bold: bool, italic: bool) -> Option<RasterizedGlyph> {
     with_font_system(|fs| {
         // Shape a single-glyph line so cosmic-text gets to walk its font
         // cascade. Monospaced primary -> CJK fallback -> Apple Color Emoji
         // are the cases we actually care about.
-        let attrs = Attrs::new().family(Family::Name("JetBrains Mono"));
+        let family = crate::renderer::font_system::terminal_family();
+        let weight = if bold { Weight::BOLD } else { Weight::NORMAL };
+        let style = if italic { Style::Italic } else { Style::Normal };
+        let attrs = Attrs::new()
+            .family(Family::Name(&family))
+            .weight(weight)
+            .style(style);
         let attrs_list = AttrsList::new(attrs);
         let mut text = [0u8; 4];
         let s: &str = ch.encode_utf8(&mut text);
@@ -177,7 +191,8 @@ pub fn measure_cell(font_size_px: f32) -> Option<CellMetrics> {
         // Shape a single 'M' the same way `rasterize` does — same primary
         // family and same fallback cascade so the metrics match what the
         // atlas will actually rasterise.
-        let attrs = Attrs::new().family(Family::Name("JetBrains Mono"));
+        let family = crate::renderer::font_system::terminal_family();
+        let attrs = Attrs::new().family(Family::Name(&family));
         let attrs_list = AttrsList::new(attrs);
         let mut line = BufferLine::new("M", LineEnding::None, attrs_list, Shaping::Advanced);
         let layout = line.layout(fs, font_size_px, None, Wrap::None, None, 8);
@@ -216,7 +231,7 @@ mod tests {
 
     #[test]
     fn rasterizes_ascii() {
-        let g = rasterize('A', 24.0).expect("ASCII 'A' must rasterise via Menlo");
+        let g = rasterize('A', 24.0, false, false).expect("ASCII 'A' must rasterise via Menlo");
         assert!(!g.pixels.is_empty(), "no pixels rendered for 'A'");
         assert_eq!(
             g.pixels.len() as u32,
@@ -228,8 +243,8 @@ mod tests {
 
     #[test]
     fn rasterizes_cjk_via_font_fallback() {
-        let ascii = rasterize('A', 24.0).expect("'A' should rasterize");
-        let cjk = rasterize('中', 24.0).expect("'中' should rasterize via fallback");
+        let ascii = rasterize('A', 24.0, false, false).expect("'A' should rasterize");
+        let cjk = rasterize('中', 24.0, false, false).expect("'中' should rasterize via fallback");
         assert!(cjk.width > 0 && cjk.height > 0);
         assert!(cjk.pixels.iter().any(|&b| b != 0));
         assert_ne!(
@@ -241,7 +256,7 @@ mod tests {
 
     #[test]
     fn rasterizes_emoji_as_color() {
-        let g = rasterize('😀', 24.0).expect("emoji should rasterize");
+        let g = rasterize('😀', 24.0, false, false).expect("emoji should rasterize");
         assert!(g.is_color, "emoji should rasterize as a color glyph");
         // 24px emoji should be at least ~16px wide. Be loose enough to tolerate
         // metric variation across iOS versions but tight enough to catch a

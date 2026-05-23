@@ -6,8 +6,11 @@ pub mod cells;
 pub mod ffi;
 pub(crate) mod font_system;
 pub(crate) mod glyph_raster;
+pub(crate) mod header_band;
+pub mod icon_atlas;
 pub mod pipeline;
 pub mod shaders;
+pub(crate) mod ui_text;
 
 use atlas::GlyphAtlas;
 use cells::{CellVertex, PanelVertex, VERTICES_PER_CELL, VERTICES_PER_PANEL};
@@ -28,6 +31,15 @@ pub struct Renderer {
     pub(crate) pixel_size: f32,
     pub(crate) dpr: f32,
     pub(crate) clear_color: [f32; 4],
+    /// Subheadline font size in **pixels** (point × scale). Pushed
+    /// from Swift via `bt_renderer_set_ui_font_sizes_px`. Used for
+    /// per-block header command text.
+    pub(crate) ui_subheadline_px: f32,
+    /// Caption2 font size in pixels — used for header subtitle.
+    pub(crate) ui_caption2_px: f32,
+    /// Current UI scale (UIScreen.scale). Fallback 3.0 covers initial
+    /// frames before Swift has a window.
+    pub(crate) ui_scale: f32,
 }
 
 impl Renderer {
@@ -74,7 +86,33 @@ impl Renderer {
             pixel_size: 14.0,
             dpr: 3.0,
             clear_color: [0.0, 0.0, 0.0, 1.0],
+            ui_subheadline_px: 0.0,
+            ui_caption2_px: 0.0,
+            ui_scale: 3.0,
         })
+    }
+
+    /// Push UI font sizes resolved from `UIFont.preferredFont(forTextStyle:)`.
+    /// Values arrive in pixels (Swift multiplies point × screen scale).
+    /// Invalidates the UI-glyph atlas cache whenever the sizes actually
+    /// change so a Dynamic Type bump re-rasterizes at the new pixel
+    /// size on the next frame.
+    pub fn set_ui_font_sizes(&mut self, sub: f32, cap: f32, scale: f32) {
+        let new_sub = sub.max(1.0);
+        let new_cap = cap.max(1.0);
+        let new_scale = scale.max(1.0);
+        // Float compare via hundredths-of-px equality — same precision the
+        // atlas's hash key uses, so we invalidate IFF a different cache
+        // key would result for any glyph at the same codepoint.
+        let changed = ((self.ui_subheadline_px - new_sub).abs() > 0.005)
+            || ((self.ui_caption2_px - new_cap).abs() > 0.005)
+            || ((self.ui_scale - new_scale).abs() > 0.005);
+        self.ui_subheadline_px = new_sub;
+        self.ui_caption2_px = new_cap;
+        self.ui_scale = new_scale;
+        if changed {
+            self.atlas.reset_ui_caches();
+        }
     }
 
     pub fn set_clear_color(&mut self, r: f32, g: f32, b: f32, a: f32) {
@@ -218,6 +256,7 @@ impl Renderer {
     /// # Safety
     /// `term` must be a valid `&mut BtTerm`. `texture_ptr` must be a live
     /// `id<MTLTexture>` borrowed for the call.
+    #[allow(clippy::too_many_arguments)]
     pub(crate) unsafe fn draw_block_list(
         &mut self,
         term: &mut crate::ffi::BtTerm,
@@ -226,6 +265,7 @@ impl Renderer {
         viewport_h: u32,
         scroll_y_px: f32,
         entries: &[crate::renderer::block_list_ffi::BtBlockLayoutEntry],
+        headers: &[crate::renderer::block_list_ffi::BtBlockHeaderEntry],
     ) -> i32 {
         if texture_ptr.is_null() {
             return -1;
@@ -280,7 +320,13 @@ impl Renderer {
                 let block = blocks.iter().find(|b| b.id == entry.block_id);
                 match block {
                     Some(b) if b.grid.is_some() => b.grid.as_ref().map(|g| g.snapshot(palette)),
-                    Some(b) if b.frozen_snapshot.is_some() => b.frozen_snapshot.clone(),
+                    // Frozen blocks store palette-agnostic colours;
+                    // re-resolve every frame so the body adopts the
+                    // live light↔dark palette instead of the colours
+                    // baked at seal-time.
+                    Some(b) if b.frozen_snapshot.is_some() => {
+                        b.frozen_snapshot.as_ref().map(|raw| raw.resolve(palette))
+                    }
                     Some(b) => {
                         let start = b.start_line;
                         let end = inner.current_line() + 1;
@@ -301,6 +347,42 @@ impl Renderer {
                 body_top_in_view,
                 &mut cell_verts,
             );
+        }
+
+        // Header bands. Order: non-sticky first, sticky last — sticky
+        // descriptors paint on top of everything (z-order via append
+        // order, not depth testing). Same vertex buffers as block
+        // bodies / panels so the existing two-pipeline pass handles
+        // everything in one render encode.
+        if !headers.is_empty() {
+            let mut ctx = crate::renderer::header_band::HeaderDrawContext {
+                subheadline_px: self.ui_subheadline_px,
+                caption2_px: self.ui_caption2_px,
+                scale: self.ui_scale,
+                viewport_w: viewport_w as f32,
+                viewport_h: viewport_h as f32,
+                scroll_y_px,
+                surface_bg_rgba: rgba_f32_to_u32(self.clear_color),
+                atlas: &mut self.atlas,
+            };
+            // Two passes so sticky always z-sorts on top, regardless
+            // of input order. Cheap — usually ≤ 10 headers.
+            for h in headers.iter().filter(|h| h.is_sticky == 0) {
+                crate::renderer::header_band::emit_header(
+                    &mut ctx,
+                    h,
+                    &mut panel_verts,
+                    &mut cell_verts,
+                );
+            }
+            for h in headers.iter().filter(|h| h.is_sticky != 0) {
+                crate::renderer::header_band::emit_header(
+                    &mut ctx,
+                    h,
+                    &mut panel_verts,
+                    &mut cell_verts,
+                );
+            }
         }
 
         // One render pass — Clear once, panels first (so cells paint on
@@ -449,13 +531,24 @@ impl Renderer {
         let cols = cols as usize;
         let rows = rows as usize;
         verts.reserve(cols * rows * VERTICES_PER_CELL);
-        // Flag bits — must match `term.rs` snapshot encoding.
+        // Flag bits — must match `term.rs` snapshot encoding
+        // (see `snapshot.rs:25`).
+        const FLAG_BOLD: u16 = 1;
+        const FLAG_UNDERLINE: u16 = 2;
+        const FLAG_INVERSE: u16 = 4;
+        const FLAG_ITALIC: u16 = 8;
         const FLAG_WIDE_LEADING: u16 = 16;
         const FLAG_WIDE_TRAILING: u16 = 32;
+        const FLAG_STRIKETHROUGH: u16 = 64;
         for cell in cells {
             if cell.ch != 0 {
                 let wide = (cell.flags & FLAG_WIDE_LEADING) != 0;
-                self.atlas.ensure(cell.ch, wide);
+                let key = crate::renderer::atlas::GlyphKey {
+                    codepoint: cell.ch,
+                    bold: (cell.flags & FLAG_BOLD) != 0,
+                    italic: (cell.flags & FLAG_ITALIC) != 0,
+                };
+                self.atlas.ensure(key, wide);
             }
         }
         for r in 0..rows {
@@ -464,7 +557,12 @@ impl Renderer {
                 if (cell.flags & FLAG_WIDE_TRAILING) != 0 {
                     continue;
                 }
-                let glyph = self.atlas.lookup(cell.ch).copied();
+                let glyph_key = crate::renderer::atlas::GlyphKey {
+                    codepoint: cell.ch,
+                    bold: (cell.flags & FLAG_BOLD) != 0,
+                    italic: (cell.flags & FLAG_ITALIC) != 0,
+                };
+                let glyph = self.atlas.lookup(glyph_key).copied();
                 let (uvo, uvs, glyph_wide, is_color) = match glyph {
                     Some(g) => (g.uv_origin, g.uv_size, g.wide, g.is_color),
                     None => ((0.0, 0.0), (0.0, 0.0), false, false),
@@ -474,8 +572,18 @@ impl Renderer {
                 let cell_span_w = cell_wf * span;
                 let x = c as f32 * cell_wf;
                 let y = r as f32 * cell_hf + dest_y_px;
-                let fg = rgba_to_float(cell.fg_rgba);
-                let bg = rgba_to_float(cell.bg_rgba);
+                // SGR 7 inverse: swap fg / bg at vertex emission. The
+                // cell shader's `mix(bg, fg, sample.a)` then paints the
+                // glyph in the original bg over the original fg — what
+                // vim's visual selection / fzf's highlighted row / less's
+                // search hit are after. Underline below picks up the
+                // post-swap `fg` so the hairline still reads against the
+                // inverted background.
+                let (fg, bg) = if (cell.flags & FLAG_INVERSE) != 0 {
+                    (rgba_to_float(cell.bg_rgba), rgba_to_float(cell.fg_rgba))
+                } else {
+                    (rgba_to_float(cell.fg_rgba), rgba_to_float(cell.bg_rgba))
+                };
                 let is_color_f = if is_color { 1.0 } else { 0.0 };
                 let v = |dx: f32, dy: f32, du: f32, dv: f32| CellVertex {
                     pos_x: x + dx * cell_span_w,
@@ -493,6 +601,53 @@ impl Renderer {
                 verts.push(v(1.0, 0.0, 1.0, 0.0));
                 verts.push(v(1.0, 1.0, 1.0, 1.0));
                 verts.push(v(0.0, 1.0, 0.0, 1.0));
+
+                // SGR 4 underline + SGR 9 strikethrough. Both reuse the
+                // cell pipeline by sampling the atlas's reserved
+                // solid-alpha texel — the fragment shader's
+                // `mix(bg, fg, sample.a)` with sample.a == 1 yields fg,
+                // so a quad with `fg = cell.fg_rgba` becomes a flat
+                // fg-coloured rectangle of the requested thickness.
+                // Underline sits below the baseline; strikethrough sits
+                // at roughly the x-height midline so it visually
+                // strikes through lowercase letters.
+                let needs_underline = (cell.flags & FLAG_UNDERLINE) != 0;
+                let needs_strike = (cell.flags & FLAG_STRIKETHROUGH) != 0;
+                if needs_underline || needs_strike {
+                    let thickness = (self.dpr.round() as u32).max(1) as f32;
+                    let (su, sv) = self.atlas.solid_uv;
+                    let mut emit_decoration = |line_y: f32| {
+                        let solid = |dx: f32, dy: f32| CellVertex {
+                            pos_x: x + dx * cell_span_w,
+                            pos_y: line_y + dy * thickness,
+                            uv_x: su,
+                            uv_y: sv,
+                            fg,
+                            bg,
+                            is_color: 0.0,
+                            _pad: [0.0; 3],
+                        };
+                        verts.push(solid(0.0, 0.0));
+                        verts.push(solid(1.0, 0.0));
+                        verts.push(solid(0.0, 1.0));
+                        verts.push(solid(1.0, 0.0));
+                        verts.push(solid(1.0, 1.0));
+                        verts.push(solid(0.0, 1.0));
+                    };
+                    if needs_underline {
+                        emit_decoration(y + self.atlas.ascent_px as f32 + thickness);
+                    }
+                    if needs_strike {
+                        // x-height midline ≈ baseline − 0.30 × ascent.
+                        // Empirical for Menlo / SF: matches where the
+                        // cross-bar of `e` / `a` sits, so the line
+                        // visually bisects lowercase letters rather
+                        // than sitting on top of them.
+                        let ascent = self.atlas.ascent_px as f32;
+                        let strike_y = y + ascent - ascent * 0.30;
+                        emit_decoration(strike_y);
+                    }
+                }
             }
         }
     }
@@ -570,6 +725,13 @@ fn rgba_to_float(rgba: u32) -> [f32; 4] {
         ((rgba >> 8) & 0xFF) as f32 / 255.0,
         (rgba & 0xFF) as f32 / 255.0,
     ]
+}
+
+/// Pack a [r,g,b,a] f32 tuple (the renderer's `clear_color` storage
+/// format) back into the 0xRRGGBBAA word the header pipeline expects.
+fn rgba_f32_to_u32(rgba: [f32; 4]) -> u32 {
+    let to_u8 = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u32;
+    (to_u8(rgba[0]) << 24) | (to_u8(rgba[1]) << 16) | (to_u8(rgba[2]) << 8) | to_u8(rgba[3])
 }
 
 /// Same as `rgba_to_float` but multiplies RGB by alpha so the panel
