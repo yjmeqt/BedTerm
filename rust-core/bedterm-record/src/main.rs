@@ -9,7 +9,7 @@
 //! ```
 
 use std::fs;
-use std::io::{Read, Write};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::path::PathBuf;
 use std::sync::mpsc;
 use std::time::Duration;
@@ -32,6 +32,7 @@ struct Args {
     font_size: Option<f32>,
     viewport_w: Option<u32>,
     viewport_h: Option<u32>,
+    stdin_lines: bool,
 }
 
 fn parse_args() -> Args {
@@ -45,6 +46,7 @@ fn parse_args() -> Args {
         font_size: None,
         viewport_w: None,
         viewport_h: None,
+        stdin_lines: false,
     };
 
     let raw: Vec<String> = std::env::args().collect();
@@ -65,6 +67,7 @@ fn parse_args() -> Args {
                 }
             }
             "--timeout" => { i += 1; args.idle_timeout_secs = raw[i].parse().unwrap_or(5); }
+            "--stdin" => { args.stdin_lines = true; }
             _ => { eprintln!("unknown flag: {}", raw[i]); print_usage(); std::process::exit(1); }
         }
         i += 1;
@@ -101,11 +104,15 @@ fn print_usage() {
     eprintln!("Options:");
     eprintln!("  --cmd TEXT        Command to run in the shell (required)");
     eprintln!("  -o, --output      Output .bin file (default: session.bin)");
-    eprintln!("  --font-size N     Font pixel size — with --viewport, derives cols/rows from cell metrics");
+    eprintln!("  --stdin           After the command, pipe stdin lines to PTY (for interactive CLIs)");
+    eprintln!("  --font-size N     Font pixel size — with --viewport, derives cols/rows");
     eprintln!("  --viewport WxH    Canvas pixels — with --font-size, computes cols/rows");
-    eprintln!("  --cols N          Terminal columns (default: 80, or derived from viewport+font)");
-    eprintln!("  --rows N          Terminal rows (default: 24, or derived from viewport+font)");
+    eprintln!("  --cols N          Terminal columns (default: derived from viewport+font, or 80)");
+    eprintln!("  --rows N          Terminal rows (default: derived from viewport+font, or 24)");
     eprintln!("  --timeout N       Idle timeout in seconds (default: 5)");
+    eprintln!("\nExamples:");
+    eprintln!("  bedterm-record --cmd \"ls --color\" --viewport 400x850 --font-size 14 -o ls.bin");
+    eprintln!("  printf 'fix auth\\n/exit\\n' | bedterm-record --cmd claude --stdin --viewport 400x850 --font-size 14 -o claude.bin");
 }
 
 fn parse_dims(s: &str) -> Option<(u32, u32)> {
@@ -165,22 +172,47 @@ fn run(args: Args) -> Result<()> {
         if !s.is_empty() { eprint!("{s}"); }
     }
 
-    // Phase 2: run the command.
-    let cmd_line = args.cmd.unwrap();
+    // Phase 2: send the command + optional stdin lines.
+    let cmd_line = args.cmd.clone().unwrap();
     eprintln!("\n[record] running: {cmd_line}");
-    writer.write_all(format!("{cmd_line}\n").as_bytes()).context("write cmd to PTY")?;
 
-    let cmd_out = drain_channel_until_idle(&rx, Duration::from_secs(args.idle_timeout_secs));
-    captured.extend_from_slice(&cmd_out);
-    if let Ok(s) = std::str::from_utf8(&cmd_out) {
-        if !s.is_empty() { eprint!("{s}"); }
+    if args.stdin_lines {
+        // Move writer into a feeder thread: sends the command first,
+        // then pipes our stdin line-by-line to the PTY.
+        let (done_tx, done_rx) = mpsc::channel();
+        std::thread::spawn(move || {
+            let _ = writer.write_all(format!("{cmd_line}\n").as_bytes());
+            let stdin = std::io::stdin();
+            for line in BufReader::new(stdin).lines().map_while(Result::ok) {
+                std::thread::sleep(Duration::from_millis(200));
+                if writer.write_all(line.as_bytes()).is_err() { break; }
+                if writer.write_all(b"\n").is_err() { break; }
+            }
+            drop(writer); // EOF to PTY
+            let _ = done_tx.send(());
+        });
+        // Don't wait for feeder — drain output while it feeds.
+        let cmd_out =
+            drain_channel_until_idle(&rx, Duration::from_secs(args.idle_timeout_secs.max(30)));
+        captured.extend_from_slice(&cmd_out);
+        if let Ok(s) = std::str::from_utf8(&cmd_out) {
+            if !s.is_empty() { eprint!("{s}"); }
+        }
+        let _ = done_rx.recv_timeout(Duration::from_secs(5));
+    } else {
+        writer.write_all(format!("{cmd_line}\n").as_bytes()).context("write cmd to PTY")?;
+        let cmd_out =
+            drain_channel_until_idle(&rx, Duration::from_secs(args.idle_timeout_secs));
+        captured.extend_from_slice(&cmd_out);
+        if let Ok(s) = std::str::from_utf8(&cmd_out) {
+            if !s.is_empty() { eprint!("{s}"); }
+        }
+        // Phase 3: exit.
+        let _ = writer.write_all(b"exit\n");
+        let final_out = drain_channel(&rx, Duration::from_millis(300));
+        captured.extend_from_slice(&final_out);
+        drop(writer);
     }
-
-    // Phase 3: exit.
-    let _ = writer.write_all(b"exit\n");
-    let final_out = drain_channel(&rx, Duration::from_millis(300));
-    captured.extend_from_slice(&final_out);
-    drop(writer);
     drop(tmpdir);
 
     eprintln!("\n[record] captured {} bytes", captured.len());
