@@ -2,13 +2,13 @@
 //!
 //! ```text
 //! # Grid mode — classic terminal
-//! echo "Hello World" | bedterm-render grid --font-size 14 > out.png
+//! echo "Hello World" | bedterm-render grid > out.png
 //!
 //! # Block list mode — wrap stdin as a single block
-//! ls --color=always | bedterm-render blocks --wrap --font-size 14 > out.png
+//! ls --color | bedterm-render blocks --wrap --command "ls --color" --exit-code 0 > out.png
 //!
-//! # Block list from SQLite
-//! bedterm-render blocks --db sessions.sqlite --session-id abc123 > out.png
+//! # Multi-block from raw OSC 133 stream
+//! cat multi-block.bin | bedterm-render blocks --palette tokyo-night > out.png
 //! ```
 
 mod blocks;
@@ -19,27 +19,12 @@ mod png;
 use std::env;
 use std::process;
 
+use blocks::PalettePreset;
+
 fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() < 2 {
-        eprintln!("usage: bedterm-render <grid|blocks> [options]");
-        eprintln!();
-        eprintln!("Modes:");
-        eprintln!("  grid     Classic terminal grid rendering (stdin byte stream)");
-        eprintln!("  blocks   Block list rendering (OSC 133 boundaries)");
-        eprintln!();
-        eprintln!("Grid options:");
-        eprintln!("  --font-size N     Cell pixel height (default: 14)");
-        eprintln!("  --viewport WxH    Canvas pixels (default: 1200x800)");
-        eprintln!("  --clear-color R,G,B  RGB clear color 0-255 (default: 0,0,0)");
-        eprintln!("  [input]           File path, or omit for stdin");
-        eprintln!();
-        eprintln!("Block options:");
-        eprintln!("  --font-size N     Cell pixel height (default: 14)");
-        eprintln!("  --viewport WxH    Canvas pixels (default: 1200x800)");
-        eprintln!("  --clear-color R,G,B  RGB clear color (default: 0,0,0)");
-        eprintln!("  --ui-scale N      Header font scale (default: 2.0)");
-        eprintln!("  --wrap            Wrap stdin as a single block");
+        print_usage();
         process::exit(1);
     }
 
@@ -55,7 +40,7 @@ fn main() {
         }
         _ => {
             eprintln!("unknown mode: {mode}");
-            eprintln!("usage: bedterm-render <grid|blocks>");
+            print_usage();
             process::exit(1);
         }
     };
@@ -65,6 +50,31 @@ fn main() {
         process::exit(1);
     }
 }
+
+fn print_usage() {
+    eprintln!("usage: bedterm-render <grid|blocks> [options]");
+    eprintln!();
+    eprintln!("Common options:");
+    eprintln!("  --font-size N       Cell pixel height (default: 14)");
+    eprintln!("  --viewport WxH      Canvas pixels (default: 1200x800)");
+    eprintln!("  --palette NAME      Color palette preset (default: default)");
+    eprintln!("                        Presets: default, tokyo-night, solarized-dark,");
+    eprintln!("                        solarized-light, dracula, gruvbox-dark");
+    eprintln!("  [input]             File path, or omit for stdin");
+    eprintln!();
+    eprintln!("Grid mode (stdin byte stream → terminal frame):");
+    eprintln!("  bedterm-render grid [options] [input]");
+    eprintln!();
+    eprintln!("Block mode (stdin byte stream → block list):");
+    eprintln!("  bedterm-render blocks [options] [input]");
+    eprintln!("  --ui-scale N        Header font scale (default: 2.0)");
+    eprintln!("  --wrap              Wrap stdin as a single block");
+    eprintln!("  --command TEXT      Command name for --wrap header");
+    eprintln!("  --exit-code N       Exit code for --wrap (default: 0)");
+    eprintln!("  --duration-ms N     Duration in ms for --wrap");
+}
+
+// ── Grid arg parsing ───────────────────────────────────────────────────
 
 fn parse_grid_args(args: &[String]) -> grid::GridArgs {
     let mut opts = grid::GridArgs::default();
@@ -86,10 +96,10 @@ fn parse_grid_args(args: &[String]) -> grid::GridArgs {
                     }
                 }
             }
-            "--clear-color" => {
+            "--palette" => {
                 i += 1;
-                if let Some(v) = args.get(i) {
-                    opts.clear_color = parse_rgb(v);
+                if let Some(p) = args.get(i).and_then(|s| PalettePreset::from_str(s)) {
+                    opts.palette = p.build();
                 }
             }
             other if !other.starts_with("--") => {
@@ -104,6 +114,8 @@ fn parse_grid_args(args: &[String]) -> grid::GridArgs {
     }
     opts
 }
+
+// ── Block arg parsing ──────────────────────────────────────────────────
 
 fn parse_block_args(args: &[String]) -> blocks::BlockArgs {
     let mut opts = blocks::BlockArgs::default();
@@ -125,10 +137,10 @@ fn parse_block_args(args: &[String]) -> blocks::BlockArgs {
                     }
                 }
             }
-            "--clear-color" => {
+            "--palette" => {
                 i += 1;
-                if let Some(v) = args.get(i) {
-                    opts.clear_color = parse_rgb(v);
+                if let Some(p) = args.get(i).and_then(|s| PalettePreset::from_str(s)) {
+                    opts.palette = p.build();
                 }
             }
             "--ui-scale" => {
@@ -139,6 +151,24 @@ fn parse_block_args(args: &[String]) -> blocks::BlockArgs {
             }
             "--wrap" => {
                 opts.wrap_single_block = true;
+            }
+            "--command" => {
+                i += 1;
+                if let Some(v) = args.get(i) {
+                    opts.wrap_command = Some(v.clone());
+                }
+            }
+            "--exit-code" => {
+                i += 1;
+                if let Some(v) = args.get(i).and_then(|s| s.parse().ok()) {
+                    opts.wrap_exit_code = v;
+                }
+            }
+            "--duration-ms" => {
+                i += 1;
+                if let Some(v) = args.get(i).and_then(|s| s.parse().ok()) {
+                    opts.wrap_duration_ms = Some(v);
+                }
             }
             other if !other.starts_with("--") => {
                 opts.input = Some(other.to_string());
@@ -153,17 +183,11 @@ fn parse_block_args(args: &[String]) -> blocks::BlockArgs {
     opts
 }
 
+// ── Helpers ────────────────────────────────────────────────────────────
+
 fn parse_dims(s: &str) -> Option<(u32, u32)> {
     let mut parts = s.split('x');
     let w = parts.next()?.parse().ok()?;
     let h = parts.next()?.parse().ok()?;
     Some((w, h))
-}
-
-fn parse_rgb(s: &str) -> [f32; 4] {
-    let mut parts = s.split(',');
-    let r: f32 = parts.next().and_then(|v| v.parse().ok()).unwrap_or(0.0) / 255.0;
-    let g: f32 = parts.next().and_then(|v| v.parse().ok()).unwrap_or(0.0) / 255.0;
-    let b: f32 = parts.next().and_then(|v| v.parse().ok()).unwrap_or(0.0) / 255.0;
-    [r, g, b, 1.0]
 }

@@ -1,4 +1,4 @@
-//! Grid mode: stdin/fixture → BtTerm::feed → Renderer::draw → PNG.
+//! Grid mode: stdin/fixture → BtTerm → Renderer::draw → PNG.
 
 use std::fs;
 use std::io::{self, Read};
@@ -6,7 +6,9 @@ use std::io::{self, Read};
 use metal::foreign_types::ForeignType;
 use metal::Device;
 
+use bedterm_core::ffi::BtPaletteView;
 use bedterm_core::renderer::Renderer;
+use bedterm_core::term::Palette;
 
 use crate::png::{self, OffscreenTarget};
 
@@ -14,8 +16,8 @@ pub(crate) struct GridArgs {
     pub font_size: f32,
     pub viewport_w: u32,
     pub viewport_h: u32,
-    pub clear_color: [f32; 4],
     pub input: Option<String>,
+    pub palette: Palette,
 }
 
 impl Default for GridArgs {
@@ -24,8 +26,8 @@ impl Default for GridArgs {
             font_size: 14.0,
             viewport_w: 1200,
             viewport_h: 800,
-            clear_color: [0.0, 0.0, 0.0, 1.0],
             input: None,
+            palette: Palette::default(),
         }
     }
 }
@@ -56,16 +58,26 @@ pub(crate) fn run(args: GridArgs) -> Result<(), Box<dyn std::error::Error>> {
     }
     .ok_or("failed to create renderer")?;
 
+    // Clear color from palette background if no explicit --clear-color.
+    let bg = args.palette.default_bg;
+    let clear = [
+        bg.r as f32 / 255.0,
+        bg.g as f32 / 255.0,
+        bg.b as f32 / 255.0,
+        1.0,
+    ];
+
     renderer.set_font(args.font_size, 2.0);
-    renderer.set_clear_color(
-        args.clear_color[0],
-        args.clear_color[1],
-        args.clear_color[2],
-        args.clear_color[3],
-    );
+    renderer.set_clear_color(clear[0], clear[1], clear[2], clear[3]);
 
     let term = bedterm_core::ffi::bt_term_new(cols, rows);
     unsafe {
+        let view = BtPaletteView {
+            default_fg: args.palette.default_fg,
+            default_bg: args.palette.default_bg,
+            ansi: args.palette.ansi,
+        };
+        bedterm_core::ffi::bt_term_set_palette(term, &view);
         bedterm_core::ffi::bt_term_feed(term, bytes.as_ptr(), bytes.len());
     }
 
