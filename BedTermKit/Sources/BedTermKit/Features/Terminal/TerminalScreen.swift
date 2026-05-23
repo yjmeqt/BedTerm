@@ -175,6 +175,11 @@ struct TerminalScreen: View {
                     .padding(.top, 8)
                 }
 
+                if TerminalSession.shouldShowConnectingOverlay(session.state) {
+                    ConnectingOverlay(host: hostName, onCancel: cancelConnect)
+                        .transition(.opacity)
+                }
+
                 #if DEBUG
                     geomHUD
                         .padding(.top, 4)
@@ -364,6 +369,11 @@ struct TerminalScreen: View {
             initialPTY: .init(cols: 80, rows: 24),
             bootstrapPayload: bootstrapPayload()
         )
+    }
+
+    private func cancelConnect() {
+        session.disconnect()
+        onBack()
     }
 }
 
