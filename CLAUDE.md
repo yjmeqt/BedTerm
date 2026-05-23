@@ -74,3 +74,44 @@ Use the `/prd <module>/<feature>` skill to load a PRD with its Figma context bef
 PRDs describe **what** the product does (rules, bugs, Figma refs) — never type names, hex codes, pixel values, or file paths. Implementation specs live in `bedterm/docs/specs/<feature>.md` and are linked from `<implementation spec="…">` in the PRD.
 
 After implementing a rule, set its `status="✅"` and run `prd format` to normalise. Never rename or reuse a `rule id` or `bug id` — bugs and conversation history reference them permanently. Bugs move `Open → Fix Pending → Fixed`; only the user marks `Fixed`.
+
+## Testing methodology
+
+### Rust renderer changes → offline CLI (macOS)
+
+No simulator needed. Build and render a fixture, compare visually or against golden PNG:
+
+```sh
+# Grid mode — terminal frame from stdin byte stream
+echo -e '\x1b[32mHello World\x1b[0m' | cargo run -p bedterm_core --bin bedterm-render grid > /tmp/out.png
+
+# Block list mode — wrap stdin as a single block with OSC 133 boundaries
+ls --color=always | cargo run -p bedterm_core --bin bedterm-render blocks --wrap > /tmp/out.png
+
+# From fixture files
+cargo run -p bedterm_core --bin bedterm-render grid tests/fixtures/ls-color.bin > /tmp/out.png
+cargo run -p bedterm_core --bin bedterm-render blocks tests/fixtures/multi-block.bin > /tmp/out.png
+```
+
+### Block list layout changes → verify with mock SSH
+
+```sh
+cargo run -p bedterm_mock_ssh -- --script tests/fixtures/multi-block.json &
+ssh localhost -p 2222 "cmd1; cmd2; cmd3" 2>&1 | \
+  cargo run -p bedterm_core --bin bedterm-render blocks - > /tmp/out.png
+```
+
+### Swift UIKit changes → iOS only
+
+Must run on iOS simulator or device:
+
+```sh
+worktree-ios-dev-tool test
+worktree-ios-dev-tool run  # manual verification
+```
+
+### Fixture conventions
+
+- `tests/fixtures/*.bin` — raw byte streams (may include OSC 133) for regression input
+- `tests/fixtures/*.json` — canned session data for block list fixture tests
+- `tests/fixtures/*.png` — golden output images for comparison
