@@ -139,7 +139,7 @@ final class TerminalSession {
     /// Upper bound on `client.connect(...)`. Past this point we tear down the
     /// in-flight attempt and surface a `.timeout` error so the UI can recover
     /// instead of spinning forever on an unreachable host.
-    static let connectTimeoutSeconds: TimeInterval = 20
+    static let connectTimeoutSeconds: TimeInterval = 5
 
     func send(_ data: Data) {
         guard case .open = state else { return }
