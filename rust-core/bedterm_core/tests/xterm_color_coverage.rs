@@ -29,7 +29,6 @@ fn fresh(payload: &[u8]) -> bedterm_core::snapshot::GridSnapshot {
             b: 0xEF,
         },
         ansi,
-        ..Palette::default()
     });
     t.feed(payload);
     t.snapshot()
