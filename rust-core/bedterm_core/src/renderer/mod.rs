@@ -119,6 +119,11 @@ impl Renderer {
         self.clear_color = [r, g, b, a];
     }
 
+    /// Actual cell pixel dimensions after font registration.
+    pub fn cell_pixel_size(&self) -> (u32, u32) {
+        self.atlas.cell_px
+    }
+
     pub fn set_font(&mut self, pixel_size: f32, dpr: f32) {
         self.pixel_size = pixel_size.max(1.0);
         self.dpr = dpr.max(1.0);

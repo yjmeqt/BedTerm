@@ -213,11 +213,6 @@ pub(crate) fn run(args: BlockArgs) -> Result<(), Box<dyn std::error::Error>> {
     let device = Device::system_default().ok_or("no Metal device found (must run on macOS)")?;
     let queue = device.new_command_queue();
 
-    let cell_h = args.font_size;
-    let cell_w = args.font_size * 0.5;
-    let cols = (args.viewport_w as f32 / cell_w).max(1.0) as u16;
-    let rows = (args.viewport_h as f32 / cell_h).max(1.0) as u16;
-
     let mut renderer = unsafe {
         Renderer::from_ptrs(
             device.as_ptr() as *const std::ffi::c_void,
@@ -226,6 +221,16 @@ pub(crate) fn run(args: BlockArgs) -> Result<(), Box<dyn std::error::Error>> {
     }
     .ok_or("failed to create renderer")?;
 
+    crate::font::register_system_font();
+    renderer.set_font(args.font_size, 2.0);
+
+    // Derive terminal geometry from actual font metrics.
+    let (cell_w_px, cell_h_px) = renderer.cell_pixel_size();
+    let cell_w = cell_w_px as f32;
+    let cell_h = cell_h_px as f32;
+    let cols = (args.viewport_w as f32 / cell_w).max(1.0) as u16;
+    let rows = (args.viewport_h as f32 / cell_h).max(1.0) as u16;
+
     let bg = args.palette.default_bg;
     let clear = [
         bg.r as f32 / 255.0,
@@ -233,10 +238,6 @@ pub(crate) fn run(args: BlockArgs) -> Result<(), Box<dyn std::error::Error>> {
         bg.b as f32 / 255.0,
         1.0,
     ];
-
-    crate::font::register_system_font();
-
-    renderer.set_font(args.font_size, 2.0);
     renderer.set_clear_color(clear[0], clear[1], clear[2], clear[3]);
     renderer.set_ui_font_sizes(15.0 * args.ui_scale, 12.0 * args.ui_scale, args.ui_scale);
 
