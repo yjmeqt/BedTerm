@@ -10,6 +10,10 @@ final class TerminalMetalUIView: MTKView {
     let onSend: (Data) -> Void
     private let onResize: (Int, Int) -> Void
     private weak var session: TerminalSession?
+    /// When `true`, this view refuses first responder and drops all input
+    /// (hardware keys, IME, soft-keyboard). Selection and scroll gestures
+    /// still work so the user can copy from the read-only replay.
+    let isInputDisabled: Bool
 
     private var startTime = CACurrentMediaTime()
     private var consumeTask: Task<Void, Never>?
@@ -80,11 +84,15 @@ final class TerminalMetalUIView: MTKView {
         // Shared Metal context across the terminal pane and every Block view —
         // one atlas + pipeline state for the whole app. See MetalEnvironment.
         let env = MetalEnvironment.shared
-        self.terminalCore = TerminalCore(cols: 80, rows: 24)
+        // Borrow the session-owned core; the session keeps it alive across
+        // view tear-downs so Back→re-open restores the existing grid
+        // (background-sessions P1: TerminalCore strong-ownership).
+        self.terminalCore = session.terminalCore
         self.bridge = env.renderer
         self.onSend = onSend
         self.onResize = onResize
         self.session = session
+        self.isInputDisabled = false
         super.init(frame: .zero, device: env.device)
 
         // Snap-on-input (R5.scroll_snap_on_input): one session hook covers
@@ -97,10 +105,6 @@ final class TerminalMetalUIView: MTKView {
             self?.stopInertia()
             self?.setNeedsDisplay()
         }
-        // Back-ref so Block view can read live grid + the Rust-owned block
-        // list directly. BlockStore mirrors that list via `refresh(from:)`
-        // after each feed; no Swift-side state machine.
-        session.terminalCore = core
 
         // framebufferOnly=false: we hand the drawable's texture across FFI as a
         // raw pointer, so the GPU pipeline must allow CPU-readable access.
@@ -121,22 +125,47 @@ final class TerminalMetalUIView: MTKView {
         applyAppearance()
         installTraitObservers()
 
+        // The session pump is authoritative for feeding the core, mode,
+        // and block-store — it runs whether or not this view is mounted.
+        // The view's loop is purely a redraw + screen-clear-anchor signal.
         consumeTask = Task { @MainActor [weak self] in
             for await chunk in feed {
                 guard let self else { return }
-                let hadScreenClear = Self.containsScreenClear(chunk)
-                self.terminalCore.feed(chunk)
-                self.session?.updateMode(self.terminalCore.mode)
-                // Rust owns the block list now — pull a fresh mirror after
-                // each feed. The store skips the rebuild when nothing
-                // observable changed (fast scalar diff).
-                if let session = self.session {
-                    session.blockStore.refresh(from: self.terminalCore)
-                }
                 self.setNeedsDisplay()
-                if hadScreenClear { self.scheduleBottomAnchorPass() }
+                if Self.containsScreenClear(chunk) {
+                    self.scheduleBottomAnchorPass()
+                }
             }
         }
+    }
+
+    /// Read-only replay init: mounts an externally-owned `TerminalCore`
+    /// (produced by `PersistenceHandle.openReplay`) without attaching a
+    /// live session feed. Input is disabled; scroll and selection work.
+    init(replayCore: TerminalCore) {
+        let env = MetalEnvironment.shared
+        self.terminalCore = replayCore
+        self.bridge = env.renderer
+        self.onSend = { _ in }
+        self.onResize = { _, _ in }
+        self.session = nil
+        self.isInputDisabled = true
+        super.init(frame: .zero, device: env.device)
+
+        self.framebufferOnly = false
+        self.colorPixelFormat = .bgra8Unorm
+        self.isPaused = true
+        self.enableSetNeedsDisplay = true
+        self.presentsWithTransaction = true
+
+        layer.addSublayer(cursorLayer)
+        layer.addSublayer(selectionLayer)
+        installGestureRecognizers()
+        refreshFontMetrics()
+        applyAppearance()
+        installTraitObservers()
+        // No consumeTask — no live feed; render once on appear.
+        setNeedsDisplay()
     }
 
     @available(*, unavailable)
@@ -303,7 +332,7 @@ final class TerminalMetalUIView: MTKView {
             // initial banner + prompt land at the bottom of the new viewport
             // instead of the top. The anchor pass is a no-op when a TUI app
             // has drawn below the cursor.
-            if didGrow, rows > 3 {
+            if didGrow, rows > 3, !isInputDisabled {
                 scheduleBottomAnchorPass()
             }
         }
@@ -337,6 +366,7 @@ final class TerminalMetalUIView: MTKView {
         // Tap during deceleration stops it immediately, even if the keyboard
         // is already showing — gives the user a brake on a flick.
         stopInertia()
+        guard !isInputDisabled else { return }
         if !isFirstResponder {
             _ = becomeFirstResponder()
             reloadInputViews()
@@ -345,11 +375,12 @@ final class TerminalMetalUIView: MTKView {
 
     override func didMoveToWindow() {
         super.didMoveToWindow()
-        guard displayMode != .blockList, window != nil, !isFirstResponder else { return }
+        guard !isInputDisabled, displayMode != .blockList,
+            window != nil, !isFirstResponder else { return }
         _ = becomeFirstResponder()
     }
 
-    override var canBecomeFirstResponder: Bool { true }
+    override var canBecomeFirstResponder: Bool { !isInputDisabled }
 
     private func refreshFontMetrics() {
         let body = UIFontMetrics.default.scaledFont(

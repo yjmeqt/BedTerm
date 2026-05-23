@@ -18,11 +18,17 @@ let package = Package(
         ),
         // C header wrapper so Swift targets can `import BedTermCoreC`.
         // The actual symbols live in BedTermCore (the .a xcframework).
+        // rusqlite (inside BedTermCore) dynamically links against the
+        // system SQLite, so we declare that dependency here so Xcode
+        // passes -lsqlite3 when linking any target that depends on us.
         .target(
             name: "BedTermCoreC",
             dependencies: ["BedTermCore"],
             path: "Sources/BedTermCoreC",
-            publicHeadersPath: "include"
+            publicHeadersPath: "include",
+            linkerSettings: [
+                .linkedLibrary("sqlite3")
+            ]
         ),
         .target(
             name: "BedTermKit",

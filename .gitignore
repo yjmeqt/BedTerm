@@ -42,3 +42,5 @@ docs/superpowers/
 rust-core/target/
 BedTermKit/BinaryFrameworks/BedTermCore.xcframework/*/
 !BedTermKit/BinaryFrameworks/BedTermCore.xcframework/Info.plist
+# added by worktree-ios-dev-tool proj init
+worktree-ios-dev/

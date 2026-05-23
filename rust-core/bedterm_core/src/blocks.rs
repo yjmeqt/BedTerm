@@ -19,6 +19,12 @@ use std::time::Instant;
 /// diffs stay clean across reconnects.
 pub type BlockId = u64;
 
+/// Maximum number of newline characters stored in `stylized_command` or
+/// `stylized_output`. Bytes beyond this limit are silently dropped so a
+/// long-running command with voluminous output doesn't grow the in-memory
+/// capture without bound.
+pub const MAX_BLOCK_OUTPUT_LINES: u32 = 5000;
+
 /// Sentinel for a still-running block's `end_line`. Picked outside the legal
 /// `i32` grid-line range alacritty produces. Public so the FFI layer can
 /// surface it to Swift.
@@ -64,6 +70,57 @@ pub struct Block {
     /// open-but-not-yet-Preexec blocks (no command running yet).
     pub grid: Option<BlockGrid>,
     pub is_running: bool,
+    /// Raw bytes received between the `Preexec` event (command starts
+    /// running) and the `CommandFinished` event, captured verbatim with
+    /// all ANSI/SGR escape sequences intact so replay can reconstruct
+    /// the exact rendered output. Capped at `MAX_BLOCK_OUTPUT_LINES`
+    /// newlines; bytes beyond that limit are silently dropped.
+    ///
+    /// Note: this DCS-based protocol has no separate "command echo"
+    /// phase (unlike iTerm2's OSC 133;B/C split), so `stylized_command`
+    /// is always empty in the current implementation. It is reserved for
+    /// future protocol extensions.
+    pub stylized_command: Vec<u8>,
+    /// Bytes received between `Preexec` and `CommandFinished`. Same cap
+    /// as `stylized_command`. Populated in parallel with `block.grid`
+    /// feeding — both see the same raw byte slices.
+    pub stylized_output: Vec<u8>,
+    pub stylized_command_lines: u32,
+    pub stylized_output_lines: u32,
+}
+
+impl Block {
+    /// Append `bytes` to `stylized_output`, stopping once
+    /// `MAX_BLOCK_OUTPUT_LINES` newlines have been captured.
+    pub fn append_output_bytes(&mut self, bytes: &[u8]) {
+        Self::append_capped(
+            &mut self.stylized_output,
+            &mut self.stylized_output_lines,
+            bytes,
+        );
+    }
+
+    /// Append `bytes` to `stylized_command`. Reserved for future use —
+    /// the current DCS protocol does not produce command-phase bytes.
+    pub fn append_command_bytes(&mut self, bytes: &[u8]) {
+        Self::append_capped(
+            &mut self.stylized_command,
+            &mut self.stylized_command_lines,
+            bytes,
+        );
+    }
+
+    fn append_capped(buf: &mut Vec<u8>, lines: &mut u32, bytes: &[u8]) {
+        for &b in bytes {
+            if *lines >= MAX_BLOCK_OUTPUT_LINES {
+                return;
+            }
+            buf.push(b);
+            if b == b'\n' {
+                *lines += 1;
+            }
+        }
+    }
 }
 
 pub struct BlockStore {
@@ -195,6 +252,13 @@ impl BlockStore {
         self.blocks.get_mut(idx)
     }
 
+    /// Whether there is currently an open (running) block. Used by
+    /// `Terminal::feed` to detect whether a `Precmd` event will seal an
+    /// existing block (true) or is arriving fresh (false).
+    pub fn has_open_block(&self) -> bool {
+        self.open_index.is_some()
+    }
+
     /// Resize every still-attached `BlockGrid` to the new PTY
     /// geometry — called by `Terminal::resize` so a running command
     /// inside a TUI doesn't get scrambled when the iOS view bounds
@@ -206,6 +270,13 @@ impl BlockStore {
                 grid.resize(cols, rows);
             }
         }
+    }
+
+    /// Return a reference to the most-recently-sealed (non-running) block.
+    /// Used by the persistence sink in `Terminal::feed` to fetch the block
+    /// that just finalized at `CommandFinished`.
+    pub fn last_finalized(&self) -> Option<&Block> {
+        self.blocks.iter().rev().find(|b| !b.is_running)
     }
 
     fn open_new(&mut self, current_line: i32, pwd: Option<String>, git_branch: Option<String>) {
@@ -224,6 +295,10 @@ impl BlockStore {
             cli_agent: None,
             grid: None,
             is_running: true,
+            stylized_command: Vec::new(),
+            stylized_output: Vec::new(),
+            stylized_command_lines: 0,
+            stylized_output_lines: 0,
         });
         self.open_index = Some(self.blocks.len() - 1);
     }

@@ -4,11 +4,11 @@ struct HostRow: View {
     let entry: SavedHost
     let inFlight: Bool
     let isCurrentSession: Bool
-    let onEdit: () -> Void
+    let onTapBody: () -> Void
     let onConnect: () -> Void
 
     var body: some View {
-        Button(action: onEdit) {
+        Button(action: onTapBody) {
             HStack(alignment: .center, spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(primaryLabel)

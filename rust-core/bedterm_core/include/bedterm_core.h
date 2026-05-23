@@ -11,6 +11,14 @@
 #include <stdlib.h>
 
 /**
+ * Maximum number of newline characters stored in `stylized_command` or
+ * `stylized_output`. Bytes beyond this limit are silently dropped so a
+ * long-running command with voluminous output doesn't grow the in-memory
+ * capture without bound.
+ */
+#define MAX_BLOCK_OUTPUT_LINES 5000
+
+/**
  * Sentinel for a still-running block's `end_line`. Picked outside the legal
  * `i32` grid-line range alacritty produces. Public so the FFI layer can
  * surface it to Swift.
@@ -46,6 +54,12 @@
 #define BT_CLI_AGENT_HERMES 12
 
 #define BT_CLI_AGENT_VIBE 13
+
+#define MAX_BLOCKS_PER_SNAPSHOT 100
+
+#define CURRENT_VERSION 1
+
+#define MAX_SNAPSHOTS_PER_HOST 10
 
 /**
  * Two triangles per cell.
@@ -117,19 +131,22 @@
 
 #define BT_MODE_FOCUS_IN_OUT (1 << 5)
 
-#define VINTR 3
-
-#define VEOF 4
-
-#define VERASE 127
-
-typedef struct BtMockTty BtMockTty;
-
 typedef struct BtRenderer BtRenderer;
 
 typedef struct BtTerm BtTerm;
 
-typedef struct Flags Flags;
+/**
+ * Backing storage that keeps the `CString` allocations alive for as long as
+ * the `CSnapshotList` is live.
+ */
+typedef struct OwnedListBacking OwnedListBacking;
+
+/**
+ * Opaque handle. Allocated by `init`, freed by `close`.
+ */
+typedef struct PersistenceHandle PersistenceHandle;
+
+typedef struct Terminal Terminal;
 
 typedef struct BtBlockView {
   uint64_t id;
@@ -247,6 +264,45 @@ typedef struct BtPaletteView {
 } BtPaletteView;
 
 /**
+ * A single snapshot row as seen from Swift / C.
+ */
+typedef struct CSnapshot {
+  const char *id;
+  const char *host_id;
+  /**
+   * -1 if no kill_reason was recorded.
+   */
+  int32_t kill_reason;
+  /**
+   * 0.0 if no killed_at was recorded.
+   */
+  double killed_at;
+  /**
+   * null if no last_cwd was recorded.
+   */
+  const char *last_cwd;
+  /**
+   * null if no last_command was recorded.
+   */
+  const char *last_command;
+  /**
+   * `i32::MIN` if no exit code was recorded.
+   */
+  int32_t last_exit_code;
+  int64_t block_count;
+} CSnapshot;
+
+/**
+ * Heap-allocated list returned by `bedterm_persistence_list`.
+ * Free with `bedterm_persistence_free_list`.
+ */
+typedef struct CSnapshotList {
+  const struct CSnapshot *items;
+  uintptr_t count;
+  struct OwnedListBacking *_owned;
+} CSnapshotList;
+
+/**
  * One entry per block: the BODY cell region plus the panel chrome
  * rect. Headers are emitted separately via `BtBlockHeaderEntry`.
  */
@@ -353,10 +409,6 @@ typedef struct BtBlockHeaderEntry {
   uint8_t _pad2[3];
 } BtBlockHeaderEntry;
 
-
-
-
-
 #ifdef __cplusplus
 extern "C" {
 #endif // __cplusplus
@@ -393,6 +445,16 @@ int bt_term_block_snapshot(struct BtTerm *h, uintptr_t idx, struct BtSnapshotVie
 void bt_term_block_snapshot_release(struct BtTerm *h);
 
 struct BtTerm *bt_term_new(uint16_t cols, uint16_t rows);
+
+/**
+ * Construct a replay-only `BtTerm` — no PTY backing, no persistence sink.
+ * Feed stored block bytes into this terminal to reconstruct the block list.
+ * Caller owns the returned pointer; release via `bt_term_free`.
+ *
+ * # Safety
+ * Same as `bt_term_new`. The returned pointer must be freed with `bt_term_free`.
+ */
+struct BtTerm *bt_term_new_replay(uint16_t cols, uint16_t rows);
 
 /**
  * # Safety
@@ -499,6 +561,134 @@ void bt_term_snapshot_release(struct BtTerm *h);
  * aligned `BtPaletteView`, or be null (a null palette is a no-op).
  */
 void bt_term_set_palette(struct BtTerm *h, const struct BtPaletteView *palette);
+
+/**
+ * Attach persistence to a `BtTerm` handle — a convenience shim over
+ * `bedterm_persistence_attach` that accepts the opaque `BtTerm *` Swift
+ * already owns rather than requiring Swift to materialise a bare `Terminal *`.
+ *
+ * # Safety
+ * `h` must be a valid `BtTerm *` returned by `bt_term_new`.
+ * `handle`, `snapshot_id`, and `host_id` follow the same safety contract
+ * as `bedterm_persistence_attach`.
+ */
+void bt_term_attach_persistence(struct BtTerm *h,
+                                struct PersistenceHandle *handle,
+                                const char *snapshot_id,
+                                const char *host_id);
+
+/**
+ * # Safety
+ * `db_path` must be a valid NUL-terminated UTF-8 C string or null.
+ * The returned pointer must be freed with `bedterm_persistence_close`.
+ */
+struct PersistenceHandle *bedterm_persistence_init(const char *db_path);
+
+/**
+ * # Safety
+ * `handle` must be a pointer previously returned by
+ * `bedterm_persistence_init` and not yet freed.
+ */
+void bedterm_persistence_close(struct PersistenceHandle *handle);
+
+/**
+ * Wire `terminal` to the persistence database held in `handle`, scoped to
+ * `snapshot_id`. This function also ensures a `snapshots` row exists for
+ * `snapshot_id` (idempotent — harmlessly fails with a constraint error if
+ * the row was already inserted).
+ *
+ * After this call, every `CommandFinished` event processed by `terminal`
+ * inserts a row into the `blocks` table. Blocks sealed by Ctrl-C
+ * (Precmd-over-running-command path) are also persisted, with `exit_code`
+ * set to NULL.
+ *
+ * # Safety
+ *
+ * - `handle`, `terminal`, `snapshot_id`, and `host_id` must all be valid
+ *   non-null pointers.
+ * - `snapshot_id` and `host_id` must be NUL-terminated UTF-8 C strings.
+ * - The caller MUST keep `handle` alive until `terminal` is freed. The
+ *   persistence sink installed by this function holds a raw pointer into
+ *   `handle.db` — if the handle is freed while the terminal is still live,
+ *   any subsequent block finalization will access freed memory.
+ *
+ * The intended call order is:
+ *   1. `bedterm_persistence_attach(handle, term, sid, hid)` — on session open.
+ *   2. Feed PTY bytes to `term` via `bedterm_feed` as usual.
+ *   3. Free `term` (e.g. `bedterm_free`).
+ *   4. `bedterm_persistence_close(handle)` — after the terminal is gone.
+ */
+void bedterm_persistence_attach(struct PersistenceHandle *handle,
+                                struct Terminal *terminal,
+                                const char *snapshot_id,
+                                const char *host_id);
+
+/**
+ * Record that a session was killed.
+ *
+ * - `reason`: a `KillReason` discriminant (0–4).
+ * - `last_cwd`, `last_command`: NUL-terminated UTF-8 or null.
+ * - `last_exit_code` / `has_exit_code`: use `has_exit_code != 0` to pass a
+ *   real exit code; `i32::MIN` is a legal exit code so a sentinel is not safe.
+ *
+ * # Safety
+ * All non-null pointer arguments must point to valid NUL-terminated UTF-8.
+ */
+void bedterm_persistence_record_kill(struct PersistenceHandle *handle,
+                                     const char *snapshot_id,
+                                     int32_t reason,
+                                     const char *last_cwd,
+                                     const char *last_command,
+                                     int32_t last_exit_code,
+                                     int32_t has_exit_code);
+
+/**
+ * List all killed snapshots for a host, ordered newest-first.
+ *
+ * Returns a heap-allocated `CSnapshotList` that must be freed with
+ * `bedterm_persistence_free_list`. Returns null on error.
+ *
+ * # Safety
+ * `handle` and `host_id` must be valid non-null pointers.
+ */
+struct CSnapshotList *bedterm_persistence_list(struct PersistenceHandle *handle,
+                                               const char *host_id);
+
+/**
+ * Free a list previously returned by `bedterm_persistence_list`.
+ *
+ * # Safety
+ * `list` must have been returned by `bedterm_persistence_list` and not yet
+ * freed.
+ */
+void bedterm_persistence_free_list(struct CSnapshotList *list);
+
+/**
+ * Open a replay terminal pre-loaded with the stored blocks for `snapshot_id`.
+ *
+ * Returns a newly-allocated `BtTerm` that has been fed all stored block bytes
+ * for the given snapshot. The terminal has no PTY backing and no persistence
+ * sink — it is read-only and renders the session history via the normal Metal
+ * renderer. Free the returned pointer with `bt_term_free`.
+ *
+ * Returns null if `snapshot_id` is unknown, has no blocks, or an error occurs.
+ *
+ * # Safety
+ * `handle` and `snapshot_id` must be valid non-null pointers.
+ * `snapshot_id` must be a NUL-terminated UTF-8 C string.
+ * The returned `BtTerm *` must be freed with `bt_term_free` (existing FFI).
+ */
+struct BtTerm *bedterm_persistence_open_replay(struct PersistenceHandle *handle,
+                                               const char *snapshot_id);
+
+/**
+ * Delete a snapshot (and its blocks) from the database.
+ *
+ * # Safety
+ * `handle` and `snapshot_id` must be valid non-null pointers; `snapshot_id`
+ * must be a NUL-terminated UTF-8 C string.
+ */
+void bedterm_persistence_discard(struct PersistenceHandle *handle, const char *snapshot_id);
 
 /**
  * Paint visible block bodies + header bands into `texture` for one
@@ -667,45 +857,6 @@ int bt_font_register_terminal_face(const uint8_t *bytes_ptr,
  * duration of the call.
  */
 int bt_font_register_aux_face(const uint8_t *bytes_ptr, uintptr_t bytes_len);
-
-/**
- * # Safety
- * `opts_json` must be either null or point to a NUL-terminated UTF-8 string
- * owned by the caller for the duration of this call.
- */
-struct BtMockTty *bt_mock_tty_create(uint32_t program, const char *opts_json);
-
-/**
- * # Safety
- * `h` must be a pointer returned by `bt_mock_tty_create` that has not been freed.
- */
-void bt_mock_tty_free(struct BtMockTty *h);
-
-/**
- * # Safety
- * `h` must be a valid, non-freed handle.
- */
-void bt_mock_tty_set_output_callback(struct BtMockTty *h, void (*cb)(const uint8_t*,
-                                                                     uintptr_t,
-                                                                     void*), void *user_data);
-
-/**
- * # Safety
- * `h` must be valid; `bytes` must point to at least `len` bytes (or be null when len == 0).
- */
-int32_t bt_mock_tty_write(struct BtMockTty *h, const uint8_t *bytes, uintptr_t len);
-
-/**
- * # Safety
- * `h` must be valid.
- */
-void bt_mock_tty_resize(struct BtMockTty *h, uint16_t cols, uint16_t rows);
-
-/**
- * # Safety
- * `h` must be valid.
- */
-void bt_mock_tty_tick(struct BtMockTty *h, uint64_t now_ms);
 
 #ifdef __cplusplus
 }  // extern "C"

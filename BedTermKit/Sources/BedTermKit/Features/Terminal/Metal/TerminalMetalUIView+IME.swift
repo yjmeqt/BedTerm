@@ -61,6 +61,7 @@ extension TerminalMetalUIView {
     var hasText: Bool { false }
 
     func insertText(_ text: String) {
+        guard !isInputDisabled else { return }
         // Clear any IME preedit before forwarding the committed bytes.
         clearMarkedTextOnCommit()
         if text == "\n" {
@@ -71,6 +72,7 @@ extension TerminalMetalUIView {
     }
 
     func deleteBackward() {
+        guard !isInputDisabled else { return }
         onSend(Data([0x7F]))  // DEL — xterm-256color expects 0x7F.
     }
 
@@ -136,6 +138,7 @@ extension TerminalMetalUIView: UITextInput {
     }
 
     func setMarkedText(_ markedText: String?, selectedRange: NSRange) {
+        guard !isInputDisabled else { return }
         let state = imeState
         state.markedText = markedText ?? ""
         state.selectedRange = selectedRange
@@ -143,6 +146,7 @@ extension TerminalMetalUIView: UITextInput {
     }
 
     func unmarkText() {
+        guard !isInputDisabled else { return }
         let state = imeState
         let pending = state.markedText
         state.markedText = ""

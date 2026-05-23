@@ -76,6 +76,12 @@ struct Sink {
     is_ours: bool,
     buf: Vec<u8>,
     events: VecDeque<DcsEvent>,
+    /// Byte offset within the current `feed_with_positions` call where the
+    /// most recent "ours" DCS frame started. Set in `feed_with_positions`
+    /// when `hook` fires and the frame is ours; cleared when the event is
+    /// emitted. `None` when no frame is in progress or the frame started
+    /// in a previous call.
+    frame_start_in_chunk: Option<usize>,
 }
 
 impl Default for DcsSniffer {
@@ -97,25 +103,60 @@ impl DcsSniffer {
     }
 
     /// Stateful feed that returns each newly-completed DCS event
-    /// paired with its **end-of-frame byte offset** in `bytes` (1-past
-    /// the terminator). Unlike the freestanding `scan_dcs_events`,
-    /// this handles frames that span multiple `feed` calls — the VTE
-    /// parser keeps DCS state between calls, so a `\eP$d` start in
-    /// one feed and the matching `\e\` terminator in the next still
-    /// emit a single event at the right position.
+    /// paired with its byte offsets in `bytes`:
+    /// - `frame_start`: index of the first byte of the DCS introducer
+    ///   (`ESC P`) within this call's `bytes`. If the frame started in a
+    ///   *previous* call (cross-chunk frames), this is `None` — the
+    ///   caller treats all bytes before `frame_end` as non-output.
+    /// - `frame_end`: 1-past the terminator byte (exclusive). Bytes from
+    ///   `frame_end` onward belong to the *next* output segment.
     ///
-    /// Implementation feeds bytes one at a time and watches the
-    /// sink's event queue grow. Byte-by-byte advance is allowed by
-    /// the VTE parser by design — it's a finite state machine that
-    /// handles any chunking.
-    pub fn feed_with_positions(&mut self, bytes: &[u8]) -> Vec<(usize, DcsEvent)> {
+    /// Unlike the freestanding `scan_dcs_events`, this handles frames that
+    /// span multiple `feed` calls — the VTE parser keeps DCS state between
+    /// calls, so a `\eP$d` start in one feed and the matching `\e\`
+    /// terminator in the next still emit a single event at the right
+    /// position.
+    ///
+    /// Implementation feeds bytes one at a time and watches the sink's
+    /// event queue grow.
+    pub fn feed_with_positions(&mut self, bytes: &[u8]) -> Vec<(Option<usize>, usize, DcsEvent)> {
         let mut located = Vec::new();
         let mut i = 0;
+        // Byte index where a potential DCS frame starts (the ESC byte).
+        // Updated whenever we see 0x1B so that if `hook` fires shortly
+        // after, we can report the full frame start.
+        let mut last_esc: Option<usize> = None;
         while i < bytes.len() {
             let byte = bytes[i];
+
+            if byte == 0x1B {
+                // Record this as a candidate frame start. If this ESC turns
+                // out to start a DCS (`ESC P $ d …`) then `hook` will fire
+                // a few bytes later and we can look back here.
+                last_esc = Some(i);
+            }
+
+            // Track when the sink enters a "this is ours" DCS frame so we
+            // can record the frame-start byte offset. The `hook` callback
+            // sets `sink.is_ours = true`; capture the position just before
+            // feeding that byte.
+            let was_ours = self.sink.is_ours;
+
             let before = self.sink.events.len();
             self.parser
                 .advance(&mut self.sink, std::slice::from_ref(&byte));
+
+            // If this byte caused `hook` to fire and claim ownership, record
+            // where the frame started using the most recent ESC position.
+            if !was_ours && self.sink.is_ours {
+                // `hook` fired: the frame started at the ESC we recorded in
+                // `last_esc`. If the ESC was in a previous chunk, `last_esc`
+                // is `None` and we propagate `None` to the caller so it
+                // treats all bytes up to `frame_end` as non-capturable.
+                self.sink.frame_start_in_chunk = last_esc;
+                last_esc = None;
+            }
+
             if self.sink.events.len() > before {
                 // Per VT500 state machine: a 7-bit ST is `ESC \`, and
                 // `unhook` fires on the ESC byte while the trailing `\`
@@ -134,8 +175,9 @@ impl DcsSniffer {
                 } else {
                     i + 1
                 };
+                let frame_start = self.sink.frame_start_in_chunk.take();
                 for j in before..self.sink.events.len() {
-                    located.push((end, self.sink.events[j].clone()));
+                    located.push((frame_start, end, self.sink.events[j].clone()));
                 }
                 i = end;
             } else {

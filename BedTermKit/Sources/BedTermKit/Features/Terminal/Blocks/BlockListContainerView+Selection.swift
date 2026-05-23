@@ -7,7 +7,7 @@ import UIKit
 @MainActor
 extension BlockListContainerViewController {
     func blockHitTest(at point: CGPoint) -> BlockListSelectionController.BlockHit? {
-        guard let core = session.terminalCore else { return nil }
+        let core = session.terminalCore
         let gap = BlockPanelStyle.interBlockGapPt
         var yPt: CGFloat = 0
         for block in session.blockStore.blocks {
@@ -39,8 +39,8 @@ extension BlockListContainerViewController {
     }
 
     func extractText(blockID: UInt64, range: SelectionRange) -> String? {
-        guard let core = session.terminalCore,
-            let block = session.blockStore.blocks.first(where: { $0.id == blockID }),
+        let core = session.terminalCore
+        guard let block = session.blockStore.blocks.first(where: { $0.id == blockID }),
             let snap = snapshot(for: block, core: core)
         else { return nil }
         let norm = range.normalised
