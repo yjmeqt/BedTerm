@@ -31,13 +31,6 @@ if [ "$PROFILE" = "release" ]; then
   PROFILE_DIR="release"
 fi
 
-# Debug builds expose the in-process mock TTY (`bt_mock_tty_*`) used by the
-# Swift `RustMockTTYClient` in `#if DEBUG`. Release builds omit the symbols.
-CARGO_FEATURE_ARGS=()
-if [ "$PROFILE" != "release" ]; then
-  CARGO_FEATURE_ARGS+=( --features mock-tty )
-fi
-
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 RUST_DIR="$REPO_ROOT/rust-core"
 OUT_DIR="$REPO_ROOT/BedTermKit/BinaryFrameworks"
@@ -62,7 +55,6 @@ for t in "${TARGETS[@]}"; do
   echo "==> cargo build --target $t ($PROFILE)"
   cargo build -p bedterm_core \
     "${CARGO_PROFILE_ARG[@]+"${CARGO_PROFILE_ARG[@]}"}" \
-    "${CARGO_FEATURE_ARGS[@]+"${CARGO_FEATURE_ARGS[@]}"}" \
     --target "$t"
 done
 

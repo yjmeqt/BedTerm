@@ -160,4 +160,19 @@ The terminal viewport: ANSI/VT100 emulation rendered by the Metal renderer, basi
   </steps>
 </bug>
 
+<bug id="cjk_input_blocked_in_claude_mode" status="Open" date="2026-05-22" rule="R3.claude_cli_alt_screen">
+  <current>
+    In Block view's Claude session (the `claude` CLI running in alt-screen, where R3.alt_screen_collapse routes keystrokes directly to the PTY), the user cannot input CJK / IME text. The system keyboard is forced to ASCII-only passthrough: the globe key does not cycle into Pinyin / Zhuyin / Kana / Hangul, marked-text composition is not committed, and only ASCII characters reach the remote `claude` prompt. The composer (R4) — which handles CJK correctly per the fix to `composer_blocks_language_switch` — is bypassed in this mode because R6.composer_is_only_input is suspended while alt-screen is active.
+  </current>
+  <expected>
+    The user can compose and send CJK / IME text to `claude` while it is running in alt-screen, with the same fidelity as the composer in normal Block view: IME candidate UI works, marked text commits on selection, UTF-8 bytes reach the PTY verbatim (wrapped in bracketed paste per R4.send_uses_bracketed_paste when the remote advertises it). One reasonable shape: in Claude alt-screen sessions, keep the composer (R4) active instead of falling back to raw passthrough, since `claude` reads its prompt as line-buffered text rather than per-keystroke chords.
+  </expected>
+  <steps>
+    1. Add a CJK input source (e.g. Simplified Chinese — Pinyin) in iOS Settings → General → Keyboard.
+    2. Open Block view and start a Claude session (R18.claude_cli_quick_launch, or run `claude` manually).
+    3. With the Claude TUI active (alt-screen), tap the keyboard and press the globe key to switch to Pinyin.
+    4. Observe: the keyboard does not switch, or switches but candidate UI / marked text never commits into the `claude` prompt — only ASCII characters appear.
+  </steps>
+</bug>
+
 </prd>

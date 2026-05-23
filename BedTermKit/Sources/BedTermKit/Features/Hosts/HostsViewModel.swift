@@ -56,6 +56,20 @@ public final class HostsViewModel {
     private let store: HostsStore
     private let connectFactory: @MainActor () -> ConnectAttempt
     private var inFlightTask: Task<Void, Never>?
+    /// Initial input to send after the SSH channel opens — used to
+    /// implement "Resume here" (PRD R4.detail_resume_action), which
+    /// queues `cd <quoted-cwd>\n` to land the new shell in the killed
+    /// session's last CWD. Cleared as soon as it's been sent.
+    private var pendingInitialInput: [UUID: String] = [:]
+    /// Killed-session snapshot store. Set after init by the host screen
+    /// from the SwiftUI environment so this view model can preserve
+    /// scrollback + last-CWD when a session ends (PRD R1.killed_keeps_snapshot).
+    public weak var snapshotStore: PersistedSessionSnapshotStore?
+
+    /// Process-wide SQLite persistence layer. Set by the host screen from the
+    /// SwiftUI environment after init. When nil, sessions are created without
+    /// persistence (debug / first-unlock scenarios).
+    public weak var persistenceHandle: PersistenceHandle?
 
     public init(store: HostsStore = HostsStore()) {
         self.store = store
@@ -139,6 +153,8 @@ public final class HostsViewModel {
         let attempt = self.connectFactory()
         let outcome = await attempt.run(
             credential: entry.credential,
+            hostID: id,
+            persistence: self.persistenceHandle,
             bootstrapPayload: self.bootstrapPayloadProvider?())
         if Task.isCancelled { return }
 
@@ -146,6 +162,18 @@ public final class HostsViewModel {
         case .session(let session):
             self.lastSession = session
             self.currentSessionID = id
+            if let initialCommand = self.pendingInitialInput.removeValue(forKey: id) {
+                // Brief delay so the bootstrap heredoc (if any) finishes
+                // sourcing and the next prompt is drawn before we queue
+                // the resume `cd` into the PTY.
+                Task { [weak session] in
+                    try? await Task.sleep(for: .milliseconds(400))
+                    guard let session else { return }
+                    await MainActor.run {
+                        session.send(Data(initialCommand.utf8))
+                    }
+                }
+            }
         case .mismatch(let stored, let remote, let host, let port):
             self.pendingMismatch = PendingMismatch(
                 stored: stored, remote: remote, host: host, port: port, sourceID: id
@@ -172,6 +200,40 @@ public final class HostsViewModel {
     public func sessionEnded() {
         self.lastSession = nil
         self.currentSessionID = nil
+    }
+
+    /// Disconnect the current session and reload the persisted snapshot
+    /// store so the killed-session entry becomes visible in the UI
+    /// (PRD R1.killed_keeps_snapshot, R3.kill_button). The `TerminalSession`
+    /// writes kill metadata to SQLite directly via `recordKill`; this
+    /// method just triggers the subsequent UI reload.
+    /// Safe to call even when there is no live session — it just falls
+    /// through to `sessionEnded()`.
+    public func snapshotAndEnd(reason: SessionSnapshot.KillReason) {
+        guard
+            let session = self.lastSession,
+            let hostID = self.currentSessionID
+        else {
+            self.sessionEnded()
+            return
+        }
+        session.disconnect()
+        self.lastSession = nil
+        self.currentSessionID = nil
+        // Reload so the new SQLite row appears in the sessions panel
+        // immediately after the navigation transition completes.
+        snapshotStore?.reload(forHost: hostID)
+    }
+
+    /// Re-launch a fresh session for the given host with an optional
+    /// initial command to send after the channel opens (PRD R4.detail_resume_action).
+    /// Used by `KilledSessionDetailScreen` to land the new shell in
+    /// the killed session's last CWD via a queued `cd`.
+    public func requestResume(hostID: UUID, initialCommand: String?) {
+        if let cmd = initialCommand, !cmd.isEmpty {
+            self.pendingInitialInput[hostID] = cmd
+        }
+        self.requestConnect(id: hostID)
     }
 
     // MARK: - Delete

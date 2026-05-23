@@ -3,9 +3,11 @@ import UIKit
 
 public struct HostsScreen: View {
     @Binding var path: NavigationPath
-    @Environment(\.toaster) private var toaster
+    @Environment(\.toaster) var toaster
     @Environment(BedTermSettings.self) private var settings
-    @State private var viewModel = HostsViewModel()
+    @Environment(PersistedSessionSnapshotStore.self) var snapshotStore
+    @Environment(\.persistenceHandle) private var persistenceHandle
+    @State var viewModel = HostsViewModel()
     @State private var didFirstAppear = false
     @State private var showingMismatchReview = false
     @State private var showingSettings = false
@@ -107,20 +109,38 @@ public struct HostsScreen: View {
                 #if DEBUG
                     debugMockSSHRow
                         .padding(.horizontal, 16)
-                    DebugTTYSection(path: $path)
-                        .padding(.top, 8)
                 #endif
                 ForEach(viewModel.entries) { entry in
-                    HostRow(
-                        entry: entry,
-                        inFlight: viewModel.inFlightID == entry.id,
-                        isCurrentSession: viewModel.currentSessionID == entry.id,
-                        onEdit: { path.append(AppRoute.hostForm(entry.id)) },
-                        onConnect: {
-                            viewModel.onConnectError = handleConnectError
-                            viewModel.requestConnect(id: entry.id)
-                        }
-                    )
+                    VStack(alignment: .leading, spacing: 8) {
+                        HostRow(
+                            entry: entry,
+                            inFlight: viewModel.inFlightID == entry.id,
+                            isCurrentSession: viewModel.currentSessionID == entry.id,
+                            // Tapping the row body opens the full panel
+                            // unconditionally; the inline list below
+                            // covers the common low-count case so most
+                            // users won't reach for the body tap.
+                            onTapBody: { path.append(AppRoute.sessionsPanel(entry.id)) },
+                            onConnect: {
+                                viewModel.onConnectError = handleConnectError
+                                viewModel.requestConnect(id: entry.id)
+                            }
+                        )
+                        HostSessionsInlineList(
+                            host: entry,
+                            runningSessionID: viewModel.currentSessionID,
+                            snapshots: snapshotStore.snapshots(forHost: entry.id),
+                            onTapRunning: {
+                                path.append(AppRoute.terminal)
+                            },
+                            onTapKilled: { snapshot in
+                                path.append(AppRoute.killedSessionDetail(snapshot.id))
+                            },
+                            onViewAll: {
+                                path.append(AppRoute.sessionsPanel(entry.id))
+                            }
+                        )
+                    }
                     .contextMenu {
                         Button(String(localized: "Edit"), systemImage: "pencil") {
                             path.append(AppRoute.hostForm(entry.id))
@@ -187,62 +207,24 @@ public struct HostsScreen: View {
                 onFinish: handleFormOutcome
             )
         case .terminal:
-            if let session = viewModel.lastSession, let entry = currentSessionEntry() {
-                TerminalScreen(
-                    session: session,
-                    credential: entry.credential,
-                    onExit: {
-                        let label = viewModel.displayName(for: entry.id)
-                        viewModel.sessionEnded()
-                        path = NavigationPath()
-                        toaster.show(
-                            .info,
-                            title: String(localized: "Session ended"),
-                            description: String(localized: "Disconnected from \(label).")
-                        )
-                    }
-                )
-            } else {
-                Text("No session.")
-            }
+            terminalDestination
+        case .sessionsPanel(let hostID):
+            sessionsPanelDestination(hostID: hostID)
+        case .killedSessionDetail(let snapshotID):
+            killedSessionDetailDestination(snapshotID: snapshotID)
         #if DEBUG
-            case .debugTerminal(let selection):
-                debugTerminalScreen(for: selection)
+            case .mockSSH:
+                mockSSHDestination
         #endif
         }
     }
 
-    private func currentSessionEntry() -> SavedHost? {
+    // Destination helpers live in HostsScreen+Destinations.swift.
+
+    func currentSessionEntry() -> SavedHost? {
         guard let id = viewModel.currentSessionID else { return nil }
         return viewModel.entries.first { $0.id == id }
     }
-
-    #if DEBUG
-        /// Ephemeral debug-only host row: connects to the loopback
-        /// `bedterm-mock-ssh` server on 127.0.0.1:2222 with hard-coded
-        /// credentials. Not persisted — the entry only exists for the
-        /// duration of the running DEBUG app.
-        @ViewBuilder
-        private var debugMockSSHRow: some View {
-            let credential = HostCredential(
-                host: "127.0.0.1", port: 2222, username: "test",
-                auth: .password("x"))
-            // Stable UUID derived from the credential so the row's
-            // identity doesn't churn across SwiftUI body re-evals.
-            let id =
-                UUID(uuidString: "0000DEBC-0001-0000-0000-000027C2DD22")
-                ?? UUID()
-            let entry = SavedHost(
-                id: id, label: "Mock SSH (loopback)", credential: credential)
-            HostRow(
-                entry: entry,
-                inFlight: false,
-                isCurrentSession: false,
-                onEdit: { path.append(AppRoute.debugTerminal(.mockSSH)) },
-                onConnect: { path.append(AppRoute.debugTerminal(.mockSSH)) }
-            )
-        }
-    #endif
 
     private func handleFormOutcome(_ outcome: ConnectionFormScreen.Outcome) {
         viewModel.refresh()
@@ -271,7 +253,7 @@ public struct HostsScreen: View {
 
     // MARK: - Toast wiring
 
-    private func handleConnectError(id: UUID, message: String, permissionDenied: Bool) {
+    func handleConnectError(id: UUID, message: String, permissionDenied: Bool) {
         let name = viewModel.displayName(for: id)
         var actions: [Toaster.Action] = []
         if permissionDenied {
@@ -345,6 +327,8 @@ public struct HostsScreen: View {
 
     private func onAppear() {
         viewModel.load()
+        viewModel.snapshotStore = snapshotStore
+        viewModel.persistenceHandle = persistenceHandle
         // Settings env is unavailable at view-init time; wire the
         // bootstrap-payload resolver here so the saved-host Connect
         // path can push the shell-integration heredoc when the user

@@ -116,10 +116,8 @@ final class TerminalBlocksMetalView: MTKView {
     }
 
     override func draw(_ rect: CGRect) {
-        guard let drawable = currentDrawable, let session, let core = session.terminalCore
-        else {
-            return
-        }
+        guard let drawable = currentDrawable, let session else { return }
+        let core = session.terminalCore
         let env = MetalEnvironment.shared
         // Defensive per-frame palette re-sync — see `syncPaletteFromTraits`.
         syncPaletteFromTraits(core: core)

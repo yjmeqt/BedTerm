@@ -19,20 +19,33 @@ final class TerminalSession {
     private(set) var mode: BedTermMode = []
     private(set) var feed: AsyncStream<Data>
     private let feedContinuation: AsyncStream<Data>.Continuation
-    /// Observable mirror of the Rust-owned block list. The renderer view
+    /// Observable mirror of the Rust-owned block list. The session pump
     /// calls `blockStore.refresh(from: terminalCore)` after each
     /// `TerminalCore.feed(_:)`; canonical state (ids, boundaries, frozen
     /// snapshots) lives in Rust.
     public let blockStore = BlockStore()
 
-    /// The renderer view's `TerminalCore`, surfaced on the session so views
-    /// outside the renderer hierarchy (Block list, future Block view) can
-    /// read live grid state. Set by `TerminalMetalUIView` on init. Weak so
-    /// we don't extend the renderer view's lifetime through this back-edge.
+    /// Authoritative terminal grid + scrollback. Owned by the session
+    /// strongly so it outlives the Metal renderer view — re-entering a
+    /// backgrounded session restores the previously drawn content
+    /// (background-sessions P1: TerminalCore strong-ownership).
+    /// The renderer view borrows this via the init and only displays it.
     @ObservationIgnored
-    public weak var terminalCore: TerminalCore?
+    public let terminalCore: TerminalCore
     private let client: any SSHClient
     private var pumpTask: Task<Void, Never>?
+    private var killRecorded = false
+
+    /// SQLite snapshot row identifier for this session. Stable for the
+    /// session lifetime; used to record blocks and kill metadata.
+    let snapshotID: UUID
+    /// The SavedHost UUID this session belongs to — written into the
+    /// `snapshots` row at attach time.
+    let hostID: UUID
+    /// Weak reference to the process-wide persistence layer. Nil when
+    /// running in debug/test contexts that opt out of persistence.
+    @ObservationIgnored
+    private weak var persistence: PersistenceHandle?
 
     /// Optional hook fired before each `send(_:)` writes to the PTY. Set by
     /// the terminal view to implement R5.scroll_snap_on_input (snap back to
@@ -41,11 +54,23 @@ final class TerminalSession {
     @ObservationIgnored
     var onBeforeSend: (() -> Void)?
 
-    init(client: any SSHClient) {
+    init(
+        client: any SSHClient,
+        hostID: UUID,
+        persistence: PersistenceHandle?,
+        snapshotID: UUID = UUID()
+    ) {
         self.client = client
+        self.hostID = hostID
+        self.persistence = persistence
+        self.snapshotID = snapshotID
         var feedCont: AsyncStream<Data>.Continuation!
         self.feed = AsyncStream<Data> { feedCont = $0 }
         self.feedContinuation = feedCont
+        // Default geometry; first layout pass in TerminalMetalUIView
+        // resizes to the actual viewport before any bytes arrive.
+        self.terminalCore = TerminalCore(cols: 80, rows: 24)
+        persistence?.attach(terminal: terminalCore, snapshotID: snapshotID, hostID: hostID)
     }
 
     func connect(
@@ -62,21 +87,32 @@ final class TerminalSession {
                     initialPTY: initialPTY,
                     bootstrapPayload: bootstrapPayload))
             state = .open
-            pumpTask = Task { [feedContinuation, client] in
-                for await chunk in client.output {
-                    feedContinuation.yield(chunk)
+            pumpTask = Task { @MainActor [weak self] in
+                guard let self else { return }
+                for await chunk in self.client.output {
+                    // Authoritative: feed the session-owned core so the
+                    // grid + scrollback keep advancing even when the
+                    // renderer view is unmounted (Back keeps session
+                    // alive). The yield below is a redraw signal for
+                    // the mounted view; bytes are not re-applied to
+                    // core there.
+                    self.terminalCore.feed(chunk)
+                    self.updateMode(self.terminalCore.mode)
+                    self.blockStore.refresh(from: self.terminalCore)
+                    self.feedContinuation.yield(chunk)
                 }
-                await MainActor.run { [weak self] in
-                    if case .open = self?.state {
-                        self?.state = .closed(reason: String(localized: "Connection ended"))
-                    }
-                    self?.feedContinuation.finish()
+                if case .open = self.state {
+                    self.recordKill(reason: .remoteLogout)
+                    self.state = .closed(reason: String(localized: "Connection ended"))
                 }
+                self.feedContinuation.finish()
             }
         } catch let err as SSHError {
             lastError = err
+            recordKill(reason: killReason(for: err))
             state = .closed(reason: Self.describe(err))
         } catch {
+            recordKill(reason: .userKilled)
             state = .closed(reason: String(describing: error))
         }
     }
@@ -99,11 +135,42 @@ final class TerminalSession {
     }
 
     func disconnect() {
+        recordKill(reason: .userKilled)
         pumpTask?.cancel()
         Task { await client.disconnect() }
         feedContinuation.finish()
         blockStore.reset()
         state = .closed(reason: String(localized: "Closed"))
+    }
+
+    // MARK: - Persistence helpers
+
+    /// Write kill metadata to SQLite. Guards against double-writes via a
+    /// one-shot boolean flag. This allows recordKill to be called from any
+    /// state (.idle, .connecting, .open) and ensures it runs exactly once,
+    /// blocking subsequent calls regardless of state.
+    private func recordKill(reason: SessionSnapshot.KillReason) {
+        guard !killRecorded else { return }
+        killRecorded = true
+        guard let persistence else { return }
+        // Pull last-finalized block metadata for the snapshot row.
+        let lastBlock = blockStore.blocks.last(where: { !$0.isRunning })
+        persistence.recordKill(
+            snapshotID: snapshotID,
+            reason: reason,
+            lastCwd: lastBlock?.workingDirectory,
+            lastCommand: lastBlock?.command,
+            lastExitCode: lastBlock?.exitCode
+        )
+    }
+
+    private func killReason(for error: SSHError) -> SessionSnapshot.KillReason {
+        switch error {
+        case .peerReset, .dnsResolution, .tcpRefused, .timeout:
+            return .networkDrop
+        default:
+            return .userKilled
+        }
     }
 
     nonisolated static func describe(_ error: SSHError) -> String {

@@ -51,7 +51,7 @@ struct ShellIntegrationTests {
     @Test("connect propagates bootstrap payload to client")
     func connectPropagatesBootstrapPayloadToClient() async throws {
         let mock = MockSSHClient()
-        let session = TerminalSession(client: mock)
+        let session = TerminalSession(client: mock, hostID: UUID(), persistence: nil)
         let credential = HostCredential(host: "test.example.com", port: 22, username: "alice", auth: .password(""))
         let payload = try #require(ShellIntegrationScript.bootstrapPayload())
         await session.connect(
@@ -66,7 +66,7 @@ struct ShellIntegrationTests {
     @Test("connect omits bootstrap when not provided")
     func connectOmitsBootstrapWhenNotProvided() async {
         let mock = MockSSHClient()
-        let session = TerminalSession(client: mock)
+        let session = TerminalSession(client: mock, hostID: UUID(), persistence: nil)
         let credential = HostCredential(host: "test.example.com", port: 22, username: "alice", auth: .password(""))
         await session.connect(
             credential: credential,
@@ -83,12 +83,12 @@ struct ShellIntegrationTests {
         UserDefaults().removePersistentDomain(forName: suite)
         let defaults = try #require(UserDefaults(suiteName: suite))
         let settings = BedTermSettings(defaults: defaults)
-        // Default — opt-in: off
-        #expect(!settings.installShellIntegrationOnConnect)
-        settings.installShellIntegrationOnConnect = true
+        // Default — opt-out: on (matches the default-flip in 75cca90).
         #expect(settings.installShellIntegrationOnConnect)
+        settings.installShellIntegrationOnConnect = false
+        #expect(!settings.installShellIntegrationOnConnect)
         // Persists
         let reloaded = BedTermSettings(defaults: defaults)
-        #expect(reloaded.installShellIntegrationOnConnect)
+        #expect(!reloaded.installShellIntegrationOnConnect)
     }
 }

@@ -115,7 +115,7 @@ final class BlockListContainerViewController: UIViewController {
             guard prev.userInterfaceStyle != self.traitCollection.userInterfaceStyle else {
                 return
             }
-            self.session.terminalCore?.setPalette(
+            self.session.terminalCore.setPalette(
                 TerminalPalette.resolve(for: self.view.traitCollection))
             self.pushUIFontSizes()
             self.pushLayoutToMetalView()
@@ -310,7 +310,7 @@ final class BlockListContainerViewController: UIViewController {
     /// and push them to the Rust renderer. Called on viewDidLoad and
     /// traitCollectionDidChange.
     func pushUIFontSizes() {
-        let scale = view.window?.screen.scale ?? UIScreen.main.scale
+        let scale = view.window?.screen.scale ?? view.traitCollection.displayScale
         let traits = view.traitCollection
         let sub = UIFont.preferredFont(forTextStyle: .subheadline, compatibleWith: traits).pointSize
         let cap = UIFont.preferredFont(forTextStyle: .caption2, compatibleWith: traits).pointSize

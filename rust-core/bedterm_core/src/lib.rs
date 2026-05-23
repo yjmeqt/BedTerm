@@ -6,12 +6,10 @@ pub mod blocks_ffi;
 pub mod cli_agent;
 pub mod dcs;
 pub mod ffi;
+pub mod persistence;
 pub mod renderer;
 pub mod snapshot;
 pub mod term;
-
-#[cfg(feature = "mock-tty")]
-pub mod mock_tty;
 
 // Re-export FFI mode constants at crate root so cbindgen emits them into the
 // generated C header.
@@ -20,6 +18,11 @@ pub use blocks_ffi::{
     BT_CLI_AGENT_CODEX, BT_CLI_AGENT_COPILOT, BT_CLI_AGENT_CURSOR_CLI, BT_CLI_AGENT_DROID,
     BT_CLI_AGENT_GEMINI, BT_CLI_AGENT_GOOSE, BT_CLI_AGENT_HERMES, BT_CLI_AGENT_NONE,
     BT_CLI_AGENT_OPENCODE, BT_CLI_AGENT_PI, BT_CLI_AGENT_VIBE,
+};
+pub use persistence::ffi::{
+    bedterm_persistence_attach, bedterm_persistence_close, bedterm_persistence_discard,
+    bedterm_persistence_free_list, bedterm_persistence_init, bedterm_persistence_list,
+    bedterm_persistence_open_replay, bedterm_persistence_record_kill, CSnapshot, CSnapshotList,
 };
 pub use term::{
     BT_MODE_ALT_SCREEN, BT_MODE_APP_CURSOR, BT_MODE_APP_KEYPAD, BT_MODE_BRACKETED_PASTE,
