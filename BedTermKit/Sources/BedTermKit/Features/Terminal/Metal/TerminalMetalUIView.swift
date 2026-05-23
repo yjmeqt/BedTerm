@@ -1,3 +1,4 @@
+import BedTermCoreC
 import MetalKit
 import UIKit
 
@@ -12,7 +13,7 @@ final class TerminalMetalUIView: MTKView {
 
     private var startTime = CACurrentMediaTime()
     private var consumeTask: Task<Void, Never>?
-    private var anchorTask: Task<Void, Never>?
+    var anchorTask: Task<Void, Never>?
     private var lastCols: Int = 0
     private var lastRows: Int = 0
     private(set) var cellSize = CGSize(width: 8, height: 16)
@@ -27,7 +28,48 @@ final class TerminalMetalUIView: MTKView {
     var panGR: UIPanGestureRecognizer?
     var dragAccumulator: CGFloat = 0  // sub-row remainder (points)
     var displayLink: CADisplayLink?
-    var inertiaVelocity: CGFloat = 0  // points / sec, +toward-older-content
+    var scrollPhysics: ScrollPhysics?
+
+    // MARK: Display mode
+
+    /// Which rendering path `draw(_:)` takes. Set by the SwiftUI host via
+    /// `TerminalMetalHostView.updateUIView`. The didSet gates gestures,
+    /// cursor visibility, and first-responder status per mode.
+    var displayMode: TerminalDisplayMode = .inline {
+        didSet {
+            let isBlock = displayMode == .blockList
+            panGR?.isEnabled = !isBlock
+            selectionGR.isEnabled = !isBlock
+            isUserInteractionEnabled = !isBlock
+            cursorLayer.isHidden = isBlock
+            setNeedsDisplay()
+        }
+    }
+
+    // MARK: Block-list layout (pushed by BlockListContainerViewController)
+
+    private var blockScrollOffsetPx: CGFloat = 0
+    private var blockEntries: [BtBlockLayoutEntry] = []
+    private var blockHeaders: [BtBlockHeaderEntry] = []
+    /// Contiguous UTF-8 blob that keeps `blockHeaders[*].command_utf8` /
+    /// `subtitle_utf8` pointers alive across the FFI call in `draw(_:)`.
+    private var blockHeaderBlob: [UInt8] = []
+
+    /// Called by the block-list interaction controller before each redraw.
+    /// `headers` must have their UTF-8 pointers already patched into
+    /// `headerBlob` — the blob is retained here so pointers stay live
+    /// through `draw(_:)`.
+    func updateBlockLayout(
+        scrollOffsetPx: CGFloat,
+        entries: [BtBlockLayoutEntry],
+        headers: [BtBlockHeaderEntry],
+        headerBlob: [UInt8]
+    ) {
+        blockScrollOffsetPx = scrollOffsetPx
+        blockEntries = entries
+        blockHeaders = headers
+        blockHeaderBlob = headerBlob
+    }
 
     init(
         session: TerminalSession,
@@ -189,36 +231,50 @@ final class TerminalMetalUIView: MTKView {
     }
 
     override func draw(_ rect: CGRect) {
-        guard let drawable = currentDrawable else { return }
+        // Skip the GPU render pass when hidden behind the block-list overlay.
+        guard let drawable = currentDrawable, window != nil, !isHidden, alpha > 0 else {
+            return
+        }
         let size = drawableSize
-        let elapsed = CACurrentMediaTime() - startTime
-        // Reclaim the shared bridge's clear colour (Block views may have left it transparent).
         bridge.setClearColor(
             red: Float(clearColor.red), green: Float(clearColor.green),
             blue: Float(clearColor.blue), alpha: Float(clearColor.alpha))
-        _ = bridge.draw(
-            term: terminalCore,
-            into: drawable.texture,
-            viewport: size,
-            time: elapsed
-        )
-        let snapshot = terminalCore.snapshot()
-        let cursorRow = Int(snapshot.cursorRow)
-        let cursorVisible = cursorRow < Int(snapshot.rows)
-        cursorLayer.isHidden = !cursorVisible
-        if cursorVisible {
-            cursorLayer.update(
-                col: Int(snapshot.cursorCol),
-                row: cursorRow,
-                cellSize: cellSize
+
+        switch displayMode {
+        case .blockList:
+            // blockHeaderBlob keeps header UTF-8 pointers alive.
+            _ = blockHeaderBlob
+            _ = bridge.drawBlockList(
+                term: terminalCore,
+                into: drawable.texture,
+                viewport: size,
+                scrollOffsetPx: blockScrollOffsetPx,
+                layout: blockEntries,
+                headers: blockHeaders
             )
+
+        case .inline, .altScreen:
+            let elapsed = CACurrentMediaTime() - startTime
+            _ = bridge.draw(
+                term: terminalCore,
+                into: drawable.texture,
+                viewport: size,
+                time: elapsed
+            )
+            let snapshot = terminalCore.snapshot()
+            let cursorRow = Int(snapshot.cursorRow)
+            let cursorVisible = cursorRow < Int(snapshot.rows)
+            cursorLayer.isHidden = !cursorVisible
+            if cursorVisible {
+                cursorLayer.update(
+                    col: Int(snapshot.cursorCol),
+                    row: cursorRow,
+                    cellSize: cellSize
+                )
+            }
+            updatePreeditOverlay()
         }
-        updatePreeditOverlay()
-        // presentsWithTransaction=true requires a synchronous present: wait
-        // for the cell-pass command buffer to be scheduled, then present the
-        // drawable in the current CATransaction. Using cmd.present(drawable)
-        // here would queue an async present that lands one frame after the
-        // cursor CALayer commits, causing the cells-lag-cursor symptom.
+
         let fence = bridge.queue.makeCommandBuffer()
         fence?.commit()
         fence?.waitUntilScheduled()
@@ -289,9 +345,8 @@ final class TerminalMetalUIView: MTKView {
 
     override func didMoveToWindow() {
         super.didMoveToWindow()
-        if window != nil, !isFirstResponder {
-            _ = becomeFirstResponder()
-        }
+        guard displayMode != .blockList, window != nil, !isFirstResponder else { return }
+        _ = becomeFirstResponder()
     }
 
     override var canBecomeFirstResponder: Bool { true }
@@ -310,78 +365,6 @@ final class TerminalMetalUIView: MTKView {
         cellSize = bridge.cellSizeInPoints(scale: scale)
     }
 
-    // MARK: Bottom anchoring
-
-    // Standard "clear screen" CSI sequences emitted by `clear`, Ctrl+L,
-    // `tput clear`, `reset`, and the `ESC c` RIS code. We bottom-anchor
-    // only after one of these + a quiet period, so TUI apps that clear
-    // before drawing their own UI are not disrupted.
-    private static let screenClearPatterns: [[UInt8]] = [
-        Array("\u{1B}[2J".utf8),
-        Array("\u{1B}[3J".utf8),
-        [0x1B, 0x63]
-    ]
-
-    private static func containsScreenClear(_ chunk: Data) -> Bool {
-        guard !chunk.isEmpty else { return false }
-        let bytes = [UInt8](chunk)
-        for pattern in screenClearPatterns where indexOfSubsequence(of: pattern, in: bytes) != nil {
-            return true
-        }
-        return false
-    }
-
-    private static func indexOfSubsequence(of needle: [UInt8], in haystack: [UInt8]) -> Int? {
-        guard !needle.isEmpty, haystack.count >= needle.count else { return nil }
-        let last = haystack.count - needle.count
-        for offset in 0...last {
-            var match = true
-            for pos in 0..<needle.count where haystack[offset + pos] != needle[pos] {
-                match = false
-                break
-            }
-            if match { return offset }
-        }
-        return nil
-    }
-
-    private func scheduleBottomAnchorPass() {
-        anchorTask?.cancel()
-        anchorTask = Task { @MainActor [weak self] in
-            // Give the shell ~120 ms to finish emitting its new prompt before
-            // we decide. TUI apps keep streaming during this window, which
-            // keeps the post-flight emptiness check below failing and the
-            // anchor pass a no-op.
-            try? await Task.sleep(nanoseconds: 120_000_000)
-            if Task.isCancelled { return }
-            self?.applyBottomAnchorIfShellAtTop()
-        }
-    }
-
-    private func applyBottomAnchorIfShellAtTop() {
-        let snapshot = terminalCore.snapshot()
-        let rows = Int(snapshot.rows)
-        let cols = Int(snapshot.cols)
-        let row = Int(snapshot.cursorRow)
-        let col = Int(snapshot.cursorCol)
-        guard rows > 3, row >= 0, row < rows / 2 else { return }
-        // Only anchor when every visible row strictly below the cursor is blank.
-        for rowIndex in (row + 1)..<rows {
-            for col in 0..<cols {
-                if let cell = snapshot.cell(col: col, row: rowIndex), cell.ch != 0 {
-                    return
-                }
-            }
-        }
-        let linesToInsert = rows - 1 - row
-        guard linesToInsert > 0 else { return }
-        // Move to home, insert N blank lines (which pushes the existing prompt
-        // row down to the bottom), then re-park the cursor on the same column
-        // of the new bottom row.
-        let sequence = "\u{1B}[1;1H\u{1B}[\(linesToInsert)L\u{1B}[\(rows);\(col + 1)H"
-        terminalCore.feed(Data(sequence.utf8))
-        setNeedsDisplay()
-    }
 }
 
 extension TerminalMetalUIView: UIGestureRecognizerDelegate {

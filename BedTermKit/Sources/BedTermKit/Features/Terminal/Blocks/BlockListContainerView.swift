@@ -2,23 +2,18 @@ import BedTermCoreC
 import QuartzCore
 import UIKit
 
-/// Single-Metal-pass block list. The renderer paints bodies, header
-/// bands, dividers, and the pinned sticky band in one
-/// `bt_renderer_draw_block_list` call. The Swift container owns:
-///
-///   - `metalView`: full-frame MTKView that draws everything.
-///   - `contentView`: transparent overlay whose frame.origin.y tracks
-///     `-contentOffsetY`. Hosts `selectionLayer` so long-press points
-///     resolve to content-space without per-frame translation.
-///   - `panGR` + own `MomentumState`: replaces the old UIScrollView.
-///     Mirrors Warp's `MomentumScroll` exactly (decay 0.968 per 8 ms).
+/// Block-list interaction controller. Pushes per-frame layout to the shared
+/// `TerminalMetalUIView` (which renders bodies, headers, dividers, and the
+/// sticky band in one Metal pass). This controller provides the transparent
+/// gesture overlay — pan, selection, scroll physics — without owning its
+/// own MTKView.
 @MainActor
 final class BlockListContainerViewController: UIViewController {
     let session: TerminalSession
     /// Transparent overlay that scrolls in lockstep with contentOffsetY.
     /// Hosts the selection highlight layer; nothing visible draws here.
     let contentView = UIView()
-    private let metalView: TerminalBlocksMetalView
+    private weak var sharedMetalView: TerminalMetalUIView?
 
     // MARK: Scroll state
 
@@ -30,7 +25,7 @@ final class BlockListContainerViewController: UIViewController {
     let panGR = UIPanGestureRecognizer()
     var panStartOffsetY: CGFloat = 0
     var velocityEstimator = VelocityEstimator()
-    var momentum: MomentumState?
+    var scrollPhysics: ScrollPhysics?
 
     // MARK: Layout constants
 
@@ -55,9 +50,9 @@ final class BlockListContainerViewController: UIViewController {
     // cumulative-Y the layout pipeline already computes.
     var selectionController: BlockListSelectionController!
 
-    init(session: TerminalSession) {
+    init(session: TerminalSession, sharedMetalView: TerminalMetalUIView) {
         self.session = session
-        self.metalView = TerminalBlocksMetalView(session: session)
+        self.sharedMetalView = sharedMetalView
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -72,7 +67,6 @@ final class BlockListContainerViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.addSubview(metalView)
         view.addSubview(contentView)
         contentView.backgroundColor = .clear
         contentView.isUserInteractionEnabled = false
@@ -95,19 +89,12 @@ final class BlockListContainerViewController: UIViewController {
         installTraitObservers()
     }
 
-    /// iOS 17+ trait observers. The deprecated `traitCollectionDidChange`
-    /// fires unreliably under SwiftUI hosting in iOS 17+ (especially when
-    /// the host view is `.opacity(0)`-hidden), so subscribe to the new
-    /// `UITraitUserInterfaceStyle` channel directly.
-    ///
-    /// Why we also re-push the terminal palette from here: the block
-    /// list shares `session.terminalCore` with `TerminalMetalUIView`,
-    /// which has its own trait observer that pushes the palette. But
-    /// when block-list mode is active, the terminal pane sits at
-    /// `opacity(0)`. Its observer may or may not fire before the
-    /// block-list controller's, leaving `terminalCore.palette` stale
-    /// for one frame. Pushing here makes the block list self-sufficient
-    /// — `frozen_snapshot.resolve(palette)` and `clearColor` agree.
+    /// Palette + font push on Light↔Dark flip. The shared MTKView's own
+    /// trait observer pushes the palette via `applyAppearance()`, and
+    /// `TerminalMetalUIView.displayMode.didSet` triggers a redraw — we
+    /// just push UI font sizes and re-layout. Pushing the palette to
+    /// `terminalCore` here ensures block cell colour resolution stays
+    /// in sync even if this observer fires before the MTKView's.
     private func installTraitObservers() {
         registerForTraitChanges(
             [UITraitUserInterfaceStyle.self]
@@ -139,10 +126,6 @@ final class BlockListContainerViewController: UIViewController {
     /// user.
     func refresh() {
         refreshRowHeight()
-        // Mirror Warp's `AfterCommandExecutionStarted` — when a new
-        // block lands, re-anchor to the bottom so the user always sees
-        // the command they just submitted, even if they had previously
-        // scrolled into history.
         let blockCount = session.blockStore.blocks.count
         if blockCount > lastBlockCount {
             scrollPosition = .followsBottom
@@ -158,7 +141,7 @@ final class BlockListContainerViewController: UIViewController {
 
     func updateDisplayLink() {
         let hasRunning = session.blockStore.blocks.contains(where: \.isRunning)
-        let needs = hasRunning || momentum != nil
+        let needs = hasRunning || scrollPhysics != nil
         if needs {
             if displayLink == nil {
                 let link = CADisplayLink(target: self, selector: #selector(handleDisplayTick))
@@ -172,12 +155,12 @@ final class BlockListContainerViewController: UIViewController {
     }
 
     @objc private func handleDisplayTick() {
-        if momentum != nil { advanceMomentum(now: CACurrentMediaTime()) }
+        if scrollPhysics != nil { advanceMomentum(now: CACurrentMediaTime()) }
         updateContentSize()
         applyScrollPosition()
         pushLayoutToMetalView()
-        if momentum == nil {
-            updateDisplayLink()  // shed the link when both reasons go away
+        if scrollPhysics == nil {
+            updateDisplayLink()
         }
     }
 
@@ -199,10 +182,6 @@ final class BlockListContainerViewController: UIViewController {
     override func viewWillLayoutSubviews() {
         super.viewWillLayoutSubviews()
         let bounds = view.bounds
-        metalView.frame = bounds
-        // contentView is viewport-sized — Warp-style. It hosts only the
-        // selection layer, which the controller repositions in
-        // view-space per frame. No giant content-space overlay.
         contentView.frame = bounds
         if bounds.size != lastLayoutBounds {
             lastLayoutBounds = bounds.size
@@ -248,7 +227,7 @@ final class BlockListContainerViewController: UIViewController {
     }
 
     func pushLayoutToMetalView() {
-        guard !isPushingLayout else { return }
+        guard !isPushingLayout, let metalView = sharedMetalView else { return }
         isPushingLayout = true
         defer { isPushingLayout = false }
 
@@ -292,23 +271,58 @@ final class BlockListContainerViewController: UIViewController {
             storage.append(sticky.storage)
         }
 
-        // Sync the metal view's clear colour to the same palette the
-        // header descriptors were just resolved against, then push the
-        // layout. Both updates land in one `setNeedsDisplay` so the
-        // next frame paints header bands AND cell-surface clear in
-        // lock-step — no transient frame where one has flipped but the
-        // other hasn't.
-        metalView.syncSurfaceColor()
-        metalView.update(
-            scrollOffset: contentOffsetY,
-            layout: entries,
+        let blob = Self.patchHeaderPointers(
+            headers: &headers, storage: storage)
+
+        let scrollOffsetPx = contentOffsetY * scale
+        metalView.updateBlockLayout(
+            scrollOffsetPx: scrollOffsetPx,
+            entries: entries,
             headers: headers,
-            storage: storage)
+            headerBlob: blob)
+        metalView.setNeedsDisplay()
+    }
+
+    /// Flatten header UTF-8 storage into a contiguous blob and patch
+    /// `headers[*].command_utf8` / `subtitle_utf8` to point into it.
+    /// Returns the blob; the caller must keep it alive while the headers
+    /// are in use (it's handed to `TerminalMetalUIView.updateBlockLayout`).
+    static func patchHeaderPointers(
+        headers: inout [BtBlockHeaderEntry],
+        storage: [(command: Data, subtitle: Data?)]
+    ) -> [UInt8] {
+        var blob: [UInt8] = []
+        var commandRanges: [Range<Int>] = []
+        commandRanges.reserveCapacity(storage.count)
+        var subtitleRanges: [Range<Int>?] = []
+        subtitleRanges.reserveCapacity(storage.count)
+        for entry in storage {
+            let cStart = blob.count
+            blob.append(contentsOf: entry.command)
+            commandRanges.append(cStart..<blob.count)
+            if let sub = entry.subtitle, !sub.isEmpty {
+                let sStart = blob.count
+                blob.append(contentsOf: sub)
+                subtitleRanges.append(sStart..<blob.count)
+            } else {
+                subtitleRanges.append(nil)
+            }
+        }
+        blob.withUnsafeBufferPointer { blobBuf in
+            let base = blobBuf.baseAddress
+            for idx in headers.indices where idx < commandRanges.count {
+                let cmdRange = commandRanges[idx]
+                headers[idx].command_utf8 = base?.advanced(by: cmdRange.lowerBound)
+                if let subRange = subtitleRanges[idx] {
+                    headers[idx].subtitle_utf8 = base?.advanced(by: subRange.lowerBound)
+                }
+            }
+        }
+        return blob
     }
 
     /// Resolve UI font pixel sizes from the current trait collection
-    /// and push them to the Rust renderer. Called on viewDidLoad and
-    /// traitCollectionDidChange.
+    /// and push them to the Rust renderer.
     func pushUIFontSizes() {
         let scale = view.window?.screen.scale ?? UIScreen.main.scale
         let traits = view.traitCollection

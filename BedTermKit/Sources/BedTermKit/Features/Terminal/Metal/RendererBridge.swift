@@ -5,6 +5,10 @@ final class RendererBridge {
     private let handle: OpaquePointer
     let device: MTLDevice
     let queue: MTLCommandQueue
+    private var lastClearRed: Float = -1
+    private var lastClearGreen: Float = -1
+    private var lastClearBlue: Float = -1
+    private var lastClearAlpha: Float = -1
 
     init?(device: MTLDevice, queue: MTLCommandQueue) {
         // Ownership contract (see Rust `Renderer::from_ptrs` docs):
@@ -35,8 +39,18 @@ final class RendererBridge {
 
     /// Update the Metal renderer's `MTLLoadAction::Clear` colour. Takes effect
     /// on the next `draw(...)`. Components outside `[0, 1]` are tolerated by
-    /// Metal (clamped downstream).
+    /// Metal (clamped downstream). Skips the FFI call when the value hasn't
+    /// changed — both the terminal pane and block-list views call this every
+    /// frame to "reclaim" the shared bridge from each other.
     func setClearColor(red: Float, green: Float, blue: Float, alpha: Float = 1.0) {
+        guard
+            red != lastClearRed || green != lastClearGreen
+                || blue != lastClearBlue || alpha != lastClearAlpha
+        else { return }
+        lastClearRed = red
+        lastClearGreen = green
+        lastClearBlue = blue
+        lastClearAlpha = alpha
         bt_renderer_set_clear_color(handle, red, green, blue, alpha)
     }
 
@@ -68,40 +82,6 @@ final class RendererBridge {
             UInt32(viewport.height),
             time
         )
-    }
-
-    /// Draw a caller-provided cell array. Used by Block view: sealed blocks
-    /// pass a frozen `GridSnapshot` captured at command-end; running blocks
-    /// pass a fresh range snapshot. Pipeline is identical to `draw(term:)`
-    /// so ANSI colours / wide chars / underlines render the same way.
-    ///
-    /// Copies `cells` into a transient C-layout buffer because Swift's
-    /// `GridSnapshot.Cell` isn't `@frozen` with explicit C layout —
-    /// `withMemoryRebound` between the two types isn't guaranteed safe.
-    @discardableResult
-    func drawCells(
-        _ snapshot: GridSnapshot,
-        into texture: MTLTexture,
-        viewport: CGSize,
-        time: CFTimeInterval
-    ) -> Int32 {
-        let texPtr = Unmanaged.passUnretained(texture as AnyObject).toOpaque()
-        var cBuffer: [CellSnapshot] = snapshot.cells.map {
-            CellSnapshot(ch: $0.ch, fg_rgba: $0.fgRGBA, bg_rgba: $0.bgRGBA, flags: $0.flags)
-        }
-        return cBuffer.withUnsafeMutableBufferPointer { buf in
-            bt_renderer_draw_cells(
-                handle,
-                buf.baseAddress,
-                UInt(buf.count),
-                snapshot.cols,
-                snapshot.rows,
-                texPtr,
-                UInt32(viewport.width),
-                UInt32(viewport.height),
-                time
-            )
-        }
     }
 
     /// Draw every visible block body in one pass via

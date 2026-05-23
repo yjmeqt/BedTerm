@@ -43,36 +43,41 @@ extension TerminalMetalUIView {
         }
     }
 
+    // Aggressive decay so a typical flick (~2000 pt/s) settles in ~600 ms.
+    private static let terminalScrollPhysics = ScrollPhysics(
+        decay: 0.001, decayInterval: 1.0)
+
     private func startInertia(initialVelocity: CGFloat) {
         stopInertia()
-        inertiaVelocity = initialVelocity
+        var physics = Self.terminalScrollPhysics
+        physics.velocity = initialVelocity
+        physics.lastTick = CACurrentMediaTime()
+        scrollPhysics = physics
         let link = CADisplayLink(target: self, selector: #selector(tickInertia(_:)))
         link.add(to: .main, forMode: .common)
         displayLink = link
     }
 
     @objc func tickInertia(_ link: CADisplayLink) {
-        let dt = CGFloat(link.targetTimestamp - link.timestamp)
-        guard dt > 0 else { return }
-        applyScroll(points: inertiaVelocity * dt)
-        // Exponential decay: ~0.1% of original velocity remains after one
-        // second (pow(0.001, 1) == 0.001). A typical flick (~2000 pt/s)
-        // settles visually in ~600 ms.
-        inertiaVelocity *= pow(0.001, dt)
+        guard var physics = scrollPhysics else { return }
+        let pts = physics.step(now: CACurrentMediaTime())
+        applyScroll(points: pts)
 
         let offset = terminalCore.scrollOffset
         let atTop = offset >= terminalCore.scrollbackLines
         let atBottom = offset == 0
-        let exhausted = abs(inertiaVelocity) < 30
-        let pinnedAtEdge = (inertiaVelocity > 0 && atTop) || (inertiaVelocity < 0 && atBottom)
+        let exhausted = abs(physics.velocity) < 30
+        let pinnedAtEdge = (physics.velocity > 0 && atTop) || (physics.velocity < 0 && atBottom)
         if exhausted || pinnedAtEdge {
             stopInertia()
+        } else {
+            scrollPhysics = physics
         }
     }
 
     func stopInertia() {
         displayLink?.invalidate()
         displayLink = nil
-        inertiaVelocity = 0
+        scrollPhysics = nil
     }
 }
