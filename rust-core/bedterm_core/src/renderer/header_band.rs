@@ -46,11 +46,14 @@ pub(crate) struct HeaderDrawContext<'a> {
     pub viewport_w: f32,
     pub viewport_h: f32,
     pub scroll_y_px: f32,
-    /// Surface bg the renderer clears to (terminal palette default bg).
-    /// Sticky bands paint this as an opaque fill to occlude scrolling
-    /// body cells underneath; text runs use it as the glyph alpha-mask
-    /// `bg` so anti-aliasing blends against the real surface — no
-    /// chance of the header colour drifting from the body colour.
+    /// Surface bg the renderer clears to — the terminal palette's
+    /// `default_bg`. Header bands paint this **explicitly** as an
+    /// opaque rectangle so they're a real surface (sticky bands need
+    /// it to occlude scrolling body cells underneath; natural bands
+    /// share the colour with the body but stay distinct geometry).
+    /// Text-run glyphs also anti-alias against this same value so
+    /// header chrome and body cells share one colour source — light↔
+    /// dark flips can't desync them.
     pub surface_bg_rgba: u32,
     pub atlas: &'a mut GlyphAtlas,
 }
@@ -101,22 +104,22 @@ pub(crate) fn emit_header(
         );
     }
 
-    // Sticky band only: opaque surface-coloured fill so body cells
-    // scrolling beneath the pinned chrome don't bleed through. Natural
-    // headers sit directly on the cleared surface — no fill needed,
-    // and skipping it guarantees the band colour can never diverge
-    // from the body colour.
-    if header.is_sticky != 0 {
-        append_panel(
-            panel_verts,
-            header.panel_x_left_px,
-            y_screen,
-            header.panel_width_px,
-            h,
-            0.0,
-            ctx.surface_bg_rgba,
-        );
-    }
+    // Header band fill — explicitly paint with the body colour
+    // (terminal palette `default_bg`). Same value the renderer clears
+    // to, so the band is visually flush with the cell surface, but
+    // painting it as a real opaque rectangle (rather than relying on
+    // a hole in the geometry) means sticky bands occlude scrolling
+    // body cells underneath, and natural bands stay a tangible surface
+    // — not transparent chrome.
+    append_panel(
+        panel_verts,
+        header.panel_x_left_px,
+        y_screen,
+        header.panel_width_px,
+        h,
+        0.0,
+        ctx.surface_bg_rgba,
+    );
 
     // Badge (circle + icon).
     let pad_left = c::HORIZONTAL_PADDING_PT * ctx.scale;

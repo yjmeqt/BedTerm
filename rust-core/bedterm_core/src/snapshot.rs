@@ -22,7 +22,7 @@ pub struct CellSnapshot {
     pub fg_rgba: u32,
     /// Background colour, same encoding.
     pub bg_rgba: u32,
-    /// Bitfield: 1=bold, 2=underline, 4=inverse, 8=italic, 16=wide_leading, 32=wide_trailing.
+    /// Bitfield: 1=bold, 2=underline, 4=inverse, 8=italic, 16=wide_leading, 32=wide_trailing, 64=strikethrough.
     pub flags: u16,
 }
 

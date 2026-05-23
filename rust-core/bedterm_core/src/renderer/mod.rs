@@ -531,13 +531,24 @@ impl Renderer {
         let cols = cols as usize;
         let rows = rows as usize;
         verts.reserve(cols * rows * VERTICES_PER_CELL);
-        // Flag bits — must match `term.rs` snapshot encoding.
+        // Flag bits — must match `term.rs` snapshot encoding
+        // (see `snapshot.rs:25`).
+        const FLAG_BOLD: u16 = 1;
+        const FLAG_UNDERLINE: u16 = 2;
+        const FLAG_INVERSE: u16 = 4;
+        const FLAG_ITALIC: u16 = 8;
         const FLAG_WIDE_LEADING: u16 = 16;
         const FLAG_WIDE_TRAILING: u16 = 32;
+        const FLAG_STRIKETHROUGH: u16 = 64;
         for cell in cells {
             if cell.ch != 0 {
                 let wide = (cell.flags & FLAG_WIDE_LEADING) != 0;
-                self.atlas.ensure(cell.ch, wide);
+                let key = crate::renderer::atlas::GlyphKey {
+                    codepoint: cell.ch,
+                    bold: (cell.flags & FLAG_BOLD) != 0,
+                    italic: (cell.flags & FLAG_ITALIC) != 0,
+                };
+                self.atlas.ensure(key, wide);
             }
         }
         for r in 0..rows {
@@ -546,7 +557,12 @@ impl Renderer {
                 if (cell.flags & FLAG_WIDE_TRAILING) != 0 {
                     continue;
                 }
-                let glyph = self.atlas.lookup(cell.ch).copied();
+                let glyph_key = crate::renderer::atlas::GlyphKey {
+                    codepoint: cell.ch,
+                    bold: (cell.flags & FLAG_BOLD) != 0,
+                    italic: (cell.flags & FLAG_ITALIC) != 0,
+                };
+                let glyph = self.atlas.lookup(glyph_key).copied();
                 let (uvo, uvs, glyph_wide, is_color) = match glyph {
                     Some(g) => (g.uv_origin, g.uv_size, g.wide, g.is_color),
                     None => ((0.0, 0.0), (0.0, 0.0), false, false),
@@ -556,8 +572,18 @@ impl Renderer {
                 let cell_span_w = cell_wf * span;
                 let x = c as f32 * cell_wf;
                 let y = r as f32 * cell_hf + dest_y_px;
-                let fg = rgba_to_float(cell.fg_rgba);
-                let bg = rgba_to_float(cell.bg_rgba);
+                // SGR 7 inverse: swap fg / bg at vertex emission. The
+                // cell shader's `mix(bg, fg, sample.a)` then paints the
+                // glyph in the original bg over the original fg — what
+                // vim's visual selection / fzf's highlighted row / less's
+                // search hit are after. Underline below picks up the
+                // post-swap `fg` so the hairline still reads against the
+                // inverted background.
+                let (fg, bg) = if (cell.flags & FLAG_INVERSE) != 0 {
+                    (rgba_to_float(cell.bg_rgba), rgba_to_float(cell.fg_rgba))
+                } else {
+                    (rgba_to_float(cell.fg_rgba), rgba_to_float(cell.bg_rgba))
+                };
                 let is_color_f = if is_color { 1.0 } else { 0.0 };
                 let v = |dx: f32, dy: f32, du: f32, dv: f32| CellVertex {
                     pos_x: x + dx * cell_span_w,
@@ -575,6 +601,53 @@ impl Renderer {
                 verts.push(v(1.0, 0.0, 1.0, 0.0));
                 verts.push(v(1.0, 1.0, 1.0, 1.0));
                 verts.push(v(0.0, 1.0, 0.0, 1.0));
+
+                // SGR 4 underline + SGR 9 strikethrough. Both reuse the
+                // cell pipeline by sampling the atlas's reserved
+                // solid-alpha texel — the fragment shader's
+                // `mix(bg, fg, sample.a)` with sample.a == 1 yields fg,
+                // so a quad with `fg = cell.fg_rgba` becomes a flat
+                // fg-coloured rectangle of the requested thickness.
+                // Underline sits below the baseline; strikethrough sits
+                // at roughly the x-height midline so it visually
+                // strikes through lowercase letters.
+                let needs_underline = (cell.flags & FLAG_UNDERLINE) != 0;
+                let needs_strike = (cell.flags & FLAG_STRIKETHROUGH) != 0;
+                if needs_underline || needs_strike {
+                    let thickness = (self.dpr.round() as u32).max(1) as f32;
+                    let (su, sv) = self.atlas.solid_uv;
+                    let mut emit_decoration = |line_y: f32| {
+                        let solid = |dx: f32, dy: f32| CellVertex {
+                            pos_x: x + dx * cell_span_w,
+                            pos_y: line_y + dy * thickness,
+                            uv_x: su,
+                            uv_y: sv,
+                            fg,
+                            bg,
+                            is_color: 0.0,
+                            _pad: [0.0; 3],
+                        };
+                        verts.push(solid(0.0, 0.0));
+                        verts.push(solid(1.0, 0.0));
+                        verts.push(solid(0.0, 1.0));
+                        verts.push(solid(1.0, 0.0));
+                        verts.push(solid(1.0, 1.0));
+                        verts.push(solid(0.0, 1.0));
+                    };
+                    if needs_underline {
+                        emit_decoration(y + self.atlas.ascent_px as f32 + thickness);
+                    }
+                    if needs_strike {
+                        // x-height midline ≈ baseline − 0.30 × ascent.
+                        // Empirical for Menlo / SF: matches where the
+                        // cross-bar of `e` / `a` sits, so the line
+                        // visually bisects lowercase letters rather
+                        // than sitting on top of them.
+                        let ascent = self.atlas.ascent_px as f32;
+                        let strike_y = y + ascent - ascent * 0.30;
+                        emit_decoration(strike_y);
+                    }
+                }
             }
         }
     }

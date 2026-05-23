@@ -75,12 +75,32 @@ pub struct GlyphInfo {
     pub is_color: bool,
 }
 
+/// Cell-glyph cache key. Includes weight / slant so bold and italic
+/// variants of the same codepoint each get their own atlas slot
+/// instead of colliding on a single rasterization.
+#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
+pub struct GlyphKey {
+    pub codepoint: u32,
+    pub bold: bool,
+    pub italic: bool,
+}
+
+impl GlyphKey {
+    pub fn regular(codepoint: u32) -> Self {
+        Self {
+            codepoint,
+            bold: false,
+            italic: false,
+        }
+    }
+}
+
 pub struct GlyphAtlas {
     pub texture: Texture,
     /// Single-column cell metrics. Wide glyphs occupy `2 * cell_px.0` width.
     pub cell_px: (u32, u32),
     pub ascent_px: u32,
-    glyphs: HashMap<u32, GlyphInfo>,
+    glyphs: HashMap<GlyphKey, GlyphInfo>,
     cursor_x: u32,
     cursor_y: u32,
     font_size_px: f32,
@@ -96,6 +116,12 @@ pub struct GlyphAtlas {
     ui_cursor_x: u32,
     ui_cursor_y: u32,
     ui_row_height: u32,
+    /// UV pointing into a reserved 4×4 fully-opaque white texel at the
+    /// top-left of the atlas. Underline / strikethrough quads sample
+    /// here with `fg = cell.fg_rgba`; the cell shader's
+    /// `mix(bg, fg, sample.a)` yields `fg` since `sample.a == 1`. No
+    /// extra pipeline, no extra texture binding.
+    pub solid_uv: (f32, f32),
 }
 
 impl GlyphAtlas {
@@ -118,6 +144,35 @@ impl GlyphAtlas {
         desc.set_usage(MTLTextureUsage::ShaderRead);
         let texture = device.new_texture(&desc);
 
+        // Reserve a 4×4 solid-white block in the **bottom-right corner**
+        // of the atlas, used as the alpha-mask source for flat
+        // decorations (underline, strikethrough). It HAS to live away
+        // from (0,0): empty cells (whose glyph lookup misses) emit
+        // quads with UV=(0,0)..(0,0), and that texel must stay
+        // transparent so the shader's `mix(bg, fg, 0) = bg` preserves
+        // the cell's background. Putting solid at (0,0) makes every
+        // empty cell render as `fg`, which manifests as full-cell
+        // white-on-fg blocks across the viewport (regression caught
+        // during SGR 4 verification).
+        const SOLID_PX: u32 = 4;
+        let solid_x = ATLAS_PX - SOLID_PX;
+        let solid_y = ATLAS_PX - SOLID_PX;
+        {
+            let buf = vec![0xFFu8; (SOLID_PX * SOLID_PX * 4) as usize];
+            let region = MTLRegion::new_2d(
+                solid_x as u64,
+                solid_y as u64,
+                SOLID_PX as u64,
+                SOLID_PX as u64,
+            );
+            texture.replace_region(region, 0, buf.as_ptr() as *const _, (SOLID_PX * 4) as u64);
+        }
+        let atlas_pxf = ATLAS_PX as f32;
+        let solid_uv = (
+            (solid_x as f32 + SOLID_PX as f32 * 0.5) / atlas_pxf,
+            (solid_y as f32 + SOLID_PX as f32 * 0.5) / atlas_pxf,
+        );
+
         let mut me = Self {
             texture,
             cell_px: (metrics.cell_width.max(1), metrics.cell_height.max(1)),
@@ -131,6 +186,7 @@ impl GlyphAtlas {
             ui_cursor_x: 0,
             ui_cursor_y: UI_SECTION_Y,
             ui_row_height: 0,
+            solid_uv,
         };
         me.preload_ascii();
         me
@@ -150,28 +206,29 @@ impl GlyphAtlas {
 
     fn preload_ascii(&mut self) {
         for ch in 0x20u32..0x7Fu32 {
-            self.ensure(ch, false);
+            self.ensure(GlyphKey::regular(ch), false);
         }
     }
 
-    /// Rasterise+upload `codepoint` if not already in the atlas. Idempotent.
-    /// `wide=true` reserves a 2-cell-wide slot for CJK double-width glyphs.
-    pub fn ensure(&mut self, codepoint: u32, wide: bool) {
-        if self.glyphs.contains_key(&codepoint) {
+    /// Rasterise+upload the glyph for `key` if not already in the atlas.
+    /// Idempotent. `wide=true` reserves a 2-cell-wide slot for CJK
+    /// double-width glyphs.
+    pub fn ensure(&mut self, key: GlyphKey, wide: bool) {
+        if self.glyphs.contains_key(&key) {
             return;
         }
-        if let Some(info) = self.rasterize_and_upload(codepoint, wide) {
-            self.glyphs.insert(codepoint, info);
+        if let Some(info) = self.rasterize_and_upload(key, wide) {
+            self.glyphs.insert(key, info);
         }
     }
 
-    pub fn lookup(&self, codepoint: u32) -> Option<&GlyphInfo> {
-        self.glyphs.get(&codepoint)
+    pub fn lookup(&self, key: GlyphKey) -> Option<&GlyphInfo> {
+        self.glyphs.get(&key)
     }
 
-    fn rasterize_and_upload(&mut self, codepoint: u32, wide: bool) -> Option<GlyphInfo> {
-        let ch = char::from_u32(codepoint)?;
-        let raster = rasterize(ch, self.font_size_px)?;
+    fn rasterize_and_upload(&mut self, key: GlyphKey, wide: bool) -> Option<GlyphInfo> {
+        let ch = char::from_u32(key.codepoint)?;
+        let raster = rasterize(ch, self.font_size_px, key.bold, key.italic)?;
 
         // Color emoji is conventionally wide in terminals; auto-promote so
         // the bitmap isn't squished into a single-cell slot.

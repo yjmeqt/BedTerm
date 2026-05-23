@@ -9,7 +9,20 @@ The terminal viewport: ANSI/VT100 emulation rendered by the Metal renderer, basi
     Full terminal emulation rendering ANSI escape sequences, VT100 control codes, colors, and cursor positioning correctly.
   </description>
   <rule id="ansi_colors" status="✅">ANSI color codes (16-color and 256-color) render with correct foreground and background colors.</rule>
-  <rule id="sgr_inverse" status="❌">SGR 7 inverse video swaps the cell's foreground and background colors at render time. Programs that rely on it — vim cursorline / visual selection, fzf selected row, less search hits, htop highlighted process, mc menus — appear with the intended emphasis instead of the underlying fg on fg. SGR 27 resets back to non-inverse without re-issuing the colors.</rule>
+  <rule id="sgr_bold" status="✅">SGR 1 bold renders the cell's glyph with a heavier weight so emphasized output — <code>ls</code> directory names, <code>git status</code> branch headers, <code>grep --color</code> matches, man-page section titles — visually stands out from regular text. SGR 22 resets to normal weight. Bold cells share the active foreground colour; no faux brightness shift is applied.</rule>
+  <rule id="sgr_italic" status="✅">SGR 3 italic renders the cell's glyph in an italic / oblique style so programs that mark quotations, file paths, or inline emphasis — <code>man</code> page references, some <code>git log</code> formats, certain markdown previews — show slanted text instead of upright. SGR 23 resets to upright.</rule>
+  <rule id="sgr_underline" status="✅">SGR 4 underline draws a horizontal line directly below the cell's baseline. Used by hyperlinks (<code>ls --hyperlink</code>, terminal-image viewers, MUAs), <code>man</code> page argument names, and TUI focus rings. SGR 24 resets to non-underlined. The line spans the cell's full width and inherits the cell's foreground colour so coloured underlines coexist with coloured text.</rule>
+  <rule id="sgr_inverse" status="✅">SGR 7 inverse video swaps the cell's foreground and background colors at render time. Programs that rely on it — vim cursorline / visual selection, fzf selected row, less search hits, htop highlighted process, mc menus — appear with the intended emphasis instead of the underlying fg on fg. SGR 27 resets back to non-inverse without re-issuing the colors.
+    <p>
+      <strong>Verification:</strong> bold / italic / underline / inverse are exercised together by the test scripts under <code>scripts/sgr-test/</code>. From any shell open in BedTerm, <code>cd</code> into that directory on the remote host (the scripts are pure POSIX <code>printf</code>, no install required) and run:
+    </p>
+    <ul>
+      <li><code>./sgr-basic.sh</code> — one row per attribute; colour×style matrix; SGR 22 / 23 / 24 / 27 reset round-trip.</li>
+      <li><code>./sgr-realworld.sh</code> — mocks of <code>ls --color</code>, <code>git status</code>, <code>grep</code>, <code>man</code>, <code>diff -u</code>.</li>
+      <li><code>./sgr-cjk.sh</code> — every attribute applied to CJK strings, verifies the font-fallback cascade still picks up the CJK face under bold / italic.</li>
+    </ul>
+    <p>The composite screenshot below was captured after running <code>./sgr-cjk.sh</code> followed by <code>sh sgr-basic.sh</code> in a single block-mode session:</p>
+    <img src="screenshots/sgr_styles_verified.png" alt="Terminal showing bold, italic, underline, inverse all rendering correctly, including the colour×style matrix and CJK rows"/></rule>
   <rule id="sgr_strikethrough" status="❌">SGR 9 crossed-out (strikethrough) renders a horizontal line through the cell's glyph, at roughly the x-height midline. SGR 29 resets to non-strikethrough. Used by some TUIs (diff tools, task lists, mc, git log graphs) to mark deleted / completed items without changing color.</rule>
   <rule id="vt100_cursor" status="✅">VT100 cursor movement and positioning work correctly.</rule>
   <rule id="clear_screen" status="✅">Clear screen sequences repaint the terminal viewport correctly.</rule>

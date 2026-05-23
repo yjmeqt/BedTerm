@@ -399,6 +399,9 @@ impl Terminal {
                 if f.contains(CellFlags::WIDE_CHAR_SPACER) {
                     flags |= 32;
                 }
+                if f.contains(CellFlags::STRIKEOUT) {
+                    flags |= 64;
+                }
                 let ch =
                     if f.contains(CellFlags::WIDE_CHAR_SPACER) || (cell.c == ' ' && f.is_empty()) {
                         0
@@ -478,6 +481,9 @@ impl Terminal {
                 }
                 if f.contains(CellFlags::WIDE_CHAR_SPACER) {
                     flags |= 32;
+                }
+                if f.contains(CellFlags::STRIKEOUT) {
+                    flags |= 64;
                 }
 
                 // Blank cells have ' ' as their char — emit 0 for those.

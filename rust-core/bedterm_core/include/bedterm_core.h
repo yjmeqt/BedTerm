@@ -205,7 +205,7 @@ typedef struct CellSnapshot {
    */
   uint32_t bg_rgba;
   /**
-   * Bitfield: 1=bold, 2=underline, 4=inverse, 8=italic, 16=wide_leading, 32=wide_trailing.
+   * Bitfield: 1=bold, 2=underline, 4=inverse, 8=italic, 16=wide_leading, 32=wide_trailing, 64=strikethrough.
    */
   uint16_t flags;
 } CellSnapshot;
@@ -618,6 +618,55 @@ int bt_renderer_draw_cells(struct BtRenderer *r,
                            uint32_t viewport_width_px,
                            uint32_t viewport_height_px,
                            double time_seconds);
+
+/**
+ * Register a host-supplied font face (TTF / TTC / OTF bytes) and
+ * promote it to the primary terminal family. Used by Swift to wire
+ * iOS's SF Mono / Menlo into the Rust rasterizer at app launch.
+ *
+ * **The family name is sourced from the sfnt `name` table by fontdb**,
+ * not from the caller — this closes the trap where iOS's CTFont
+ * surface name (`.AppleSystemUIFontMonospaced`) doesn't match what
+ * the font file actually declares (`SF Mono`), which would otherwise
+ * make `Family::Name(...)` at shape time silently fall through to
+ * the bundled JetBrains Mono.
+ *
+ * The resolved family is written back into `out_family_ptr` (up to
+ * `out_family_capacity` bytes, no NUL terminator) so the caller can
+ * log it. If `out_family_ptr` is null or capacity is 0, registration
+ * still happens and the return value just reports the length that
+ * would have been written.
+ *
+ * Returns the family name length on success (≥ 0), or `-1` if
+ * `bytes_ptr` is null / `bytes_len == 0`, or fontdb couldn't extract
+ * any face from the bytes.
+ *
+ * # Safety
+ * `bytes_ptr` must point to `bytes_len` readable bytes for the
+ * duration of the call. `out_family_ptr`, if non-null, must point to
+ * `out_family_capacity` writable bytes.
+ */
+int bt_font_register_terminal_face(const uint8_t *bytes_ptr,
+                                   uintptr_t bytes_len,
+                                   uint8_t *out_family_ptr,
+                                   uintptr_t out_family_capacity);
+
+/**
+ * Register an **auxiliary** font face (Bold / Italic / BoldItalic
+ * companions of the primary terminal family). Unlike
+ * `bt_font_register_terminal_face`, this does **not** promote the
+ * face to the primary family — cosmic-text resolves the weight/style
+ * variant by matching `Attrs::weight` / `Attrs::style` against fontdb
+ * after the family lookup. Use this for every non-Regular Menlo cut.
+ *
+ * Returns 0 on success, -1 if `bytes_ptr` is null / `bytes_len == 0`,
+ * or fontdb couldn't extract any face from the bytes.
+ *
+ * # Safety
+ * `bytes_ptr` must point to `bytes_len` readable bytes for the
+ * duration of the call.
+ */
+int bt_font_register_aux_face(const uint8_t *bytes_ptr, uintptr_t bytes_len);
 
 /**
  * # Safety
