@@ -234,6 +234,8 @@ pub(crate) fn run(args: BlockArgs) -> Result<(), Box<dyn std::error::Error>> {
         1.0,
     ];
 
+    crate::font::register_system_font();
+
     renderer.set_font(args.font_size, 2.0);
     renderer.set_clear_color(clear[0], clear[1], clear[2], clear[3]);
     renderer.set_ui_font_sizes(15.0 * args.ui_scale, 12.0 * args.ui_scale, args.ui_scale);

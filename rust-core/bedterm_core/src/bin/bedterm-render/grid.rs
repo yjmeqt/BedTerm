@@ -67,6 +67,8 @@ pub(crate) fn run(args: GridArgs) -> Result<(), Box<dyn std::error::Error>> {
         1.0,
     ];
 
+    crate::font::register_system_font();
+
     renderer.set_font(args.font_size, 2.0);
     renderer.set_clear_color(clear[0], clear[1], clear[2], clear[3]);
 

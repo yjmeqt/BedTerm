@@ -12,6 +12,7 @@
 //! ```
 
 mod blocks;
+mod font;
 mod grid;
 mod layout;
 mod png;
