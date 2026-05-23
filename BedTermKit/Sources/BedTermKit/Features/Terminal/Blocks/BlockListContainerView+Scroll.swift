@@ -20,6 +20,10 @@ enum ScrollPosition: Equatable {
     case fixedAt(CGFloat)
 }
 
+/// Scroll-physics constants matching Warp's desktop `MOMENTUM_DECAY`.
+private let blockListScrollPhysics = ScrollPhysics(
+    decay: 0.968, decayInterval: 0.008)
+
 @MainActor
 extension BlockListContainerViewController: UIGestureRecognizerDelegate {
     /// Apply the current `scrollPosition` anchor to `contentOffsetY`.
@@ -29,7 +33,7 @@ extension BlockListContainerViewController: UIGestureRecognizerDelegate {
         guard view.bounds.height > 0 else { return }
         guard panGR.state != .began,
             panGR.state != .changed,
-            momentum == nil
+            scrollPhysics == nil
         else { return }
         let maxOff = maxOffsetY
         switch scrollPosition {
@@ -52,8 +56,7 @@ extension BlockListContainerViewController: UIGestureRecognizerDelegate {
     }
 
     /// Clamp a raw offset to `[0, maxOffsetY]` and report whether the
-    /// raw value overflowed (used by `MomentumState.advance` to know
-    /// when to stop).
+    /// raw value overflowed.
     func clampOffset(_ offsetY: CGFloat) -> (CGFloat, Bool) {
         let maxOff = maxOffsetY
         let clamped = max(0, min(offsetY, maxOff))
@@ -84,8 +87,10 @@ extension BlockListContainerViewController: UIGestureRecognizerDelegate {
         case .ended, .cancelled:
             let velocity = velocityEstimator.velocity()
             if abs(velocity) > 50 {
-                momentum = MomentumState(
-                    velocityPxPerSec: velocity, lastTick: CACurrentMediaTime())
+                var physics = blockListScrollPhysics
+                physics.velocity = velocity
+                physics.lastTick = CACurrentMediaTime()
+                scrollPhysics = physics
                 updateDisplayLink()
             } else if isAtBottomEdge() {
                 scrollPosition = .followsBottom
@@ -95,21 +100,18 @@ extension BlockListContainerViewController: UIGestureRecognizerDelegate {
         }
     }
 
-    func stopMomentum() { momentum = nil }
+    func stopMomentum() { scrollPhysics = nil }
 
     func advanceMomentum(now: CFTimeInterval) {
-        guard var state = momentum else { return }
-        let (newOffset, done) = MomentumState.advance(
-            offset: contentOffsetY, state: &state, now: now,
-            clamp: { [weak self] candidate in
-                self?.clampOffset(candidate) ?? (candidate, false)
-            })
-        setContentOffsetY(newOffset)
-        if done {
-            momentum = nil
-            scrollPosition = isAtBottomEdge() ? .followsBottom : .fixedAt(newOffset)
+        guard var physics = scrollPhysics else { return }
+        let delta = physics.step(now: now)
+        let (clamped, hitEdge) = clampOffset(contentOffsetY + delta)
+        setContentOffsetY(clamped)
+        if hitEdge || abs(physics.velocity) < 1.0 {
+            scrollPhysics = nil
+            scrollPosition = isAtBottomEdge() ? .followsBottom : .fixedAt(clamped)
         } else {
-            momentum = state
+            scrollPhysics = physics
         }
     }
 

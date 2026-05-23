@@ -8,6 +8,10 @@ struct TerminalMetalHostView: UIViewRepresentable {
     let onResize: (Int, Int) -> Void
     let focusHandle: FocusHandle
     let yieldFirstResponder: Bool
+    let displayMode: TerminalDisplayMode
+    /// Called once when the MTKView is created, so the block-list overlay
+    /// can push layout data to the shared render surface.
+    let onMetalView: (TerminalMetalUIView) -> Void
 
     /// Lets callers outside the SwiftUI view tree (e.g. the composer) hand
     /// first-responder back to the terminal *before* their own view is torn
@@ -23,14 +27,17 @@ struct TerminalMetalHostView: UIViewRepresentable {
 
     func makeUIView(context: Context) -> TerminalMetalUIView {
         let view = TerminalMetalUIView(session: session, feed: feed, onSend: onSend, onResize: onResize)
+        view.displayMode = displayMode
         focusHandle.bind(view)
         if !yieldFirstResponder {
             _ = view.becomeFirstResponder()
         }
+        onMetalView(view)
         return view
     }
 
     func updateUIView(_ uiView: TerminalMetalUIView, context: Context) {
+        uiView.displayMode = displayMode
         if yieldFirstResponder, uiView.isFirstResponder {
             _ = uiView.resignFirstResponder()
         } else if !yieldFirstResponder, !uiView.isFirstResponder {

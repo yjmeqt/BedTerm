@@ -1,3 +1,4 @@
+import BedTermCoreC
 import MetalKit
 import UIKit
 
@@ -31,7 +32,26 @@ final class TerminalMetalUIView: MTKView {
     var panGR: UIPanGestureRecognizer?
     var dragAccumulator: CGFloat = 0  // sub-row remainder (points)
     var displayLink: CADisplayLink?
-    var inertiaVelocity: CGFloat = 0  // points / sec, +toward-older-content
+    var scrollPhysics: ScrollPhysics?
+
+    // MARK: Display mode
+
+    /// Which rendering path `draw(_:)` takes. Set by the SwiftUI host via
+    /// `TerminalMetalHostView.updateUIView`. The didSet gates gestures,
+    /// cursor visibility, and first-responder status per mode.
+    var displayMode: TerminalDisplayMode = .inline {
+        didSet {
+            let isBlock = displayMode == .blockList
+            panGR?.isEnabled = !isBlock
+            selectionGR.isEnabled = !isBlock
+            isUserInteractionEnabled = !isBlock
+            cursorLayer.isHidden = isBlock
+            setNeedsDisplay()
+        }
+    }
+
+    // MARK: Block-list layout (pushed by BlockListContainerViewController)
+    var blockLayout = BlockLayoutState()
 
     init(
         session: TerminalSession,
@@ -218,36 +238,50 @@ final class TerminalMetalUIView: MTKView {
     }
 
     override func draw(_ rect: CGRect) {
-        guard let drawable = currentDrawable else { return }
+        // Skip the GPU render pass when hidden behind the block-list overlay.
+        guard let drawable = currentDrawable, window != nil, !isHidden, alpha > 0 else {
+            return
+        }
         let size = drawableSize
-        let elapsed = CACurrentMediaTime() - startTime
-        // Reclaim the shared bridge's clear colour (Block views may have left it transparent).
         bridge.setClearColor(
             red: Float(clearColor.red), green: Float(clearColor.green),
             blue: Float(clearColor.blue), alpha: Float(clearColor.alpha))
-        _ = bridge.draw(
-            term: terminalCore,
-            into: drawable.texture,
-            viewport: size,
-            time: elapsed
-        )
-        let snapshot = terminalCore.snapshot()
-        let cursorRow = Int(snapshot.cursorRow)
-        let cursorVisible = cursorRow < Int(snapshot.rows)
-        cursorLayer.isHidden = !cursorVisible
-        if cursorVisible {
-            cursorLayer.update(
-                col: Int(snapshot.cursorCol),
-                row: cursorRow,
-                cellSize: cellSize
+
+        switch displayMode {
+        case .blockList:
+            // blockLayout.headerBlob keeps header UTF-8 pointers alive.
+            _ = blockLayout.headerBlob
+            _ = bridge.drawBlockList(
+                term: terminalCore,
+                into: drawable.texture,
+                viewport: size,
+                scrollOffsetPx: blockLayout.scrollOffsetPx,
+                layout: blockLayout.entries,
+                headers: blockLayout.headers
             )
+
+        case .inline, .altScreen:
+            let elapsed = CACurrentMediaTime() - startTime
+            _ = bridge.draw(
+                term: terminalCore,
+                into: drawable.texture,
+                viewport: size,
+                time: elapsed
+            )
+            let snapshot = terminalCore.snapshot()
+            let cursorRow = Int(snapshot.cursorRow)
+            let cursorVisible = cursorRow < Int(snapshot.rows)
+            cursorLayer.isHidden = !cursorVisible
+            if cursorVisible {
+                cursorLayer.update(
+                    col: Int(snapshot.cursorCol),
+                    row: cursorRow,
+                    cellSize: cellSize
+                )
+            }
+            updatePreeditOverlay()
         }
-        updatePreeditOverlay()
-        // presentsWithTransaction=true requires a synchronous present: wait
-        // for the cell-pass command buffer to be scheduled, then present the
-        // drawable in the current CATransaction. Using cmd.present(drawable)
-        // here would queue an async present that lands one frame after the
-        // cursor CALayer commits, causing the cells-lag-cursor symptom.
+
         let fence = bridge.queue.makeCommandBuffer()
         fence?.commit()
         fence?.waitUntilScheduled()
@@ -319,10 +353,10 @@ final class TerminalMetalUIView: MTKView {
 
     override func didMoveToWindow() {
         super.didMoveToWindow()
-        guard !isInputDisabled else { return }
-        if window != nil, !isFirstResponder {
-            _ = becomeFirstResponder()
-        }
+        guard !isInputDisabled, displayMode != .blockList,
+            window != nil, !isFirstResponder
+        else { return }
+        _ = becomeFirstResponder()
     }
 
     override var canBecomeFirstResponder: Bool { !isInputDisabled }

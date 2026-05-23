@@ -9,6 +9,7 @@ struct TerminalScreen: View {
     @State private var keyboard = KeyboardLayoutObserver()
     @State private var keyboardHidden = false
     @State private var dpadOpen = false
+    @State private var metalView: TerminalMetalUIView?
     @Namespace private var composerMorph
     #if DEBUG
         @State private var fpsMeter = FPSMeter()
@@ -146,31 +147,24 @@ struct TerminalScreen: View {
     var body: some View {
         VStack(spacing: 0) {
             ZStack(alignment: .top) {
-                // Always mount the Metal host view — it owns the
-                // TerminalCore that the BlockStore reads from, and that
-                // store needs to keep building blocks even while the user
-                // is looking at the Block list. We just hide it when the
-                // Block list is visible so the GPU isn't redundantly
-                // presenting both.
+                // Single MTKView — renders both classic terminal grid and
+                // block-list content. Always mounted so the TerminalCore /
+                // BlockStore data pump never stops.
                 TerminalMetalHostView(
                     session: session,
                     feed: session.feed,
                     onSend: { session.send($0) },
                     onResize: { cols, rows in session.resize(cols: cols, rows: rows) },
                     focusHandle: focusHandle,
-                    yieldFirstResponder: composer.isOpen || keyboardHidden
+                    yieldFirstResponder: composer.isOpen || keyboardHidden,
+                    displayMode: displayMode,
+                    onMetalView: { metalView = $0 }
                 )
                 .ignoresSafeArea(edges: ignoredTerminalEdges)
-                .opacity(showBlockView ? 0 : 1)
-                // Top-inset toggle must be instant (terminal-view
-                // R1.alt_screen_top_inset). Animating a mid-frame PTY reflow
-                // tears vim/htop's UI; suppress any animation that the
-                // surrounding view tree might otherwise carry into the
-                // safe-area change.
                 .transaction(value: reserveTopSafeArea) { $0.animation = nil }
 
-                if showBlockView {
-                    BlockListView(session: session)
+                if showBlockView, let metalView {
+                    BlockListView(session: session, metalView: metalView)
                         .transition(.opacity)
                 }
 
