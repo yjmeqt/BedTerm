@@ -139,7 +139,7 @@ impl CoreTextRasterizer {
         let cf_string = CFString::new(s);
         let range = CFRange {
             location: 0,
-            length: cf_string.char_len() as isize,
+            length: cf_string.char_len(),
         };
 
         let raw_font = unsafe {
