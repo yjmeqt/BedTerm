@@ -14,6 +14,9 @@ objc2-foundation = { version = "0.2", features = [
     "NSString",
     "NSNotification",
     "NSValue",
+    "NSArray",
+    "NSDictionary",
+    "NSRange",
 ] }
 objc2-ui-kit = { version = "0.2", features = [
     "UIResponder",
@@ -30,7 +33,22 @@ objc2-ui-kit = { version = "0.2", features = [
     "UIScrollView",
     "UITextView",
     "UITextInput",
+    "UIGestureRecognizer",
+    "UITapGestureRecognizer",
     "UIKitDefines",
+    "UIEvent",
+    "UITouch",
+] }
+objc2-metal = { version = "0.2", features = [
+    "MTLDevice",
+    "MTLCommandQueue",
+    "MTLTexture",
+    "MTLPixelFormat",
+    "MTLDefines",
+] }
+objc2-metal-kit = { version = "0.2", features = [
+    "MTKView",
+    "MTKDefines",
 ] }
 
 [target.'cfg(not(target_os = "ios"))'.dependencies]
