@@ -45,21 +45,11 @@ jobs:
           retention-days: 7
 
       # ── iOS Simulator renders ───────────────────────────────────
-      - name: Select Xcode
-        run: |
-          echo "Available Xcodes:"
-          ls -d /Applications/Xcode*.app 2>/dev/null || true
-          if [ -d "/Applications/Xcode_26.app" ]; then
-            sudo xcode-select -s /Applications/Xcode_26.app
-            echo "Selected Xcode 26"
-          elif [ -d "/Applications/Xcode_26.0.app" ]; then
-            sudo xcode-select -s /Applications/Xcode_26.0.app
-            echo "Selected Xcode 26.0"
-          else
-            echo "Xcode 26 not found, using default: $(xcode-select -p)"
-          fi
-
+      # Disabled: GHA macos-15 runner has Xcode 16.x; Package.swift
+      # requires Swift 6.2 (Xcode 26+). Re-enable when GHA ships a
+      # macOS runner with Xcode 26.
       - name: iOS renders
+        if: false
         env:
           RENDER_OUTPUT_DIR: /tmp/ci-renders/ios
         run: |
@@ -70,7 +60,7 @@ jobs:
             2>&1 | tail -30
 
       - name: Upload iOS renders
-        if: always()
+        if: false
         uses: actions/upload-artifact@v5
         with:
           name: renders-ios
