@@ -34,6 +34,7 @@ objc2-ui-kit = { version = "0.2", features = [
     "UITextView",
     "UITextInput",
     "UITextInputTraits",
+    "NSText",
     "UIGestureRecognizer",
     "UITapGestureRecognizer",
     "UIKitDefines",
