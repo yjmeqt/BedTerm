@@ -25,17 +25,11 @@ The server prints the listen port and the bridged shell on startup.
 
 ## Connecting from the iOS simulator
 
-The sim shares the Mac's loopback, so `127.0.0.1:2222` works as-is. Two
-shortcuts in DEBUG builds:
-
-1. **Hosts list → "Mock SSH (loopback)"** — top row above your saved
-   hosts. Routes through the real `CitadelSSHClient` with throwaway
-   credentials (`user=test`, `password=x`). Use this for end-to-end
-   testing of the SSH client path.
-2. **`AppRoute.debugTerminal(.mockSSH)`** — the underlying route, also
-   reachable programmatically.
-
-Either entry point gives you the same interactive shell.
+The sim shares the Mac's loopback, so `127.0.0.1:2222` works as-is. In
+BedTerm, add a regular host entry pointing at `127.0.0.1:2222` with any
+username + password (e.g. `user=test`, `password=x`); it routes through
+the real `CitadelSSHClient` for end-to-end testing of the SSH client
+path.
 
 ## Blocks during the session
 

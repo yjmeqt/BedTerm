@@ -65,10 +65,9 @@ cargo run -p bedterm-mock-ssh --release --manifest-path rust-core/Cargo.toml
 cargo run -p bedterm-mock-ssh --release --manifest-path rust-core/Cargo.toml -- --shell
 ```
 
-In DEBUG builds the Hosts screen shows a **Mock SSH (loopback)** row
-above your saved hosts that connects to this server via the real
-`CitadelSSHClient`. See `rust-core/bedterm-mock-ssh/README.md` for the
-full breakdown.
+Add a host pointing at `127.0.0.1:2222` (any username + password) to
+exercise the real `CitadelSSHClient` against this server. See
+`rust-core/bedterm-mock-ssh/README.md` for the full breakdown.
 
 ## Lint
 

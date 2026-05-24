@@ -98,26 +98,16 @@ public struct HostsScreen: View {
 
     @ViewBuilder
     private var rootContent: some View {
-        #if DEBUG
-            // Always show the list in Debug builds so the Debug TTY section
-            // remains reachable even when no hosts have been added yet.
+        if viewModel.entries.isEmpty && !viewModel.loadFailed {
+            emptyState
+        } else {
             hostsList
-        #else
-            if viewModel.entries.isEmpty && !viewModel.loadFailed {
-                emptyState
-            } else {
-                hostsList
-            }
-        #endif
+        }
     }
 
     private var hostsList: some View {
         ScrollView {
             LazyVStack(spacing: 12) {
-                #if DEBUG
-                    debugMockSSHRow
-                        .padding(.horizontal, 16)
-                #endif
                 ForEach(viewModel.entries) { entry in
                     VStack(alignment: .leading, spacing: 8) {
                         HostRow(
@@ -220,10 +210,6 @@ public struct HostsScreen: View {
             sessionsPanelDestination(hostID: hostID)
         case .killedSessionDetail(let snapshotID):
             killedSessionDetailDestination(snapshotID: snapshotID)
-        #if DEBUG
-            case .mockSSH:
-                mockSSHDestination
-        #endif
         }
     }
 
