@@ -13,6 +13,16 @@ use objc2::{declare_class, msg_send, msg_send_id, ClassType, DeclaredClass};
 use objc2_foundation::NSString;
 use std::cell::{Cell, RefCell};
 
+extern "C" {
+    fn NSLog(fmt: *const NSString, ...);
+}
+
+fn objc2_log(s: &str) {
+    let msg = NSString::from_str(s);
+    let fmt = NSString::from_str("%@");
+    unsafe { NSLog(&*fmt as *const NSString, &*msg as *const NSString) };
+}
+
 #[repr(u8)]
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum FocusTarget {
@@ -91,6 +101,7 @@ declare_class!(
         /// Tap recogniser target for view1. Routes through `focusView1`.
         #[method(handleView1Tap:)]
         fn handle_view1_tap(&self, _sender: &AnyObject) {
+            objc2_log("[rs-terminal] coordinator.handleView1Tap fired");
             self.do_focus_view1();
         }
     }
@@ -112,13 +123,15 @@ impl BtRsKeyboardCoordinator {
 
     fn do_focus_view1(&self) {
         let v1 = self.ivars().view1.get();
+        objc2_log(&format!("[rs-terminal] do_focus_view1 v1={:p}", v1));
         if v1.is_null() {
             return;
         }
         let rgba = self.ivars().pending_color.get();
         let view: &BtRsMetalInputView = unsafe { &*(v1 as *const BtRsMetalInputView) };
         view.set_bg_color(rgba);
-        let _: bool = unsafe { msg_send![v1, becomeFirstResponder] };
+        let became: bool = unsafe { msg_send![v1, becomeFirstResponder] };
+        objc2_log(&format!("[rs-terminal] becomeFirstResponder -> {became}"));
         self.ivars().focused.set(FocusTarget::View1 as u8);
     }
 

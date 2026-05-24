@@ -44,8 +44,11 @@ struct MTLClearColor {
 }
 
 unsafe impl Encode for MTLClearColor {
+    // Apple uses an anonymous "?" struct name for MTLClearColor in its ObjC
+    // runtime metadata — passing a named struct here causes objc2's argument
+    // marshalling to misroute the 32-byte struct on arm64 (crash).
     const ENCODING: Encoding = Encoding::Struct(
-        "MTLClearColor",
+        "?",
         &[f64::ENCODING, f64::ENCODING, f64::ENCODING, f64::ENCODING],
     );
 }
@@ -148,52 +151,6 @@ declare_class!(
             unsafe {
                 let _: () = msg_send![super(self), touchesBegan: touches, withEvent: event];
             }
-        }
-
-        // ---- UIKeyInput -----------------------------------------------------
-
-        #[method(hasText)]
-        fn has_text(&self) -> bool {
-            !self.ivars().text.borrow().is_empty()
-        }
-
-        #[method(insertText:)]
-        fn insert_text(&self, text: &NSString) {
-            let s = text.to_string();
-            let mut buf = self.ivars().text.borrow_mut();
-            let start = self.ivars().selected_start.get().min(buf.len());
-            let end = self.ivars().selected_end.get().min(buf.len()).max(start);
-            buf.replace_range(start..end, &s);
-            let new_caret = start + s.len();
-            self.ivars().selected_start.set(new_caret);
-            self.ivars().selected_end.set(new_caret);
-            self.ivars().marked_start.set(-1);
-            self.ivars().marked_end.set(-1);
-        }
-
-        #[method(deleteBackward)]
-        fn delete_backward(&self) {
-            let mut buf = self.ivars().text.borrow_mut();
-            let start = self.ivars().selected_start.get().min(buf.len());
-            let end = self.ivars().selected_end.get().min(buf.len()).max(start);
-            if start != end {
-                buf.replace_range(start..end, "");
-                self.ivars().selected_start.set(start);
-                self.ivars().selected_end.set(start);
-                return;
-            }
-            if start == 0 {
-                return;
-            }
-            // Find previous UTF-8 char boundary.
-            let prev = buf[..start]
-                .char_indices()
-                .next_back()
-                .map(|(i, _)| i)
-                .unwrap_or(0);
-            buf.replace_range(prev..start, "");
-            self.ivars().selected_start.set(prev);
-            self.ivars().selected_end.set(prev);
         }
 
         // ---- UITextInput: text / selection ----------------------------------
@@ -566,16 +523,63 @@ declare_class!(
             self.ivars().marked_end.set(-1);
         }
     }
+
+    // ---- UIKeyInput conformance ---------------------------------------------
+    //
+    // Methods MUST live inside this `unsafe impl UIKeyInput` block (not in the
+    // class impl above) so objc2's macro-time required-method check sees them
+    // and registers protocol conformance with the ObjC runtime.
+    unsafe impl UIKeyInput for BtRsMetalInputView {
+        #[method(hasText)]
+        fn has_text(&self) -> bool {
+            !self.ivars().text.borrow().is_empty()
+        }
+
+        #[method(insertText:)]
+        fn insert_text(&self, text: &NSString) {
+            let s = text.to_string();
+            let mut buf = self.ivars().text.borrow_mut();
+            let start = self.ivars().selected_start.get().min(buf.len());
+            let end = self.ivars().selected_end.get().min(buf.len()).max(start);
+            buf.replace_range(start..end, &s);
+            let new_caret = start + s.len();
+            self.ivars().selected_start.set(new_caret);
+            self.ivars().selected_end.set(new_caret);
+            self.ivars().marked_start.set(-1);
+            self.ivars().marked_end.set(-1);
+        }
+
+        #[method(deleteBackward)]
+        fn delete_backward(&self) {
+            let mut buf = self.ivars().text.borrow_mut();
+            let start = self.ivars().selected_start.get().min(buf.len());
+            let end = self.ivars().selected_end.get().min(buf.len()).max(start);
+            if start != end {
+                buf.replace_range(start..end, "");
+                self.ivars().selected_start.set(start);
+                self.ivars().selected_end.set(start);
+                return;
+            }
+            if start == 0 {
+                return;
+            }
+            let prev = buf[..start]
+                .char_indices()
+                .next_back()
+                .map(|(i, _)| i)
+                .unwrap_or(0);
+            buf.replace_range(prev..start, "");
+            self.ivars().selected_start.set(prev);
+            self.ivars().selected_end.set(prev);
+        }
+    }
 );
 
-// NSObjectProtocol conformance (required for protocol traits below).
+// Rust trait conformances for parent / sibling protocols. UIKeyInput's
+// registration lives inside declare_class!; these are no-method shims
+// satisfying Rust's trait coherence for UITextInput.
 unsafe impl NSObjectProtocol for BtRsMetalInputView {}
-
-// Mark protocol conformance so UIKit's `conformsToProtocol:` returns YES.
-// We implement the protocol methods via `#[method(...)]` above; the trait
-// impls are zero-method shims.
 unsafe impl UITextInputTraits for BtRsMetalInputView {}
-unsafe impl UIKeyInput for BtRsMetalInputView {}
 unsafe impl UITextInput for BtRsMetalInputView {}
 
 // -------- Public Rust-side helpers ------------------------------------------
@@ -592,20 +596,27 @@ impl BtRsMetalInputView {
         let this: Option<Retained<Self>> =
             unsafe { msg_send_id![mtm.alloc::<Self>(), initWithFrame: zero, device: device] };
         if let Some(ref v) = this {
-            // Draw only when we ask — Phase 1 is a static colour clear.
             unsafe {
+                // Paused + only-redraw-on-demand: no GPU work in Phase 1.
                 let _: () = msg_send![&**v, setEnableSetNeedsDisplay: true];
                 let _: () = msg_send![&**v, setPaused: true];
+                // Make the Metal layer transparent so UIView's backgroundColor
+                // (set via `set_bg_color`) shows through.
+                let _: () = msg_send![&**v, setOpaque: false];
+                let _: () = msg_send![&**v, setUserInteractionEnabled: true];
             }
         }
         this
     }
 
-    /// Update the background colour and request a redraw. RGBA components are
-    /// 0..1.
+    /// Update the background colour. RGBA components are 0..1.
     ///
-    /// Phase 1 uses UIView's `backgroundColor` (no Metal pipeline yet); when we
-    /// add glyph rendering this will switch to `setClearColor:` on the MTKView.
+    /// Phase 1 paints via UIView's `backgroundColor` with the Metal layer set
+    /// non-opaque — the MTKView is paused, doesn't draw, and the UIView fill
+    /// shows through. Phase 2 (glyph rendering) will switch this to a real
+    /// `setClearColor:` once we have a working Metal pipeline that can clear
+    /// + present a frame. Passing `MTLClearColor` by value through `msg_send!`
+    /// in objc2 0.5 mis-marshals the 32-byte struct on arm64 (crash).
     pub fn set_bg_color(&self, rgba: (f32, f32, f32, f32)) {
         let color: Retained<objc2_ui_kit::UIColor> = unsafe {
             msg_send_id![
@@ -618,7 +629,6 @@ impl BtRsMetalInputView {
         };
         unsafe {
             let _: () = msg_send![self, setBackgroundColor: &*color];
-            let _: () = msg_send![self, setNeedsDisplay];
         }
     }
 
