@@ -180,8 +180,11 @@ fn build_context(extra: &[String]) -> RenderContext {
             "--ui-scale" | "--command" | "--duration-ms" if i + 1 < extra.len() => {
                 i += 2;
             }
-            "--wrap" | "--exit-code" => {
+            "--wrap" => {
                 i += 1;
+            }
+            "--exit-code" => {
+                i += 2;
             }
             _ => {
                 i += 1;
@@ -281,38 +284,38 @@ fn parse_block_args(args: &[String]) -> blocks::BlockArgs {
                 i += 1;
             }
             "--palette" => {
-                i += 1;
-                if let Some(p) = args.get(i).and_then(|s| PalettePreset::from_str(s)) {
+                if let Some(p) = args.get(i + 1).and_then(|s| PalettePreset::from_str(s)) {
                     opts.palette_override = Some(p.build());
                 }
+                i += 2;
             }
             "--ui-scale" => {
-                i += 1;
-                if let Some(v) = args.get(i).and_then(|s| s.parse().ok()) {
+                if let Some(v) = args.get(i + 1).and_then(|s| s.parse().ok()) {
                     opts.ui_scale = v;
                 }
+                i += 2;
             }
             "--wrap" => {
                 opts.wrap_single_block = true;
                 i += 1;
             }
             "--command" => {
-                i += 1;
-                if let Some(v) = args.get(i) {
+                if let Some(v) = args.get(i + 1) {
                     opts.wrap_command = Some(v.clone());
                 }
+                i += 2;
             }
             "--exit-code" => {
-                i += 1;
-                if let Some(v) = args.get(i).and_then(|s| s.parse().ok()) {
+                if let Some(v) = args.get(i + 1).and_then(|s| s.parse().ok()) {
                     opts.wrap_exit_code = v;
                 }
+                i += 2;
             }
             "--duration-ms" => {
-                i += 1;
-                if let Some(v) = args.get(i).and_then(|s| s.parse().ok()) {
+                if let Some(v) = args.get(i + 1).and_then(|s| s.parse().ok()) {
                     opts.wrap_duration_ms = Some(v);
                 }
+                i += 2;
             }
             other if !other.starts_with("--") => {
                 opts.input = Some(other.to_string());
