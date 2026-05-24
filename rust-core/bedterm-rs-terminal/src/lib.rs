@@ -8,6 +8,8 @@ mod color;
 #[cfg(target_os = "ios")]
 mod geometry;
 #[cfg(target_os = "ios")]
+mod text_input;
+#[cfg(target_os = "ios")]
 mod vc;
 
 /// Opaque callback type.
