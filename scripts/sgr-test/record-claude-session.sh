@@ -53,6 +53,18 @@ if [[ ! -x "$BIN_RECORD" ]] || [[ ! -x "$BIN_RENDER" ]]; then
     cargo build --manifest-path "$WORKSPACE/Cargo.toml" -p bedterm-record -p bedterm_core 2>&1 | tail -2
 fi
 
+# ── Query actual cell size from the renderer ───────────────────────────
+read -r cell_w cell_h < <("$BIN_RENDER" cell-size --font-size "$FONT_SIZE" 2>/dev/null)
+if [[ -n "$cell_w" && -n "$cell_h" ]]; then
+    cols=$(awk "BEGIN { printf \"%d\", ($viewport%x) / $cell_w }" 2>/dev/null || echo "80")
+    rows=$(awk "BEGIN { printf \"%d\", (${viewport#*x}) / $cell_h }" 2>/dev/null || echo "24")
+    echo "=== Cell metrics: ${cell_w}x${cell_h}px → ${cols}×${rows} ==="
+else
+    cols=80
+    rows=24
+    echo "=== WARNING: could not query cell size, falling back to ${cols}x${rows} ==="
+fi
+
 # ── Record ─────────────────────────────────────────────────────────────
 echo "=== Recording Claude Code ==="
 echo "  Device:    $device ($viewport)"
@@ -61,18 +73,19 @@ echo "  Timeout:   ${TIMEOUT}s"
 echo "  Output:    $bin_file"
 echo ""
 
+record_args=(--cmd "claude" --stdin
+    --cols "$cols" --rows "$rows"
+    --font-size "$FONT_SIZE" --viewport "$viewport"
+    --timeout "$TIMEOUT" -o "$bin_file")
+
 if $stdin_mode; then
-    "$BIN_RECORD" --cmd "claude" --stdin \
-        --font-size "$FONT_SIZE" --viewport "$viewport" \
-        --timeout "$TIMEOUT" -o "$bin_file"
+    "$BIN_RECORD" "${record_args[@]}"
 else
     if [[ -z "$prompt" ]]; then
         echo "error: provide a prompt or use --stdin"
         exit 1
     fi
-    printf '%s\n/exit\n' "$prompt" | "$BIN_RECORD" --cmd "claude" --stdin \
-        --font-size "$FONT_SIZE" --viewport "$viewport" \
-        --timeout "$TIMEOUT" -o "$bin_file"
+    printf '%s\n/exit\n' "$prompt" | "$BIN_RECORD" "${record_args[@]}"
 fi
 
 echo ""

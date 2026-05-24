@@ -21,6 +21,7 @@ use std::env;
 use std::process;
 
 use blocks::PalettePreset;
+use metal::foreign_types::ForeignType;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -30,6 +31,21 @@ fn main() {
     }
 
     let mode = &args[1];
+    if mode == "cell-size" {
+        let mut font_size: f32 = 14.0;
+        let mut i = 2;
+        while i < args.len() {
+            if args[i] == "--font-size" && i + 1 < args.len() {
+                font_size = args[i + 1].parse().unwrap_or(14.0);
+                i += 2;
+            } else {
+                i += 1;
+            }
+        }
+        print_cell_size(font_size);
+        return;
+    }
+
     let result = match mode.as_str() {
         "grid" => {
             let opts = parse_grid_args(&args[2..]);
@@ -53,7 +69,7 @@ fn main() {
 }
 
 fn print_usage() {
-    eprintln!("usage: bedterm-render <grid|blocks> [options]");
+    eprintln!("usage: bedterm-render <grid|blocks|cell-size> [options]");
     eprintln!();
     eprintln!("Common options:");
     eprintln!("  --font-size N       Cell pixel height (default: 14)");
@@ -73,6 +89,36 @@ fn print_usage() {
     eprintln!("  --command TEXT      Command name for --wrap header");
     eprintln!("  --exit-code N       Exit code for --wrap (default: 0)");
     eprintln!("  --duration-ms N     Duration in ms for --wrap");
+    eprintln!();
+    eprintln!("Cell size query (print actual font metrics):");
+    eprintln!("  bedterm-render cell-size --font-size 14");
+    eprintln!("  Output: <cell_w_px> <cell_h_px>");
+}
+
+fn print_cell_size(font_size: f32) {
+    let device = match metal::Device::system_default() {
+        Some(d) => d,
+        None => { eprintln!("no Metal device"); process::exit(1); }
+    };
+    let queue = device.new_command_queue();
+    let mut renderer = unsafe {
+        bedterm_core::renderer::Renderer::from_ptrs(
+            device.as_ptr() as *const std::ffi::c_void,
+            queue.as_ptr() as *const std::ffi::c_void,
+        )
+    };
+    let Some(ref mut r) = renderer else {
+        eprintln!("failed to create renderer");
+        process::exit(1);
+    };
+    crate::font::register_system_font();
+    r.set_font(font_size, 2.0);
+    let (cw, ch) = r.cell_pixel_size();
+    println!("{cw} {ch}");
+    // Avoid double-free: renderer's Device/CommandQueue wrappers and the
+    // local variables both point to the same ObjC objects. Exit early
+    // to skip Drop (which would over-release).
+    std::process::exit(0);
 }
 
 // ── Grid arg parsing ───────────────────────────────────────────────────

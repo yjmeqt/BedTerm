@@ -74,13 +74,25 @@ fn parse_args() -> Args {
     }
     if args.cmd.is_none() { eprintln!("--cmd required"); print_usage(); std::process::exit(1); }
 
-    if let (Some(fs), Some(vw), Some(vh)) = (args.font_size, args.viewport_w, args.viewport_h) {
-        let cell_w = (fs * 0.55).max(1.0);
-        let cell_h = (fs * 1.25).max(1.0);
-        args.cols = (vw as f32 / cell_w).max(1.0) as u16;
-        args.rows = (vh as f32 / cell_h).max(1.0) as u16;
+    // Derive cols/rows from font-size + viewport ONLY if --cols/--rows
+    // were not explicitly passed. Explicit values take precedence.
+    let cols_explicit = raw.iter().any(|a| a == "--cols");
+    let rows_explicit = raw.iter().any(|a| a == "--rows");
+
+    if !cols_explicit && !rows_explicit {
+        if let (Some(fs), Some(vw), Some(vh)) = (args.font_size, args.viewport_w, args.viewport_h) {
+            let cell_w = (fs * 0.55).max(1.0);
+            let cell_h = (fs * 1.25).max(1.0);
+            args.cols = (vw as f32 / cell_w).max(1.0) as u16;
+            args.rows = (vh as f32 / cell_h).max(1.0) as u16;
+            eprintln!(
+                "[record] viewport={vw}x{vh} font={fs} → cols={}, rows={}",
+                args.cols, args.rows
+            );
+        }
+    } else {
         eprintln!(
-            "[record] viewport={vw}x{vh} font={fs} → cols={}, rows={}",
+            "[record] using explicit --cols={} --rows={}",
             args.cols, args.rows
         );
     }
