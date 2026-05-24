@@ -19,7 +19,7 @@ Everything required to ship BedTerm to the App Store under an individual Apple D
   <description>
     Create the app record in App Store Connect with the correct bundle ID, primary language, and category, ready to receive builds and metadata.
   </description>
-  <rule id="bundle_id_registered" status="❌">A unique bundle identifier is registered in the developer portal and matches the Xcode project.</rule>
+  <rule id="bundle_id_registered" status="❌">Three bundle identifiers, one per configuration, are registered in the developer portal: dev.yjmeqt.bedterm (Release), dev.yjmeqt.bedterm.beta (TestFlight), dev.yjmeqt.bedterm.debug (Debug). All match the Xcode project.</rule>
   <rule id="app_record_created" status="❌">The App Store Connect record exists with name, primary language, bundle ID, and SKU.</rule>
   <rule id="category_chosen" status="❌">Primary and secondary App Store categories are selected (e.g., Developer Tools / Utilities).</rule>
 </requirement>
@@ -76,7 +76,7 @@ Everything required to ship BedTerm to the App Store under an individual Apple D
   </description>
   <rule id="version_build" status="❌">Marketing version (e.g. 1.0.0) and build number are set on the target.</rule>
   <rule id="distribution_cert" status="❌">A Distribution certificate and App Store provisioning profile exist (Automatic signing is acceptable).</rule>
-  <rule id="archive_uploads" status="❌">An Xcode Archive of the Release configuration uploads successfully to App Store Connect.</rule>
+  <rule id="archive_uploads" status="❌">An Xcode Archive of the TestFlight configuration uploads successfully to App Store Connect.</rule>
   <rule id="testflight_internal" status="❌">The uploaded build is testable through TestFlight internal testing on the developer's own device.</rule>
 </requirement>
 
