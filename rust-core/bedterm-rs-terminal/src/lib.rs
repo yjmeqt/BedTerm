@@ -231,8 +231,13 @@ mod ios {
                 // Set self as view2's delegate so we can react to text changes.
                 let _: () = unsafe { msg_send![&*view2, setDelegate: self] };
 
-                // Measure one-line height from the actual font + container inset.
-                let font: Retained<UIFont> = unsafe { msg_send_id![&*view2, font] };
+                // Set a known font on both views and use it to measure line height.
+                // A freshly-init'd UITextView can return nil for `font`, so set it explicitly.
+                let font: Retained<UIFont> =
+                    unsafe { msg_send_id![UIFont::class(), systemFontOfSize: 17.0_f64] };
+                let _: () = unsafe { msg_send![&*view1, setFont: &*font] };
+                let _: () = unsafe { msg_send![&*view2, setFont: &*font] };
+
                 let line_h: CGFloat = unsafe { msg_send![&*font, lineHeight] };
                 let inset: UIEdgeInsets = unsafe { msg_send![&*view2, textContainerInset] };
                 let one_line = line_h + inset.top + inset.bottom;
