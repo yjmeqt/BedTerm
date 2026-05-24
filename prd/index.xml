@@ -9,6 +9,7 @@
     <entry name="Settings" file="bedterm/settings.xml" />
     <entry name="Design" file="bedterm/design.xml" />
     <entry name="Localization" file="bedterm/localization.xml" />
+    <entry name="Release" file="bedterm/release.xml" />
     <entry name="Debug Mock TTY" file="bedterm/debug-mock-tty.xml" />
   </module>
 </prd_index>

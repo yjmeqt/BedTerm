@@ -26,7 +26,7 @@ PROFILE_RAW="${PROFILE_RAW#--}"
 PROFILE="$(printf '%s' "$PROFILE_RAW" | tr '[:upper:]' '[:lower:]')"
 CARGO_PROFILE_ARG=()
 PROFILE_DIR="debug"
-if [ "$PROFILE" = "release" ]; then
+if [ "$PROFILE" = "release" ] || [ "$PROFILE" = "testflight" ]; then
   CARGO_PROFILE_ARG=(--release)
   PROFILE_DIR="release"
 fi
