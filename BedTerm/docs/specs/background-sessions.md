@@ -183,8 +183,8 @@ The PRD is large enough that landing it in one PR risks subtle regressions. Reco
   - `OSC133CwdCaptureTests` — feed a known prompt sequence, assert `lastCwd` updates.
   - `KillReasonClassifierTests` — map SSH disconnect causes to `KillReason`.
 - **UI test** (BedTermUITests):
-  - `BackgroundSessionFlowTests` — drive a debug-mock-tty session (per `prd/bedterm/debug-mock-tty.xml`), tap Back, return via panel, kill via ×, open killed detail, tap "Resume here", verify a new running session appears.
-- **Manual / simulator E2E** via `worktree-ios-dev` skill against the iPhone 17 sim using the debug mock TTY so we don't need a real SSH host. Automated by `xcodebuildmcp-cli` UI driver: boot sim → install → launch → mock-host → run a `cd /tmp && ls` → Back → tap host row → see panel → tap × → confirm → see killed → tap row → see scrollback → tap Resume here → verify new session lands in `/tmp`.
+  - `BackgroundSessionFlowTests` — drive a session against the loopback `bedterm-mock-ssh` server (configured as a regular host entry pointing at `127.0.0.1:2222`), tap Back, return via panel, kill via ×, open killed detail, tap "Resume here", verify a new running session appears.
+- **Manual / simulator E2E** via `worktree-ios-dev` skill against the iPhone 17 sim using the loopback `bedterm-mock-ssh` server so we don't need a remote host. Automated by `xcodebuildmcp-cli` UI driver: boot sim → install → launch → connect to the loopback host → run a `cd /tmp && ls` → Back → tap host row → see panel → tap × → confirm → see killed → tap row → see scrollback → tap Resume here → verify new session lands in `/tmp`.
 
 ## Open design questions worth flagging before P3
 
