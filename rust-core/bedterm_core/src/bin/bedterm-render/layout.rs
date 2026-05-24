@@ -3,12 +3,12 @@
 //!
 //! Computes per-frame geometry for block list rendering: block Y ranges,
 //! `BtBlockLayoutEntry` arrays, and `BtBlockHeaderEntry` arrays (including
-//! the sticky pinned header). Color tokens are hardcoded per palette rather
-//! than resolved from an Xcode asset catalog.
+//! the sticky pinned header).
 
 use bedterm_core::blocks::Block;
 use bedterm_core::cli_agent::CliAgent;
 use bedterm_core::renderer::block_list_ffi::{BtBlockHeaderEntry, BtBlockLayoutEntry};
+use bedterm_core::term::{BtRgb24, Palette};
 
 // ── Layout constants (match BlockPanelStyle / BlockHeader) ──────────────
 
@@ -25,13 +25,33 @@ pub(crate) struct PaletteColors {
     pub surface_bg: u32,
 }
 
-/// Tokyo Night Storm palette.
-pub(crate) const TOKYO_NIGHT: PaletteColors = PaletteColors {
-    fg: 0xC0CAF5FF,         // #c0caf5
-    muted: 0x565F89FF,      // #565f89
-    divider: 0x292E4280,    // #292e42 alpha 0.5
-    surface_bg: 0x24283BFF, // #24283b
-};
+/// Derive header colour tokens from the active terminal palette so every
+/// palette preset automatically gets matching header chrome without
+/// per-preset hand-picked values.
+pub(crate) fn palette_colors_from_term_palette(p: &Palette) -> PaletteColors {
+    let fg = p.default_fg;
+    let bg = p.default_bg;
+    // Muted: blend fg 55% toward bg so subtitle / exit-code text recedes.
+    let muted = BtRgb24 {
+        r: lerp_u8(fg.r, bg.r, 0.45),
+        g: lerp_u8(fg.g, bg.g, 0.45),
+        b: lerp_u8(fg.b, bg.b, 0.45),
+    };
+    PaletteColors {
+        fg: pack_rgba(fg.r, fg.g, fg.b, 0xFF),
+        muted: pack_rgba(muted.r, muted.g, muted.b, 0xFF),
+        divider: pack_rgba(fg.r, fg.g, fg.b, 0x26),
+        surface_bg: pack_rgba(bg.r, bg.g, bg.b, 0xFF),
+    }
+}
+
+fn lerp_u8(a: u8, b: u8, t: f32) -> u8 {
+    (a as f32 + (b as f32 - a as f32) * t).round() as u8
+}
+
+fn pack_rgba(r: u8, g: u8, b: u8, a: u8) -> u32 {
+    ((r as u32) << 24) | ((g as u32) << 16) | ((b as u32) << 8) | (a as u32)
+}
 
 // ── Agent badge tints ──────────────────────────────────────────────────
 

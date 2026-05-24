@@ -360,6 +360,7 @@ impl Renderer {
         // bodies / panels so the existing two-pipeline pass handles
         // everything in one render encode.
         if !headers.is_empty() {
+            let (cell_w_px, cell_h_px) = self.atlas.cell_px;
             let mut ctx = crate::renderer::header_band::HeaderDrawContext {
                 subheadline_px: self.ui_subheadline_px,
                 caption2_px: self.ui_caption2_px,
@@ -369,6 +370,8 @@ impl Renderer {
                 scroll_y_px,
                 surface_bg_rgba: rgba_f32_to_u32(self.clear_color),
                 atlas: &mut self.atlas,
+                cell_w_px: cell_w_px as f32,
+                cell_h_px: cell_h_px as f32,
             };
             // Two passes so sticky always z-sorts on top, regardless
             // of input order. Cheap — usually ≤ 10 headers.

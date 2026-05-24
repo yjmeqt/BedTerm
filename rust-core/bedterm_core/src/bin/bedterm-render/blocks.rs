@@ -17,7 +17,7 @@ use bedterm_core::renderer::Renderer;
 use bedterm_core::term::{BtRgb24, Palette, Terminal};
 
 use crate::context::RenderContext;
-use crate::layout::{self, TOKYO_NIGHT};
+use crate::layout::{self, palette_colors_from_term_palette};
 use crate::png::{self, OffscreenTarget};
 
 pub(crate) struct BlockArgs {
@@ -290,8 +290,9 @@ pub(crate) fn run(args: BlockArgs, ctx: &RenderContext) -> Result<(), Box<dyn st
     let row_height_pt = ctx.font_size_pt / ui_scale;
     let ranges = layout::compute_block_ranges(blocks, row_height_pt);
     let layout_entries = layout::build_layout_entries(&ranges, ui_scale, width_px);
+    let header_colors = palette_colors_from_term_palette(&palette);
     let (mut headers, storage) =
-        layout::build_header_descriptors(&ranges, ui_scale, width_px, &TOKYO_NIGHT);
+        layout::build_header_descriptors(&ranges, ui_scale, width_px, &header_colors);
     let _blob = layout::patch_header_pointers(&mut headers, &storage);
 
     // FFI term: replay the SAME bytes so block IDs are identical.
