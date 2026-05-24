@@ -439,8 +439,9 @@ impl Renderer {
         verts.push(v(0.0, 1.0));
     }
 
-    /// Single render pass, four ordered phases:
-    ///   1. body panels  →  2. body cells  →  3. header panels  →  4. header cells.
+    /// Single render pass, four ordered phases: body panels → body cells →
+    /// header panels → header cells.
+    ///
     /// The split exists so the sticky header band's opaque rectangle paints
     /// AFTER all body cells — otherwise body cells in the pinned band's
     /// Y-range would draw last and the header would look transparent.
