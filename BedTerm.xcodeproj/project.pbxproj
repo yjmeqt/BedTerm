@@ -246,7 +246,7 @@
 					"-ObjC",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = dev.yjmeqt.bedterm.debug;
-				INFOPLIST_KEY_CFBundleDisplayName = "BedTerm Debug";
+				PRODUCT_NAME = "BedTerm Debug";
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -429,8 +429,9 @@
 					"@executable_path/Frameworks",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = dev.yjmeqt.bedterm;
-				INFOPLIST_KEY_CFBundleDisplayName = BedTerm;
+				PRODUCT_NAME = BedTerm;
 				SDKROOT = iphoneos;
+				ONLY_ACTIVE_ARCH = YES;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
@@ -507,8 +508,9 @@
 					"@executable_path/Frameworks",
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = dev.yjmeqt.bedterm.beta;
-				INFOPLIST_KEY_CFBundleDisplayName = "BedTerm Beta";
+				PRODUCT_NAME = "BedTerm Beta";
 				SDKROOT = iphoneos;
+				ONLY_ACTIVE_ARCH = YES;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = TestFlight;
