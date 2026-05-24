@@ -20,10 +20,18 @@ The terminal viewport: ANSI/VT100 emulation rendered by the Metal renderer, basi
       <li><code>./sgr-basic.sh</code> — one row per attribute; colour×style matrix; SGR 22 / 23 / 24 / 27 reset round-trip.</li>
       <li><code>./sgr-realworld.sh</code> — mocks of <code>ls --color</code>, <code>git status</code>, <code>grep</code>, <code>man</code>, <code>diff -u</code>.</li>
       <li><code>./sgr-cjk.sh</code> — every attribute applied to CJK strings, verifies the font-fallback cascade still picks up the CJK face under bold / italic.</li>
+      <li><code>./sgr-symbols.sh</code> — block elements, geometric shapes, misc technical, dingbats; exercises font-fallback for non-ASCII symbols.</li>
     </ul>
     <p>The composite screenshot below was captured after running <code>./sgr-cjk.sh</code> followed by <code>sh sgr-basic.sh</code> in a single block-mode session:</p>
     <img src="screenshots/sgr_styles_verified.png" alt="Terminal showing bold, italic, underline, inverse all rendering correctly, including the colour×style matrix and CJK rows"/></rule>
   <rule id="sgr_strikethrough" status="❌">SGR 9 crossed-out (strikethrough) renders a horizontal line through the cell's glyph, at roughly the x-height midline. SGR 29 resets to non-strikethrough. Used by some TUIs (diff tools, task lists, mc, git log graphs) to mark deleted / completed items without changing color.</rule>
+  <rule id="unicode_symbol_coverage" status="❌">Block-drawing (U+2580–U+259F), geometric shapes (U+25A0–U+25FF), and miscellaneous technical (U+2300–U+23FF) characters render as proper glyphs — not tofu — whether covered by the primary monospace face or resolved through font fallback. This is what makes Warp-style block separators, powerline prompts, and TUI box-drawing work.
+    <p>
+      <strong>Verification:</strong> run <code>./sgr-symbols.sh</code> from <code>scripts/sgr-test/</code> on a remote host and verify every character cell shows its glyph. On Apple platforms the CoreText rasterizer (<code>coretext_raster.rs</code>) resolves fallback glyphs via <code>CTFontCreateForString</code>; on other platforms the swash rasterizer relies on fontdb's cascade.
+    </p>
+    <p>
+      <strong>Known gaps (2026-05-24):</strong> U+2588 Full Block has 1–2 px horizontal gaps when tiled adjacently — CoreText's tight bounding box is narrower than the glyph's advance width. U+23FA Black Circle for Record is rasterised from a system fallback font whose metrics differ from the monospace cell grid, causing misalignment. Both are annotated as TODOs in <code>coretext_raster.rs</code>.
+    </p></rule>
   <rule id="vt100_cursor" status="✅">VT100 cursor movement and positioning work correctly.</rule>
   <rule id="clear_screen" status="✅">Clear screen sequences repaint the terminal viewport correctly.</rule>
   <rule id="vim_display" status="✅">Running vim or nano displays the editor UI correctly, including status lines and cursor positioning.</rule>

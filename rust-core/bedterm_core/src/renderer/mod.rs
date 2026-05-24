@@ -3,6 +3,8 @@
 pub mod atlas;
 pub mod block_list_ffi;
 pub mod cells;
+#[cfg(any(target_os = "ios", target_os = "macos"))]
+pub(crate) mod coretext_raster;
 pub mod ffi;
 pub(crate) mod font_system;
 pub(crate) mod glyph_raster;
