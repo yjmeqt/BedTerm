@@ -8,130 +8,11 @@
 
 use std::fs;
 
-/// Predefined iOS device profiles.
-/// Logical viewport in points (UIScreen.bounds.size).
-/// Scale = UIScreen.scale (device-pixel ratio).
-/// Source: ios-resolution.com
-#[derive(Clone, Debug)]
-pub struct DevicePreset {
-    pub name: &'static str,
-    pub viewport_pt: (u32, u32),
-    pub scale: f32,
-}
+// Re-export the shared device preset lookup from the core library.
+pub use bedterm_core::device_presets::find_device;
 
-const DEVICES: &[DevicePreset] = &[
-    // ── iPhone 17 series (@3x) ──────────────────────────────────────
-    DevicePreset {
-        name: "iphone17",
-        viewport_pt: (402, 874),
-        scale: 3.0,
-    },
-    DevicePreset {
-        name: "iphone17-pro",
-        viewport_pt: (402, 874),
-        scale: 3.0,
-    },
-    DevicePreset {
-        name: "iphone17-promax",
-        viewport_pt: (440, 956),
-        scale: 3.0,
-    },
-    // ── iPhone 16 series (@3x) ──────────────────────────────────────
-    DevicePreset {
-        name: "iphone16",
-        viewport_pt: (393, 852),
-        scale: 3.0,
-    },
-    DevicePreset {
-        name: "iphone16-pro",
-        viewport_pt: (402, 874),
-        scale: 3.0,
-    },
-    DevicePreset {
-        name: "iphone16-promax",
-        viewport_pt: (440, 956),
-        scale: 3.0,
-    },
-    // ── iPhone 15 series (@3x) ──────────────────────────────────────
-    DevicePreset {
-        name: "iphone15",
-        viewport_pt: (393, 852),
-        scale: 3.0,
-    },
-    DevicePreset {
-        name: "iphone15-pro",
-        viewport_pt: (393, 852),
-        scale: 3.0,
-    },
-    DevicePreset {
-        name: "iphone15-promax",
-        viewport_pt: (430, 932),
-        scale: 3.0,
-    },
-    // ── iPhone 14 series (@3x) ──────────────────────────────────────
-    DevicePreset {
-        name: "iphone14",
-        viewport_pt: (390, 844),
-        scale: 3.0,
-    },
-    DevicePreset {
-        name: "iphone14-pro",
-        viewport_pt: (393, 852),
-        scale: 3.0,
-    },
-    DevicePreset {
-        name: "iphone14-promax",
-        viewport_pt: (430, 932),
-        scale: 3.0,
-    },
-    // ── iPhone SE / mini (@3x or @2x) ───────────────────────────────
-    DevicePreset {
-        name: "iphone-se3",
-        viewport_pt: (375, 667),
-        scale: 2.0,
-    },
-    // ── iPad Pro (@2x) ──────────────────────────────────────────────
-    DevicePreset {
-        name: "ipad-pro13",
-        viewport_pt: (1032, 1376),
-        scale: 2.0,
-    },
-    DevicePreset {
-        name: "ipad-pro11",
-        viewport_pt: (834, 1210),
-        scale: 2.0,
-    },
-    // ── iPad Air (@2x) ──────────────────────────────────────────────
-    DevicePreset {
-        name: "ipad-air13",
-        viewport_pt: (1024, 1366),
-        scale: 2.0,
-    },
-    DevicePreset {
-        name: "ipad-air11",
-        viewport_pt: (820, 1180),
-        scale: 2.0,
-    },
-    // ── iPad mini (@2x) ─────────────────────────────────────────────
-    DevicePreset {
-        name: "ipad-mini",
-        viewport_pt: (744, 1133),
-        scale: 2.0,
-    },
-    // ── Mac (CLI default) ───────────────────────────────────────────
-    DevicePreset {
-        name: "mac",
-        viewport_pt: (1200, 800),
-        scale: 2.0,
-    },
-];
-
-pub fn find_device(name: &str) -> Option<&'static DevicePreset> {
-    DEVICES.iter().find(|d| d.name == name)
-}
-
-pub fn list_device_names() -> Vec<&'static str> {
-    DEVICES.iter().map(|d| d.name).collect()
+fn device_names() -> Vec<&'static str> {
+    bedterm_core::device_presets::device_names()
 }
 
 // ── RenderContext ─────────────────────────────────────────────────────────
@@ -153,7 +34,7 @@ pub struct RenderContext {
     pub cols: Option<u16>,
     /// Explicit terminal rows.
     pub rows: Option<u16>,
-    /// Palette preset name (e.g. "tokyo-night").
+    /// Palette preset name (e.g. "bedterm-dark").
     pub palette: Option<String>,
     /// Appearance: "light" or "dark".
     pub appearance: Option<String>,
@@ -188,7 +69,7 @@ impl RenderContext {
             format!(
                 "unknown device '{}'; known: {}",
                 name,
-                list_device_names().join(", ")
+                device_names().join(", ")
             )
         })?;
         self.viewport_pt = d.viewport_pt;
@@ -233,7 +114,6 @@ impl RenderContext {
 
     fn from_json_str(s: &str) -> Result<Self, String> {
         let mut ctx = Self::default();
-        // Tiny hand-rolled parser for this fixed schema — avoids a serde dep.
         ctx.viewport_pt = (
             extract_u32(s, "\"viewport_pt\": [").unwrap_or(ctx.viewport_pt.0),
             extract_u32_after_comma(s, "\"viewport_pt\": [").unwrap_or(ctx.viewport_pt.1),
@@ -317,7 +197,7 @@ mod tests {
             font_size_pt: 13.0,
             cols: Some(50),
             rows: Some(48),
-            palette: Some("tokyo-night".into()),
+            palette: Some("bedterm-dark".into()),
             appearance: Some("dark".into()),
         };
         let json = ctx.to_json();

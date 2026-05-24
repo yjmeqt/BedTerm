@@ -85,78 +85,12 @@ fn parse_args() -> Args {
             }
             "--device" => {
                 i += 1;
-                match raw[i].as_str() {
-                    "iphone17" | "iphone17-pro" => {
-                        args.viewport_pt = Some((402, 874));
-                        args.scale = 3.0;
-                    }
-                    "iphone17-promax" => {
-                        args.viewport_pt = Some((440, 956));
-                        args.scale = 3.0;
-                    }
-                    "iphone16" => {
-                        args.viewport_pt = Some((393, 852));
-                        args.scale = 3.0;
-                    }
-                    "iphone16-pro" => {
-                        args.viewport_pt = Some((402, 874));
-                        args.scale = 3.0;
-                    }
-                    "iphone16-promax" => {
-                        args.viewport_pt = Some((440, 956));
-                        args.scale = 3.0;
-                    }
-                    "iphone15" | "iphone15-pro" => {
-                        args.viewport_pt = Some((393, 852));
-                        args.scale = 3.0;
-                    }
-                    "iphone15-promax" => {
-                        args.viewport_pt = Some((430, 932));
-                        args.scale = 3.0;
-                    }
-                    "iphone14" => {
-                        args.viewport_pt = Some((390, 844));
-                        args.scale = 3.0;
-                    }
-                    "iphone14-pro" => {
-                        args.viewport_pt = Some((393, 852));
-                        args.scale = 3.0;
-                    }
-                    "iphone14-promax" => {
-                        args.viewport_pt = Some((430, 932));
-                        args.scale = 3.0;
-                    }
-                    "iphone-se3" => {
-                        args.viewport_pt = Some((375, 667));
-                        args.scale = 2.0;
-                    }
-                    "ipad-pro13" => {
-                        args.viewport_pt = Some((1032, 1376));
-                        args.scale = 2.0;
-                    }
-                    "ipad-pro11" => {
-                        args.viewport_pt = Some((834, 1210));
-                        args.scale = 2.0;
-                    }
-                    "ipad-air13" => {
-                        args.viewport_pt = Some((1024, 1366));
-                        args.scale = 2.0;
-                    }
-                    "ipad-air11" => {
-                        args.viewport_pt = Some((820, 1180));
-                        args.scale = 2.0;
-                    }
-                    "ipad-mini" => {
-                        args.viewport_pt = Some((744, 1133));
-                        args.scale = 2.0;
-                    }
-                    "mac" => {
-                        args.viewport_pt = Some((1200, 800));
-                        args.scale = 2.0;
-                    }
-                    other => {
-                        eprintln!("[record] unknown device '{other}', using defaults");
-                    }
+                let name = raw[i].as_str();
+                if let Some(d) = bedterm_core::device_presets::find_device(name) {
+                    args.viewport_pt = Some(d.viewport_pt);
+                    args.scale = d.scale;
+                } else {
+                    eprintln!("[record] unknown device '{name}', using defaults");
                 }
             }
             "--scale" => {
