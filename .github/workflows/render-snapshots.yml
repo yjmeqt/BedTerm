@@ -45,11 +45,14 @@ jobs:
           retention-days: 7
 
       # ── iOS Simulator renders ───────────────────────────────────
+      # Disabled: GitHub macos-latest (Xcode 16.4 / Swift 6.1) does not
+      # meet the Package.swift Swift 6.2 requirement. Re-enable when a
+      # runner with Xcode 26+ is available.
       - name: iOS renders
+        if: false
         env:
           RENDER_OUTPUT_DIR: /tmp/ci-renders/ios
         run: |
-          # xcodebuild auto-boots a matching simulator via -destination.
           xcodebuild test \
             -scheme BedTerm \
             -destination 'platform=iOS Simulator,name=iPhone 17' \
@@ -57,7 +60,7 @@ jobs:
             2>&1 | tail -30
 
       - name: Upload iOS renders
-        if: always()
+        if: false
         uses: actions/upload-artifact@v5
         with:
           name: renders-ios
