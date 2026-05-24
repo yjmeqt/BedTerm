@@ -12,6 +12,7 @@ public final class BedTermSettings {
     private enum Key {
         static let reserveTopSafeAreaInAltScreen = "settings.reserveTopSafeAreaInAltScreen"
         static let showCommandBlocks = "settings.showCommandBlocks"
+        static let useRustTerminal = "experiments.useRustTerminal"
     }
 
     private let defaults: UserDefaults
@@ -45,6 +46,16 @@ public final class BedTermSettings {
         }
     }
 
+    /// **Experimental.** Route the terminal screen through the Rust-backed
+    /// `BtRsTerminalViewController`. Default: off.
+    public var useRustTerminal: Bool {
+        didSet {
+            if useRustTerminal != oldValue {
+                defaults.set(useRustTerminal, forKey: Key.useRustTerminal)
+            }
+        }
+    }
+
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         // `object(forKey:)` is `nil` for never-written keys; `bool(forKey:)`
@@ -54,6 +65,8 @@ public final class BedTermSettings {
             defaults.object(forKey: Key.reserveTopSafeAreaInAltScreen) as? Bool ?? true
         self.showCommandBlocks =
             defaults.object(forKey: Key.showCommandBlocks) as? Bool ?? false
+        self.useRustTerminal =
+            defaults.object(forKey: Key.useRustTerminal) as? Bool ?? false
         // Migrate the old shell-integration key (pre-2026-05-24, when it was
         // a separate toggle) into showCommandBlocks, then delete it.
         if let oldShell = defaults.object(forKey: "settings.installShellIntegrationOnConnect") as? Bool {

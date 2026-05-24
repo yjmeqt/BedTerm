@@ -4,17 +4,24 @@ extension HostsScreen {
     @ViewBuilder
     var terminalDestination: some View {
         if let session = viewModel.lastSession, let entry = currentSessionEntry() {
-            TerminalScreen(
-                session: session,
-                credential: entry.credential,
-                hostName: viewModel.displayName(for: entry.id),
-                onBack: {
-                    handleTerminalBack()
-                },
-                onKill: { reason in
-                    handleTerminalKill(entryID: entry.id, reason: reason)
-                }
-            )
+            let hostName = viewModel.displayName(for: entry.id)
+            if settings.useRustTerminal {
+                RsTerminalView(onBack: handleTerminalBack)
+                    .navigationTitle(hostName)
+                    .navigationBarTitleDisplayMode(.inline)
+            } else {
+                TerminalScreen(
+                    session: session,
+                    credential: entry.credential,
+                    hostName: hostName,
+                    onBack: {
+                        handleTerminalBack()
+                    },
+                    onKill: { reason in
+                        handleTerminalKill(entryID: entry.id, reason: reason)
+                    }
+                )
+            }
         } else {
             Text("No session.")
         }

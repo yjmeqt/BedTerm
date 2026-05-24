@@ -72,6 +72,37 @@ struct SettingsScreen: View {
                 } header: {
                     Text("Blocks")
                 }
+
+                #if DEBUG
+                    Section {
+                        Toggle(isOn: $settings.useRustTerminal) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                HStack(spacing: 6) {
+                                    Text("Rust terminal (experimental)")
+                                    Text("Exp")
+                                        .font(.caption2.weight(.semibold))
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 2)
+                                        .background(
+                                            Capsule().fill(Color("ShadcnBorder", bundle: .module))
+                                        )
+                                        .foregroundStyle(Color("ShadcnMutedForeground", bundle: .module))
+                                }
+                                Text(
+                                    """
+                                    Route the terminal screen through an experimental \
+                                    Rust-backed view controller. Off by default.
+                                    """
+                                )
+                                .font(.footnote)
+                                .foregroundStyle(Color("ShadcnMutedForeground", bundle: .module))
+                            }
+                        }
+                        .accessibilityIdentifier("settings.useRustTerminal")
+                    } header: {
+                        Text("Experimental")
+                    }
+                #endif
             }
             .navigationTitle(Text("Settings"))
             .navigationBarTitleDisplayMode(.inline)
