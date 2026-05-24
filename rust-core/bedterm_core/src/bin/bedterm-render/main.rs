@@ -94,9 +94,8 @@ fn print_usage() {
     eprintln!("  --font-size N      Font size in points (default: 14)");
     eprintln!("  --cols N           Explicit terminal columns (derived if omitted)");
     eprintln!("  --rows N           Explicit terminal rows");
-    eprintln!("  --palette NAME     Color palette preset (default: default)");
-    eprintln!("                       Presets: default, tokyo-night, solarized-dark,");
-    eprintln!("                       solarized-light, dracula, gruvbox-dark");
+    eprintln!("  --palette NAME     Color palette (default: bedterm-dark)");
+    eprintln!("                       Presets: bedterm-dark, bedterm-light");
     eprintln!("  --context FILE     Load context from JSON sidecar (CLI flags override)");
     eprintln!("  [input]            File path, or omit for stdin");
     eprintln!();

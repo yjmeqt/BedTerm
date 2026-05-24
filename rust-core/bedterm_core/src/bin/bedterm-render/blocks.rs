@@ -60,68 +60,30 @@ fn resolve_palette(ctx: &RenderContext, override_: Option<&Palette>) -> Palette 
 // ── Palette presets ────────────────────────────────────────────────────
 
 pub(crate) enum PalettePreset {
-    Default,
-    TokyoNight,
-    SolarizedDark,
-    SolarizedLight,
-    Dracula,
-    GruvboxDark,
+    /// BedTerm dark — matches `Tokens.xcassets` dark appearance.
+    BedtermDark,
+    /// BedTerm light — matches `Tokens.xcassets` light appearance.
+    BedtermLight,
 }
 
 impl PalettePreset {
     pub fn from_str(s: &str) -> Option<Self> {
         match s {
-            "default" => Some(Self::Default),
-            "tokyo-night" => Some(Self::TokyoNight),
-            "solarized-dark" => Some(Self::SolarizedDark),
-            "solarized-light" => Some(Self::SolarizedLight),
-            "dracula" => Some(Self::Dracula),
-            "gruvbox-dark" => Some(Self::GruvboxDark),
+            "bedterm-dark" | "default" => Some(Self::BedtermDark),
+            "bedterm-light" => Some(Self::BedtermLight),
             _ => None,
         }
     }
 
     pub fn build(&self) -> Palette {
         match self {
-            Self::Default => Palette::default(),
-            Self::TokyoNight => Self::palette_from_hexs(
-                (0xc0, 0xca, 0xf5),
-                (0x24, 0x28, 0x3b),
+            Self::BedtermDark => Palette::default(),
+            Self::BedtermLight => Self::palette_from_hexs(
+                (0x1A, 0x1A, 0x1A), // fg: near-black (#1A1A1A)
+                (0xFF, 0xFF, 0xFF), // bg: white
                 [
-                    0x1a1b26, 0xf7768e, 0x9ece6a, 0xe0af68, 0x7aa2f7, 0xbb9af7, 0x7dcfff, 0xa9b1d6,
-                    0x414868, 0xf7768e, 0x9ece6a, 0xe0af68, 0x7aa2f7, 0xbb9af7, 0x7dcfff, 0xc0caf5,
-                ],
-            ),
-            Self::SolarizedDark => Self::palette_from_hexs(
-                (0x83, 0x94, 0x96),
-                (0x00, 0x2b, 0x36),
-                [
-                    0x073642, 0xdc322f, 0x859900, 0xb58900, 0x268bd2, 0xd33682, 0x2aa198, 0xeee8d5,
-                    0x002b36, 0xcb4b16, 0x586e75, 0x657b83, 0x839496, 0x6c71c4, 0x93a1a1, 0xfdf6e3,
-                ],
-            ),
-            Self::SolarizedLight => Self::palette_from_hexs(
-                (0x65, 0x7b, 0x83),
-                (0xfd, 0xf6, 0xe3),
-                [
-                    0xeee8d5, 0xdc322f, 0x859900, 0xb58900, 0x268bd2, 0xd33682, 0x2aa198, 0x073642,
-                    0xfdf6e3, 0xcb4b16, 0x93a1a1, 0x839496, 0x657b83, 0x6c71c4, 0x586e75, 0x002b36,
-                ],
-            ),
-            Self::Dracula => Self::palette_from_hexs(
-                (0xf8, 0xf8, 0xf2),
-                (0x28, 0x2a, 0x36),
-                [
-                    0x21222c, 0xff5555, 0x50fa7b, 0xf1fa8c, 0xbd93f9, 0xff79c6, 0x8be9fd, 0xf8f8f2,
-                    0x6272a4, 0xff6e6e, 0x69ff94, 0xffffa5, 0xd6acff, 0xff92df, 0xa4ffff, 0xffffff,
-                ],
-            ),
-            Self::GruvboxDark => Self::palette_from_hexs(
-                (0xeb, 0xdb, 0xb2),
-                (0x28, 0x28, 0x28),
-                [
-                    0x282828, 0xcc241d, 0x98971a, 0xd79921, 0x458588, 0xb16286, 0x689d6a, 0xa89984,
-                    0x928374, 0xfb4934, 0xb8bb26, 0xfabd2f, 0x83a598, 0xd3869b, 0x8ec07c, 0xebdbb2,
+                    0x000000, 0xC91B00, 0x00A000, 0xA18400, 0x0059CB, 0xB000B0, 0x00A1A1, 0xBEBEBE,
+                    0x555555, 0xFF3F1F, 0x00CB00, 0xC8A800, 0x0071FF, 0xE000E0, 0x00C8C8, 0x1A1A1A,
                 ],
             ),
         }

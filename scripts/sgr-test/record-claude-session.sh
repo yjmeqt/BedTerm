@@ -25,7 +25,7 @@ TIMEOUT=180
 device="iphone17"
 stdin_mode=false
 prompt=""
-palette="tokyo-night"
+palette="bedterm-dark"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in

@@ -21,7 +21,7 @@ DEVICES=(
     "ipad-pro13"
 )
 
-PALETTES=("tokyo-night" "dracula" "gruvbox-dark")
+PALETTES=("bedterm-dark" "bedterm-light")
 
 mkdir -p "$OUTDIR"
 rm -f "$OUTDIR"/*.png
