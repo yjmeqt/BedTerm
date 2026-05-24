@@ -126,12 +126,16 @@ fn run(args: Args) -> Result<()> {
     let integration_script = fs::read_to_string(&args.integration)
         .with_context(|| format!("integration script not found: {}", args.integration.display()))?;
 
-    // Write a temp .zshrc that sources the integration script + suppresses
-    // the ZLE echo we'd get from sending `eval` via PTY write.
+    // Write a temp .zshrc that sources the integration script + forces
+    // terminal size. stty is needed because macOS doesn't send SIGWINCH
+    // after ioctl(TIOCSWINSZ); the shell must explicitly configure the tty.
     let tmpdir = tempfile::tempdir().context("create temp dir for ZDOTDIR")?;
     let zshrc = tmpdir.path().join(".zshrc");
-    fs::write(&zshrc, format!("{}\n", integration_script))
-        .context("write .zshrc")?;
+    let zshrc_content = format!(
+        "stty cols {} rows {} 2>/dev/null\n",
+        args.cols, args.rows
+    ) + &integration_script + "\n";
+    fs::write(&zshrc, &zshrc_content).context("write .zshrc")?;
 
     let pty_size = PtySize { rows: args.rows, cols: args.cols, pixel_width: 0, pixel_height: 0 };
     let pair = pty_system.openpty(pty_size).context("failed to open PTY")?;
