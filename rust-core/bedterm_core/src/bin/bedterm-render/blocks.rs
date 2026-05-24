@@ -1,0 +1,325 @@
+//! Block list mode: stdin → Terminal/FfiTerm → layout → draw_block_list → PNG.
+//!
+//! Feeds the same byte stream to both a Rust `Terminal` (for metadata extraction)
+//! and an FFI `BtTerm` (for cell resolution in draw_block_list).  Block IDs are
+//! deterministic so the renderer's `block_id`-based lookup finds matching cells.
+
+use std::fmt::Write as FmtWrite;
+use std::fs;
+use std::io::{self, Read};
+
+use metal::foreign_types::ForeignType;
+use metal::Device;
+
+use bedterm_core::ffi::BtPaletteView;
+use bedterm_core::renderer::block_list_ffi::bt_renderer_draw_block_list;
+use bedterm_core::renderer::Renderer;
+use bedterm_core::term::{BtRgb24, Palette, Terminal};
+
+use crate::context::RenderContext;
+use crate::layout::{self, palette_colors_from_term_palette};
+use crate::png::{self, OffscreenTarget};
+
+pub(crate) struct BlockArgs {
+    pub ui_scale: f32,
+    pub wrap_single_block: bool,
+    pub wrap_command: Option<String>,
+    pub wrap_exit_code: i32,
+    pub wrap_duration_ms: Option<u64>,
+    pub input: Option<String>,
+    /// Explicit --palette flag overrides context.
+    pub palette_override: Option<Palette>,
+    /// Scroll offset in points for sticky header testing.
+    pub scroll_y_pt: f32,
+}
+
+impl Default for BlockArgs {
+    fn default() -> Self {
+        Self {
+            ui_scale: 2.0,
+            wrap_single_block: false,
+            wrap_command: None,
+            wrap_exit_code: 0,
+            wrap_duration_ms: None,
+            input: None,
+            palette_override: None,
+            scroll_y_pt: 0.0,
+        }
+    }
+}
+
+fn resolve_palette(ctx: &RenderContext, override_: Option<&Palette>) -> Palette {
+    if let Some(p) = override_ {
+        return *p;
+    }
+    match &ctx.palette {
+        Some(name) => PalettePreset::from_str(name)
+            .map(|p| p.build())
+            .unwrap_or_default(),
+        None => Palette::default(),
+    }
+}
+
+// ── Palette presets ────────────────────────────────────────────────────
+
+pub(crate) enum PalettePreset {
+    /// BedTerm dark — matches `Tokens.xcassets` dark appearance.
+    BedtermDark,
+    /// BedTerm light — matches `Tokens.xcassets` light appearance.
+    BedtermLight,
+}
+
+impl PalettePreset {
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s {
+            "bedterm-dark" | "default" => Some(Self::BedtermDark),
+            "bedterm-light" => Some(Self::BedtermLight),
+            _ => None,
+        }
+    }
+
+    pub fn build(&self) -> Palette {
+        match self {
+            Self::BedtermDark => Palette::default(),
+            Self::BedtermLight => Self::palette_from_hexs(
+                (0x1A, 0x1A, 0x1A), // fg: near-black (#1A1A1A)
+                (0xFF, 0xFF, 0xFF), // bg: white
+                [
+                    0x000000, 0xC91B00, 0x00A000, 0xA18400, 0x0059CB, 0xB000B0, 0x00A1A1, 0xBEBEBE,
+                    0x555555, 0xFF3F1F, 0x00CB00, 0xC8A800, 0x0071FF, 0xE000E0, 0x00C8C8, 0x1A1A1A,
+                ],
+            ),
+        }
+    }
+
+    fn palette_from_hexs(fg: (u8, u8, u8), bg: (u8, u8, u8), ansi_hex: [u32; 16]) -> Palette {
+        Palette {
+            default_fg: BtRgb24 {
+                r: fg.0,
+                g: fg.1,
+                b: fg.2,
+            },
+            default_bg: BtRgb24 {
+                r: bg.0,
+                g: bg.1,
+                b: bg.2,
+            },
+            ansi: std::array::from_fn(|i| {
+                let h = ansi_hex[i];
+                BtRgb24 {
+                    r: ((h >> 16) & 0xff) as u8,
+                    g: ((h >> 8) & 0xff) as u8,
+                    b: (h & 0xff) as u8,
+                }
+            }),
+        }
+    }
+}
+
+// ── DCS protocol helpers ───────────────────────────────────────────────
+
+/// Build a DCS-wrapped shell-integration event.
+/// Format: `ESC P $ d <hex-encoded JSON> 0x9C`
+fn dcs_event(json: &str) -> Vec<u8> {
+    let hex: String = json.bytes().fold(String::new(), |mut s, b| {
+        let _ = write!(s, "{b:02x}");
+        s
+    });
+    let mut v = vec![0x1B, b'P', b'$', b'd'];
+    v.extend_from_slice(hex.as_bytes());
+    v.push(0x9C);
+    v
+}
+
+fn precmd_bytes() -> Vec<u8> {
+    dcs_event(r#"{"hook":"Precmd","value":{}}"#)
+}
+
+fn preexec_bytes(cmd: &str) -> Vec<u8> {
+    let json = format!(
+        r#"{{"hook":"Preexec","value":{{"command":"{}"}}}}"#,
+        json_escape(cmd)
+    );
+    dcs_event(&json)
+}
+
+fn command_finished_bytes(exit_code: i32) -> Vec<u8> {
+    let json = format!(
+        r#"{{"hook":"CommandFinished","value":{{"exit_code":{}}}}}"#,
+        exit_code
+    );
+    dcs_event(&json)
+}
+
+fn json_escape(s: &str) -> String {
+    s.replace('\\', "\\\\").replace('"', "\\\"")
+}
+
+/// Wrap raw output bytes in DCS shell-integration events so the block
+/// store creates a single sealed block with the given metadata.
+fn wrap_with_dcs(user_bytes: &[u8], args: &BlockArgs) -> Vec<u8> {
+    let mut out = Vec::new();
+    out.extend_from_slice(&precmd_bytes());
+    let cmd = args.wrap_command.as_deref().unwrap_or("unknown");
+    out.extend_from_slice(&preexec_bytes(cmd));
+    out.extend_from_slice(user_bytes);
+    out.extend_from_slice(&command_finished_bytes(args.wrap_exit_code));
+    out
+}
+
+// ── Palette → FFI ──────────────────────────────────────────────────────
+
+fn push_palette_to_ffi(ffi_term: *mut bedterm_core::ffi::BtTerm, palette: &Palette) {
+    let view = BtPaletteView {
+        default_fg: palette.default_fg,
+        default_bg: palette.default_bg,
+        ansi: palette.ansi,
+    };
+    unsafe {
+        bedterm_core::ffi::bt_term_set_palette(ffi_term, &view);
+    }
+}
+
+// ── Main entry point ───────────────────────────────────────────────────
+
+pub(crate) fn run(args: BlockArgs, ctx: &RenderContext) -> Result<(), Box<dyn std::error::Error>> {
+    let device = Device::system_default().ok_or("no Metal device found (must run on macOS)")?;
+    let queue = device.new_command_queue();
+
+    let mut renderer = unsafe {
+        Renderer::from_ptrs(
+            device.as_ptr() as *const std::ffi::c_void,
+            queue.as_ptr() as *const std::ffi::c_void,
+        )
+    }
+    .ok_or("failed to create renderer")?;
+
+    crate::font::register_system_font();
+    renderer.set_font(ctx.font_size_pt, ctx.scale);
+
+    // Derive terminal geometry from actual font metrics.
+    let (cell_w_px, cell_h_px) = renderer.cell_pixel_size();
+    let cell_w = cell_w_px as f32;
+    let cell_h = cell_h_px as f32;
+    let (vp_w, vp_h) = ctx.viewport_px();
+    let cols = ctx
+        .cols
+        .unwrap_or_else(|| (vp_w as f32 / cell_w).max(1.0) as u16);
+    let rows = ctx
+        .rows
+        .unwrap_or_else(|| (vp_h as f32 / cell_h).max(1.0) as u16);
+
+    let palette = resolve_palette(ctx, args.palette_override.as_ref());
+    let bg = palette.default_bg;
+    let clear = [
+        bg.r as f32 / 255.0,
+        bg.g as f32 / 255.0,
+        bg.b as f32 / 255.0,
+        1.0,
+    ];
+    renderer.set_clear_color(clear[0], clear[1], clear[2], clear[3]);
+    renderer.set_ui_font_sizes(15.0 * args.ui_scale, 12.0 * args.ui_scale, args.ui_scale);
+
+    let raw_bytes: Vec<u8> = match &args.input {
+        Some(path) => fs::read(path)?,
+        None => {
+            let mut buf = Vec::new();
+            io::stdin().read_to_end(&mut buf)?;
+            buf
+        }
+    };
+    let user_bytes = crate::context::normalize_newlines(&raw_bytes);
+
+    let stream_bytes = if args.wrap_single_block {
+        wrap_with_dcs(&user_bytes, &args)
+    } else {
+        user_bytes
+    };
+
+    // Rust Terminal for metadata + layout.
+    let mut terminal = Terminal::new(cols, rows);
+    terminal.set_palette(palette);
+    terminal.feed(&stream_bytes);
+
+    let blocks = terminal.blocks();
+    if blocks.is_empty() {
+        let target = OffscreenTarget::new(&device, &queue, vp_w, vp_h)
+            .ok_or("failed to create offscreen texture")?;
+        let pixels = target.read_pixels();
+        let stdout = io::stdout();
+        return png::write_png(&mut stdout.lock(), &pixels, vp_w, vp_h);
+    }
+
+    let ui_scale = args.ui_scale;
+    let width_px = vp_w as f32;
+
+    let row_height_pt = ctx.font_size_pt / ui_scale;
+    let ranges = layout::compute_block_ranges(blocks, row_height_pt);
+    let layout_entries = layout::build_layout_entries(&ranges, ui_scale, width_px);
+    let header_colors = palette_colors_from_term_palette(&palette);
+    let (mut headers, mut storage) =
+        layout::build_header_descriptors(&ranges, ui_scale, width_px, &header_colors);
+
+    // Sticky header: when scrolled, overlay the active block's header
+    // pinned at the top of the viewport (like iOS section headers).
+    let scroll_y_pt = args.scroll_y_pt;
+    let scroll_y_px = scroll_y_pt * ui_scale;
+    if scroll_y_pt > 0.0 {
+        if let Some(sticky) = layout::build_sticky_descriptor(
+            &ranges,
+            scroll_y_pt,
+            ui_scale,
+            width_px,
+            &header_colors,
+        ) {
+            // Remove the natural header for the pinned block so it
+            // isn't drawn twice (once in-flow, once sticky).
+            if let Some(idx) = headers.iter().position(|h| h.block_id == sticky.block_id) {
+                headers.remove(idx);
+                storage.remove(idx);
+            }
+            headers.push(sticky.entry);
+            storage.push(sticky.storage);
+        }
+    }
+    let _blob = layout::patch_header_pointers(&mut headers, &storage);
+
+    // FFI term: replay the SAME bytes so block IDs are identical.
+    let ffi_term = bedterm_core::ffi::bt_term_new(cols, rows);
+    push_palette_to_ffi(ffi_term, &palette);
+    unsafe {
+        bedterm_core::ffi::bt_term_feed(ffi_term, stream_bytes.as_ptr(), stream_bytes.len());
+    }
+
+    let target = OffscreenTarget::new(&device, &queue, vp_w, vp_h)
+        .ok_or("failed to create offscreen texture")?;
+
+    unsafe {
+        let ret = bt_renderer_draw_block_list(
+            &mut renderer as *mut Renderer as *mut bedterm_core::renderer::ffi::BtRenderer,
+            ffi_term,
+            target.texture_ptr(),
+            vp_w,
+            vp_h,
+            scroll_y_px,
+            layout_entries.as_ptr(),
+            layout_entries.len(),
+            headers.as_ptr(),
+            headers.len(),
+        );
+        if ret != 0 {
+            bedterm_core::ffi::bt_term_free(ffi_term);
+            return Err("bt_renderer_draw_block_list failed".into());
+        }
+        bedterm_core::ffi::bt_term_free(ffi_term);
+    }
+
+    let pixels = target.read_pixels();
+    let stdout = io::stdout();
+    png::write_png(&mut stdout.lock(), &pixels, vp_w, vp_h)?;
+
+    eprintln!(
+        "[blocks] cols={cols} rows={rows} cell={cell_w_px}×{cell_h_px}px viewport={vp_w}×{vp_h}px → PNG {vp_w}×{vp_h}"
+    );
+    Ok(())
+}

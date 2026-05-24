@@ -10,6 +10,7 @@ name = "bedterm-mock-ssh"
 path = "src/main.rs"
 
 [dependencies]
+bedterm_core = { path = "../bedterm_core" }
 russh = "0.45"
 russh-keys = "0.45"
 tokio = { version = "1", features = ["full"] }

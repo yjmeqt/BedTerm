@@ -7,7 +7,7 @@ pub mod cells;
 pub(crate) mod coretext_raster;
 pub mod ffi;
 pub(crate) mod font_system;
-pub(crate) mod glyph_raster;
+pub mod glyph_raster;
 pub(crate) mod header_band;
 pub mod icon_atlas;
 pub mod pipeline;
@@ -119,6 +119,11 @@ impl Renderer {
 
     pub fn set_clear_color(&mut self, r: f32, g: f32, b: f32, a: f32) {
         self.clear_color = [r, g, b, a];
+    }
+
+    /// Actual cell pixel dimensions after font registration.
+    pub fn cell_pixel_size(&self) -> (u32, u32) {
+        self.atlas.cell_px
     }
 
     pub fn set_font(&mut self, pixel_size: f32, dpr: f32) {
@@ -360,6 +365,7 @@ impl Renderer {
         let mut header_panel_verts: Vec<PanelVertex> = Vec::new();
         let mut header_cell_verts: Vec<CellVertex> = Vec::new();
         if !headers.is_empty() {
+            let (cell_w_px, cell_h_px) = self.atlas.cell_px;
             let mut ctx = crate::renderer::header_band::HeaderDrawContext {
                 subheadline_px: self.ui_subheadline_px,
                 caption2_px: self.ui_caption2_px,
@@ -369,6 +375,8 @@ impl Renderer {
                 scroll_y_px,
                 surface_bg_rgba: rgba_f32_to_u32(self.clear_color),
                 atlas: &mut self.atlas,
+                cell_w_px: cell_w_px as f32,
+                cell_h_px: cell_h_px as f32,
             };
             for h in headers.iter().filter(|h| h.is_sticky == 0) {
                 crate::renderer::header_band::emit_header(

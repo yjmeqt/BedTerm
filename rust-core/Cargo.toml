@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["bedterm_core", "bedterm-mock-ssh"]
+members = ["bedterm_core", "bedterm-mock-ssh", "bedterm-record"]
 
 [workspace.package]
 edition = "2021"

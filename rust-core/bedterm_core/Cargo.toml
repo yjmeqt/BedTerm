@@ -9,6 +9,10 @@ license.workspace = true
 name = "bedterm_core"
 crate-type = ["staticlib", "rlib"]
 
+[[bin]]
+name = "bedterm-render"
+path = "src/bin/bedterm-render/main.rs"
+
 [dependencies]
 alacritty_terminal = "0.26"
 metal = "0.32"

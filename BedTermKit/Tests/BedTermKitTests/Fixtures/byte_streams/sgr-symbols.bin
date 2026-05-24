@@ -1,0 +1,89 @@
+
+[1m── Block Elements ──[0m
+U+2588 full block       [0m█[0m
+U+2580 upper half       [0m▀[0m
+U+2584 lower half       [0m▄[0m
+U+258C left half        [0m▌[0m
+U+2590 right half       [0m▐[0m
+U+2598 quadrant UL      [0m▘[0m
+U+259D quadrant UR      [0m▝[0m
+U+2597 quadrant LR      [0m▗[0m
+U+2596 quadrant LL      [0m▖[0m
+U+259C quad UL+UR+LR    [0m▜[0m
+U+259B quad UL+UR+LL    [0m▛[0m
+U+259F quad all four    [0m▟[0m
+U+259A quad UL+LR       [0m▚[0m
+U+2599 quad UR+UL+LL+LR [0m▙[0m
+
+[1m── Geometric Shapes ──[0m
+U+25FC black med square [0m◼[0m
+U+25FB white med square [0m◻[0m
+U+25A0 black square     [0m■[0m
+U+25A1 white square     [0m□[0m
+U+25EF large circle     [0m◯[0m
+U+25CF black circle     [0m●[0m
+U+25CB white circle     [0m○[0m
+U+25B6 black rt triang  [0m▶[0m
+U+25C0 black lt triang  [0m◀[0m
+U+25B2 black up triang  [0m▲[0m
+U+25BC black dn triang  [0m▼[0m
+
+[1m── Miscellaneous Technical ──[0m
+U+23F5 black med rt tri [0m⏵[0m
+U+23F4 black med lt tri [0m⏴[0m
+U+23F0 alarm clock       [0m⏰[0m
+U+23FA black circle rec [0m⏺[0m
+U+23FB white circle rec [0m⏻[0m
+U+23BF dentistry vert    [0m⎿[0m
+
+[1m── Dingbats ──[0m
+U+273B teardrop asterisk [0m✻[0m
+U+2713 check mark        [0m✓[0m
+U+2717 ballot x          [0m✗[0m
+U+2726 black star        [0m✦[0m
+
+[1m── Adjacency check ──[0m
+[3mSolid bar:[0m         ████████████████████
+[3mChecker half:[0m      ▀▄▀▄▀▄▀▄▀▄▀▄▀▄▀▄▀▄
+[3mChecker quad:[0m      ▘▝▘▝▘▝▘▝▘▝▘▝▘▝▘▝▘▝
+[3mStair UL→LR:[0m       ▘▚▙█
+[3mStair UR→LL:[0m       ▝▚▛█
+[3mLeft half bar:[0m     ▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌▌
+[3mRight half bar:[0m    ▐▐▐▐▐▐▐▐▐▐▐▐▐▐▐▐▐▐▐▐
+
+[1m── Warp-style block separators ──[0m
+[3mSolid bar (full):[0m        [1m██████████████████████████████████████[0m
+[3mDim bar (full):[0m          [2m██████████████████████████████████████[0m
+[3mThick-thin upper:[0m       [1m▛▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▜[0m
+[3mThick-thin lower:[0m       [1m▙▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▟[0m
+[3mAngle start (bold):[0m      [1m▛▀▜[0m  [1m▛▀▀▀▜[0m
+[3mAngle end (bold):[0m        [1m▙▄▟[0m  [1m▙▄▄▄▟[0m
+[3mObserved pattern:[0m       ⏵⏵ ⏺ ✻ ◼ ◻ ⏺ ◯ ▘▘ ▝▝ ▝▜█████▛▘ ⎿
+
+[1m── Colour × symbol ──[0m
+█ [0mregular[0m  [31m █ [0m[32m █ [0m[33m █ [0m[34m █ [0m[35m █ [0m[36m █ [0m
+◼ [0mregular[0m  [31m ◼ [0m[32m ◼ [0m[33m ◼ [0m[34m ◼ [0m[35m ◼ [0m[36m ◼ [0m
+⏵ [0mregular[0m  [31m ⏵ [0m[32m ⏵ [0m[33m ⏵ [0m[34m ⏵ [0m[35m ⏵ [0m[36m ⏵ [0m
+✻ [0mregular[0m  [31m ✻ [0m[32m ✻ [0m[33m ✻ [0m[34m ✻ [0m[35m ✻ [0m[36m ✻ [0m
+
+[1m── SGR attributes over symbols ──[0m
+[1mbold[0m       [1m◼◻◯ █▀▄ ⏵⏺ ✻[0m
+[3mitalic[0m     [3m◼◻◯ █▀▄ ⏵⏺ ✻[0m
+[4munderline[0m  [4m◼◻◯ █▀▄ ⏵⏺ ✻[0m
+[7minverse[0m    [7m◼◻◯ █▀▄ ⏵⏺ ✻[0m
+[9mstrike[0m     [9m◼◻◯ █▀▄ ⏵⏺ ✻[0m
+[1;31mbold+fg[0m   [1;31m◼◻◯ █▀▄ ⏵⏺ ✻[0m
+[1;4mbold+und[0m  [1;4m◼◻◯ █▀▄ ⏵⏺ ✻[0m
+
+[1m── Dim (SGR 2) symbols ──[0m
+[3mdim full bar:[0m   [2m████████████████████[0m
+[3mdim shapes:[0m     [2m◼◻◯ ⏵⏺ ✻[0m
+
+[1m── Inverse + colour (bg fills cell) ──[0m
+[7;31mfg 31[0m [7;31m██████████[0m [7;31m▌▌▌▌▌[0m [7;31m◼◼◼[0m
+[7;32mfg 32[0m [7;32m██████████[0m [7;32m▌▌▌▌▌[0m [7;32m◼◼◼[0m
+[7;33mfg 33[0m [7;33m██████████[0m [7;33m▌▌▌▌▌[0m [7;33m◼◼◼[0m
+[7;34mfg 34[0m [7;34m██████████[0m [7;34m▌▌▌▌▌[0m [7;34m◼◼◼[0m
+[7;35mfg 35[0m [7;35m██████████[0m [7;35m▌▌▌▌▌[0m [7;35m◼◼◼[0m
+[7;36mfg 36[0m [7;36m██████████[0m [7;36m▌▌▌▌▌[0m [7;36m◼◼◼[0m
+

@@ -17,7 +17,7 @@
 //! Keeping the constants here means the Swift descriptor builder only
 //! sources data (strings, colors, ids), not geometry.
 
-use crate::renderer::atlas::{GlyphAtlas, UISlot};
+use crate::renderer::atlas::{GlyphAtlas, GlyphInfo, GlyphKey, UISlot};
 use crate::renderer::block_list_ffi::BtBlockHeaderEntry;
 use crate::renderer::cells::{CellVertex, PanelVertex, VERTICES_PER_CELL, VERTICES_PER_PANEL};
 use crate::renderer::icon_atlas::slot_for_agent;
@@ -39,23 +39,16 @@ pub(crate) struct HeaderDrawContext<'a> {
     pub subheadline_px: f32,
     pub caption2_px: f32,
     pub scale: f32,
-    /// Currently only used for horizontal-cull bookkeeping in tests;
-    /// real culling lives in the vertical axis (`viewport_h`). Kept
-    /// alongside `viewport_h` so the context block is self-describing.
     #[allow(dead_code)]
     pub viewport_w: f32,
     pub viewport_h: f32,
     pub scroll_y_px: f32,
-    /// Surface bg the renderer clears to — the terminal palette's
-    /// `default_bg`. Header bands paint this **explicitly** as an
-    /// opaque rectangle so they're a real surface (sticky bands need
-    /// it to occlude scrolling body cells underneath; natural bands
-    /// share the colour with the body but stay distinct geometry).
-    /// Text-run glyphs also anti-alias against this same value so
-    /// header chrome and body cells share one colour source — light↔
-    /// dark flips can't desync them.
     pub surface_bg_rgba: u32,
     pub atlas: &'a mut GlyphAtlas,
+    /// Width of a terminal cell in pixels — used for monospace command text.
+    pub cell_w_px: f32,
+    /// Height of a terminal cell in pixels.
+    pub cell_h_px: f32,
 }
 
 /// Emit vertices for one header descriptor into the caller's panel and
@@ -180,17 +173,13 @@ pub(crate) fn emit_header(
     let stack_top = y_screen + (h - stack_h) / 2.0;
 
     if let Some(cmd) = header_str(header.command_utf8, header.command_len) {
-        // 0.78 is the empirical baseline ratio for SF UI body text —
-        // matches what UIFont's lineHeight/ascent ratio comes out to
-        // across Dynamic Type sizes for subheadline/caption2. Close
-        // enough; precise typography lives behind cosmic-text shaping.
-        let baseline = stack_top + sub_px * 0.78;
-        emit_text_run(
+        // Center cell-height text vertically in the header band.
+        let cell_baseline = y_screen + (h + ctx.cell_h_px) * 0.5;
+        emit_mono_text_run(
             ctx,
             cmd,
-            sub_px,
             text_cursor_x,
-            baseline,
+            cell_baseline,
             max_text_w,
             header.command_fg_rgba,
             ctx.surface_bg_rgba,
@@ -353,6 +342,144 @@ fn append_textured_quad(
         fg,
         bg,
         is_color: 0.0,
+        _pad: [0.0; 3],
+    };
+    verts.push(v(0.0, 0.0));
+    verts.push(v(1.0, 0.0));
+    verts.push(v(0.0, 1.0));
+    verts.push(v(1.0, 0.0));
+    verts.push(v(1.0, 1.0));
+    verts.push(v(0.0, 1.0));
+}
+
+/// Render `text` using the terminal monospace font (cell glyph atlas).
+/// Each character advances by `cell_w_px` (×2 for wide glyphs).
+/// Truncates with "…" when the run exceeds `max_w`.
+#[allow(clippy::too_many_arguments)]
+fn emit_mono_text_run(
+    ctx: &mut HeaderDrawContext<'_>,
+    text: &str,
+    start_x: f32,
+    baseline_y: f32,
+    max_w: f32,
+    fg_rgba: u32,
+    bg_rgba: u32,
+    cell_verts: &mut Vec<CellVertex>,
+) {
+    if text.is_empty() || max_w <= 0.0 || ctx.cell_w_px <= 0.0 {
+        return;
+    }
+    let cell_w = ctx.cell_w_px;
+    let ellipsis_w = cell_w * 3.0; // "…" is one wide char but reserve 3 cells for safety
+    let fg = rgba_to_float(fg_rgba);
+    let bg = rgba_to_float(bg_rgba);
+
+    let mut pen_x = start_x;
+    let chars: Vec<char> = text.chars().collect();
+    let mut i = 0;
+    while i < chars.len() {
+        let ch = chars[i];
+        let key = GlyphKey {
+            codepoint: ch as u32,
+            bold: false,
+            italic: false,
+        };
+        ctx.atlas.ensure(key, false);
+        let info = ctx.atlas.lookup(key).copied();
+        let (uv_origin, uv_size, wide, is_color) = match info {
+            Some(g) => (g.uv_origin, g.uv_size, g.wide, g.is_color),
+            None => {
+                i += 1;
+                pen_x += cell_w;
+                continue;
+            }
+        };
+        let span = if wide { cell_w * 2.0 } else { cell_w };
+
+        // Check for truncation.
+        let remaining_w = if i == chars.len() - 1 {
+            0.0
+        } else if chars.len() - i <= 2 {
+            ellipsis_w
+        } else {
+            ellipsis_w + span
+        };
+        if pen_x + span + remaining_w > start_x + max_w && i < chars.len() - 1 {
+            // Emit ellipsis and stop.
+            let ell_key = GlyphKey {
+                codepoint: '…' as u32,
+                bold: false,
+                italic: false,
+            };
+            ctx.atlas.ensure(ell_key, false);
+            if let Some(ell_info) = ctx.atlas.lookup(ell_key).copied() {
+                emit_glyph_info_quad(
+                    cell_verts,
+                    pen_x,
+                    baseline_y,
+                    ctx.cell_w_px,
+                    ctx.cell_h_px,
+                    &ell_info,
+                    fg,
+                    bg,
+                );
+            }
+            break;
+        }
+
+        emit_glyph_info_quad(
+            cell_verts,
+            pen_x,
+            baseline_y,
+            ctx.cell_w_px,
+            ctx.cell_h_px,
+            &GlyphInfo {
+                uv_origin,
+                uv_size,
+                pixel_size: (ctx.cell_w_px as u32, ctx.cell_h_px as u32),
+                wide,
+                is_color,
+            },
+            fg,
+            bg,
+        );
+
+        pen_x += span;
+        i += 1;
+    }
+}
+
+/// Emit a single cell-glyph quad using a `GlyphInfo` (cell atlas lookup).
+#[allow(clippy::too_many_arguments)]
+fn emit_glyph_info_quad(
+    verts: &mut Vec<CellVertex>,
+    x: f32,
+    baseline_y: f32,
+    cell_w_px: f32,
+    cell_h_px: f32,
+    glyph: &GlyphInfo,
+    fg: [f32; 4],
+    bg: [f32; 4],
+) {
+    verts.reserve(VERTICES_PER_CELL);
+    let w = if glyph.wide {
+        cell_w_px * 2.0
+    } else {
+        cell_w_px
+    };
+    let h = cell_h_px;
+    let y = baseline_y - h; // cell top = baseline - cell_height
+    let (u0, v0) = glyph.uv_origin;
+    let (uw, vh) = glyph.uv_size;
+    let is_color = if glyph.is_color { 1.0 } else { 0.0 };
+    let v = |dx: f32, dy: f32| CellVertex {
+        pos_x: x + dx * w,
+        pos_y: y + dy * h,
+        uv_x: u0 + dx * uw,
+        uv_y: v0 + dy * vh,
+        fg,
+        bg,
+        is_color,
         _pad: [0.0; 3],
     };
     verts.push(v(0.0, 0.0));

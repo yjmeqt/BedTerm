@@ -47,7 +47,7 @@ pub struct CellMetrics {
 /// display-scale multiplication). `scale` is the display's pixel scale
 /// factor (DPR). The returned `RasterizedGlyph` is always in device-pixel
 /// coordinates.
-pub(crate) trait GlyphRasterizer {
+pub trait GlyphRasterizer {
     fn rasterize(
         &mut self,
         ch: char,
@@ -64,10 +64,10 @@ pub(crate) trait GlyphRasterizer {
 
 /// Existing swash-backed rasterizer. The default on non-Apple platforms.
 /// Kept on Apple platforms for tests and A/B comparison.
+#[derive(Default)]
 #[allow(dead_code)]
 pub struct SwashRasterizer;
 
-#[allow(dead_code)]
 impl SwashRasterizer {
     pub fn new() -> Self {
         Self

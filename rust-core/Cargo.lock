@@ -209,12 +209,23 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "bedterm_core",
  "clap",
  "portable-pty",
  "rand",
  "russh",
  "russh-keys",
  "tokio",
+]
+
+[[package]]
+name = "bedterm-record"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bedterm_core",
+ "portable-pty",
+ "tempfile",
 ]
 
 [[package]]

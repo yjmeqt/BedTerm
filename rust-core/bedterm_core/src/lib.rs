@@ -5,6 +5,7 @@ pub mod blocks;
 pub mod blocks_ffi;
 pub mod cli_agent;
 pub mod dcs;
+pub mod device_presets;
 pub mod ffi;
 pub mod persistence;
 pub mod renderer;
