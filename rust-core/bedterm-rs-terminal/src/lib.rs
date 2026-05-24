@@ -4,6 +4,7 @@
 //! a Metal-backed `BtRsMetalInputView` (view1) and a UITextView composer
 //! (view2). Focus is routed through `BtRsKeyboardCoordinator`.
 
+mod color;
 #[cfg(target_os = "ios")]
 mod geometry;
 #[cfg(target_os = "ios")]
