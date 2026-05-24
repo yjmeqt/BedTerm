@@ -1,5 +1,11 @@
 //! Deterministic text → RGBA mapping for view1's background.
 
+// The colour helpers are wired in `metal_view.rs`, which compiles only on iOS.
+// On other targets the unit tests still exercise them, but the public fns are
+// otherwise dead → allow the warnings so `cargo clippy -D warnings` stays
+// green on macOS hosts.
+#![cfg_attr(not(any(target_os = "ios", test)), allow(dead_code))]
+
 /// DJB2 hash. Stable, fast, no allocations.
 fn djb2(s: &str) -> u32 {
     let mut h: u32 = 5381;

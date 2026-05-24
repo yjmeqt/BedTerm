@@ -24,12 +24,13 @@ struct RsTerminalView: UIViewControllerRepresentable {
         @MainActor func makeVC() -> UIViewController {
             // Pass a raw pointer to self as the callback context.
             let ctx = Unmanaged.passRetained(self).toOpaque()
-            let ptr = bt_rs_terminal_create_vc({ rawCtx in
-                guard let rawCtx else { return }
-                let coordinator = Unmanaged<Coordinator>.fromOpaque(rawCtx)
-                    .takeUnretainedValue()
-                coordinator.onBack()
-            }, ctx)
+            let ptr = bt_rs_terminal_create_vc(
+                { rawCtx in
+                    guard let rawCtx else { return }
+                    let coordinator = Unmanaged<Coordinator>.fromOpaque(rawCtx)
+                        .takeUnretainedValue()
+                    coordinator.onBack()
+                }, ctx)
             guard let ptr else {
                 // Fallback: plain UIViewController if Rust returned null.
                 return UIViewController()
