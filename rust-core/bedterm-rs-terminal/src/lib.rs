@@ -6,6 +6,8 @@
 
 mod color;
 #[cfg(target_os = "ios")]
+mod coordinator;
+#[cfg(target_os = "ios")]
 mod geometry;
 #[cfg(target_os = "ios")]
 mod metal_view;
