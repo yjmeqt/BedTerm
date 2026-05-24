@@ -2,6 +2,7 @@ import SwiftUI
 
 struct TerminalScreen: View {
     @Environment(BedTermSettings.self) private var settings
+    @Environment(\.colorScheme) private var colorScheme
     @State var session: TerminalSession
     @State private var keyBar: KeyBarController
     @State private var composer: ComposerController
@@ -41,7 +42,10 @@ struct TerminalScreen: View {
     /// alt-screen; once a TUI takes over we surrender the inset back to the
     /// system so the Dynamic Island doesn't overlap meaningful content.
     private var ignoredTerminalEdges: Edge.Set {
-        reserveTopSafeArea ? .horizontal : [.top, .horizontal]
+        // Block mode pins headers at the viewport top — we need the top
+        // safe area honoured or the sticky band paints behind the nav bar.
+        if displayMode == .blockList { return .horizontal }
+        return reserveTopSafeArea ? .horizontal : [.top, .horizontal]
     }
 
     /// Whether to show the Block list instead of the Classic grid. Block
@@ -158,7 +162,12 @@ struct TerminalScreen: View {
                     focusHandle: focusHandle,
                     yieldFirstResponder: composer.isOpen || keyboardHidden,
                     displayMode: displayMode,
-                    onMetalView: { metalView = $0 }
+                    onMetalView: { view in
+                        // Defer to next runloop tick — makeUIView fires
+                        // during a SwiftUI render pass and direct @State
+                        // writes here can be silently dropped.
+                        DispatchQueue.main.async { metalView = view }
+                    }
                 )
                 .ignoresSafeArea(edges: ignoredTerminalEdges)
                 .transaction(value: reserveTopSafeArea) { $0.animation = nil }
@@ -173,6 +182,14 @@ struct TerminalScreen: View {
                         Task { await reconnect() }
                     }
                     .padding(.top, 8)
+                }
+
+                if TerminalSession.shouldShowConnectingOverlay(session.state) {
+                    ConnectingOverlay(host: hostName) {
+                        session.disconnect()
+                        onBack()
+                    }
+                    .transition(.opacity)
                 }
 
                 #if DEBUG
@@ -244,6 +261,11 @@ struct TerminalScreen: View {
         .onChange(of: keyboard.isHidden) { _, hidden in
             if keyboardHidden != hidden { keyboardHidden = hidden }
         }
+        .onChange(of: colorScheme) { _, _ in
+            // System appearance flipped — MTKView's trait observer can
+            // miss app-level changes, so refresh palette explicitly.
+            metalView?.applyAppearance()
+        }
         .toolbar {
             // Back + × cluster on the leading side; trailing reserved
             // for a future per-session action (PRD R3).
@@ -298,7 +320,7 @@ struct TerminalScreen: View {
     /// Resolve the shell-integration payload to push at connect time. Returns
     /// `nil` when the user hasn't opted in, so the channel stays pristine.
     private func bootstrapPayload() -> String? {
-        guard settings.installShellIntegrationOnConnect else { return nil }
+        guard settings.showCommandBlocks else { return nil }
         return ShellIntegrationScript.bootstrapPayload()
     }
 
@@ -366,25 +388,3 @@ struct TerminalScreen: View {
         )
     }
 }
-
-#if DEBUG
-    extension TerminalScreen {
-        /// Debug-only: build a TerminalScreen against a caller-supplied SSH
-        /// client (e.g. CitadelSSHClient pointed at the loopback
-        /// `bedterm-mock-ssh` server). Bypasses the hosts list / view model.
-        init(
-            mockSSHClient: any SSHClient,
-            credential: HostCredential,
-            onExit: @escaping () -> Void
-        ) {
-            let session = TerminalSession(client: mockSSHClient, hostID: UUID(), persistence: nil)
-            self.init(
-                session: session,
-                credential: credential,
-                hostName: "mock-ssh",
-                onBack: onExit,
-                onKill: { _ in onExit() }
-            )
-        }
-    }
-#endif

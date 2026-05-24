@@ -7,7 +7,8 @@ struct BedTermApp: App {
     @State private var toaster = Toaster()
     @State private var settings = BedTermSettings()
     @State private var persistenceHandle: PersistenceHandle?
-    @State private var persistedSnapshots: PersistedSessionSnapshotStore?
+    /// Default to a no-op store; attach the SQLite handle when it opens.
+    @State private var persistedSnapshots = PersistedSessionSnapshotStore(handle: nil)
 
     @State private var onboardingDone: Bool =
         OnboardingViewModel.hasCompleted
@@ -15,34 +16,28 @@ struct BedTermApp: App {
 
     var body: some Scene {
         WindowGroup {
-            rootContent
+            navigationRoot
                 .environment(\.toaster, toaster)
                 .environment(settings)
                 .environment(\.persistenceHandle, persistenceHandle)
+                .environment(persistedSnapshots)
                 .task {
                     if persistenceHandle == nil {
                         let dbURL = URL.applicationSupportDirectory.appending(
                             path: "BedTerm/sessions.sqlite")
-                        persistenceHandle = PersistenceHandle.open(at: dbURL)
-                    }
-                    if persistedSnapshots == nil, let handle = persistenceHandle {
-                        persistedSnapshots = PersistedSessionSnapshotStore(handle: handle)
+                        // SQLite open can stall on WAL recovery or a stale
+                        // file lock after a prior force-quit. Run it off the
+                        // main actor so the HostsScreen stays interactive
+                        // even if the open never returns.
+                        let handle = await Task.detached(priority: .userInitiated) {
+                            PersistenceHandle.open(at: dbURL)
+                        }.value
+                        if let handle {
+                            persistedSnapshots.attach(handle: handle)
+                            persistenceHandle = handle
+                        }
                     }
                 }
-        }
-    }
-
-    /// Injects `PersistedSessionSnapshotStore` once SQLite is open (usually
-    /// < 50 ms). Until then a transient `ProgressView` is shown — barely
-    /// visible in practice since SQLite open is synchronous.
-    @ViewBuilder
-    private var rootContent: some View {
-        if let store = persistedSnapshots {
-            navigationRoot
-                .environment(store)
-        } else {
-            ProgressView()
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
 

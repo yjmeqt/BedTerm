@@ -9,17 +9,34 @@ import Observation
 public final class PersistedSessionSnapshotStore {
     public private(set) var snapshots: [SessionSnapshot] = []
 
-    private let handle: PersistenceHandle
+    private var handle: PersistenceHandle?
 
-    public init(handle: PersistenceHandle) {
+    public init(handle: PersistenceHandle?) {
         self.handle = handle
     }
 
-    /// Return all snapshots for a host, reloading from SQLite first. Cheap
-    /// (returns at most 10 rows per host).
+    /// Upgrade a no-op store (constructed with `handle: nil`) to a
+    /// SQLite-backed one once `PersistenceHandle.open` completes off-main.
+    /// Lets BedTermApp hold a single store identity for the app lifetime
+    /// so child views' captured references stay valid.
+    public func attach(handle: PersistenceHandle) {
+        if let existing = self.handle {
+            assert(
+                existing === handle,
+                "PersistedSessionSnapshotStore.attach called twice with a different handle"
+            )
+            return
+        }
+        self.handle = handle
+    }
+
+    /// Pure filter over the cached snapshot list. Safe to call from SwiftUI
+    /// `body`. Trigger a refresh explicitly via `reload(forHost:)` from a
+    /// `.task` or `.onChange` — calling reload here mutates `snapshots` and
+    /// invalidates the surrounding view, which spins into a render loop on
+    /// devices that don't coalesce same-tick invalidations.
     public func snapshots(forHost hostID: UUID) -> [SessionSnapshot] {
-        reload(forHost: hostID)
-        return snapshots.filter { $0.hostID == hostID }
+        snapshots.filter { $0.hostID == hostID }
     }
 
     public func snapshot(id: UUID) -> SessionSnapshot? {
@@ -28,6 +45,7 @@ public final class PersistedSessionSnapshotStore {
 
     /// Reload snapshot metadata for one host from SQLite.
     public func reload(forHost hostID: UUID) {
+        guard let handle else { return }
         let hostStr = hostID.uuidString
         let listPtr: UnsafeMutablePointer<CSnapshotList>? = hostStr.withCString { cstr in
             bedterm_persistence_list(handle.unsafeHandle, cstr)
@@ -62,6 +80,10 @@ public final class PersistedSessionSnapshotStore {
     }
 
     public func discard(id: UUID) {
+        guard let handle else {
+            snapshots.removeAll { $0.id == id }
+            return
+        }
         id.uuidString.withCString { cstr in
             bedterm_persistence_discard(handle.unsafeHandle, cstr)
         }

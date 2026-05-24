@@ -63,7 +63,15 @@ public struct HostsScreen: View {
             .onChange(of: viewModel.pendingMismatch?.sourceID) { _, _ in
                 handlePendingMismatchChanged()
             }
-            .privacySensitive()
+            .onChange(of: persistenceHandle == nil) { _, _ in
+                // SQLite opens off-main in BedTermApp.task; rewire once the
+                // handle goes non-nil so connect flows actually persist.
+                viewModel.persistenceHandle = persistenceHandle
+                reloadAllSnapshots()
+            }
+            .task(id: viewModel.entries.map(\.id)) {
+                reloadAllSnapshots()
+            }
     }
 
     @ToolbarContentBuilder
@@ -336,7 +344,7 @@ public struct HostsScreen: View {
         // BedTermSettings is `@MainActor @Observable` and the closure
         // runs on the main actor.
         viewModel.bootstrapPayloadProvider = { [settings] in
-            guard settings.installShellIntegrationOnConnect else { return nil }
+            guard settings.showCommandBlocks else { return nil }
             return ShellIntegrationScript.bootstrapPayload()
         }
         guard !didFirstAppear else { return }
@@ -347,6 +355,13 @@ public struct HostsScreen: View {
             defaults.set(true, forKey: Self.firstRunShortcutKey)
             pendingConnectOnSave = true
             path.append(AppRoute.hostForm(nil))
+        }
+    }
+
+    private func reloadAllSnapshots() {
+        guard persistenceHandle != nil else { return }
+        for entry in viewModel.entries {
+            snapshotStore.reload(forHost: entry.id)
         }
     }
 

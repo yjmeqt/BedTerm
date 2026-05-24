@@ -49,7 +49,7 @@ public final class HostsViewModel {
     public var onConnectError: ((UUID, String, Bool) -> Void)?
     /// Resolves the shell-integration heredoc to push at connect time.
     /// Set by `HostsScreen` after the SwiftUI environment is wired so we
-    /// can read `BedTermSettings.installShellIntegrationOnConnect`. Nil
+    /// can read `BedTermSettings.showCommandBlocks`. Nil
     /// keeps the channel pristine.
     public var bootstrapPayloadProvider: (@MainActor () -> String?)?
 
@@ -64,12 +64,15 @@ public final class HostsViewModel {
     /// Killed-session snapshot store. Set after init by the host screen
     /// from the SwiftUI environment so this view model can preserve
     /// scrollback + last-CWD when a session ends (PRD R1.killed_keeps_snapshot).
-    public weak var snapshotStore: PersistedSessionSnapshotStore?
+    /// Strong ref: BedTermApp owns the single store instance for the app
+    /// lifetime via `@State`, so there is no retain cycle.
+    public var snapshotStore: PersistedSessionSnapshotStore?
 
     /// Process-wide SQLite persistence layer. Set by the host screen from the
     /// SwiftUI environment after init. When nil, sessions are created without
-    /// persistence (debug / first-unlock scenarios).
-    public weak var persistenceHandle: PersistenceHandle?
+    /// persistence (debug / first-unlock scenarios). Strong ref: BedTermApp
+    /// owns the handle for the app lifetime.
+    public var persistenceHandle: PersistenceHandle?
 
     public init(store: HostsStore = HostsStore()) {
         self.store = store

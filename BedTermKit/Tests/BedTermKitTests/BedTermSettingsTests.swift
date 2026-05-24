@@ -40,4 +40,42 @@ struct BedTermSettingsTests {
         let reloaded = BedTermSettings(defaults: defaults)
         #expect(reloaded.reserveTopSafeAreaInAltScreen)
     }
+
+    @Test("command blocks toggle persists")
+    func commandBlocksTogglePersists() throws {
+        let defaults = try makeDefaults()
+        let settings = BedTermSettings(defaults: defaults)
+        settings.showCommandBlocks = false
+
+        let reloaded = BedTermSettings(defaults: defaults)
+        #expect(!reloaded.showCommandBlocks)
+    }
+
+    @Test("migrates old shell-integration key when on")
+    func migratesOldShellKeyWhenOn() throws {
+        let defaults = try makeDefaults()
+        // Simulate pre-migration state: old key exists and is true.
+        defaults.set(true, forKey: "settings.installShellIntegrationOnConnect")
+        let settings = BedTermSettings(defaults: defaults)
+        #expect(settings.showCommandBlocks)
+        #expect(defaults.object(forKey: "settings.installShellIntegrationOnConnect") == nil)
+    }
+
+    @Test("migrates old shell-integration key when off")
+    func migratesOldShellKeyWhenOff() throws {
+        let defaults = try makeDefaults()
+        defaults.set(false, forKey: "settings.installShellIntegrationOnConnect")
+        let settings = BedTermSettings(defaults: defaults)
+        // User had explicitly disabled shell integration; blocks follow.
+        #expect(!settings.showCommandBlocks)
+        #expect(defaults.object(forKey: "settings.installShellIntegrationOnConnect") == nil)
+    }
+
+    @Test("migration respects new key when old key is absent")
+    func migrationRespectsNewKey() throws {
+        let defaults = try makeDefaults()
+        defaults.set(false, forKey: "settings.showCommandBlocks")
+        let settings = BedTermSettings(defaults: defaults)
+        #expect(!settings.showCommandBlocks)
+    }
 }

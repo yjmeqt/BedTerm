@@ -33,3 +33,8 @@ tempfile = "3"
 
 [build-dependencies]
 cbindgen = "0.27"
+
+[target.'cfg(any(target_os = "ios", target_os = "macos"))'.dependencies]
+core-text = "22.0"
+core-graphics = "0.25"
+core-foundation = "0.10"
