@@ -39,7 +39,17 @@ struct SettingsScreen: View {
                 Section {
                     Toggle(isOn: $settings.showCommandBlocks) {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Command blocks")
+                            HStack(spacing: 6) {
+                                Text("Command blocks")
+                                Text("Beta")
+                                    .font(.caption2.weight(.semibold))
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(
+                                        Capsule().fill(Color("ShadcnBorder", bundle: .module))
+                                    )
+                                    .foregroundStyle(Color("ShadcnMutedForeground", bundle: .module))
+                            }
                             Text(
                                 """
                                 Show each command and its output as a separate \
@@ -50,7 +60,8 @@ struct SettingsScreen: View {
                                 blocks won't show command metadata. \
                                 BedTerm uses Warp's DCS hook protocol, not \
                                 OSC 133, so third-party integrations won't \
-                                drive it.
+                                drive it. This feature is still in beta and off \
+                                by default.
                                 """
                             )
                             .font(.footnote)

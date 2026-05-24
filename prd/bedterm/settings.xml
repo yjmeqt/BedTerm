@@ -12,6 +12,7 @@ A dedicated Settings screen, separate from the connection editor, that exposes u
   <rule id="keepalive_setting" status="❌" context="Settings → Connection">The user can choose the TCP keepalive idle interval used by every SSH session. Options include Off, 15s, 30s (default), 60s, 120s. The current selection is persisted across launches and applied to subsequent connections.</rule>
   <rule id="autoreconnect_setting" status="❌" context="Settings → Connection">A toggle "Reconnect on resume" controls whether the app automatically retries the last session when it returns to the foreground and the session was previously dropped. Default off (so a stranded session shows the existing reconnect banner instead of reconnecting silently).</rule>
   <rule id="defaults_when_unset" status="❌">If the user has never opened Settings, the app behaves as if the defaults above were chosen (keepalive 30s, auto-reconnect off). The user does not have to visit Settings to get sane behaviour.</rule>
+  <rule id="command_blocks_setting" status="❌" context="Settings → Blocks">A toggle "Command blocks" controls whether sessions render as Warp-style command blocks (Terminal View R3) instead of the Classic inline-prompt grid. The row is labelled with a "Beta" badge because the feature is still in development. Default off — new users see Classic view (R2) until they explicitly opt in.</rule>
 </requirement>
 
 </prd>
