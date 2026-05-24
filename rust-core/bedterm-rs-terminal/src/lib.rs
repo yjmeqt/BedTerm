@@ -62,7 +62,7 @@ mod ios {
     use objc2_foundation::{MainThreadMarker, NSNotificationCenter, NSString};
     use objc2_ui_kit::{
         UIBarButtonItem, UIBarButtonItemStyle, UIColor, UIFont, UINavigationItem, UITextView,
-        UITextViewDelegate, UIView, UIViewController,
+        UIViewController,
     };
     use std::cell::{Cell, RefCell};
 
@@ -349,6 +349,36 @@ mod ios {
             fn keyboard_will_hide(&self, _notification: &NSObject) {
                 self.ivars().keyboard_height.set(0.0);
                 self.relayout();
+            }
+
+            #[method(viewWillDisappear:)]
+            fn view_will_disappear(&self, animated: bool) {
+                let _: () = unsafe { msg_send![super(self), viewWillDisappear: animated] };
+                let center: Retained<NSNotificationCenter> =
+                    unsafe { msg_send_id![NSNotificationCenter::class(), defaultCenter] };
+                let _: () = unsafe { msg_send![&*center, removeObserver: self as *const _ as *const AnyObject] };
+            }
+
+            #[method(textViewDidChange:)]
+            fn text_view_did_change(&self, _text_view: &UITextView) {
+                let content_height: CGFloat = {
+                    let v2_borrow = self.ivars().view2.borrow();
+                    match v2_borrow.as_ref() {
+                        Some(v2) => {
+                            let s: CGSize = unsafe { msg_send![&**v2, contentSize] };
+                            s.height
+                        }
+                        None => return,
+                    }
+                };
+                let min_h = self.ivars().one_line_height.get();
+                let max_h = self.ivars().three_line_height.get();
+                let clamped = content_height.max(min_h).min(max_h);
+                let prev = self.ivars().view2_height.get();
+                if (clamped - prev).abs() > 0.5 {
+                    self.ivars().view2_height.set(clamped);
+                    self.relayout();
+                }
             }
         }
     );
