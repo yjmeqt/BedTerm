@@ -55,20 +55,107 @@ pub unsafe extern "C" fn bt_rs_terminal_release_vc(vc_ptr: *mut std::ffi::c_void
 #[cfg(target_os = "ios")]
 mod ios {
     use super::BtRsBackCallback;
+    use objc2::encode::{Encode, Encoding, RefEncode};
     use objc2::rc::Retained;
+    use objc2::runtime::{AnyObject, NSObject};
     use objc2::{declare_class, msg_send, msg_send_id, sel, ClassType, DeclaredClass};
-    use objc2_foundation::{MainThreadMarker, NSString};
+    use objc2_foundation::{MainThreadMarker, NSNotificationCenter, NSString};
     use objc2_ui_kit::{
-        UIBarButtonItem, UIBarButtonItemStyle, UIColor, UINavigationItem, UIViewController,
+        UIBarButtonItem, UIBarButtonItemStyle, UIColor, UIFont, UINavigationItem, UITextView,
+        UITextViewDelegate, UIView, UIViewController,
     };
-    use std::cell::Cell;
+    use std::cell::{Cell, RefCell};
+
+    /// CoreGraphics primitive types. On iOS (64-bit) `CGFloat` is `f64`.
+    /// Defined locally to keep objc2-foundation feature set minimal.
+    pub(super) type CGFloat = f64;
+
+    #[repr(C)]
+    #[derive(Clone, Copy, Default)]
+    pub(super) struct CGPoint {
+        pub x: CGFloat,
+        pub y: CGFloat,
+    }
+
+    #[repr(C)]
+    #[derive(Clone, Copy, Default)]
+    pub(super) struct CGSize {
+        pub width: CGFloat,
+        pub height: CGFloat,
+    }
+
+    #[repr(C)]
+    #[derive(Clone, Copy, Default)]
+    pub(super) struct CGRect {
+        pub origin: CGPoint,
+        pub size: CGSize,
+    }
+
+    #[repr(C)]
+    #[derive(Clone, Copy, Default)]
+    pub(super) struct UIEdgeInsets {
+        pub top: CGFloat,
+        pub left: CGFloat,
+        pub bottom: CGFloat,
+        pub right: CGFloat,
+    }
+
+    // SAFETY: All geometry structs are `#[repr(C)]` with matching ObjC layout.
+    unsafe impl Encode for CGPoint {
+        const ENCODING: Encoding =
+            Encoding::Struct("CGPoint", &[CGFloat::ENCODING, CGFloat::ENCODING]);
+    }
+    unsafe impl RefEncode for CGPoint {
+        const ENCODING_REF: Encoding = Encoding::Pointer(&Self::ENCODING);
+    }
+    unsafe impl Encode for CGSize {
+        const ENCODING: Encoding =
+            Encoding::Struct("CGSize", &[CGFloat::ENCODING, CGFloat::ENCODING]);
+    }
+    unsafe impl RefEncode for CGSize {
+        const ENCODING_REF: Encoding = Encoding::Pointer(&Self::ENCODING);
+    }
+    unsafe impl Encode for CGRect {
+        const ENCODING: Encoding =
+            Encoding::Struct("CGRect", &[CGPoint::ENCODING, CGSize::ENCODING]);
+    }
+    unsafe impl RefEncode for CGRect {
+        const ENCODING_REF: Encoding = Encoding::Pointer(&Self::ENCODING);
+    }
+    unsafe impl Encode for UIEdgeInsets {
+        const ENCODING: Encoding = Encoding::Struct(
+            "UIEdgeInsets",
+            &[
+                CGFloat::ENCODING,
+                CGFloat::ENCODING,
+                CGFloat::ENCODING,
+                CGFloat::ENCODING,
+            ],
+        );
+    }
+    unsafe impl RefEncode for UIEdgeInsets {
+        const ENCODING_REF: Encoding = Encoding::Pointer(&Self::ENCODING);
+    }
 
     /// Per-instance state stored as ivars.
+    #[derive(Default)]
     pub struct Ivars {
         /// C callback to fire on back-tap (may be None).
         on_back: Cell<Option<BtRsBackCallback>>,
         /// Context pointer for the callback. Only accessed on the main thread.
         ctx: Cell<*mut std::ffi::c_void>,
+        /// Upper text view — fills the area between safe-area top and view2.top.
+        view1: RefCell<Option<Retained<UITextView>>>,
+        /// Lower composer text view — sits above the keyboard, 1–3 lines tall.
+        view2: RefCell<Option<Retained<UITextView>>>,
+        /// Current keyboard height (0 when hidden). Updated by notifications.
+        keyboard_height: Cell<CGFloat>,
+        /// Current dynamic height of view2 (clamped 1–3 lines).
+        view2_height: Cell<CGFloat>,
+        /// One-line height (font.lineHeight + textContainerInset.top/bottom).
+        one_line_height: Cell<CGFloat>,
+        /// Three-line ceiling for view2.
+        three_line_height: Cell<CGFloat>,
     }
 
     // SAFETY: Only accessed on the main thread (MainThreadOnly mutability).
@@ -97,16 +184,13 @@ mod ios {
                 let mtm = unsafe { MainThreadMarker::new_unchecked() };
 
                 // Background colour — system background so it respects dark mode.
-                // `systemBackgroundColor` is in the UIInterface feature of objc2-ui-kit
-                // so we call it through msg_send! to keep feature dependencies minimal.
                 let bg: Retained<UIColor> =
                     unsafe { msg_send_id![UIColor::class(), systemBackgroundColor] };
                 if let Some(view) = self.view() {
                     view.setBackgroundColor(Some(&bg));
                 }
 
-                // Back bar button item.
-                // UIBarButtonItem is MainThreadOnly so use mtm.alloc().
+                // ---------- Back bar button (unchanged) ----------
                 let back_title = NSString::from_str("Back");
                 let back_btn: Retained<UIBarButtonItem> = unsafe {
                     UIBarButtonItem::initWithTitle_style_target_action(
@@ -117,10 +201,76 @@ mod ios {
                         Some(sel!(backButtonTapped)),
                     )
                 };
-
                 let nav_item: Retained<UINavigationItem> =
                     unsafe { msg_send_id![self, navigationItem] };
                 unsafe { nav_item.setLeftBarButtonItem(Some(&back_btn)) };
+
+                // ---------- Text views ----------
+                let zero = CGRect::default();
+
+                // view1 — main editable area
+                let view1: Retained<UITextView> = unsafe {
+                    msg_send_id![mtm.alloc::<UITextView>(), initWithFrame: zero]
+                };
+                // view2 — composer that hugs the keyboard
+                let view2: Retained<UITextView> = unsafe {
+                    msg_send_id![mtm.alloc::<UITextView>(), initWithFrame: zero]
+                };
+
+                // Make view2 visually distinct so the user can see the boundary.
+                let secondary_bg: Retained<UIColor> =
+                    unsafe { msg_send_id![UIColor::class(), secondarySystemBackgroundColor] };
+                let _: () = unsafe { msg_send![&*view2, setBackgroundColor: &*secondary_bg] };
+
+                // Set self as view2's delegate so we can react to text changes.
+                let _: () = unsafe { msg_send![&*view2, setDelegate: self] };
+
+                // Measure one-line height from the actual font + container inset.
+                let font: Retained<UIFont> = unsafe { msg_send_id![&*view2, font] };
+                let line_h: CGFloat = unsafe { msg_send![&*font, lineHeight] };
+                let inset: UIEdgeInsets = unsafe { msg_send![&*view2, textContainerInset] };
+                let one_line = line_h + inset.top + inset.bottom;
+                let three_line = line_h * 3.0 + inset.top + inset.bottom;
+
+                self.ivars().one_line_height.set(one_line);
+                self.ivars().three_line_height.set(three_line);
+                self.ivars().view2_height.set(one_line);
+                self.ivars().keyboard_height.set(0.0);
+
+                // Add as subviews.
+                if let Some(view) = self.view() {
+                    let _: () = unsafe { msg_send![&*view, addSubview: &*view1] };
+                    let _: () = unsafe { msg_send![&*view, addSubview: &*view2] };
+                }
+
+                // Store strong refs.
+                *self.ivars().view1.borrow_mut() = Some(view1);
+                *self.ivars().view2.borrow_mut() = Some(view2);
+
+                // Register keyboard observers.
+                let center: Retained<NSNotificationCenter> =
+                    unsafe { msg_send_id![NSNotificationCenter::class(), defaultCenter] };
+                let show_name = NSString::from_str("UIKeyboardWillShowNotification");
+                let hide_name = NSString::from_str("UIKeyboardWillHideNotification");
+                let null_obj: *const AnyObject = std::ptr::null();
+                let _: () = unsafe {
+                    msg_send![
+                        &*center,
+                        addObserver: self as *const _ as *const AnyObject,
+                        selector: sel!(keyboardWillShow:),
+                        name: &*show_name,
+                        object: null_obj,
+                    ]
+                };
+                let _: () = unsafe {
+                    msg_send![
+                        &*center,
+                        addObserver: self as *const _ as *const AnyObject,
+                        selector: sel!(keyboardWillHide:),
+                        name: &*hide_name,
+                        object: null_obj,
+                    ]
+                };
             }
 
             #[method(backButtonTapped)]
