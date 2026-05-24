@@ -77,6 +77,63 @@ After implementing a rule, set its `status="✅"` and run `prd format` to normal
 
 ## Testing methodology
 
+All visual changes to the terminal renderer (font, layout, palette, block headers, cell grid)
+MUST be verified offline via the CLI tools **before** touching the iOS simulator. The CLI toolchain
+is the fast path — no simulator boot, no Xcode build, instant PNG output.
+
+### Unit convention
+
+All spatial values in CLI flags are **points** (UIScreen.bounds logic units).
+Device pixels = points × scale.
+
+```
+--device iphone17          # 402×874 pt @ 3x → 1206×2622 px PNG
+--font-size 14             # font size in points (matches UIFont.pointSize)
+--scale 3.0                # device-pixel ratio (matches UIScreen.scale)
+```
+
+### Device presets
+
+Use `--device <name>` to pick a real iOS screen. Scale and viewport are set automatically.
+Full list in `rust-core/bedterm_core/src/bin/bedterm-render/context.rs`.
+
+| Flag | Viewport (pt) | Scale |
+|---|---|---|
+| `--device iphone17` | 402×874 | @3x |
+| `--device iphone17-promax` | 440×956 | @3x |
+| `--device iphone16` | 393×852 | @3x |
+| `--device iphone16-promax` | 440×956 | @3x |
+| `--device iphone15` | 393×852 | @3x |
+| `--device iphone15-promax` | 430×932 | @3x |
+| `--device iphone-se3` | 375×667 | @2x |
+| `--device ipad-pro13` | 1032×1376 | @2x |
+| `--device ipad-pro11` | 834×1210 | @2x |
+| `--device ipad-air13` | 1024×1366 | @2x |
+| `--device ipad-mini` | 744×1133 | @2x |
+| `--device mac` | 1200×800 | @2x |
+
+### Palette
+
+Two presets matching the iOS app's `Tokens.xcassets` colour catalogue:
+
+```sh
+--palette bedterm-dark     # default: fg=#CCC, bg=#000, ANSI per asset catalog dark appearance
+--palette bedterm-light    # fg=#1A1A1A, bg=#FFF, ANSI per asset catalog light appearance
+```
+
+Header chrome (command text, subtitle, divider, band fill) derives from the active palette
+automatically — no per-palette hardcoded tokens needed.
+
+### Query cell metrics
+
+```sh
+# Font size in pts, scale = device-pixel ratio
+cargo run -p bedterm_core --bin bedterm-render cell-size --font-size 14 --scale 3.0
+# → 35 50   (cell_w_px cell_h_px)
+```
+
+Derive cols/rows: `cols = viewport_px.w / cell_w_px`, `rows = viewport_px.h / cell_h_px`.
+
 ### Rust renderer changes → offline CLI (macOS)
 
 No simulator needed. Build and render a fixture, compare visually or against golden PNG:
@@ -85,13 +142,56 @@ No simulator needed. Build and render a fixture, compare visually or against gol
 # Grid mode — terminal frame from stdin byte stream
 echo -e '\x1b[32mHello World\x1b[0m' | cargo run -p bedterm_core --bin bedterm-render grid > /tmp/out.png
 
-# Block list mode — wrap stdin as a single block with OSC 133 boundaries
+# Grid mode with device preset
+cargo run -p bedterm_core --bin bedterm-render grid --device iphone17 > /tmp/out.png
+
+# Block list mode — wrap stdin as a single block
 ls --color=always | cargo run -p bedterm_core --bin bedterm-render blocks --wrap > /tmp/out.png
+
+# Block list with device + palette
+cat multi-block.bin | cargo run -p bedterm_core --bin bedterm-render blocks \
+    --device iphone17 --palette bedterm-light > /tmp/out.png
 
 # From fixture files
 cargo run -p bedterm_core --bin bedterm-render grid tests/fixtures/ls-color.bin > /tmp/out.png
 cargo run -p bedterm_core --bin bedterm-render blocks tests/fixtures/multi-block.bin > /tmp/out.png
+
+# Batch render across all device presets
+bash scripts/sgr-test/render-all-matrix.sh
+open /tmp/renders/*.png
 ```
+
+### Record → render pipeline (faithful replay)
+
+`bedterm-record` captures a real PTY session with shell integration at exact terminal
+dimensions. It writes a `.meta.json` sidecar so `bedterm-render` replays at the same
+cols/rows — text wrapping is byte-identical.
+
+```sh
+# Build both tools
+cargo build -p bedterm_core -p bedterm-record
+
+# Record a command
+cargo run -p bedterm-record -- --cmd "ls --color=always" --device iphone17 -o session.bin
+
+# Render with context sidecar (guarantees consistent cols/rows)
+cat session.bin | cargo run -p bedterm_core --bin bedterm-render blocks \
+    --context session.meta.json > out.png
+
+# Record an interactive Claude session
+bash scripts/sgr-test/record-claude-session.sh "fix the auth bug"
+```
+
+The script queries cell metrics, derives exact cols/rows, passes `--cols`/`--rows` to the
+record tool, and renders with the sidecar. Both record (PTY) and render (Terminal) use
+the same dimensions.
+
+### Context override priority
+
+1. Explicit CLI flags (`--cols`, `--rows`, `--scale`, `--viewport`, `--palette`)
+2. Context file (`--context session.meta.json`)
+3. Device preset (`--device iphone17`)
+4. Defaults (mac viewport, scale=2.0, bedterm-dark palette)
 
 ### Block list layout changes → verify with mock SSH
 
