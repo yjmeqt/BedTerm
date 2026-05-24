@@ -1,11 +1,15 @@
-//! `bedterm-record` — record a real terminal session via PTY to a `.bin` file.
+//! `bedterm-record` — record a real terminal session via PTY to a `.bin` file
+//! plus a `.meta.json` sidecar for faithful replay.
 //!
 //! ```text
-//! bedterm-record --cmd "ls --color" --font-size 14 --viewport 400x850 -o ls-session.bin
-//! bedterm-record --cmd "claude -p 'fix the auth bug'" --font-size 14 --viewport 400x850 -o claude-session.bin
+//! # Record with device preset
+//! bedterm-record --cmd "ls --color" --device iphone17 -o ls-session.bin
 //!
-//! # Replay + render
-//! cat ls-session.bin | bedterm-render blocks --palette tokyo-night > out.png
+//! # Record with explicit viewport (points) + scale
+//! bedterm-record --cmd claude --stdin --device iphone17 -o claude-session.bin
+//!
+//! # Replay + render (uses .meta.json for consistent dimensions)
+//! cat ls-session.bin | bedterm-render blocks --context ls-session.meta.json > out.png
 //! ```
 
 use std::fs;
@@ -29,10 +33,11 @@ struct Args {
     cols: u16,
     rows: u16,
     idle_timeout_secs: u64,
-    font_size: Option<f32>,
-    viewport_w: Option<u32>,
-    viewport_h: Option<u32>,
+    font_size_pt: f32,
+    viewport_pt: Option<(u32, u32)>,
+    scale: f32,
     stdin_lines: bool,
+    palette: Option<String>,
 }
 
 fn parse_args() -> Args {
@@ -43,51 +48,124 @@ fn parse_args() -> Args {
         cols: 80,
         rows: 24,
         idle_timeout_secs: 5,
-        font_size: None,
-        viewport_w: None,
-        viewport_h: None,
+        font_size_pt: 14.0,
+        viewport_pt: None,
+        scale: 2.0,
         stdin_lines: false,
+        palette: None,
     };
 
     let raw: Vec<String> = std::env::args().collect();
     let mut i = 1;
     while i < raw.len() {
         match raw[i].as_str() {
-            "--cmd" => { i += 1; args.cmd = Some(raw[i].clone()); }
-            "--output" | "-o" => { i += 1; args.output = PathBuf::from(&raw[i]); }
-            "--integration" => { i += 1; args.integration = PathBuf::from(&raw[i]); }
-            "--cols" => { i += 1; args.cols = raw[i].parse().unwrap_or(80); }
-            "--rows" => { i += 1; args.rows = raw[i].parse().unwrap_or(24); }
-            "--font-size" => { i += 1; args.font_size = raw[i].parse().ok(); }
+            "--cmd" => {
+                i += 1;
+                args.cmd = Some(raw[i].clone());
+            }
+            "--output" | "-o" => {
+                i += 1;
+                args.output = PathBuf::from(&raw[i]);
+            }
+            "--integration" => {
+                i += 1;
+                args.integration = PathBuf::from(&raw[i]);
+            }
+            "--cols" => {
+                i += 1;
+                args.cols = raw[i].parse().unwrap_or(80);
+            }
+            "--rows" => {
+                i += 1;
+                args.rows = raw[i].parse().unwrap_or(24);
+            }
+            "--font-size" => {
+                i += 1;
+                args.font_size_pt = raw[i].parse().unwrap_or(14.0);
+            }
+            "--device" => {
+                i += 1;
+                match raw[i].as_str() {
+                    "iphone17" => {
+                        args.viewport_pt = Some((400, 850));
+                        args.scale = 3.0;
+                    }
+                    "iphone17-promax" => {
+                        args.viewport_pt = Some((430, 930));
+                        args.scale = 3.0;
+                    }
+                    "ipad-mini" => {
+                        args.viewport_pt = Some((744, 1133));
+                        args.scale = 2.0;
+                    }
+                    "ipad-pro13" => {
+                        args.viewport_pt = Some((1024, 1366));
+                        args.scale = 2.0;
+                    }
+                    "mac" => {
+                        args.viewport_pt = Some((1200, 800));
+                        args.scale = 2.0;
+                    }
+                    other => {
+                        eprintln!("[record] unknown device '{other}', using defaults");
+                    }
+                }
+            }
+            "--scale" => {
+                i += 1;
+                args.scale = raw[i].parse().unwrap_or(2.0);
+            }
             "--viewport" => {
                 i += 1;
                 if let Some((w, h)) = parse_dims(&raw[i]) {
-                    args.viewport_w = Some(w);
-                    args.viewport_h = Some(h);
+                    args.viewport_pt = Some((w, h));
                 }
             }
-            "--timeout" => { i += 1; args.idle_timeout_secs = raw[i].parse().unwrap_or(5); }
-            "--stdin" => { args.stdin_lines = true; }
-            _ => { eprintln!("unknown flag: {}", raw[i]); print_usage(); std::process::exit(1); }
+            "--palette" => {
+                i += 1;
+                args.palette = Some(raw[i].clone());
+            }
+            "--timeout" => {
+                i += 1;
+                args.idle_timeout_secs = raw[i].parse().unwrap_or(5);
+            }
+            "--stdin" => {
+                args.stdin_lines = true;
+            }
+            _ => {
+                eprintln!("unknown flag: {}", raw[i]);
+                print_usage();
+                std::process::exit(1);
+            }
         }
         i += 1;
     }
-    if args.cmd.is_none() { eprintln!("--cmd required"); print_usage(); std::process::exit(1); }
+    if args.cmd.is_none() {
+        eprintln!("--cmd required");
+        print_usage();
+        std::process::exit(1);
+    }
 
-    // Derive cols/rows from font-size + viewport ONLY if --cols/--rows
-    // were not explicitly passed. Explicit values take precedence.
+    // Derive cols/rows from viewport + font-size ONLY if --cols/--rows
+    // were not explicitly passed.
     let cols_explicit = raw.iter().any(|a| a == "--cols");
     let rows_explicit = raw.iter().any(|a| a == "--rows");
 
     if !cols_explicit && !rows_explicit {
-        if let (Some(fs), Some(vw), Some(vh)) = (args.font_size, args.viewport_w, args.viewport_h) {
-            let cell_w = (fs * 0.55).max(1.0);
-            let cell_h = (fs * 1.25).max(1.0);
-            args.cols = (vw as f32 / cell_w).max(1.0) as u16;
-            args.rows = (vh as f32 / cell_h).max(1.0) as u16;
+        if let Some((vpw, vph)) = args.viewport_pt {
+            // Heuristic cell dimensions in points (matching SF Mono metrics).
+            // cols = viewport_pt.w / cell_w_pt — scale cancels, same cols at any dpr.
+            let cell_w_pt = (args.font_size_pt * 0.55).max(1.0);
+            let cell_h_pt = (args.font_size_pt * 1.25).max(1.0);
+            args.cols = (vpw as f32 / cell_w_pt).max(1.0) as u16;
+            args.rows = (vph as f32 / cell_h_pt).max(1.0) as u16;
             eprintln!(
-                "[record] viewport={vw}x{vh} font={fs} → cols={}, rows={}",
-                args.cols, args.rows
+                "[record] device viewport={vpw}x{vph}pt scale={} → {:.0}x{:.0}px → cols={}, rows={}",
+                args.scale,
+                vpw as f32 * args.scale,
+                vph as f32 * args.scale,
+                args.cols,
+                args.rows,
             );
         }
     } else {
@@ -106,7 +184,9 @@ fn find_integration_script() -> PathBuf {
         "../../BedTermKit/Sources/BedTermKit/ShellIntegrationResources/bedterm-integration.sh",
     ] {
         let p = PathBuf::from(c);
-        if p.exists() { return p.canonicalize().unwrap_or(p); }
+        if p.exists() {
+            return p.canonicalize().unwrap_or(p);
+        }
     }
     PathBuf::from("bedterm-integration.sh")
 }
@@ -116,15 +196,19 @@ fn print_usage() {
     eprintln!("Options:");
     eprintln!("  --cmd TEXT        Command to run in the shell (required)");
     eprintln!("  -o, --output      Output .bin file (default: session.bin)");
-    eprintln!("  --stdin           After the command, pipe stdin lines to PTY (for interactive CLIs)");
-    eprintln!("  --font-size N     Font pixel size — with --viewport, derives cols/rows");
-    eprintln!("  --viewport WxH    Canvas pixels — with --font-size, computes cols/rows");
-    eprintln!("  --cols N          Terminal columns (default: derived from viewport+font, or 80)");
-    eprintln!("  --rows N          Terminal rows (default: derived from viewport+font, or 24)");
+    eprintln!("  --device NAME     Device preset: iphone17, iphone17-promax,");
+    eprintln!("                    ipad-mini, ipad-pro13, mac");
+    eprintln!("  --viewport WxH    Logical viewport in points (overrides --device)");
+    eprintln!("  --scale N         Device-pixel ratio (default: 2.0, or from --device)");
+    eprintln!("  --font-size N     Font size in points (default: 14)");
+    eprintln!("  --cols N          Terminal columns (derived if omitted)");
+    eprintln!("  --rows N          Terminal rows (derived if omitted)");
+    eprintln!("  --palette NAME    Color palette preset for sidecar metadata");
+    eprintln!("  --stdin           After the command, pipe stdin lines to PTY");
     eprintln!("  --timeout N       Idle timeout in seconds (default: 5)");
     eprintln!("\nExamples:");
-    eprintln!("  bedterm-record --cmd \"ls --color\" --viewport 400x850 --font-size 14 -o ls.bin");
-    eprintln!("  printf 'fix auth\\n/exit\\n' | bedterm-record --cmd claude --stdin --viewport 400x850 --font-size 14 -o claude.bin");
+    eprintln!("  bedterm-record --cmd \"ls --color\" --device iphone17 -o ls.bin");
+    eprintln!("  printf 'prompt\\n/exit\\n' | bedterm-record --cmd claude --stdin --device iphone17 -o claude.bin");
 }
 
 fn parse_dims(s: &str) -> Option<(u32, u32)> {
@@ -132,24 +216,57 @@ fn parse_dims(s: &str) -> Option<(u32, u32)> {
     Some((w.parse().ok()?, h.parse().ok()?))
 }
 
+// ── Sidecar ───────────────────────────────────────────────────────────────
+
+fn write_sidecar(bin_path: &std::path::Path, args: &Args) {
+    let meta_path = bin_path.with_extension("meta.json");
+    let cols = args.cols;
+    let rows = args.rows;
+    let palette = args
+        .palette
+        .as_ref()
+        .map_or("null".to_string(), |v| format!("\"{v}\""));
+    let (vpw, vph) = args.viewport_pt.unwrap_or((1200, 800));
+    let json = format!(
+        "{{\n  \"viewport_pt\": [{vpw}, {vph}],\n  \"scale\": {},\n  \"font_size_pt\": {},\n  \"cols\": {cols},\n  \"rows\": {rows},\n  \"palette\": {palette},\n  \"appearance\": null\n}}\n",
+        args.scale,
+        args.font_size_pt,
+    );
+    if let Err(e) = fs::write(&meta_path, &json) {
+        eprintln!("[record] warning: could not write sidecar: {e}");
+    } else {
+        eprintln!("[record] sidecar: {}", meta_path.display());
+    }
+}
+
+// ── PTY logic ─────────────────────────────────────────────────────────────
+
 fn run(args: Args) -> Result<()> {
     let pty_system = NativePtySystem::default();
 
-    let integration_script = fs::read_to_string(&args.integration)
-        .with_context(|| format!("integration script not found: {}", args.integration.display()))?;
+    let integration_script = fs::read_to_string(&args.integration).with_context(|| {
+        format!(
+            "integration script not found: {}",
+            args.integration.display()
+        )
+    })?;
 
     // Write a temp .zshrc that sources the integration script + forces
     // terminal size. stty is needed because macOS doesn't send SIGWINCH
     // after ioctl(TIOCSWINSZ); the shell must explicitly configure the tty.
     let tmpdir = tempfile::tempdir().context("create temp dir for ZDOTDIR")?;
     let zshrc = tmpdir.path().join(".zshrc");
-    let zshrc_content = format!(
-        "stty cols {} rows {} 2>/dev/null\n",
-        args.cols, args.rows
-    ) + &integration_script + "\n";
+    let zshrc_content = format!("stty cols {} rows {} 2>/dev/null\n", args.cols, args.rows)
+        + &integration_script
+        + "\n";
     fs::write(&zshrc, &zshrc_content).context("write .zshrc")?;
 
-    let pty_size = PtySize { rows: args.rows, cols: args.cols, pixel_width: 0, pixel_height: 0 };
+    let pty_size = PtySize {
+        rows: args.rows,
+        cols: args.cols,
+        pixel_width: 0,
+        pixel_height: 0,
+    };
     let pair = pty_system.openpty(pty_size).context("failed to open PTY")?;
 
     let mut cmd = CommandBuilder::new("zsh");
@@ -160,7 +277,10 @@ fn run(args: Args) -> Result<()> {
     cmd.env("ZDOTDIR", tmpdir.path().to_string_lossy().to_string());
 
     eprintln!("[record] spawning zsh ({}x{})...", args.cols, args.rows);
-    let mut _child = pair.slave.spawn_command(cmd).context("failed to spawn zsh")?;
+    let mut _child = pair
+        .slave
+        .spawn_command(cmd)
+        .context("failed to spawn zsh")?;
 
     // MUST resize after spawn: openpty sets the initial size, but the
     // shell / child may query TIOCGWINSZ before env vars are evaluated.
@@ -179,7 +299,9 @@ fn run(args: Args) -> Result<()> {
             match reader.read(&mut buf) {
                 Ok(0) => break,
                 Ok(n) => {
-                    if tx.send(buf[..n].to_vec()).is_err() { break; }
+                    if tx.send(buf[..n].to_vec()).is_err() {
+                        break;
+                    }
                 }
                 Err(_) => break,
             }
@@ -191,7 +313,9 @@ fn run(args: Args) -> Result<()> {
     let startup = drain_channel(&rx, Duration::from_millis(1200));
     let mut captured = startup;
     if let Ok(s) = std::str::from_utf8(&captured) {
-        if !s.is_empty() { eprint!("{s}"); }
+        if !s.is_empty() {
+            eprint!("{s}");
+        }
     }
 
     // Phase 2: send the command + optional stdin lines.
@@ -199,17 +323,10 @@ fn run(args: Args) -> Result<()> {
     eprintln!("\n[record] running: {cmd_line}");
 
     if args.stdin_lines {
-        // Interactive mode with stdin prompts. Flow:
-        // 1. Send the command (e.g. "claude").
-        // 2. Let the CLI start up (short idle).
-        // 3. Feed stdin lines as prompt to the CLI.
-        // 4. Wait for the CLI to finish (longer idle timeout).
-        // 5. Send /exit (or exit) to close cleanly.
         writer
             .write_all(format!("{cmd_line}\n").as_bytes())
             .context("write cmd to PTY")?;
 
-        // Read all stdin lines upfront.
         let stdin_lines: Vec<String> = {
             BufReader::new(std::io::stdin())
                 .lines()
@@ -217,25 +334,20 @@ fn run(args: Args) -> Result<()> {
                 .collect()
         };
 
-        // Separate prompt lines from explicit exit command.
         let exit_idx = stdin_lines
             .iter()
             .position(|l| l.trim() == "/exit" || l.trim() == "exit");
         let prompt_lines = &stdin_lines[..exit_idx.unwrap_or(stdin_lines.len())];
         let has_explicit_exit = exit_idx.is_some();
 
-        // Wait for the CLI's TUI / startup banner.
-        let startup_out = drain_channel_until_idle(
-            &rx,
-            Duration::from_secs(2),
-        );
+        let startup_out = drain_channel_until_idle(&rx, Duration::from_secs(2));
         captured.extend_from_slice(&startup_out);
         if let Ok(s) = std::str::from_utf8(&startup_out) {
-            if !s.is_empty() { eprint!("{s}"); }
+            if !s.is_empty() {
+                eprint!("{s}");
+            }
         }
 
-        // Feed each prompt line with pacing so the CLI reads them as
-        // separate keystrokes / lines.
         for line in prompt_lines {
             std::thread::sleep(Duration::from_millis(300));
             eprintln!("\n[record] typing: {line}");
@@ -245,31 +357,35 @@ fn run(args: Args) -> Result<()> {
             writer.write_all(b"\n").context("write newline to PTY")?;
         }
 
-        // Wait for the CLI to finish processing.
-        let cmd_out = drain_channel_until_idle(
-            &rx,
-            Duration::from_secs(args.idle_timeout_secs.max(120)),
-        );
+        let cmd_out =
+            drain_channel_until_idle(&rx, Duration::from_secs(args.idle_timeout_secs.max(120)));
         captured.extend_from_slice(&cmd_out);
         if let Ok(s) = std::str::from_utf8(&cmd_out) {
-            if !s.is_empty() { eprint!("{s}"); }
+            if !s.is_empty() {
+                eprint!("{s}");
+            }
         }
 
-        // Send the shutdown command.
-        let exit_cmd = if has_explicit_exit { "/exit\n" } else { "exit\n" };
+        let exit_cmd = if has_explicit_exit {
+            "/exit\n"
+        } else {
+            "exit\n"
+        };
         let _ = writer.write_all(exit_cmd.as_bytes());
         let final_out = drain_channel(&rx, Duration::from_millis(500));
         captured.extend_from_slice(&final_out);
         drop(writer);
     } else {
-        writer.write_all(format!("{cmd_line}\n").as_bytes()).context("write cmd to PTY")?;
-        let cmd_out =
-            drain_channel_until_idle(&rx, Duration::from_secs(args.idle_timeout_secs));
+        writer
+            .write_all(format!("{cmd_line}\n").as_bytes())
+            .context("write cmd to PTY")?;
+        let cmd_out = drain_channel_until_idle(&rx, Duration::from_secs(args.idle_timeout_secs));
         captured.extend_from_slice(&cmd_out);
         if let Ok(s) = std::str::from_utf8(&cmd_out) {
-            if !s.is_empty() { eprint!("{s}"); }
+            if !s.is_empty() {
+                eprint!("{s}");
+            }
         }
-        // Phase 3: exit.
         let _ = writer.write_all(b"exit\n");
         let final_out = drain_channel(&rx, Duration::from_millis(300));
         captured.extend_from_slice(&final_out);
@@ -281,14 +397,20 @@ fn run(args: Args) -> Result<()> {
     fs::write(&args.output, &captured)
         .with_context(|| format!("failed to write {}", args.output.display()))?;
     eprintln!("[record] saved to {}", args.output.display());
+
+    // Write JSON sidecar for faithful replay.
+    write_sidecar(&args.output, &args);
+
     eprintln!(
-        "[record] replay: cat {} | bedterm-render blocks - > out.png",
-        args.output.display()
+        "[record] replay: cat {} | bedterm-render blocks --context {}.meta.json > out.png",
+        args.output.display(),
+        args.output.with_extension("").display(),
     );
     Ok(())
 }
 
-/// Drain the channel for up to `timeout`, returning all received chunks.
+// ── Channel drain helpers ─────────────────────────────────────────────────
+
 fn drain_channel(rx: &mpsc::Receiver<Vec<u8>>, timeout: Duration) -> Vec<u8> {
     let mut out = Vec::new();
     loop {
@@ -301,8 +423,6 @@ fn drain_channel(rx: &mpsc::Receiver<Vec<u8>>, timeout: Duration) -> Vec<u8> {
     out
 }
 
-/// Drain channel, resetting the timer on each chunk. Stops when no
-/// chunk arrives for `idle` duration.
 fn drain_channel_until_idle(rx: &mpsc::Receiver<Vec<u8>>, idle: Duration) -> Vec<u8> {
     let mut out = Vec::new();
     loop {
@@ -317,4 +437,3 @@ fn drain_channel_until_idle(rx: &mpsc::Receiver<Vec<u8>>, idle: Duration) -> Vec
     }
     out
 }
-

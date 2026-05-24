@@ -10,29 +10,20 @@ use bedterm_core::ffi::BtPaletteView;
 use bedterm_core::renderer::Renderer;
 use bedterm_core::term::Palette;
 
+use crate::context::RenderContext;
 use crate::png::{self, OffscreenTarget};
 
 pub(crate) struct GridArgs {
-    pub font_size: f32,
-    pub viewport_w: u32,
-    pub viewport_h: u32,
     pub input: Option<String>,
-    pub palette: Palette,
 }
 
 impl Default for GridArgs {
     fn default() -> Self {
-        Self {
-            font_size: 14.0,
-            viewport_w: 1200,
-            viewport_h: 800,
-            input: None,
-            palette: Palette::default(),
-        }
+        Self { input: None }
     }
 }
 
-pub(crate) fn run(args: GridArgs) -> Result<(), Box<dyn std::error::Error>> {
+pub(crate) fn run(args: GridArgs, ctx: &RenderContext) -> Result<(), Box<dyn std::error::Error>> {
     let bytes: Vec<u8> = match &args.input {
         Some(path) => fs::read(path)?,
         None => {
@@ -54,16 +45,21 @@ pub(crate) fn run(args: GridArgs) -> Result<(), Box<dyn std::error::Error>> {
     .ok_or("failed to create renderer")?;
 
     crate::font::register_system_font();
-    renderer.set_font(args.font_size, 2.0);
+    renderer.set_font(ctx.font_size_pt, ctx.scale);
 
-    // Derive terminal geometry from actual font metrics.
     let (cell_w_px, cell_h_px) = renderer.cell_pixel_size();
     let cell_w = cell_w_px as f32;
     let cell_h = cell_h_px as f32;
-    let cols = (args.viewport_w as f32 / cell_w).max(1.0) as u16;
-    let rows = (args.viewport_h as f32 / cell_h).max(1.0) as u16;
+    let (vp_w, vp_h) = ctx.viewport_px();
+    let cols = ctx
+        .cols
+        .unwrap_or_else(|| (vp_w as f32 / cell_w).max(1.0) as u16);
+    let rows = ctx
+        .rows
+        .unwrap_or_else(|| (vp_h as f32 / cell_h).max(1.0) as u16);
 
-    let bg = args.palette.default_bg;
+    let palette = resolve_palette(ctx);
+    let bg = palette.default_bg;
     let clear = [
         bg.r as f32 / 255.0,
         bg.g as f32 / 255.0,
@@ -75,15 +71,15 @@ pub(crate) fn run(args: GridArgs) -> Result<(), Box<dyn std::error::Error>> {
     let term = bedterm_core::ffi::bt_term_new(cols, rows);
     unsafe {
         let view = BtPaletteView {
-            default_fg: args.palette.default_fg,
-            default_bg: args.palette.default_bg,
-            ansi: args.palette.ansi,
+            default_fg: palette.default_fg,
+            default_bg: palette.default_bg,
+            ansi: palette.ansi,
         };
         bedterm_core::ffi::bt_term_set_palette(term, &view);
         bedterm_core::ffi::bt_term_feed(term, bytes.as_ptr(), bytes.len());
     }
 
-    let target = OffscreenTarget::new(&device, &queue, args.viewport_w, args.viewport_h)
+    let target = OffscreenTarget::new(&device, &queue, vp_w, vp_h)
         .ok_or("failed to create offscreen texture")?;
 
     unsafe {
@@ -91,27 +87,32 @@ pub(crate) fn run(args: GridArgs) -> Result<(), Box<dyn std::error::Error>> {
             &mut renderer as *mut Renderer as *mut bedterm_core::renderer::ffi::BtRenderer,
             term,
             target.texture_ptr(),
-            args.viewport_w,
-            args.viewport_h,
+            vp_w,
+            vp_h,
             0.0,
         );
         if ret != 0 {
+            bedterm_core::ffi::bt_term_free(term);
             return Err("bt_renderer_draw failed".into());
         }
+        bedterm_core::ffi::bt_term_free(term);
     }
 
     let pixels = target.read_pixels();
     let stdout = io::stdout();
-    png::write_png(
-        &mut stdout.lock(),
-        &pixels,
-        args.viewport_w,
-        args.viewport_h,
-    )?;
+    png::write_png(&mut stdout.lock(), &pixels, vp_w, vp_h)?;
 
-    unsafe {
-        bedterm_core::ffi::bt_term_free(term);
-    }
-
+    eprintln!(
+        "[grid] cols={cols} rows={rows} cell={cell_w_px}×{cell_h_px}px viewport={vp_w}×{vp_h}px → PNG {vp_w}×{vp_h}"
+    );
     Ok(())
+}
+
+fn resolve_palette(ctx: &RenderContext) -> Palette {
+    match &ctx.palette {
+        Some(name) => crate::blocks::PalettePreset::from_str(name)
+            .map(|p| p.build())
+            .unwrap_or_default(),
+        None => Palette::default(),
+    }
 }

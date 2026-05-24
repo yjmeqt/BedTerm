@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Render all SGR test scripts × device size matrix via bedterm-render CLI.
 #
-# Output: /tmp/renders/<script>-<device>-<mode>.png
+# Output: /tmp/renders/<script>-<device>-<palette>-<mode>.png
 #
 # Usage:
 #   bash render-all-matrix.sh
@@ -12,12 +12,13 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 RENDER_BIN="$(cd "$SCRIPT_DIR/../../rust-core" && pwd)/target/debug/bedterm-render"
 OUTDIR="/tmp/renders"
 
-# Device size matrix (width×height in pixels, font_size=14 → cell_w=7, cell_h=14)
-declare -A DEVICES=(
-    ["iphone17"]="400x850"
-    ["iphone17-promax"]="430x930"
-    ["ipad-mini"]="750x1130"
-    ["ipad-pro13"]="1030x1380"
+# Device matrix — viewports in points, scale applied automatically.
+# Each device produces a PNG at viewport_pt × scale pixels.
+DEVICES=(
+    "iphone17"
+    "iphone17-promax"
+    "ipad-mini"
+    "ipad-pro13"
 )
 
 PALETTES=("tokyo-night" "dracula" "gruvbox-dark")
@@ -28,29 +29,21 @@ rm -f "$OUTDIR"/*.png
 render_one() {
     local script="$1"
     local device="$2"
-    local dims="$3"
-    local palette="$4"
-    local mode="${5:-grid}"
+    local palette="$3"
+    local mode="${4:-grid}"
     local basename
     basename="$(basename "$script" .sh)"
-
-    local extra_args=()
-    if [ "$mode" = "blocks" ]; then
-        extra_args=(--palette "$palette")
-    else
-        extra_args=(--palette "$palette")
-    fi
 
     local out="$OUTDIR/${basename}-${device}-${palette}-${mode}.png"
     echo "  → $out"
 
     if [ "$mode" = "blocks" ]; then
         bash "$script" 2>/dev/null | "$RENDER_BIN" blocks \
-            --font-size 14 --viewport "$dims" "${extra_args[@]}" \
+            --device "$device" --palette "$palette" \
             > "$out" 2>/dev/null || echo "    (blocks mode failed, may need DCS events)"
     else
         bash "$script" 2>/dev/null | "$RENDER_BIN" grid \
-            --font-size 14 --viewport "$dims" "${extra_args[@]}" \
+            --device "$device" --palette "$palette" \
             > "$out" 2>/dev/null || echo "    (grid render failed)"
     fi
 }
@@ -65,6 +58,10 @@ echo ""
 
 for script in "$SCRIPT_DIR"/*.sh; do
     name="$(basename "$script" .sh)"
+    # Skip wrapper scripts that aren't test generators.
+    case "$name" in
+        record-claude-session|render-all-matrix) continue ;;
+    esac
     echo ""
     echo "--- $name ---"
 
@@ -74,11 +71,10 @@ for script in "$SCRIPT_DIR"/*.sh; do
         mode="blocks"
     fi
 
-    for device in "${!DEVICES[@]}"; do
-        dims="${DEVICES[$device]}"
-        # Use first palette only for speed; all-palette rendering is a separate matrix
+    for device in "${DEVICES[@]}"; do
+        # Use first palette only for speed.
         palette="${PALETTES[0]}"
-        render_one "$script" "$device" "$dims" "$palette" "$mode"
+        render_one "$script" "$device" "$palette" "$mode"
     done
 done
 
