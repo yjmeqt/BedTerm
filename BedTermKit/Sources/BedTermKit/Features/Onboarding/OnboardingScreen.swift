@@ -168,9 +168,10 @@ private struct MacTutorialStep: View {
                 macTutorialPage(
                     step: 2,
                     title: "Find your Mac's IP address",
-                    body:
-                        "Open System Settings → Network → Wi-Fi → Details. "
-                        + "Copy the IP address — you'll enter it on the next screen."
+                    body: """
+                        Open System Settings → Network → Wi-Fi → Details. \
+                        Copy the IP address — you'll enter it on the next screen.
+                        """
                 )
                 .tag(1)
 
@@ -184,8 +185,6 @@ private struct MacTutorialStep: View {
         .navigationTitle("macOS Setup")
         .navigationBarTitleDisplayMode(.inline)
     }
-
-    // MARK: Bottom Bar
 
     private var bottomBar: some View {
         HStack {
@@ -218,8 +217,6 @@ private struct MacTutorialStep: View {
         .background(.bar)
     }
 
-    // MARK: Shared Page Layout
-
     private func macTutorialPage(step: Int, title: LocalizedStringKey, body: LocalizedStringKey) -> some View {
         VStack(alignment: .leading, spacing: 24) {
             Spacer()
@@ -228,8 +225,6 @@ private struct MacTutorialStep: View {
         }
         .padding()
     }
-
-    // MARK: Step 3: Prevent Sleep
 
     private var sleepPreventionPage: some View {
         ScrollView {
@@ -244,8 +239,10 @@ private struct MacTutorialStep: View {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Prevent your Mac from sleeping").font(.headline)
                         Text(
-                            "A sleeping Mac silently drops SSH connections. "
-                                + "Your display can sleep — the system must stay awake."
+                            """
+                            A sleeping Mac silently drops SSH connections. \
+                            Your display can sleep — the system must stay awake.
+                            """
                         )
                         .font(.body)
                         .foregroundStyle(.secondary)
@@ -254,9 +251,11 @@ private struct MacTutorialStep: View {
                             Text("System Settings")
                                 .font(.subheadline.weight(.semibold))
                             Text(
-                                "Battery → Options → turn on "
-                                    + "\"Prevent automatic sleeping on power adapter"
-                                    + " when the display is off\""
+                                """
+                                Battery → Options → turn on \
+                                "Prevent automatic sleeping on power adapter \
+                                when the display is off"
+                                """
                             )
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
@@ -282,8 +281,6 @@ private struct MacTutorialStep: View {
             .padding()
         }
     }
-
-    // MARK: Shared Helpers
 
     private func tutorialSection(number: String, title: LocalizedStringKey, body: LocalizedStringKey) -> some View {
         HStack(alignment: .top, spacing: 12) {
