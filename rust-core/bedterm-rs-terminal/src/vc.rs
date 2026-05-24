@@ -1,15 +1,24 @@
 //! The experimental Rust-backed view controller.
 
+use crate::coordinator::BtRsKeyboardCoordinator;
 use crate::geometry::{CGFloat, CGPoint, CGRect, CGSize, UIEdgeInsets};
+use crate::metal_view::BtRsMetalInputView;
 use crate::BtRsBackCallback;
 use objc2::rc::{Allocated, Retained};
+use objc2::runtime::{AnyClass, AnyObject, NSObject, ProtocolObject};
 use objc2::{declare_class, msg_send, msg_send_id, sel, ClassType, DeclaredClass};
 use objc2_foundation::{MainThreadMarker, NSString};
+use objc2_metal::MTLDevice;
 use objc2_ui_kit::{
-    UIBarButtonItem, UIBarButtonItemStyle, UIColor, UIFont, UINavigationItem, UITextView,
-    UIViewController,
+    UIBarButtonItem, UIBarButtonItemStyle, UIColor, UIFont, UINavigationItem,
+    UITapGestureRecognizer, UITextView, UIViewController,
 };
 use std::cell::{Cell, RefCell};
+
+extern "C" {
+    /// `MTLCreateSystemDefaultDevice()` — returns the system-preferred GPU.
+    fn MTLCreateSystemDefaultDevice() -> *mut ProtocolObject<dyn MTLDevice>;
+}
 
 /// Per-instance state stored as ivars.
 #[derive(Default)]
@@ -18,10 +27,12 @@ pub struct Ivars {
     on_back: Cell<Option<BtRsBackCallback>>,
     /// Context pointer for the callback. Only accessed on the main thread.
     ctx: Cell<*mut std::ffi::c_void>,
-    /// Upper text view — fills the area between safe-area top and view2.top.
-    view1: RefCell<Option<Retained<UITextView>>>,
+    /// Upper view — Metal-backed input surface.
+    view1: RefCell<Option<Retained<BtRsMetalInputView>>>,
     /// Lower composer text view — sits above the keyboard, 1–3 lines tall.
     view2: RefCell<Option<Retained<UITextView>>>,
+    /// Centralised focus / keyboard router.
+    coordinator: RefCell<Option<Retained<BtRsKeyboardCoordinator>>>,
     /// Current dynamic height of view2 (clamped 1–3 lines).
     view2_height: Cell<CGFloat>,
     /// One-line height (font.lineHeight + textContainerInset.top/bottom).
@@ -83,13 +94,24 @@ declare_class!(
                 unsafe { msg_send_id![self, navigationItem] };
             unsafe { nav_item.setLeftBarButtonItem(Some(&back_btn)) };
 
-            // ---------- Text views ----------
-            let zero = CGRect::default();
+            // ---------- Metal device + view1 (Metal canvas) ----------
+            let device_ptr = unsafe { MTLCreateSystemDefaultDevice() };
+            // Probe: try to instantiate a vanilla MTKView (NOT our subclass).
+            // If even this crashes the issue is in MetalKit, not our subclass.
+            let view1_opt: Option<Retained<BtRsMetalInputView>> = if device_ptr.is_null() {
+                None
+            } else {
+                let device: Retained<ProtocolObject<dyn MTLDevice>> =
+                    unsafe { Retained::from_raw(device_ptr).expect("MTL device") };
+                let opt = BtRsMetalInputView::new(mtm, &device);
+                if let Some(ref v) = opt {
+                    v.set_bg_color((0.55, 0.55, 0.55, 1.0));
+                }
+                opt
+            };
 
-            // view1 — main editable area
-            let view1: Retained<UITextView> =
-                unsafe { msg_send_id![mtm.alloc::<UITextView>(), initWithFrame: zero] };
-            // view2 — composer that hugs the keyboard
+            // ---------- view2 (UITextView composer) ----------
+            let zero = CGRect::default();
             let view2: Retained<UITextView> =
                 unsafe { msg_send_id![mtm.alloc::<UITextView>(), initWithFrame: zero] };
 
@@ -101,11 +123,10 @@ declare_class!(
             // Set self as view2's delegate so we can react to text changes.
             let _: () = unsafe { msg_send![&*view2, setDelegate: self] };
 
-            // Set a known font on both views and use it to measure line height.
+            // Set a known font on view2 and use it to measure line height.
             // A freshly-init'd UITextView can return nil for `font`, so set it explicitly.
             let font: Retained<UIFont> =
                 unsafe { msg_send_id![UIFont::class(), systemFontOfSize: 17.0_f64] };
-            let _: () = unsafe { msg_send![&*view1, setFont: &*font] };
             let _: () = unsafe { msg_send![&*view2, setFont: &*font] };
 
             let line_h: CGFloat = unsafe { msg_send![&*font, lineHeight] };
@@ -119,13 +140,40 @@ declare_class!(
 
             // Add as subviews.
             if let Some(view) = self.view() {
-                let _: () = unsafe { msg_send![&*view, addSubview: &*view1] };
+                if let Some(ref v1) = view1_opt {
+                    let _: () = unsafe { msg_send![&*view, addSubview: &**v1] };
+                }
                 let _: () = unsafe { msg_send![&*view, addSubview: &*view2] };
             }
 
+            // ---------- Coordinator + tap recognizer for view1 ----------
+            let view1_obj: *const AnyObject = view1_opt
+                .as_ref()
+                .map(|v| &**v as *const _ as *const AnyObject)
+                .unwrap_or(std::ptr::null());
+            let view2_obj: *const AnyObject = &*view2 as *const _ as *const AnyObject;
+            let coordinator = BtRsKeyboardCoordinator::new(mtm, view1_obj, view2_obj);
+
+            if let Some(ref v1) = view1_opt {
+                // Give view1 a weak ref back to the coordinator (for touchesBegan routing).
+                v1.set_coordinator(&*coordinator as *const _ as *const AnyObject);
+
+                // Belt + braces: also install a UITapGestureRecognizer on view1.
+                let tap: Retained<UITapGestureRecognizer> = unsafe {
+                    let alloc = mtm.alloc::<UITapGestureRecognizer>();
+                    msg_send_id![
+                        alloc,
+                        initWithTarget: &*coordinator,
+                        action: sel!(handleView1Tap:),
+                    ]
+                };
+                let _: () = unsafe { msg_send![&**v1, addGestureRecognizer: &*tap] };
+            }
+
             // Store strong refs.
-            *self.ivars().view1.borrow_mut() = Some(view1);
+            *self.ivars().view1.borrow_mut() = view1_opt;
             *self.ivars().view2.borrow_mut() = Some(view2);
+            *self.ivars().coordinator.borrow_mut() = Some(coordinator);
         }
 
         #[method(backButtonTapped)]
@@ -179,16 +227,19 @@ declare_class!(
         }
 
         #[method(textViewDidChange:)]
-        fn text_view_did_change(&self, _text_view: &UITextView) {
+        fn text_view_did_change(&self, text_view: &UITextView) {
+            // Tell the coordinator about the new text so it can pre-compute
+            // view1's next background color.
+            let text: Retained<NSString> = unsafe { msg_send_id![text_view, text] };
+            let coord_borrow = self.ivars().coordinator.borrow();
+            if let Some(ref coord) = *coord_borrow {
+                let _: () = unsafe { msg_send![&**coord, notifyText2Changed: &*text] };
+            }
+
+            // Re-clamp view2's height.
             let content_height: CGFloat = {
-                let v2_borrow = self.ivars().view2.borrow();
-                match v2_borrow.as_ref() {
-                    Some(v2) => {
-                        let s: CGSize = unsafe { msg_send![&**v2, contentSize] };
-                        s.height
-                    }
-                    None => return,
-                }
+                let s: CGSize = unsafe { msg_send![text_view, contentSize] };
+                s.height
             };
             let min_h = self.ivars().one_line_height.get();
             let max_h = self.ivars().three_line_height.get();
@@ -197,6 +248,16 @@ declare_class!(
             if (clamped - prev).abs() > 0.5 {
                 self.ivars().view2_height.set(clamped);
                 self.relayout();
+            }
+        }
+
+        #[method(textViewDidBeginEditing:)]
+        fn text_view_did_begin_editing(&self, _text_view: &UITextView) {
+            // view2 became first responder via its own tap — tell the
+            // coordinator so currentFocus stays in sync.
+            let coord_borrow = self.ivars().coordinator.borrow();
+            if let Some(ref coord) = *coord_borrow {
+                let _: () = unsafe { msg_send![&**coord, focusView2] };
             }
         }
     }

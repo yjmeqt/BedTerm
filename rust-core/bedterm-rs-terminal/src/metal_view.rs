@@ -582,28 +582,42 @@ unsafe impl UITextInput for BtRsMetalInputView {}
 
 impl BtRsMetalInputView {
     /// Build a view bound to a Metal device. The caller retains ownership.
-    pub fn new(mtm: MainThreadMarker, device: &ProtocolObject<dyn MTLDevice>) -> Retained<Self> {
+    /// Returns `None` if MTKView's designated initialiser bails (rare; happens
+    /// in some headless test contexts).
+    pub fn new(
+        mtm: MainThreadMarker,
+        device: &ProtocolObject<dyn MTLDevice>,
+    ) -> Option<Retained<Self>> {
         let zero = CGRect::default();
-        let this: Retained<Self> =
+        let this: Option<Retained<Self>> =
             unsafe { msg_send_id![mtm.alloc::<Self>(), initWithFrame: zero, device: device] };
-        // Draw only when we ask — Phase 1 is a static colour clear.
-        unsafe {
-            let _: () = msg_send![&*this, setEnableSetNeedsDisplay: true];
-            let _: () = msg_send![&*this, setPaused: true];
+        if let Some(ref v) = this {
+            // Draw only when we ask — Phase 1 is a static colour clear.
+            unsafe {
+                let _: () = msg_send![&**v, setEnableSetNeedsDisplay: true];
+                let _: () = msg_send![&**v, setPaused: true];
+            }
         }
         this
     }
 
-    /// Update the clear-colour and request a redraw. RGBA components are 0..1.
+    /// Update the background colour and request a redraw. RGBA components are
+    /// 0..1.
+    ///
+    /// Phase 1 uses UIView's `backgroundColor` (no Metal pipeline yet); when we
+    /// add glyph rendering this will switch to `setClearColor:` on the MTKView.
     pub fn set_bg_color(&self, rgba: (f32, f32, f32, f32)) {
-        let c = MTLClearColor {
-            red: rgba.0 as f64,
-            green: rgba.1 as f64,
-            blue: rgba.2 as f64,
-            alpha: rgba.3 as f64,
+        let color: Retained<objc2_ui_kit::UIColor> = unsafe {
+            msg_send_id![
+                objc2_ui_kit::UIColor::class(),
+                colorWithRed: rgba.0 as f64,
+                green: rgba.1 as f64,
+                blue: rgba.2 as f64,
+                alpha: rgba.3 as f64,
+            ]
         };
         unsafe {
-            let _: () = msg_send![self, setClearColor: c];
+            let _: () = msg_send![self, setBackgroundColor: &*color];
             let _: () = msg_send![self, setNeedsDisplay];
         }
     }
