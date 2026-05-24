@@ -261,10 +261,16 @@ struct TerminalRendererSnapshotTests {
             texWidth: texWidth, texHeight: texHeight)
     }
 
+    private struct PixelBuffer {
+        let pixels: [UInt8]
+        let width: Int
+        let height: Int
+    }
+
     private static func renderAndReadPixels(
         setup: RenderSetup,
         device: MTLDevice
-    ) throws -> (pixels: [UInt8], texWidth: Int, texHeight: Int) {
+    ) throws -> PixelBuffer {
         let desc = MTLTextureDescriptor.texture2DDescriptor(
             pixelFormat: .bgra8Unorm,
             width: setup.texWidth,
@@ -295,7 +301,8 @@ struct TerminalRendererSnapshotTests {
             from: MTLRegionMake2D(0, 0, setup.texWidth, setup.texHeight),
             mipmapLevel: 0
         )
-        return (pixels, setup.texWidth, setup.texHeight)
+        return PixelBuffer(
+            pixels: pixels, width: setup.texWidth, height: setup.texHeight)
     }
 
     private enum SnapshotError: Error {
@@ -311,8 +318,11 @@ struct TerminalRendererSnapshotTests {
 
         let setup = try Self.setupRender(
             param: param, device: metalDevice)
-        let (pixels, texWidth, texHeight) = try Self.renderAndReadPixels(
+        let buf = try Self.renderAndReadPixels(
             setup: setup, device: metalDevice)
+        let pixels = buf.pixels
+        let texWidth = buf.width
+        let texHeight = buf.height
 
         // Verify non-empty
         var nonZero = 0
