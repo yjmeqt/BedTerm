@@ -225,32 +225,82 @@ pub(crate) fn build_header_descriptors(
 
 // ── Sticky headers ─────────────────────────────────────────────────────
 
-#[allow(dead_code)]
 pub(crate) struct StickyDescriptor {
     pub entry: BtBlockHeaderEntry,
     pub block_id: u64,
     pub storage: (Vec<u8>, Option<Vec<u8>>),
 }
 
-#[allow(dead_code)]
+/// Index of the block whose vertical range contains `scroll_y_pt`.
 pub(crate) fn sticky_active_index(ranges: &[BlockRange], scroll_y_pt: f32) -> Option<usize> {
     ranges
         .iter()
         .position(|r| r.top_pt <= scroll_y_pt && r.bot_pt > scroll_y_pt)
 }
 
-#[allow(dead_code)]
+/// Build a sticky header for the block at the scroll position.
+/// Returns `None` when there is no block under the scroll offset or
+/// when the active block is the last running block (Swift convention:
+/// don't pin running blocks at the tail).
 pub(crate) fn build_sticky_descriptor(
-    _ranges: &[BlockRange],
-    _scroll_y_pt: f32,
-    _scale: f32,
-    _width_px: f32,
-    _colors: &PaletteColors,
+    ranges: &[BlockRange],
+    scroll_y_pt: f32,
+    scale: f32,
+    width_px: f32,
+    colors: &PaletteColors,
 ) -> Option<StickyDescriptor> {
-    // For offline CLI rendering we don't pin a sticky header — the
-    // viewport shows the entire block list at rest. Sticky pinning is
-    // only meaningful with live scroll interaction.
-    None
+    let active_idx = sticky_active_index(ranges, scroll_y_pt)?;
+    // Don't pin the last block if it's still running.
+    if active_idx == ranges.len() - 1 && ranges[active_idx].exit_code.is_none() {
+        return None;
+    }
+
+    let range = &ranges[active_idx];
+    let header_h_pt = HEADER_HEIGHT_PT;
+
+    // Screen-space Y: natural position if not pinned.
+    let natural_screen_y = range.top_pt - scroll_y_pt;
+
+    // Push-up limit: when the next block's header approaches the top,
+    // the pinned header slides up so the handoff is smooth.
+    let push_up_limit = if active_idx + 1 < ranges.len() {
+        let next_top = ranges[active_idx + 1].top_pt;
+        (next_top - scroll_y_pt) - header_h_pt
+    } else {
+        f32::MAX
+    };
+    let pinned_y = natural_screen_y.clamp(0.0, push_up_limit);
+
+    let cmd_bytes = range.command.as_bytes().to_vec();
+    let sub = subtitle(range).map(|s| s.into_bytes());
+    let header_h_px = header_h_pt * scale;
+    let divider = 0u32; // sticky divider is placed below the band by the renderer
+
+    let entry = BtBlockHeaderEntry {
+        block_id: range.block_id,
+        header_y_top_px: pinned_y * scale,
+        header_height_px: header_h_px,
+        panel_x_left_px: 0.0,
+        panel_width_px: width_px,
+        command_utf8: std::ptr::null(),
+        command_len: cmd_bytes.len() as u32,
+        subtitle_utf8: std::ptr::null(),
+        subtitle_len: sub.as_ref().map(|s| s.len() as u32).unwrap_or(0),
+        agent_id: agent_id(range.cli_agent),
+        _pad: [0; 3],
+        badge_tint_rgba: agent_badge_tint(range.cli_agent),
+        command_fg_rgba: colors.fg,
+        subtitle_fg_rgba: colors.muted,
+        divider_rgba: divider,
+        is_sticky: 1,
+        _pad2: [0; 3],
+    };
+
+    Some(StickyDescriptor {
+        entry,
+        block_id: range.block_id,
+        storage: (cmd_bytes, sub),
+    })
 }
 
 /// Flatten header UTF-8 storage into a contiguous blob and patch

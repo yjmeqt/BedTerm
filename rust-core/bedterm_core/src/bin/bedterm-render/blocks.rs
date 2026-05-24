@@ -29,6 +29,8 @@ pub(crate) struct BlockArgs {
     pub input: Option<String>,
     /// Explicit --palette flag overrides context.
     pub palette_override: Option<Palette>,
+    /// Scroll offset in points for sticky header testing.
+    pub scroll_y_pt: f32,
 }
 
 impl Default for BlockArgs {
@@ -41,6 +43,7 @@ impl Default for BlockArgs {
             wrap_duration_ms: None,
             input: None,
             palette_override: None,
+            scroll_y_pt: 0.0,
         }
     }
 }
@@ -253,8 +256,31 @@ pub(crate) fn run(args: BlockArgs, ctx: &RenderContext) -> Result<(), Box<dyn st
     let ranges = layout::compute_block_ranges(blocks, row_height_pt);
     let layout_entries = layout::build_layout_entries(&ranges, ui_scale, width_px);
     let header_colors = palette_colors_from_term_palette(&palette);
-    let (mut headers, storage) =
+    let (mut headers, mut storage) =
         layout::build_header_descriptors(&ranges, ui_scale, width_px, &header_colors);
+
+    // Sticky header: when scrolled, overlay the active block's header
+    // pinned at the top of the viewport (like iOS section headers).
+    let scroll_y_pt = args.scroll_y_pt;
+    let scroll_y_px = scroll_y_pt * ui_scale;
+    if scroll_y_pt > 0.0 {
+        if let Some(sticky) = layout::build_sticky_descriptor(
+            &ranges,
+            scroll_y_pt,
+            ui_scale,
+            width_px,
+            &header_colors,
+        ) {
+            // Remove the natural header for the pinned block so it
+            // isn't drawn twice (once in-flow, once sticky).
+            if let Some(idx) = headers.iter().position(|h| h.block_id == sticky.block_id) {
+                headers.remove(idx);
+                storage.remove(idx);
+            }
+            headers.push(sticky.entry);
+            storage.push(sticky.storage);
+        }
+    }
     let _blob = layout::patch_header_pointers(&mut headers, &storage);
 
     // FFI term: replay the SAME bytes so block IDs are identical.
@@ -274,7 +300,7 @@ pub(crate) fn run(args: BlockArgs, ctx: &RenderContext) -> Result<(), Box<dyn st
             target.texture_ptr(),
             vp_w,
             vp_h,
-            0.0,
+            scroll_y_px,
             layout_entries.as_ptr(),
             layout_entries.len(),
             headers.as_ptr(),

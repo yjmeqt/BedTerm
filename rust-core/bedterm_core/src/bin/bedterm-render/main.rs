@@ -109,6 +109,7 @@ fn print_usage() {
     eprintln!("  --command TEXT      Command name for --wrap header");
     eprintln!("  --exit-code N       Exit code for --wrap (default: 0)");
     eprintln!("  --duration-ms N     Duration in ms for --wrap");
+    eprintln!("  --scroll-y-pt N     Scroll offset in points (enables sticky header)");
     eprintln!();
     eprintln!("Cell size query (respects --scale):");
     eprintln!("  bedterm-render cell-size --font-size 14 --scale 3.0");
@@ -182,8 +183,11 @@ fn build_context(extra: &[String]) -> RenderContext {
             "--wrap" => {
                 i += 1;
             }
-            "--exit-code" => {
+            "--exit-code" | "--scroll-y-pt" if i + 1 < extra.len() => {
                 i += 2;
+            }
+            "--exit-code" | "--scroll-y-pt" => {
+                i += 1;
             }
             _ => {
                 i += 1;
@@ -313,6 +317,12 @@ fn parse_block_args(args: &[String]) -> blocks::BlockArgs {
             "--duration-ms" => {
                 if let Some(v) = args.get(i + 1).and_then(|s| s.parse().ok()) {
                     opts.wrap_duration_ms = Some(v);
+                }
+                i += 2;
+            }
+            "--scroll-y-pt" => {
+                if let Some(v) = args.get(i + 1).and_then(|s| s.parse().ok()) {
+                    opts.scroll_y_pt = v;
                 }
                 i += 2;
             }
