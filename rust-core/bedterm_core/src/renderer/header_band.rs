@@ -450,6 +450,7 @@ fn emit_mono_text_run(
 }
 
 /// Emit a single cell-glyph quad using a `GlyphInfo` (cell atlas lookup).
+#[allow(clippy::too_many_arguments)]
 fn emit_glyph_info_quad(
     verts: &mut Vec<CellVertex>,
     x: f32,

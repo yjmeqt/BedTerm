@@ -13,14 +13,9 @@ use bedterm_core::term::Palette;
 use crate::context::RenderContext;
 use crate::png::{self, OffscreenTarget};
 
+#[derive(Default)]
 pub(crate) struct GridArgs {
     pub input: Option<String>,
-}
-
-impl Default for GridArgs {
-    fn default() -> Self {
-        Self { input: None }
-    }
 }
 
 pub(crate) fn run(args: GridArgs, ctx: &RenderContext) -> Result<(), Box<dyn std::error::Error>> {

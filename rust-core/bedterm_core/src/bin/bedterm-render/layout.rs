@@ -8,6 +8,8 @@
 use bedterm_core::blocks::Block;
 use bedterm_core::cli_agent::CliAgent;
 use bedterm_core::renderer::block_list_ffi::{BtBlockHeaderEntry, BtBlockLayoutEntry};
+
+type HeaderStorageVec = Vec<(Vec<u8>, Option<Vec<u8>>)>;
 use bedterm_core::term::{BtRgb24, Palette};
 
 // ── Layout constants (match BlockPanelStyle / BlockHeader) ──────────────
@@ -188,7 +190,7 @@ pub(crate) fn build_header_descriptors(
     scale: f32,
     width_px: f32,
     colors: &PaletteColors,
-) -> (Vec<BtBlockHeaderEntry>, Vec<(Vec<u8>, Option<Vec<u8>>)>) {
+) -> (Vec<BtBlockHeaderEntry>, HeaderStorageVec) {
     let header_h_px = HEADER_HEIGHT_PT * scale;
     let mut entries = Vec::with_capacity(ranges.len());
     let mut storage: Vec<(Vec<u8>, Option<Vec<u8>>)> = Vec::with_capacity(ranges.len());

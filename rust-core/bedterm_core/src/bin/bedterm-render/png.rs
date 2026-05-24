@@ -75,9 +75,7 @@ pub(crate) fn write_png(
     // Convert BGRA → RGBA.
     let mut rgba = pixels.to_vec();
     for chunk in rgba.chunks_exact_mut(4) {
-        let b = chunk[0];
-        chunk[0] = chunk[2]; // R ← B
-        chunk[2] = b; // B ← R
+        chunk.swap(0, 2);
     }
     image::codecs::png::PngEncoder::new(out).write_image(
         &rgba,

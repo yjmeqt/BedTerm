@@ -164,7 +164,7 @@ fn extract_optional_u16(s: &str, key: &str) -> Option<u16> {
 fn extract_optional_string(s: &str, key: &str) -> Option<String> {
     let rest = s.split(key).nth(1)?;
     let val = rest
-        .split(|c: char| c == ',' || c == '\n' || c == '}')
+        .split(|c: char| [',', '\n', '}'].contains(&c))
         .next()?
         .trim();
     if val == "null" {

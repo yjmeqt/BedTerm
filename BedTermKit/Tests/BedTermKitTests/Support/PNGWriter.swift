@@ -25,10 +25,10 @@ enum PNGWriter {
     ) throws {
         // BGRA → RGBA byte swap (matching Rust png.rs).
         var rgba = bgraPixels
-        for i in stride(from: 0, to: rgba.count, by: 4) {
-            let tmp = rgba[i]
-            rgba[i] = rgba[i + 2]
-            rgba[i + 2] = tmp
+        for offset in stride(from: 0, to: rgba.count, by: 4) {
+            let tmp = rgba[offset]
+            rgba[offset] = rgba[offset + 2]
+            rgba[offset + 2] = tmp
         }
 
         let colorSpace = CGColorSpaceCreateDeviceRGB()

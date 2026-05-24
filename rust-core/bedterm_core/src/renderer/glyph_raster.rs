@@ -64,10 +64,10 @@ pub trait GlyphRasterizer {
 
 /// Existing swash-backed rasterizer. The default on non-Apple platforms.
 /// Kept on Apple platforms for tests and A/B comparison.
+#[derive(Default)]
 #[allow(dead_code)]
 pub struct SwashRasterizer;
 
-#[allow(dead_code)]
 impl SwashRasterizer {
     pub fn new() -> Self {
         Self

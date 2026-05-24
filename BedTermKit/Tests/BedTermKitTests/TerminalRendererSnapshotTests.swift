@@ -117,7 +117,7 @@ struct TerminalRendererSnapshotTests {
         var out = Data(capacity: data.count + data.count / 10)
         var prevCR = false
         for byte in data {
-            if byte == 0x0A && !prevCR {
+            if byte == 0x0A, !prevCR {
                 out.append(0x0D)
             }
             out.append(byte)
@@ -153,19 +153,18 @@ struct TerminalRendererSnapshotTests {
         }
 
         // Fallback: look up individual files in bundle resource path
-        if fixtures.isEmpty {
-            if let resURL = bundle.resourceURL?
+        if fixtures.isEmpty,
+            let resURL = bundle.resourceURL?
                 .appendingPathComponent("Fixtures/byte_streams")
-            {
-                if let enumerator = FileManager.default.enumerator(
-                    at: resURL,
-                    includingPropertiesForKeys: [.isRegularFileKey]
-                ) {
-                    for case let url as URL in enumerator
-                    where url.pathExtension == "bin" {
-                        let name = url.deletingPathExtension().lastPathComponent
-                        fixtures.append(FixtureSource(name: name, url: url))
-                    }
+        {
+            if let enumerator = FileManager.default.enumerator(
+                at: resURL,
+                includingPropertiesForKeys: [.isRegularFileKey]
+            ) {
+                for case let url as URL in enumerator
+                where url.pathExtension == "bin" {
+                    let name = url.deletingPathExtension().lastPathComponent
+                    fixtures.append(FixtureSource(name: name, url: url))
                 }
             }
         }
@@ -196,38 +195,49 @@ struct TerminalRendererSnapshotTests {
     private static let fixtures = loadFixtures()
 
     private static func buildParams() -> [SnapshotParams] {
-        fixtures.flatMap { f in
-            devices.flatMap { d in
-                palettes.map { p in
-                    SnapshotParams(fixture: f, device: d, palette: p)
+        fixtures.flatMap { fixture in
+            devices.flatMap { device in
+                palettes.map { palette in
+                    SnapshotParams(
+                        fixture: fixture, device: device, palette: palette)
                 }
             }
         }
     }
 
-    // MARK: - Tests
+    // MARK: - Rendering helpers
 
-    @Test("render snapshot", arguments: buildParams())
-    private func renderSnapshot(param: SnapshotParams) throws {
-        let device = try #require(MTLCreateSystemDefaultDevice(), "no Metal device")
+    private struct RenderSetup {
+        let bridge: RendererBridge
+        let term: TerminalCore
+        let cols: Int
+        let rows: Int
+        let texWidth: Int
+        let texHeight: Int
+    }
+
+    private static func setupRender(
+        param: SnapshotParams,
+        device: MTLDevice
+    ) throws -> RenderSetup {
         let queue = try #require(device.makeCommandQueue(), "no command queue")
         let bridge = try #require(
             RendererBridge(device: device, queue: queue), "bridge init failed")
 
         let preset = param.device
 
-        // 1. Font + cell metrics → derive cols/rows
+        // Font + cell metrics → derive cols/rows
         bridge.setFont(pointSize: 14, scale: preset.scale)
         let cellPt = bridge.cellSizeInPoints(scale: preset.scale)
         let cols = Int((preset.viewportPt.width / cellPt.width).rounded(.down))
         let rows = Int((preset.viewportPt.height / cellPt.height).rounded(.down))
         guard cols > 0, rows > 0 else {
             Issue.record("zero cols/rows for \(preset.name): cellPt=\(cellPt)")
-            return
+            throw SnapshotError.zeroDimensions
         }
 
-        // 2. Palette + clear color
-        let palette = Self.paletteFor(param.palette)
+        // Palette + clear color
+        let palette = paletteFor(param.palette)
         let bg = palette.defaultBg
         bridge.setClearColor(
             red: Float(bg.r) / 255,
@@ -235,71 +245,98 @@ struct TerminalRendererSnapshotTests {
             blue: Float(bg.b) / 255,
             alpha: 1.0)
 
-        // 3. Terminal + feed fixture (with LF → CR+LF normalization)
+        // Terminal + feed fixture
         let rawPayload = try Data(contentsOf: param.fixture.url)
-        let payload = Self.normalizeNewlines(rawPayload)
+        let payload = normalizeNewlines(rawPayload)
         let term = TerminalCore(cols: cols, rows: rows)
         term.setPalette(palette)
         term.feed(payload)
 
-        // 4. Offscreen texture at device pixel dimensions
         let texWidth = Int((preset.viewportPt.width * preset.scale).rounded())
         let texHeight = Int((preset.viewportPt.height * preset.scale).rounded())
+
+        return RenderSetup(
+            bridge: bridge, term: term,
+            cols: cols, rows: rows,
+            texWidth: texWidth, texHeight: texHeight)
+    }
+
+    private static func renderAndReadPixels(
+        setup: RenderSetup,
+        device: MTLDevice
+    ) throws -> (pixels: [UInt8], texWidth: Int, texHeight: Int) {
         let desc = MTLTextureDescriptor.texture2DDescriptor(
             pixelFormat: .bgra8Unorm,
-            width: texWidth,
-            height: texHeight,
+            width: setup.texWidth,
+            height: setup.texHeight,
             mipmapped: false
         )
         desc.usage = [.shaderRead, .renderTarget]
         let texture = try #require(
             device.makeTexture(descriptor: desc), "texture allocation failed")
 
-        // 5. Draw
-        let rc = bridge.draw(
-            term: term,
+        let rc = setup.bridge.draw(
+            term: setup.term,
             into: texture,
-            viewport: CGSize(width: texWidth, height: texHeight),
+            viewport: CGSize(width: setup.texWidth, height: setup.texHeight),
             time: 0
         )
-        #expect(rc == 0, "draw failed on \(param.testDescription)")
+        #expect(rc == 0, "draw failed")
 
-        // 6. Drain GPU
-        let drain = queue.makeCommandBuffer()
+        let drain = setup.bridge.queue.makeCommandBuffer()
         drain?.commit()
         drain?.waitUntilCompleted()
 
-        // 7. Read back pixels
-        let bytesPerRow = texWidth * 4
-        var pixels = [UInt8](repeating: 0, count: bytesPerRow * texHeight)
+        let bytesPerRow = setup.texWidth * 4
+        var pixels = [UInt8](repeating: 0, count: bytesPerRow * setup.texHeight)
         texture.getBytes(
             &pixels,
             bytesPerRow: bytesPerRow,
-            from: MTLRegionMake2D(0, 0, texWidth, texHeight),
+            from: MTLRegionMake2D(0, 0, setup.texWidth, setup.texHeight),
             mipmapLevel: 0
         )
+        return (pixels, setup.texWidth, setup.texHeight)
+    }
 
-        // 8. Verify non-empty
+    private enum SnapshotError: Error {
+        case zeroDimensions
+    }
+
+    // MARK: - Tests
+
+    @Test("render snapshot", arguments: buildParams())
+    private func renderSnapshot(param: SnapshotParams) throws {
+        let metalDevice = try #require(
+            MTLCreateSystemDefaultDevice(), "no Metal device")
+
+        let setup = try Self.setupRender(
+            param: param, device: metalDevice)
+        let (pixels, texWidth, texHeight) = try Self.renderAndReadPixels(
+            setup: setup, device: metalDevice)
+
+        // Verify non-empty
         var nonZero = 0
-        for i in stride(from: 0, to: pixels.count, by: 4) {
-            if pixels[i] != 0 || pixels[i + 1] != 0 || pixels[i + 2] != 0 {
+        for offset in stride(from: 0, to: pixels.count, by: 4) {
+            if pixels[offset] != 0 || pixels[offset + 1] != 0
+                || pixels[offset + 2] != 0
+            {
                 nonZero += 1
             }
         }
         #expect(nonZero > 100, "empty render for \(param.testDescription)")
 
-        // 9. Write PNG
+        // Write PNG
         let dir = Self.outputDir
         try FileManager.default.createDirectory(
             at: dir, withIntermediateDirectories: true)
         let filename =
-            "\(param.fixture.name)-\(preset.name)-\(param.palette.rawValue)-grid.png"
+            "\(param.fixture.name)-\(param.device.name)-\(param.palette.rawValue)-grid.png"
         let url = dir.appendingPathComponent(filename)
         try PNGWriter.writeBGRA8(
             bgraPixels: pixels, width: texWidth, height: texHeight, to: url)
 
         print(
-            "[Snapshot] \(param.testDescription): cols=\(cols) rows=\(rows) cell=\(cellPt) tex=\(texWidth)x\(texHeight)"
+            "[Snapshot] \(param.testDescription): cols=\(setup.cols) rows=\(setup.rows) tex=\(texWidth)x\(texHeight)"
         )
     }
 }
