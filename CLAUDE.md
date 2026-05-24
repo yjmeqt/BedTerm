@@ -95,20 +95,20 @@ Device pixels = points × scale.
 ### Device presets
 
 Use `--device <name>` to pick a real iOS screen. Scale and viewport are set automatically.
-Full list in `rust-core/bedterm_core/src/bin/bedterm-render/context.rs`.
+Full list in `rust-core/bedterm_core/src/device_presets.rs`.
 
 | Flag | Viewport (pt) | Scale |
 |---|---|---|
 | `--device iphone17` | 402×874 | @3x |
 | `--device iphone17-promax` | 440×956 | @3x |
 | `--device iphone16` | 393×852 | @3x |
-| `--device iphone16-promax` | 440×956 | @3x |
-| `--device iphone15` | 393×852 | @3x |
 | `--device iphone15-promax` | 430×932 | @3x |
+| `--device iphone14` | 390×844 | @3x |
 | `--device iphone-se3` | 375×667 | @2x |
 | `--device ipad-pro13` | 1032×1376 | @2x |
 | `--device ipad-pro11` | 834×1210 | @2x |
 | `--device ipad-air13` | 1024×1366 | @2x |
+| `--device ipad-air11` | 820×1180 | @2x |
 | `--device ipad-mini` | 744×1133 | @2x |
 | `--device mac` | 1200×800 | @2x |
 

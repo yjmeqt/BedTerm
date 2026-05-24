@@ -174,6 +174,24 @@ fn extract_optional_string(s: &str, key: &str) -> Option<String> {
     }
 }
 
+// ── Newline normalization ─────────────────────────────────────────────────
+
+/// Convert bare LF (`\n`) to CR+LF (`\r\n`) so piped script output renders
+/// identically to PTY-recorded sessions (where the tty driver in cooked mode
+/// already performs this translation).
+pub fn normalize_newlines(bytes: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(bytes.len() + bytes.len() / 10);
+    let mut prev_cr = false;
+    for &b in bytes {
+        if b == b'\n' && !prev_cr {
+            out.push(b'\r');
+        }
+        out.push(b);
+        prev_cr = b == b'\r';
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

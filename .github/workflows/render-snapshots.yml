@@ -1,0 +1,65 @@
+name: render-snapshots
+on:
+  pull_request:
+    paths:
+      - 'rust-core/bedterm_core/src/renderer/**'
+      - 'rust-core/bedterm_core/src/bin/bedterm-render/**'
+      - 'rust-core/bedterm_core/src/device_presets.rs'
+      - 'BedTermKit/Sources/BedTermKit/**'
+      - 'BedTermKit/Tests/BedTermKitTests/**'
+      - 'scripts/sgr-test/**'
+      - 'scripts/ci/render-snapshots.sh'
+      - '.github/workflows/render-snapshots.yml'
+  push:
+    branches: [main]
+
+jobs:
+  render:
+    runs-on: macos-15
+    defaults:
+      run:
+        working-directory: ${{ github.workspace }}
+    steps:
+      - uses: actions/checkout@v5
+
+      # ── Rust ────────────────────────────────────────────────────
+      - name: Install Rust toolchain
+        working-directory: rust-core
+        run: |
+          rustup show
+          rustup target add aarch64-apple-darwin aarch64-apple-ios aarch64-apple-ios-sim
+
+      - name: Build bedterm-render
+        working-directory: rust-core
+        run: cargo build --bin bedterm-render
+
+      # ── macOS renders ───────────────────────────────────────────
+      - name: macOS renders
+        run: bash scripts/ci/render-snapshots.sh --macos
+
+      - name: Upload macOS renders
+        uses: actions/upload-artifact@v5
+        with:
+          name: renders-macos
+          path: /tmp/ci-renders/macos/
+          retention-days: 7
+
+      # ── iOS Simulator renders ───────────────────────────────────
+      - name: iOS renders
+        env:
+          RENDER_OUTPUT_DIR: /tmp/ci-renders/ios
+        run: |
+          # xcodebuild auto-boots a matching simulator via -destination.
+          xcodebuild test \
+            -scheme BedTerm \
+            -destination 'platform=iOS Simulator,name=iPhone 17' \
+            -only-testing "BedTermKitTests/TerminalRendererSnapshotTests" \
+            2>&1 | tail -30
+
+      - name: Upload iOS renders
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: renders-ios
+          path: /tmp/ci-renders/ios/
+          retention-days: 7

@@ -1,0 +1,32 @@
+=== emoji plain ===
+🔴🟢🔵🟡🟣🟠🟤⚫⚪
+✅❌⚠️ℹ️🔥💯🎉🚀💡
+😀😃😄😁😆😅🤣😂🙂🙃
+⌨️🖥️📱🖱️💾📀🔌🔋
+
+=== emoji + styles ===
+[1mbold  🚀 rocket bold[0m
+[3mitalic  🔥 fire italic[0m
+[4munderline  ✅ check underline[0m
+[7minverse  ⚠️ warning inverse[0m
+[2mdim  💡 idea dim[0m
+
+=== mixed ascii + emoji ===
+build [32m✅[0m  test [31m❌[0m  lint [33m⚠️[0m  deploy [34m🚀[0m
+[1;31mfatal error:[0m [7m🔥 process exited with code 1[0m
+
+=== CJK + ascii mix ===
+日本語のテスト [1m太字[0m [3m斜体[0m [4m下線[0m [7m反転[0m
+你好世界 Hello世界 こんにちはWorld
+[1mbold日本語[0m normalEnglish [3mitalic中文[0m
+
+=== emoji on colored backgrounds ===
+[48;5;1m 🔴 [0m[48;5;2m 🔴 [0m[48;5;3m 🔴 [0m[48;5;4m 🔴 [0m[48;5;5m 🔴 [0m[48;5;6m 🔴 [0m
+[48;5;196m 🟢 [0m[48;5;202m 🟢 [0m[48;5;208m 🟢 [0m[48;5;214m 🟢 [0m[48;5;220m 🟢 [0m[48;5;226m 🟢 [0m
+[48;2;40;40;60m 🔥 on gradient bg [0m
+
+=== skin tones + ZWJ ===
+👋 👋🏻 👋🏼 👋🏽 👋🏾 👋🏿  (wave + fitzpatrick)
+👨‍💻 👩‍💻 🧑‍💻  (technologist ZWJ)
+👨‍👩‍👧‍👦 👨‍👨‍👧  (family ZWJ)
+

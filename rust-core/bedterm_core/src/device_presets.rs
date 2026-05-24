@@ -15,14 +15,9 @@ pub struct DevicePreset {
 /// All supported device presets.
 pub fn all_devices() -> &'static [DevicePreset] {
     &[
-        // ── iPhone 17 series (@3x) ──────────────────────────────
+        // ── iPhone (@3x) ────────────────────────────────────────
         DevicePreset {
             name: "iphone17",
-            viewport_pt: (402, 874),
-            scale: 3.0,
-        },
-        DevicePreset {
-            name: "iphone17-pro",
             viewport_pt: (402, 874),
             scale: 3.0,
         },
@@ -31,30 +26,8 @@ pub fn all_devices() -> &'static [DevicePreset] {
             viewport_pt: (440, 956),
             scale: 3.0,
         },
-        // ── iPhone 16 series (@3x) ──────────────────────────────
         DevicePreset {
             name: "iphone16",
-            viewport_pt: (393, 852),
-            scale: 3.0,
-        },
-        DevicePreset {
-            name: "iphone16-pro",
-            viewport_pt: (402, 874),
-            scale: 3.0,
-        },
-        DevicePreset {
-            name: "iphone16-promax",
-            viewport_pt: (440, 956),
-            scale: 3.0,
-        },
-        // ── iPhone 15 series (@3x) ──────────────────────────────
-        DevicePreset {
-            name: "iphone15",
-            viewport_pt: (393, 852),
-            scale: 3.0,
-        },
-        DevicePreset {
-            name: "iphone15-pro",
             viewport_pt: (393, 852),
             scale: 3.0,
         },
@@ -63,20 +36,9 @@ pub fn all_devices() -> &'static [DevicePreset] {
             viewport_pt: (430, 932),
             scale: 3.0,
         },
-        // ── iPhone 14 series (@3x) ──────────────────────────────
         DevicePreset {
             name: "iphone14",
             viewport_pt: (390, 844),
-            scale: 3.0,
-        },
-        DevicePreset {
-            name: "iphone14-pro",
-            viewport_pt: (393, 852),
-            scale: 3.0,
-        },
-        DevicePreset {
-            name: "iphone14-promax",
-            viewport_pt: (430, 932),
             scale: 3.0,
         },
         // ── iPhone SE (@2x) ─────────────────────────────────────

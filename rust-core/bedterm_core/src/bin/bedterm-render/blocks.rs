@@ -220,7 +220,7 @@ pub(crate) fn run(args: BlockArgs, ctx: &RenderContext) -> Result<(), Box<dyn st
     renderer.set_clear_color(clear[0], clear[1], clear[2], clear[3]);
     renderer.set_ui_font_sizes(15.0 * args.ui_scale, 12.0 * args.ui_scale, args.ui_scale);
 
-    let user_bytes: Vec<u8> = match &args.input {
+    let raw_bytes: Vec<u8> = match &args.input {
         Some(path) => fs::read(path)?,
         None => {
             let mut buf = Vec::new();
@@ -228,6 +228,7 @@ pub(crate) fn run(args: BlockArgs, ctx: &RenderContext) -> Result<(), Box<dyn st
             buf
         }
     };
+    let user_bytes = crate::context::normalize_newlines(&raw_bytes);
 
     let stream_bytes = if args.wrap_single_block {
         wrap_with_dcs(&user_bytes, &args)

@@ -24,7 +24,7 @@ impl Default for GridArgs {
 }
 
 pub(crate) fn run(args: GridArgs, ctx: &RenderContext) -> Result<(), Box<dyn std::error::Error>> {
-    let bytes: Vec<u8> = match &args.input {
+    let raw_bytes: Vec<u8> = match &args.input {
         Some(path) => fs::read(path)?,
         None => {
             let mut buf = Vec::new();
@@ -32,6 +32,7 @@ pub(crate) fn run(args: GridArgs, ctx: &RenderContext) -> Result<(), Box<dyn std
             buf
         }
     };
+    let bytes = crate::context::normalize_newlines(&raw_bytes);
 
     let device = Device::system_default().ok_or("no Metal device found (must run on macOS)")?;
     let queue = device.new_command_queue();

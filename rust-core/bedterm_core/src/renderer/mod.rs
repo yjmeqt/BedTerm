@@ -7,7 +7,7 @@ pub mod cells;
 pub(crate) mod coretext_raster;
 pub mod ffi;
 pub(crate) mod font_system;
-pub(crate) mod glyph_raster;
+pub mod glyph_raster;
 pub(crate) mod header_band;
 pub mod icon_atlas;
 pub mod pipeline;

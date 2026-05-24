@@ -138,24 +138,20 @@ fn parse_args() -> Args {
             // match the renderer's actual font rasterization, not a heuristic.
             let vp_px_w = (vpw as f32 * args.scale) as u32;
             let vp_px_h = (vph as f32 * args.scale) as u32;
-            if let Some((cell_w, cell_h)) = query_cell_size(args.font_size_pt, args.scale) {
-                args.cols = (vp_px_w as f32 / cell_w as f32).max(1.0) as u16;
-                args.rows = (vp_px_h as f32 / cell_h as f32).max(1.0) as u16;
-                eprintln!(
-                    "[record] cell={cell_w}x{cell_h}px → viewport={vp_px_w}x{vp_px_h}px → cols={}, rows={}",
-                    args.cols, args.rows,
-                );
-            } else {
-                // Fallback heuristic: SF Mono width ≈ 0.83 × font_size_pt.
-                let cell_w_pt = (args.font_size_pt * 0.83).max(1.0);
-                let cell_h_pt = (args.font_size_pt * 1.20).max(1.0);
-                args.cols = (vpw as f32 / cell_w_pt).max(1.0) as u16;
-                args.rows = (vph as f32 / cell_h_pt).max(1.0) as u16;
-                eprintln!(
-                    "[record] WARNING: bedterm-render not found, using heuristic → cols={}, rows={}",
-                    args.cols, args.rows,
-                );
-            }
+            let (cell_w, cell_h) =
+                query_cell_size(args.font_size_pt, args.scale).unwrap_or_else(|| {
+                    eprintln!(
+                        "[record] ERROR: cannot query cell-size from bedterm-render. \
+                         Build it first: cargo build -p bedterm_core --bin bedterm-render"
+                    );
+                    std::process::exit(1);
+                });
+            args.cols = (vp_px_w as f32 / cell_w as f32).max(1.0) as u16;
+            args.rows = (vp_px_h as f32 / cell_h as f32).max(1.0) as u16;
+            eprintln!(
+                "[record] cell={cell_w}x{cell_h}px → viewport={vp_px_w}x{vp_px_h}px → cols={}, rows={}",
+                args.cols, args.rows,
+            );
         }
     } else {
         eprintln!(

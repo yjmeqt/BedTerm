@@ -7,7 +7,7 @@
 //! passwordless shell to the network.
 //!
 //! Usage:
-//!   cargo run -p bedterm-mock-ssh -- [--port 2222]
+//!   cargo run -p bedterm-mock-ssh -- [--port 2222] [--device iphone17]
 //!
 //! Sim connects to:
 //!   host:     127.0.0.1
@@ -37,6 +37,15 @@ struct Args {
     /// Listen port on 127.0.0.1.
     #[arg(long, default_value_t = 2222)]
     port: u16,
+
+    /// Device preset for PTY dimensions (e.g. iphone17, ipad-pro13, mac).
+    /// Defaults to 80×24 when omitted.
+    #[arg(long)]
+    device: Option<String>,
+
+    /// Font size in points (default: 14).
+    #[arg(long, default_value_t = 14.0)]
+    font_size: f32,
 }
 
 #[tokio::main]
@@ -58,15 +67,60 @@ async fn main() -> Result<()> {
         ..Default::default()
     });
 
+    // Derive PTY dimensions from device preset + real font metrics.
+    let (pty_cols, pty_rows) = derive_pty_dims(&args);
+
     let addr = ("127.0.0.1", args.port);
     let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".into());
     eprintln!("[bedterm-mock-ssh] listening on 127.0.0.1:{}", args.port);
     eprintln!("[bedterm-mock-ssh] accepts any user + password");
+    eprintln!("[bedterm-mock-ssh] PTY: {pty_cols}×{pty_rows}");
     eprintln!("[bedterm-mock-ssh] bridging to real PTY: {shell} -l");
 
-    let mut srv = MockServer;
+    let mut srv = MockServer { pty_cols, pty_rows };
     srv.run_on_address(config, addr).await?;
     Ok(())
+}
+
+/// Derive terminal cols/rows from --device + --font-size using the same
+/// font metrics the renderer uses. Falls back to 80×24 when no --device.
+fn derive_pty_dims(args: &Args) -> (u16, u16) {
+    let Some(ref device_name) = args.device else {
+        return (80, 24);
+    };
+    let Some(device) = bedterm_core::device_presets::find_device(device_name) else {
+        eprintln!(
+            "[bedterm-mock-ssh] unknown device '{}', using 80×24",
+            device_name
+        );
+        return (80, 24);
+    };
+    let vp_px_w = (device.viewport_pt.0 as f32 * device.scale).round() as u32;
+    let vp_px_h = (device.viewport_pt.1 as f32 * device.scale).round() as u32;
+    let font_px = args.font_size * device.scale;
+    let Some(metrics) = bedterm_core::renderer::glyph_raster::measure_cell(font_px) else {
+        eprintln!(
+            "[bedterm-mock-ssh] cannot measure font at {}px, using 80×24",
+            font_px
+        );
+        return (80, 24);
+    };
+    let cols = (vp_px_w as f32 / metrics.cell_width as f32).max(1.0) as u16;
+    let rows = (vp_px_h as f32 / metrics.cell_height as f32).max(1.0) as u16;
+    eprintln!(
+        "[bedterm-mock-ssh] device={} viewport={}×{}pt @{}x → {}×{}px, cell={}×{}px → cols={}, rows={}",
+        device_name,
+        device.viewport_pt.0,
+        device.viewport_pt.1,
+        device.scale,
+        vp_px_w,
+        vp_px_h,
+        metrics.cell_width,
+        metrics.cell_height,
+        cols,
+        rows,
+    );
+    (cols, rows)
 }
 
 /// Path to the persisted ed25519 host key. Resolves under
@@ -119,15 +173,18 @@ fn load_or_create_host_key() -> Result<KeyPair> {
 }
 
 #[derive(Clone)]
-struct MockServer;
+struct MockServer {
+    pty_cols: u16,
+    pty_rows: u16,
+}
 
 impl Server for MockServer {
     type Handler = MockHandler;
     fn new_client(&mut self, _peer: Option<std::net::SocketAddr>) -> MockHandler {
         MockHandler {
             shell_tx: None,
-            pty_cols: 80,
-            pty_rows: 24,
+            pty_cols: self.pty_cols,
+            pty_rows: self.pty_rows,
         }
     }
 }
