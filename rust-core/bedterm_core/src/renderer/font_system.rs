@@ -44,6 +44,12 @@ use std::sync::{Arc, Mutex, OnceLock, RwLock};
 /// available family rather than silently rendering as a wrong font.
 static TERMINAL_FAMILY: RwLock<Option<String>> = RwLock::new(None);
 
+/// Snapshot of the host-supplied Menlo font bytes, stored so the
+/// CoreText rasterizer can create a CGFont from memory without
+/// re-extracting the font from the iOS font subsystem.
+#[cfg(any(target_os = "ios", target_os = "macos"))]
+pub(crate) static MENLO_BYTES: OnceLock<Vec<u8>> = OnceLock::new();
+
 /// Sentinel family returned by `terminal_family()` when no host face
 /// has been registered yet. Chosen to never match any real font name
 /// so `Family::Name(...)` lookups miss cleanly and cosmic-text falls
@@ -53,6 +59,9 @@ const MISSING_TERMINAL_FAMILY: &str = "__bedterm-no-host-font__";
 /// Family name shape calls should request as the primary monospace.
 /// Returns a heap `String` (rather than `&'static str`) so callers can
 /// pass `Family::Name(&s)` without lifetime gymnastics.
+/// Only used by the swash backend; dead on Apple platforms where
+/// CoreText is the default.
+#[allow(dead_code)]
 pub(crate) fn terminal_family() -> String {
     TERMINAL_FAMILY
         .read()
@@ -74,6 +83,11 @@ pub(crate) fn terminal_family() -> String {
 /// fontdb after load is the only way to guarantee the request string
 /// at shape time agrees with what the database stored.
 pub(crate) fn register_terminal_face(bytes: Vec<u8>) -> Option<String> {
+    // Stash a copy for the CoreText rasterizer before fontdb consumes `bytes`.
+    #[cfg(any(target_os = "ios", target_os = "macos"))]
+    {
+        let _ = MENLO_BYTES.set(bytes.clone());
+    }
     with_font_system(|fs| {
         let db = fs.db_mut();
         // `Source::Binary` returns the face IDs that were actually

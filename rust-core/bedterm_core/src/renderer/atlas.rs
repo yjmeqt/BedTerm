@@ -21,7 +21,7 @@ use std::collections::HashMap;
 
 use metal::{Device, MTLPixelFormat, MTLRegion, MTLTextureUsage, Texture, TextureDescriptor};
 
-use crate::renderer::glyph_raster::{measure_cell, rasterize, CellMetrics};
+use crate::renderer::glyph_raster::{CellMetrics, GlyphRasterizer, PlatformRasterizer};
 use crate::renderer::icon_atlas::{decode as decode_icon, IconSlot};
 use crate::renderer::ui_text::rasterize_ui;
 
@@ -103,7 +103,11 @@ pub struct GlyphAtlas {
     glyphs: HashMap<GlyphKey, GlyphInfo>,
     cursor_x: u32,
     cursor_y: u32,
-    font_size_px: f32,
+    /// UI-specified font size in points (before display-scale multiplication).
+    logical_size_pt: f32,
+    /// Display pixel scale factor (DPR). `logical_size_pt * scale` = device px.
+    scale: f32,
+    rasterizer: PlatformRasterizer,
     /// UI glyph cache. Keyed by (codepoint, font_px) so the same
     /// codepoint at subheadline vs caption2 size each get their own
     /// slot.
@@ -126,16 +130,21 @@ pub struct GlyphAtlas {
 
 impl GlyphAtlas {
     pub fn new(device: &Device, pixel_size: f32, dpr: f32) -> Self {
-        let scaled = (pixel_size.max(1.0) * dpr.max(1.0)).max(1.0);
-        // Defensive fallback: fontdb scan failed (malformed iOS install,
-        // sandboxed font directory). Coarse approximations so the atlas
-        // still builds and the renderer draws *something* until the
-        // FontSystem is recoverable.
-        let metrics = measure_cell(scaled).unwrap_or(CellMetrics {
-            cell_width: (scaled * 0.6) as u32,
-            cell_height: scaled as u32,
-            ascent: (scaled * 0.8) as u32,
-        });
+        let logical = pixel_size.max(1.0);
+        let scale = dpr.max(1.0);
+
+        let mut rasterizer = PlatformRasterizer::new();
+        let scaled = (logical * scale).max(1.0);
+        // Defensive fallback: no font registered yet (before host
+        // bootstrap) or font system unrecoverable. Coarse approximations
+        // so the atlas still builds and the renderer draws *something*.
+        let metrics = rasterizer
+            .measure_cell(logical, scale)
+            .unwrap_or(CellMetrics {
+                cell_width: (scaled * 0.6) as u32,
+                cell_height: scaled as u32,
+                ascent: (scaled * 0.8) as u32,
+            });
 
         let desc = TextureDescriptor::new();
         desc.set_pixel_format(MTLPixelFormat::BGRA8Unorm);
@@ -180,7 +189,9 @@ impl GlyphAtlas {
             glyphs: HashMap::new(),
             cursor_x: 0,
             cursor_y: 0,
-            font_size_px: scaled,
+            logical_size_pt: logical,
+            scale,
+            rasterizer,
             ui_glyphs: HashMap::new(),
             icons: HashMap::new(),
             ui_cursor_x: 0,
@@ -228,7 +239,13 @@ impl GlyphAtlas {
 
     fn rasterize_and_upload(&mut self, key: GlyphKey, wide: bool) -> Option<GlyphInfo> {
         let ch = char::from_u32(key.codepoint)?;
-        let raster = rasterize(ch, self.font_size_px, key.bold, key.italic)?;
+        let raster = self.rasterizer.rasterize(
+            ch,
+            self.logical_size_pt,
+            self.scale,
+            key.bold,
+            key.italic,
+        )?;
 
         // Color emoji is conventionally wide in terminals; auto-promote so
         // the bitmap isn't squished into a single-cell slot.
