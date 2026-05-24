@@ -77,10 +77,13 @@ fn parse_args() -> Args {
     if let (Some(fs), Some(vw), Some(vh)) = (args.font_size, args.viewport_w, args.viewport_h) {
         let cell_w = (fs * 0.55).max(1.0);
         let cell_h = (fs * 1.25).max(1.0);
-        args.cols = (vw as f32 / cell_w).max(1.0) as u16;
-        args.rows = (vh as f32 / cell_h).max(1.0) as u16;
+        // Enforce minimum 80 cols so TUIs (claude, codex, vim) aren't
+        // squeezed. The recording captures at native terminal width; the
+        // renderer can scale the viewport independently later.
+        args.cols = ((vw as f32 / cell_w).max(1.0) as u16).max(80);
+        args.rows = ((vh as f32 / cell_h).max(1.0) as u16).max(24);
         eprintln!(
-            "[record] viewport={vw}x{vh} font={fs} → cols={}, rows={}",
+            "[record] viewport={vw}x{vh} font={fs} → cols={}, rows={} (min 80×24)",
             args.cols, args.rows
         );
     }
@@ -146,6 +149,12 @@ fn run(args: Args) -> Result<()> {
     eprintln!("[record] spawning zsh ({}x{})...", args.cols, args.rows);
     let mut _child = pair.slave.spawn_command(cmd).context("failed to spawn zsh")?;
 
+    // MUST resize after spawn: openpty sets the initial size, but the
+    // shell / child may query TIOCGWINSZ before env vars are evaluated.
+    // resize() writes the kernel winsize + sends SIGWINCH so TUIs
+    // (claude, codex, vim) pick up the correct rows × cols.
+    pair.master.resize(pty_size).context("resize PTY")?;
+
     let mut reader = pair.master.try_clone_reader().context("no PTY reader")?;
     let mut writer = pair.master.take_writer().context("no PTY writer")?;
 
@@ -177,28 +186,68 @@ fn run(args: Args) -> Result<()> {
     eprintln!("\n[record] running: {cmd_line}");
 
     if args.stdin_lines {
-        // Move writer into a feeder thread: sends the command first,
-        // then pipes our stdin line-by-line to the PTY.
-        let (done_tx, done_rx) = mpsc::channel();
-        std::thread::spawn(move || {
-            let _ = writer.write_all(format!("{cmd_line}\n").as_bytes());
-            let stdin = std::io::stdin();
-            for line in BufReader::new(stdin).lines().map_while(Result::ok) {
-                std::thread::sleep(Duration::from_millis(200));
-                if writer.write_all(line.as_bytes()).is_err() { break; }
-                if writer.write_all(b"\n").is_err() { break; }
-            }
-            drop(writer); // EOF to PTY
-            let _ = done_tx.send(());
-        });
-        // Don't wait for feeder — drain output while it feeds.
-        let cmd_out =
-            drain_channel_until_idle(&rx, Duration::from_secs(args.idle_timeout_secs.max(30)));
+        // Interactive mode with stdin prompts. Flow:
+        // 1. Send the command (e.g. "claude").
+        // 2. Let the CLI start up (short idle).
+        // 3. Feed stdin lines as prompt to the CLI.
+        // 4. Wait for the CLI to finish (longer idle timeout).
+        // 5. Send /exit (or exit) to close cleanly.
+        writer
+            .write_all(format!("{cmd_line}\n").as_bytes())
+            .context("write cmd to PTY")?;
+
+        // Read all stdin lines upfront.
+        let stdin_lines: Vec<String> = {
+            BufReader::new(std::io::stdin())
+                .lines()
+                .map_while(Result::ok)
+                .collect()
+        };
+
+        // Separate prompt lines from explicit exit command.
+        let exit_idx = stdin_lines
+            .iter()
+            .position(|l| l.trim() == "/exit" || l.trim() == "exit");
+        let prompt_lines = &stdin_lines[..exit_idx.unwrap_or(stdin_lines.len())];
+        let has_explicit_exit = exit_idx.is_some();
+
+        // Wait for the CLI's TUI / startup banner.
+        let startup_out = drain_channel_until_idle(
+            &rx,
+            Duration::from_secs(2),
+        );
+        captured.extend_from_slice(&startup_out);
+        if let Ok(s) = std::str::from_utf8(&startup_out) {
+            if !s.is_empty() { eprint!("{s}"); }
+        }
+
+        // Feed each prompt line with pacing so the CLI reads them as
+        // separate keystrokes / lines.
+        for line in prompt_lines {
+            std::thread::sleep(Duration::from_millis(300));
+            eprintln!("\n[record] typing: {line}");
+            writer
+                .write_all(line.as_bytes())
+                .context("write prompt to PTY")?;
+            writer.write_all(b"\n").context("write newline to PTY")?;
+        }
+
+        // Wait for the CLI to finish processing.
+        let cmd_out = drain_channel_until_idle(
+            &rx,
+            Duration::from_secs(args.idle_timeout_secs.max(120)),
+        );
         captured.extend_from_slice(&cmd_out);
         if let Ok(s) = std::str::from_utf8(&cmd_out) {
             if !s.is_empty() { eprint!("{s}"); }
         }
-        let _ = done_rx.recv_timeout(Duration::from_secs(5));
+
+        // Send the shutdown command.
+        let exit_cmd = if has_explicit_exit { "/exit\n" } else { "exit\n" };
+        let _ = writer.write_all(exit_cmd.as_bytes());
+        let final_out = drain_channel(&rx, Duration::from_millis(500));
+        captured.extend_from_slice(&final_out);
+        drop(writer);
     } else {
         writer.write_all(format!("{cmd_line}\n").as_bytes()).context("write cmd to PTY")?;
         let cmd_out =
