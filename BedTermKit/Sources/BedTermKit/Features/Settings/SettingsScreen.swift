@@ -37,38 +37,20 @@ struct SettingsScreen: View {
                 }
 
                 Section {
-                    Toggle(isOn: $settings.installShellIntegrationOnConnect) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Install shell integration on connect")
-                            Text(
-                                """
-                                Push a small zsh / bash snippet into each new \
-                                SSH session so prompt and command boundaries \
-                                are reported back as Warp-compatible DCS \
-                                hooks. Required for the Block view; harmless \
-                                if unused.
-                                """
-                            )
-                            .font(.footnote)
-                            .foregroundStyle(Color("ShadcnMutedForeground", bundle: .module))
-                        }
-                    }
-                    .accessibilityIdentifier("settings.installShellIntegration")
-                } header: {
-                    Text("Shell integration")
-                }
-
-                Section {
                     Toggle(isOn: $settings.showCommandBlocks) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("Command blocks")
                             Text(
                                 """
                                 Show each command and its output as a separate \
-                                block (Warp-style). Requires the \
-                                shell-integration toggle above — BedTerm uses \
-                                Warp's DCS hook protocol, not OSC 133, so \
-                                third-party integrations won't drive it.
+                                block (Warp-style). When on, BedTerm writes a \
+                                small shell-integration script into every new SSH \
+                                session to track prompt and command boundaries. \
+                                Without shell integration, \
+                                blocks won't show command metadata. \
+                                BedTerm uses Warp's DCS hook protocol, not \
+                                OSC 133, so third-party integrations won't \
+                                drive it.
                                 """
                             )
                             .font(.footnote)

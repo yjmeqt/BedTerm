@@ -49,7 +49,7 @@ public final class HostsViewModel {
     public var onConnectError: ((UUID, String, Bool) -> Void)?
     /// Resolves the shell-integration heredoc to push at connect time.
     /// Set by `HostsScreen` after the SwiftUI environment is wired so we
-    /// can read `BedTermSettings.installShellIntegrationOnConnect`. Nil
+    /// can read `BedTermSettings.showCommandBlocks`. Nil
     /// keeps the channel pristine.
     public var bootstrapPayloadProvider: (@MainActor () -> String?)?
 

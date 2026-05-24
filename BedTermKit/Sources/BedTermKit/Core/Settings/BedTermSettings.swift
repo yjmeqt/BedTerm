@@ -11,7 +11,6 @@ import Observation
 public final class BedTermSettings {
     private enum Key {
         static let reserveTopSafeAreaInAltScreen = "settings.reserveTopSafeAreaInAltScreen"
-        static let installShellIntegrationOnConnect = "settings.installShellIntegrationOnConnect"
         static let showCommandBlocks = "settings.showCommandBlocks"
     }
 
@@ -31,28 +30,12 @@ public final class BedTermSettings {
         }
     }
 
-    /// Push the bundled OSC 133 shell-integration snippet into every new SSH
-    /// session immediately after the channel opens. The snippet adds prompt
-    /// + command markers (and a few extension attrs like `cmd`, `dur`, `cwd`)
-    /// that future Block-style views consume. Off by default — opt-in,
-    /// because writing bytes into the user's shell at connect time is a
-    /// surprising side effect.
-    public var installShellIntegrationOnConnect: Bool {
-        didSet {
-            if installShellIntegrationOnConnect != oldValue {
-                defaults.set(
-                    installShellIntegrationOnConnect,
-                    forKey: Key.installShellIntegrationOnConnect)
-            }
-        }
-    }
-
     /// Group command output into collapsible blocks (Warp-style). When on,
     /// the terminal session shows the Block list instead of the Classic
     /// Metal grid (except in alt-screen mode, which always falls back to
-    /// Classic). Needs OSC 133 markers from the remote shell — pair with
-    /// `installShellIntegrationOnConnect`, or run a host that already has
-    /// iTerm2 / kitty / VSCode shell integration installed. Default: off.
+    /// Classic). Also gates the per-connect bootstrap push of the shell-
+    /// integration snippet — there is no separate shell-integration toggle
+    /// because the markers serve no purpose without Block view. Default: on.
     public var showCommandBlocks: Bool {
         didSet {
             if showCommandBlocks != oldValue {
@@ -68,10 +51,16 @@ public final class BedTermSettings {
         // documented default of `true` on first launch.
         self.reserveTopSafeAreaInAltScreen =
             defaults.object(forKey: Key.reserveTopSafeAreaInAltScreen) as? Bool ?? true
-        self.installShellIntegrationOnConnect =
-            defaults.object(forKey: Key.installShellIntegrationOnConnect) as? Bool ?? true
         self.showCommandBlocks =
             defaults.object(forKey: Key.showCommandBlocks) as? Bool ?? true
+        // Migrate the old shell-integration key (pre-2026-05-24, when it was
+        // a separate toggle) into showCommandBlocks, then delete it.
+        if let oldShell = defaults.object(forKey: "settings.installShellIntegrationOnConnect") as? Bool {
+            if !oldShell {
+                showCommandBlocks = false
+            }
+            defaults.removeObject(forKey: "settings.installShellIntegrationOnConnect")
+        }
         // Sweep obsolete debug-toggle keys from earlier builds so they don't
         // linger in users' Defaults. Add new entries to `obsoleteKeys` when
         // a setting is removed; never remove from this list.

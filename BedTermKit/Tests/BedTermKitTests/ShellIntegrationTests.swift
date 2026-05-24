@@ -84,11 +84,11 @@ struct ShellIntegrationTests {
         let defaults = try #require(UserDefaults(suiteName: suite))
         let settings = BedTermSettings(defaults: defaults)
         // Default — opt-out: on (matches the default-flip in 75cca90).
-        #expect(settings.installShellIntegrationOnConnect)
-        settings.installShellIntegrationOnConnect = false
-        #expect(!settings.installShellIntegrationOnConnect)
+        #expect(settings.showCommandBlocks)
+        settings.showCommandBlocks = false
+        #expect(!settings.showCommandBlocks)
         // Persists
         let reloaded = BedTermSettings(defaults: defaults)
-        #expect(!reloaded.installShellIntegrationOnConnect)
+        #expect(!reloaded.showCommandBlocks)
     }
 }
