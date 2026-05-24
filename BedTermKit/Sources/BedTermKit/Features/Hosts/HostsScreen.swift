@@ -4,7 +4,7 @@ import UIKit
 public struct HostsScreen: View {
     @Binding var path: NavigationPath
     @Environment(\.toaster) var toaster
-    @Environment(BedTermSettings.self) private var settings
+    @Environment(BedTermSettings.self) var settings
     @Environment(PersistedSessionSnapshotStore.self) var snapshotStore
     @Environment(\.persistenceHandle) private var persistenceHandle
     @State var viewModel = HostsViewModel()
