@@ -1,10 +1,10 @@
 <prd name="Debug Mock TTY">
 
 <overview>
-A debug-only mock TTY built into the Rust core (bedterm_core) and surfaced in the iOS app as an in-app entry point. In Debug builds the Hosts screen exposes a "Debug TTY" group with four launchable programs (echo shell, vim-lite, replay, raw sink) that drive the existing terminal pipeline end-to-end with no SSH. The same Rust mock provides a cargo-level loopback against alacritty_terminal, giving the VTE integration its first end-to-end regression coverage. Release builds contain none of this code or its symbols.
+A debug-only mock TTY built into the Rust core (bedterm_core) that provides a cargo-level loopback against alacritty_terminal, giving the VTE integration its first end-to-end regression coverage. Release builds contain none of this code or its symbols.
 </overview>
-<implementation platform="iOS+Rust" spec="docs/specs/2026-05-17-rust-mock-tty-design.md" />
-<why>Manual testing of terminal rendering, key-bar input, IME composition, alt-screen apps (vim-class), and modern TUIs (Claude Code, Codex) currently requires a live SSH session. That is slow to set up, depends on the network, and offers no determinism. At the same time, the Rust core's alacritty_terminal integration has no end-to-end test path — the bytes-in/grid-out loop is only exercised through the iOS UI. A single Rust-side mock solves both: Swift wraps it as an SSHClient for hands-on debugging on device or simulator, and Rust pipes it into Term for cargo test assertions on grid state. Building the mock in Rust (rather than Swift) is justified specifically by the cargo-test payoff; the iOS debug entry is a near-free byproduct.</why>
+<implementation platform="Rust" spec="docs/specs/2026-05-17-rust-mock-tty-design.md" />
+<why>The Rust core's alacritty_terminal integration has no end-to-end test path — the bytes-in/grid-out loop is only exercised through the iOS UI. A Rust-side mock pipes deterministic byte streams into Term for cargo test assertions on grid state, so renderer regressions surface in `cargo test` rather than only through manual on-device debugging.</why>
 
 <requirement id="R1" name="Rust Mock TTY Core">
   <description>
@@ -61,18 +61,7 @@ A debug-only mock TTY built into the Rust core (bedterm_core) and surfaced in th
   <rule id="zero_synthesis" status="✅">The raw sink program does not emit any byte that did not come from input. No prompt, no banner, no echo augmentation.</rule>
 </requirement>
 
-<requirement id="R6" name="iOS Debug Entry">
-  <description>
-    The mock TTY is reachable from inside the Debug build of the iOS app, without any SSH credential entry, by a single tap on a clearly-marked entry in the existing Hosts screen.
-  </description>
-  <rule id="hosts_section" status="✅">In Debug builds, the Hosts screen displays an additional section titled "Debug TTY" with four entries: Echo Shell, Vim-Lite, Replay…, Raw Sink. In Release builds this section does not exist.</rule>
-  <rule id="replay_picker" status="✅">Tapping "Replay…" presents a picker listing the bundled cast fixtures by name. Selecting a fixture launches the terminal screen with the replay program preloaded with that fixture.</rule>
-  <rule id="skip_credentials" status="✅">Tapping any Debug TTY entry pushes the existing terminal screen directly. No host, username, port, or key fields are shown, requested, or persisted.</rule>
-  <rule id="reuses_terminal_screen" status="✅">The Debug TTY entries reuse the production terminal screen, key bar, composer, and Metal renderer unchanged. The mock TTY only replaces the SSH client.</rule>
-  <rule id="no_localization" status="✅">Debug TTY labels are developer-only English strings and are not added to the localization catalogues.</rule>
-</requirement>
-
-<requirement id="R7" name="Rust Loopback Test Coverage">
+<requirement id="R6" name="Rust Loopback Test Coverage">
   <description>
     The mock TTY's main justification for living in Rust is delivering cargo-level end-to-end regression tests over the alacritty_terminal integration.
   </description>

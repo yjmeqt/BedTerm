@@ -33,9 +33,7 @@ public struct HostKeyStore {
     }
 
     /// Drop the stored fingerprint for `host:port`, if any. No-op when
-    /// none is stored. Used by debug routes (Mock SSH loopback) where
-    /// the server may rotate its host key between runs and we want to
-    /// fall back to trust-on-first-use rather than surface a mismatch.
+    /// none is stored.
     public func remove(host: String, port: Int) {
         Keychain.delete(service: self.service, account: self.account(host: host, port: port))
     }

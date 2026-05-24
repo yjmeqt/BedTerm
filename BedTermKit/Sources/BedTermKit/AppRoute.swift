@@ -13,10 +13,4 @@ enum AppRoute: Hashable {
     /// from `PersistedSessionSnapshotStore`.
     case killedSessionDetail(UUID)
     case terminal
-    #if DEBUG
-        /// Loopback `bedterm-mock-ssh` server on 127.0.0.1:2222 with
-        /// hard-coded credentials. Exercises the real Citadel SSH client
-        /// + block view end-to-end without going through the Hosts list.
-        case mockSSH
-    #endif
 }
