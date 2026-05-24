@@ -153,18 +153,19 @@ struct TerminalRendererSnapshotTests {
         }
 
         // Fallback: look up individual files in bundle resource path
-        if fixtures.isEmpty,
-            let resURL = bundle.resourceURL?
+        if fixtures.isEmpty {
+            if let resURL = bundle.resourceURL?
                 .appendingPathComponent("Fixtures/byte_streams")
-        {
-            if let enumerator = FileManager.default.enumerator(
-                at: resURL,
-                includingPropertiesForKeys: [.isRegularFileKey]
-            ) {
-                for case let url as URL in enumerator
-                where url.pathExtension == "bin" {
-                    let name = url.deletingPathExtension().lastPathComponent
-                    fixtures.append(FixtureSource(name: name, url: url))
+            {
+                if let enumerator = FileManager.default.enumerator(
+                    at: resURL,
+                    includingPropertiesForKeys: [.isRegularFileKey]
+                ) {
+                    for case let url as URL in enumerator
+                    where url.pathExtension == "bin" {
+                        let name = url.deletingPathExtension().lastPathComponent
+                        fixtures.append(FixtureSource(name: name, url: url))
+                    }
                 }
             }
         }
@@ -327,9 +328,11 @@ struct TerminalRendererSnapshotTests {
         // Verify non-empty
         var nonZero = 0
         for offset in stride(from: 0, to: pixels.count, by: 4) {
-            if pixels[offset] != 0 || pixels[offset + 1] != 0
+            let hasContent =
+                pixels[offset] != 0
+                || pixels[offset + 1] != 0
                 || pixels[offset + 2] != 0
-            {
+            if hasContent {
                 nonZero += 1
             }
         }
