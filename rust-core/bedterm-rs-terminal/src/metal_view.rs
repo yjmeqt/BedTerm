@@ -8,6 +8,7 @@
 //! (UTF-16) offsets, so non-ASCII input can show selection jitter under IME.
 //! This is a documented Phase 1 limitation (see the design doc).
 
+use crate::color::hash_to_rgba;
 use crate::geometry::{CGPoint, CGRect, CGSize};
 use crate::text_input::{BtRsUITextPosition, BtRsUITextRange};
 use objc2::encode::{Encode, Encoding, RefEncode};
@@ -107,7 +108,9 @@ declare_class!(
     pub struct BtRsMetalInputView;
 
     unsafe impl ClassType for BtRsMetalInputView {
-        type Super = MTKView;
+        // DIAGNOSTIC: temporarily inherit UIView (not MTKView) to test whether
+        // MTKView is what's suppressing the keyboard.
+        type Super = UIView;
         type Mutability = objc2::mutability::MainThreadOnly;
         const NAME: &'static str = "BtRsMetalInputView";
     }
@@ -119,16 +122,13 @@ declare_class!(
     unsafe impl BtRsMetalInputView {
         // ---- Init ----------------------------------------------------------
 
-        #[method_id(initWithFrame:device:)]
-        fn init_with_frame_device(
+        #[method_id(initWithFrame:)]
+        fn init_with_frame(
             this: Allocated<Self>,
             frame: CGRect,
-            device: Option<&ProtocolObject<dyn MTLDevice>>,
         ) -> Option<Retained<Self>> {
             let this = this.set_ivars(Ivars::default());
-            unsafe {
-                msg_send_id![super(this), initWithFrame: frame, device: device]
-            }
+            unsafe { msg_send_id![super(this), initWithFrame: frame] }
         }
 
         // ---- Responder ------------------------------------------------------
@@ -538,39 +538,42 @@ declare_class!(
         #[method(insertText:)]
         fn insert_text(&self, text: &NSString) {
             let s = text.to_string();
-            let mut buf = self.ivars().text.borrow_mut();
-            let start = self.ivars().selected_start.get().min(buf.len());
-            let end = self.ivars().selected_end.get().min(buf.len()).max(start);
-            buf.replace_range(start..end, &s);
-            let new_caret = start + s.len();
-            self.ivars().selected_start.set(new_caret);
-            self.ivars().selected_end.set(new_caret);
-            self.ivars().marked_start.set(-1);
-            self.ivars().marked_end.set(-1);
+            {
+                let mut buf = self.ivars().text.borrow_mut();
+                let start = self.ivars().selected_start.get().min(buf.len());
+                let end = self.ivars().selected_end.get().min(buf.len()).max(start);
+                buf.replace_range(start..end, &s);
+                let new_caret = start + s.len();
+                self.ivars().selected_start.set(new_caret);
+                self.ivars().selected_end.set(new_caret);
+                self.ivars().marked_start.set(-1);
+                self.ivars().marked_end.set(-1);
+            }
+            self.refresh_bg_from_text();
         }
 
         #[method(deleteBackward)]
         fn delete_backward(&self) {
-            let mut buf = self.ivars().text.borrow_mut();
-            let start = self.ivars().selected_start.get().min(buf.len());
-            let end = self.ivars().selected_end.get().min(buf.len()).max(start);
-            if start != end {
-                buf.replace_range(start..end, "");
-                self.ivars().selected_start.set(start);
-                self.ivars().selected_end.set(start);
-                return;
+            {
+                let mut buf = self.ivars().text.borrow_mut();
+                let start = self.ivars().selected_start.get().min(buf.len());
+                let end = self.ivars().selected_end.get().min(buf.len()).max(start);
+                if start != end {
+                    buf.replace_range(start..end, "");
+                    self.ivars().selected_start.set(start);
+                    self.ivars().selected_end.set(start);
+                } else if start > 0 {
+                    let prev = buf[..start]
+                        .char_indices()
+                        .next_back()
+                        .map(|(i, _)| i)
+                        .unwrap_or(0);
+                    buf.replace_range(prev..start, "");
+                    self.ivars().selected_start.set(prev);
+                    self.ivars().selected_end.set(prev);
+                }
             }
-            if start == 0 {
-                return;
-            }
-            let prev = buf[..start]
-                .char_indices()
-                .next_back()
-                .map(|(i, _)| i)
-                .unwrap_or(0);
-            buf.replace_range(prev..start, "");
-            self.ivars().selected_start.set(prev);
-            self.ivars().selected_end.set(prev);
+            self.refresh_bg_from_text();
         }
     }
 );
@@ -590,19 +593,13 @@ impl BtRsMetalInputView {
     /// in some headless test contexts).
     pub fn new(
         mtm: MainThreadMarker,
-        device: &ProtocolObject<dyn MTLDevice>,
+        _device: &ProtocolObject<dyn MTLDevice>,
     ) -> Option<Retained<Self>> {
         let zero = CGRect::default();
         let this: Option<Retained<Self>> =
-            unsafe { msg_send_id![mtm.alloc::<Self>(), initWithFrame: zero, device: device] };
+            unsafe { msg_send_id![mtm.alloc::<Self>(), initWithFrame: zero] };
         if let Some(ref v) = this {
             unsafe {
-                // Paused + only-redraw-on-demand: no GPU work in Phase 1.
-                let _: () = msg_send![&**v, setEnableSetNeedsDisplay: true];
-                let _: () = msg_send![&**v, setPaused: true];
-                // Make the Metal layer transparent so UIView's backgroundColor
-                // (set via `set_bg_color`) shows through.
-                let _: () = msg_send![&**v, setOpaque: false];
                 let _: () = msg_send![&**v, setUserInteractionEnabled: true];
             }
         }
@@ -636,6 +633,13 @@ impl BtRsMetalInputView {
     /// own lifetime and is reachable for the view's lifetime in practice).
     pub fn set_coordinator(&self, coordinator: *const AnyObject) {
         self.ivars().coordinator.set(coordinator);
+    }
+
+    /// Recompute the background colour from the current text buffer.
+    /// Called after every insertText:/deleteBackward:.
+    fn refresh_bg_from_text(&self) {
+        let rgba = hash_to_rgba(&self.ivars().text.borrow());
+        self.set_bg_color(rgba);
     }
 }
 
