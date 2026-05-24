@@ -194,27 +194,34 @@ fn parse_args() -> Args {
         std::process::exit(1);
     }
 
-    // Derive cols/rows from viewport + font-size ONLY if --cols/--rows
-    // were not explicitly passed.
+    // Derive cols/rows from viewport + actual font metrics.
     let cols_explicit = raw.iter().any(|a| a == "--cols");
     let rows_explicit = raw.iter().any(|a| a == "--rows");
 
     if !cols_explicit && !rows_explicit {
         if let Some((vpw, vph)) = args.viewport_pt {
-            // Heuristic cell dimensions in points (matching SF Mono metrics).
-            // cols = viewport_pt.w / cell_w_pt — scale cancels, same cols at any dpr.
-            let cell_w_pt = (args.font_size_pt * 0.55).max(1.0);
-            let cell_h_pt = (args.font_size_pt * 1.25).max(1.0);
-            args.cols = (vpw as f32 / cell_w_pt).max(1.0) as u16;
-            args.rows = (vph as f32 / cell_h_pt).max(1.0) as u16;
-            eprintln!(
-                "[record] device viewport={vpw}x{vph}pt scale={} → {:.0}x{:.0}px → cols={}, rows={}",
-                args.scale,
-                vpw as f32 * args.scale,
-                vph as f32 * args.scale,
-                args.cols,
-                args.rows,
-            );
+            // Query exact cell metrics from bedterm-render so PTY cols/rows
+            // match the renderer's actual font rasterization, not a heuristic.
+            let vp_px_w = (vpw as f32 * args.scale) as u32;
+            let vp_px_h = (vph as f32 * args.scale) as u32;
+            if let Some((cell_w, cell_h)) = query_cell_size(args.font_size_pt, args.scale) {
+                args.cols = (vp_px_w as f32 / cell_w as f32).max(1.0) as u16;
+                args.rows = (vp_px_h as f32 / cell_h as f32).max(1.0) as u16;
+                eprintln!(
+                    "[record] cell={cell_w}x{cell_h}px → viewport={vp_px_w}x{vp_px_h}px → cols={}, rows={}",
+                    args.cols, args.rows,
+                );
+            } else {
+                // Fallback heuristic: SF Mono width ≈ 0.83 × font_size_pt.
+                let cell_w_pt = (args.font_size_pt * 0.83).max(1.0);
+                let cell_h_pt = (args.font_size_pt * 1.20).max(1.0);
+                args.cols = (vpw as f32 / cell_w_pt).max(1.0) as u16;
+                args.rows = (vph as f32 / cell_h_pt).max(1.0) as u16;
+                eprintln!(
+                    "[record] WARNING: bedterm-render not found, using heuristic → cols={}, rows={}",
+                    args.cols, args.rows,
+                );
+            }
         }
     } else {
         eprintln!(
@@ -262,6 +269,33 @@ fn print_usage() {
 fn parse_dims(s: &str) -> Option<(u32, u32)> {
     let (w, h) = s.split_once('x')?;
     Some((w.parse().ok()?, h.parse().ok()?))
+}
+
+/// Try to spawn `bedterm-render cell-size` to get exact font metrics.
+/// Returns `Some((cell_w_px, cell_h_px))` on success.
+fn query_cell_size(font_size_pt: f32, scale: f32) -> Option<(u32, u32)> {
+    // Look for bedterm-render next to the current binary.
+    let self_path = std::env::current_exe().ok()?;
+    let bin_dir = self_path.parent()?;
+    let render_bin = bin_dir.join("bedterm-render");
+    let output = std::process::Command::new(&render_bin)
+        .args([
+            "cell-size",
+            "--font-size",
+            &font_size_pt.to_string(),
+            "--scale",
+            &scale.to_string(),
+        ])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let stdout = std::str::from_utf8(&output.stdout).ok()?;
+    let mut parts = stdout.split_whitespace();
+    let w: u32 = parts.next()?.parse().ok()?;
+    let h: u32 = parts.next()?.parse().ok()?;
+    Some((w, h))
 }
 
 // ── Sidecar ───────────────────────────────────────────────────────────────
