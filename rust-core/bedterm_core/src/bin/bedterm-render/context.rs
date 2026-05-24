@@ -9,36 +9,116 @@
 use std::fs;
 
 /// Predefined iOS device profiles.
+/// Logical viewport in points (UIScreen.bounds.size).
+/// Scale = UIScreen.scale (device-pixel ratio).
+/// Source: ios-resolution.com
 #[derive(Clone, Debug)]
 pub struct DevicePreset {
     pub name: &'static str,
-    /// Logical viewport in points (UIScreen.bounds.size).
     pub viewport_pt: (u32, u32),
-    /// Device-pixel ratio (UIScreen.scale).
     pub scale: f32,
 }
 
 const DEVICES: &[DevicePreset] = &[
+    // ── iPhone 17 series (@3x) ──────────────────────────────────────
     DevicePreset {
         name: "iphone17",
-        viewport_pt: (400, 850),
+        viewport_pt: (402, 874),
+        scale: 3.0,
+    },
+    DevicePreset {
+        name: "iphone17-pro",
+        viewport_pt: (402, 874),
         scale: 3.0,
     },
     DevicePreset {
         name: "iphone17-promax",
-        viewport_pt: (430, 930),
+        viewport_pt: (440, 956),
         scale: 3.0,
     },
+    // ── iPhone 16 series (@3x) ──────────────────────────────────────
+    DevicePreset {
+        name: "iphone16",
+        viewport_pt: (393, 852),
+        scale: 3.0,
+    },
+    DevicePreset {
+        name: "iphone16-pro",
+        viewport_pt: (402, 874),
+        scale: 3.0,
+    },
+    DevicePreset {
+        name: "iphone16-promax",
+        viewport_pt: (440, 956),
+        scale: 3.0,
+    },
+    // ── iPhone 15 series (@3x) ──────────────────────────────────────
+    DevicePreset {
+        name: "iphone15",
+        viewport_pt: (393, 852),
+        scale: 3.0,
+    },
+    DevicePreset {
+        name: "iphone15-pro",
+        viewport_pt: (393, 852),
+        scale: 3.0,
+    },
+    DevicePreset {
+        name: "iphone15-promax",
+        viewport_pt: (430, 932),
+        scale: 3.0,
+    },
+    // ── iPhone 14 series (@3x) ──────────────────────────────────────
+    DevicePreset {
+        name: "iphone14",
+        viewport_pt: (390, 844),
+        scale: 3.0,
+    },
+    DevicePreset {
+        name: "iphone14-pro",
+        viewport_pt: (393, 852),
+        scale: 3.0,
+    },
+    DevicePreset {
+        name: "iphone14-promax",
+        viewport_pt: (430, 932),
+        scale: 3.0,
+    },
+    // ── iPhone SE / mini (@3x or @2x) ───────────────────────────────
+    DevicePreset {
+        name: "iphone-se3",
+        viewport_pt: (375, 667),
+        scale: 2.0,
+    },
+    // ── iPad Pro (@2x) ──────────────────────────────────────────────
+    DevicePreset {
+        name: "ipad-pro13",
+        viewport_pt: (1032, 1376),
+        scale: 2.0,
+    },
+    DevicePreset {
+        name: "ipad-pro11",
+        viewport_pt: (834, 1210),
+        scale: 2.0,
+    },
+    // ── iPad Air (@2x) ──────────────────────────────────────────────
+    DevicePreset {
+        name: "ipad-air13",
+        viewport_pt: (1024, 1366),
+        scale: 2.0,
+    },
+    DevicePreset {
+        name: "ipad-air11",
+        viewport_pt: (820, 1180),
+        scale: 2.0,
+    },
+    // ── iPad mini (@2x) ─────────────────────────────────────────────
     DevicePreset {
         name: "ipad-mini",
         viewport_pt: (744, 1133),
         scale: 2.0,
     },
-    DevicePreset {
-        name: "ipad-pro13",
-        viewport_pt: (1024, 1366),
-        scale: 2.0,
-    },
+    // ── Mac (CLI default) ───────────────────────────────────────────
     DevicePreset {
         name: "mac",
         viewport_pt: (1200, 800),
@@ -255,17 +335,17 @@ mod tests {
     fn device_preset_iphone17() {
         let mut ctx = RenderContext::default();
         ctx.apply_device("iphone17").unwrap();
-        assert_eq!(ctx.viewport_pt, (400, 850));
+        assert_eq!(ctx.viewport_pt, (402, 874));
         assert!((ctx.scale - 3.0).abs() < 0.01);
     }
 
     #[test]
     fn viewport_px_scaling() {
         let ctx = RenderContext {
-            viewport_pt: (400, 850),
+            viewport_pt: (402, 874),
             scale: 3.0,
             ..Default::default()
         };
-        assert_eq!(ctx.viewport_px(), (1200, 2550));
+        assert_eq!(ctx.viewport_px(), (1206, 2622));
     }
 }

@@ -34,7 +34,7 @@ while [[ $# -gt 0 ]]; do
         --timeout) TIMEOUT="$2"; shift 2 ;;
         --font-size) FONT_SIZE="$2"; shift 2 ;;
         --palette) palette="$2"; shift 2 ;;
-        iphone17|iphone17-promax|ipad-mini|ipad-pro13|mac) device="$1"; shift ;;
+        iphone17|iphone17-pro|iphone17-promax|iphone16|iphone16-pro|iphone16-promax|iphone15|iphone15-promax|iphone14|iphone14-promax|iphone-se3|ipad-pro13|ipad-pro11|ipad-air13|ipad-air11|ipad-mini|mac) device="$1"; shift ;;
         *) prompt="$1"; shift ;;
     esac
 done
@@ -54,10 +54,8 @@ fi
 # We still query cell-size to report the actual font metrics, but the
 # record tool now derives cols/rows itself from --device.
 case "$device" in
-    iphone17) scale=3.0 ;;
-    iphone17-promax) scale=3.0 ;;
-    ipad-mini) scale=2.0 ;;
-    ipad-pro13) scale=2.0 ;;
+    iphone*) scale=3.0 ;;
+    ipad*) scale=2.0 ;;
     mac) scale=2.0 ;;
     *) scale=2.0 ;;
 esac
@@ -73,12 +71,23 @@ fi
 # wraps at the same column boundaries the renderer will use.
 if [[ -n "$cell_w" && -n "$cell_h" ]]; then
     case "$device" in
-        iphone17) vp_pt_w=400; vp_pt_h=850 ;;
-        iphone17-promax) vp_pt_w=430; vp_pt_h=930 ;;
+        iphone17|iphone17-pro) vp_pt_w=402; vp_pt_h=874 ;;
+        iphone17-promax) vp_pt_w=440; vp_pt_h=956 ;;
+        iphone16) vp_pt_w=393; vp_pt_h=852 ;;
+        iphone16-pro) vp_pt_w=402; vp_pt_h=874 ;;
+        iphone16-promax) vp_pt_w=440; vp_pt_h=956 ;;
+        iphone15|iphone15-pro) vp_pt_w=393; vp_pt_h=852 ;;
+        iphone15-promax) vp_pt_w=430; vp_pt_h=932 ;;
+        iphone14) vp_pt_w=390; vp_pt_h=844 ;;
+        iphone14-promax) vp_pt_w=430; vp_pt_h=932 ;;
+        iphone-se3) vp_pt_w=375; vp_pt_h=667 ;;
+        ipad-pro13) vp_pt_w=1032; vp_pt_h=1376 ;;
+        ipad-pro11) vp_pt_w=834; vp_pt_h=1210 ;;
+        ipad-air13) vp_pt_w=1024; vp_pt_h=1366 ;;
+        ipad-air11) vp_pt_w=820; vp_pt_h=1180 ;;
         ipad-mini) vp_pt_w=744; vp_pt_h=1133 ;;
-        ipad-pro13) vp_pt_w=1024; vp_pt_h=1366 ;;
         mac) vp_pt_w=1200; vp_pt_h=800 ;;
-        *) vp_pt_w=400; vp_pt_h=850 ;;
+        *) vp_pt_w=402; vp_pt_h=874 ;;
     esac
     vp_px_w=$(awk "BEGIN { printf \"%d\", $vp_pt_w * $scale }")
     vp_px_h=$(awk "BEGIN { printf \"%d\", $vp_pt_h * $scale }")

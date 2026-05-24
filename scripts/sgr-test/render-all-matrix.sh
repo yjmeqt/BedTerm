@@ -17,8 +17,18 @@ OUTDIR="/tmp/renders"
 DEVICES=(
     "iphone17"
     "iphone17-promax"
-    "ipad-mini"
+    "iphone16"
+    "iphone16-promax"
+    "iphone15"
+    "iphone15-promax"
+    "iphone14"
+    "iphone14-promax"
+    "iphone-se3"
     "ipad-pro13"
+    "ipad-pro11"
+    "ipad-air13"
+    "ipad-air11"
+    "ipad-mini"
 )
 
 PALETTES=("bedterm-dark" "bedterm-light")
