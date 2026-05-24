@@ -1,7 +1,3 @@
-// swift-format puts braces on the next line for multi-line conditions
-// and for-loop headers; SwiftLint's opening_brace disagrees.
-// swiftlint:disable opening_brace
-
 import Foundation
 import Metal
 import Testing
@@ -157,20 +153,19 @@ struct TerminalRendererSnapshotTests {
         }
 
         // Fallback: scan bundle resource URL directly.
-        if fixtures.isEmpty {
+        guard fixtures.isEmpty else { return fixtures.sorted { $0.name < $1.name } }
+        guard
             let resURL = bundle.resourceURL?
                 .appendingPathComponent("Fixtures/byte_streams")
-            if let resURL = resURL,
-                let enumerator = FileManager.default.enumerator(
-                    at: resURL,
-                    includingPropertiesForKeys: [.isRegularFileKey]
-                )
-            {
-                for case let url as URL in enumerator
-                where url.pathExtension == "bin" {
-                    let name = url.deletingPathExtension().lastPathComponent
-                    fixtures.append(FixtureSource(name: name, url: url))
-                }
+        else { return fixtures.sorted { $0.name < $1.name } }
+        if let enumerator = FileManager.default.enumerator(
+            at: resURL,
+            includingPropertiesForKeys: [.isRegularFileKey]
+        ) {
+            for case let url as URL in enumerator
+            where url.pathExtension == "bin" {
+                let name = url.deletingPathExtension().lastPathComponent
+                fixtures.append(FixtureSource(name: name, url: url))
             }
         }
 
