@@ -324,8 +324,43 @@ mod ios {
                     let _: () = unsafe { msg_send![&**v2, setFrame: v2_frame] };
                 }
             }
+
+            #[method(keyboardWillShow:)]
+            fn keyboard_will_show(&self, notification: &NSObject) {
+                // notification.userInfo
+                let user_info: *mut AnyObject =
+                    unsafe { msg_send![notification, userInfo] };
+                if user_info.is_null() {
+                    return;
+                }
+                let key = NSString::from_str("UIKeyboardFrameEndUserInfoKey");
+                let value: *mut AnyObject =
+                    unsafe { msg_send![user_info, objectForKey: &*key] };
+                if value.is_null() {
+                    return;
+                }
+                // NSValue.CGRectValue
+                let kb_frame: CGRect = unsafe { msg_send![value, CGRectValue] };
+                self.ivars().keyboard_height.set(kb_frame.size.height);
+                self.relayout();
+            }
+
+            #[method(keyboardWillHide:)]
+            fn keyboard_will_hide(&self, _notification: &NSObject) {
+                self.ivars().keyboard_height.set(0.0);
+                self.relayout();
+            }
         }
     );
+
+    impl RsTerminalViewController {
+        fn relayout(&self) {
+            if let Some(view) = self.view() {
+                let _: () = unsafe { msg_send![&*view, setNeedsLayout] };
+                let _: () = unsafe { msg_send![&*view, layoutIfNeeded] };
+            }
+        }
+    }
 
     pub(super) unsafe fn create_vc(
         on_back: Option<BtRsBackCallback>,
