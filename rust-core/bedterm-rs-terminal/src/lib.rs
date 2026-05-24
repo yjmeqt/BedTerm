@@ -56,7 +56,7 @@ pub unsafe extern "C" fn bt_rs_terminal_release_vc(vc_ptr: *mut std::ffi::c_void
 mod ios {
     use super::BtRsBackCallback;
     use objc2::encode::{Encode, Encoding, RefEncode};
-    use objc2::rc::Retained;
+    use objc2::rc::{Allocated, Retained};
     use objc2::runtime::{AnyObject, NSObject};
     use objc2::{declare_class, msg_send, msg_send_id, sel, ClassType, DeclaredClass};
     use objc2_foundation::{MainThreadMarker, NSNotificationCenter, NSString};
@@ -177,6 +177,12 @@ mod ios {
         }
 
         unsafe impl RsTerminalViewController {
+            #[method_id(init)]
+            fn init(this: Allocated<Self>) -> Option<Retained<Self>> {
+                let this = this.set_ivars(Ivars::default());
+                unsafe { msg_send_id![super(this), init] }
+            }
+
             #[method(viewDidLoad)]
             fn view_did_load(&self) {
                 let _: () = unsafe { msg_send![super(self), viewDidLoad] };
