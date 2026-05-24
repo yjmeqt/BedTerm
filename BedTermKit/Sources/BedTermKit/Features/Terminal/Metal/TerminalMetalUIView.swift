@@ -178,7 +178,11 @@ final class TerminalMetalUIView: MTKView {
     /// MTKView's `clearColor` + UIView `backgroundColor`, and request a
     /// redraw. Called once at init and again from the
     /// `UITraitUserInterfaceStyle` trait observer.
-    private func applyAppearance() {
+    /// Re-resolve palette + clear color from current trait collection.
+    /// Exposed so SwiftUI parents can trigger a repaint on
+    /// `@Environment(\.colorScheme)` changes — the MTKView's own
+    /// `UITraitUserInterfaceStyle` observer can miss app-level flips.
+    func applyAppearance() {
         let palette = TerminalPalette.resolve(for: traitCollection)
         terminalCore.setPalette(palette)
 

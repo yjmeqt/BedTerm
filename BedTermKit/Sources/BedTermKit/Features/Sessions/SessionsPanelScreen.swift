@@ -30,6 +30,7 @@ public struct SessionsPanelScreen: View {
             }
         }
         .background(Color("ShadcnBackground", bundle: .module).ignoresSafeArea())
+        .task { store.reload(forHost: host.id) }
         .navigationTitle(Text(verbatim: panelTitle))
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {

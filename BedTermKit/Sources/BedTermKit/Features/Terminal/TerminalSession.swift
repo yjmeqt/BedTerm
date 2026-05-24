@@ -11,6 +11,17 @@ final class TerminalSession {
         case closed(reason: String)
     }
 
+    /// Predicate driving the `ConnectingOverlay` visibility: cover both the
+    /// pre-`.task` `.idle` gap (Metal view mounted with no bytes yet) and the
+    /// in-flight `.connecting` window. Returns false once the session is open
+    /// or has closed.
+    static func shouldShowConnectingOverlay(_ state: State) -> Bool {
+        switch state {
+        case .idle, .connecting: return true
+        case .open, .closed: return false
+        }
+    }
+
     private(set) var state: State = .idle
     private(set) var lastError: SSHError?
     /// Current terminal mode flags, mirrored from the Rust core after each
@@ -76,16 +87,19 @@ final class TerminalSession {
     func connect(
         credential: HostCredential,
         initialPTY: PTYDimensions,
-        bootstrapPayload: String? = nil
+        bootstrapPayload: String? = nil,
+        timeout: TimeInterval = TerminalSession.connectTimeoutSeconds
     ) async {
         state = .connecting
         lastError = nil
         do {
-            try await client.connect(
-                .init(
-                    credential: credential,
-                    initialPTY: initialPTY,
-                    bootstrapPayload: bootstrapPayload))
+            try await withTimeout(seconds: timeout) { [client] in
+                try await client.connect(
+                    .init(
+                        credential: credential,
+                        initialPTY: initialPTY,
+                        bootstrapPayload: bootstrapPayload))
+            }
             state = .open
             pumpTask = Task { @MainActor [weak self] in
                 guard let self else { return }
@@ -107,6 +121,11 @@ final class TerminalSession {
                 }
                 self.feedContinuation.finish()
             }
+        } catch is TimeoutError {
+            lastError = .timeout
+            recordKill(reason: .networkDrop)
+            state = .closed(reason: Self.describe(.timeout))
+            await client.disconnect()
         } catch let err as SSHError {
             lastError = err
             recordKill(reason: killReason(for: err))
@@ -116,6 +135,11 @@ final class TerminalSession {
             state = .closed(reason: String(describing: error))
         }
     }
+
+    /// Upper bound on `client.connect(...)`. Past this point we tear down the
+    /// in-flight attempt and surface a `.timeout` error so the UI can recover
+    /// instead of spinning forever on an unreachable host.
+    static let connectTimeoutSeconds: TimeInterval = 5
 
     func send(_ data: Data) {
         guard case .open = state else { return }

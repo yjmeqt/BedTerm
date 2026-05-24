@@ -26,10 +26,12 @@ struct TerminalSessionPersistenceTests {
             persistence: handle
         )
 
+        store.reload(forHost: hostID)
         #expect(store.snapshots(forHost: hostID).count == 1)
 
         session.disconnect()
 
+        store.reload(forHost: hostID)
         let updated = store.snapshots(forHost: hostID).first
         #expect(updated?.killReason == .userKilled)
     }
@@ -59,6 +61,7 @@ struct TerminalSessionPersistenceTests {
             initialPTY: .init(cols: 80, rows: 24)
         )
 
+        store.reload(forHost: hostID)
         let snap = store.snapshots(forHost: hostID).first
         #expect(snap?.killReason == .networkDrop)
     }

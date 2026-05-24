@@ -349,11 +349,14 @@ impl Renderer {
             );
         }
 
-        // Header bands. Order: non-sticky first, sticky last — sticky
-        // descriptors paint on top of everything (z-order via append
-        // order, not depth testing). Same vertex buffers as block
-        // bodies / panels so the existing two-pipeline pass handles
-        // everything in one render encode.
+        // Header bands. Collected into separate vertex buffers so the
+        // sticky band's opaque rectangle paints AFTER all body cells —
+        // otherwise the body cells under the pinned header would be
+        // drawn last and the band looks transparent. Non-sticky and
+        // sticky headers share the buffers; sticky is appended last so
+        // it z-sorts above its sibling on hand-off.
+        let mut header_panel_verts: Vec<PanelVertex> = Vec::new();
+        let mut header_cell_verts: Vec<CellVertex> = Vec::new();
         if !headers.is_empty() {
             let mut ctx = crate::renderer::header_band::HeaderDrawContext {
                 subheadline_px: self.ui_subheadline_px,
@@ -365,36 +368,39 @@ impl Renderer {
                 surface_bg_rgba: rgba_f32_to_u32(self.clear_color),
                 atlas: &mut self.atlas,
             };
-            // Two passes so sticky always z-sorts on top, regardless
-            // of input order. Cheap — usually ≤ 10 headers.
             for h in headers.iter().filter(|h| h.is_sticky == 0) {
                 crate::renderer::header_band::emit_header(
                     &mut ctx,
                     h,
-                    &mut panel_verts,
-                    &mut cell_verts,
+                    &mut header_panel_verts,
+                    &mut header_cell_verts,
                 );
             }
             for h in headers.iter().filter(|h| h.is_sticky != 0) {
                 crate::renderer::header_band::emit_header(
                     &mut ctx,
                     h,
-                    &mut panel_verts,
-                    &mut cell_verts,
+                    &mut header_panel_verts,
+                    &mut header_cell_verts,
                 );
             }
         }
 
-        // One render pass — Clear once, panels first (so cells paint on
-        // top), cells second. The panel pipeline uses alpha-blended
-        // premultiplied output so rounded corners anti-alias against
-        // the clear colour.
+        // One render pass, four phases:
+        //   1. body panels  (currently always empty — Swift passes
+        //      panel_bg_rgba=0, so the renderer skips them)
+        //   2. body cells   (block output text)
+        //   3. header panels (opaque band — must overpaint body cells
+        //      so the sticky pin actually occludes content underneath)
+        //   4. header cells (command + subtitle glyphs, badge icons)
         self.encode_block_pass(
             texture_ptr,
             viewport_w,
             viewport_h,
             &panel_verts,
             &cell_verts,
+            &header_panel_verts,
+            &header_cell_verts,
         );
         0
     }
@@ -433,15 +439,23 @@ impl Renderer {
         verts.push(v(0.0, 1.0));
     }
 
-    /// Single render pass that paints panels (rounded chrome) and then
-    /// cells (text) into `texture_ptr`. Always clears with `self.clear_color`.
+    /// Single render pass, four ordered phases: body panels → body cells →
+    /// header panels → header cells.
+    ///
+    /// The split exists so the sticky header band's opaque rectangle paints
+    /// AFTER all body cells — otherwise body cells in the pinned band's
+    /// Y-range would draw last and the header would look transparent.
+    /// Always clears with `self.clear_color`.
+    #[allow(clippy::too_many_arguments)]
     unsafe fn encode_block_pass(
         &mut self,
         texture_ptr: *const std::ffi::c_void,
         viewport_w: u32,
         viewport_h: u32,
-        panel_verts: &[PanelVertex],
-        cell_verts: &[CellVertex],
+        body_panel_verts: &[PanelVertex],
+        body_cell_verts: &[CellVertex],
+        header_panel_verts: &[PanelVertex],
+        header_cell_verts: &[CellVertex],
     ) {
         #[repr(C)]
         struct Uniforms {
@@ -453,20 +467,28 @@ impl Renderer {
             vp_y: viewport_h as f32,
         };
 
-        let panel_buf = (!panel_verts.is_empty()).then(|| {
-            self.device.new_buffer_with_data(
-                panel_verts.as_ptr() as *const _,
-                std::mem::size_of_val(panel_verts) as u64,
-                MTLResourceOptions::StorageModeShared,
-            )
-        });
-        let cell_buf = (!cell_verts.is_empty()).then(|| {
-            self.device.new_buffer_with_data(
-                cell_verts.as_ptr() as *const _,
-                std::mem::size_of_val(cell_verts) as u64,
-                MTLResourceOptions::StorageModeShared,
-            )
-        });
+        let make_panel_buf = |verts: &[PanelVertex]| {
+            (!verts.is_empty()).then(|| {
+                self.device.new_buffer_with_data(
+                    verts.as_ptr() as *const _,
+                    std::mem::size_of_val(verts) as u64,
+                    MTLResourceOptions::StorageModeShared,
+                )
+            })
+        };
+        let make_cell_buf = |verts: &[CellVertex]| {
+            (!verts.is_empty()).then(|| {
+                self.device.new_buffer_with_data(
+                    verts.as_ptr() as *const _,
+                    std::mem::size_of_val(verts) as u64,
+                    MTLResourceOptions::StorageModeShared,
+                )
+            })
+        };
+        let body_panel_buf = make_panel_buf(body_panel_verts);
+        let body_cell_buf = make_cell_buf(body_cell_verts);
+        let header_panel_buf = make_panel_buf(header_panel_verts);
+        let header_cell_buf = make_cell_buf(header_cell_verts);
 
         let texture = Texture::from_ptr(texture_ptr as *mut _);
         let texture = std::mem::ManuallyDrop::new(texture);
@@ -484,27 +506,37 @@ impl Renderer {
         let cmd = self.queue.new_command_buffer();
         let enc = cmd.new_render_command_encoder(pass);
 
-        if let Some(ref b) = panel_buf {
-            enc.set_render_pipeline_state(&self.pipelines.panel_pso);
-            enc.set_vertex_buffer(0, Some(b), 0);
-            enc.set_vertex_bytes(
-                1,
-                std::mem::size_of::<Uniforms>() as u64,
-                &uniforms as *const Uniforms as *const _,
-            );
-            enc.draw_primitives(MTLPrimitiveType::Triangle, 0, panel_verts.len() as u64);
-        }
-        if let Some(ref b) = cell_buf {
-            enc.set_render_pipeline_state(&self.pipelines.cell_pso);
-            enc.set_vertex_buffer(0, Some(b), 0);
-            enc.set_vertex_bytes(
-                1,
-                std::mem::size_of::<Uniforms>() as u64,
-                &uniforms as *const Uniforms as *const _,
-            );
-            enc.set_fragment_texture(0, Some(&self.atlas.texture));
-            enc.draw_primitives(MTLPrimitiveType::Triangle, 0, cell_verts.len() as u64);
-        }
+        let draw_panels = |verts: &[PanelVertex], buf: &Option<metal::Buffer>| {
+            if let Some(ref b) = buf {
+                enc.set_render_pipeline_state(&self.pipelines.panel_pso);
+                enc.set_vertex_buffer(0, Some(b), 0);
+                enc.set_vertex_bytes(
+                    1,
+                    std::mem::size_of::<Uniforms>() as u64,
+                    &uniforms as *const Uniforms as *const _,
+                );
+                enc.draw_primitives(MTLPrimitiveType::Triangle, 0, verts.len() as u64);
+            }
+        };
+        let draw_cells = |verts: &[CellVertex], buf: &Option<metal::Buffer>| {
+            if let Some(ref b) = buf {
+                enc.set_render_pipeline_state(&self.pipelines.cell_pso);
+                enc.set_vertex_buffer(0, Some(b), 0);
+                enc.set_vertex_bytes(
+                    1,
+                    std::mem::size_of::<Uniforms>() as u64,
+                    &uniforms as *const Uniforms as *const _,
+                );
+                enc.set_fragment_texture(0, Some(&self.atlas.texture));
+                enc.draw_primitives(MTLPrimitiveType::Triangle, 0, verts.len() as u64);
+            }
+        };
+
+        draw_panels(body_panel_verts, &body_panel_buf);
+        draw_cells(body_cell_verts, &body_cell_buf);
+        draw_panels(header_panel_verts, &header_panel_buf);
+        draw_cells(header_cell_verts, &header_cell_buf);
+
         enc.end_encoding();
         cmd.commit();
     }

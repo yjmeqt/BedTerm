@@ -12,6 +12,7 @@ public final class MockSSHClient: SSHClient, @unchecked Sendable {
 
     private var scriptedOutput: [Data] = []
     private var scriptedConnectError: SSHError?
+    private var scriptedConnectHang = false
     private var continuation: AsyncStream<Data>.Continuation?
     private let outputStream: AsyncStream<Data>
 
@@ -25,11 +26,17 @@ public final class MockSSHClient: SSHClient, @unchecked Sendable {
 
     public func script(output chunks: [Data]) { self.scriptedOutput = chunks }
     public func scriptConnectError(_ error: SSHError) { self.scriptedConnectError = error }
+    /// Make `connect()` suspend until the surrounding task is cancelled. Lets
+    /// tests exercise the connect-timeout race without hitting the network.
+    public func scriptConnectHang() { self.scriptedConnectHang = true }
 
     public func connect(_ request: SSHConnectionRequest) async throws {
         self.connectCalls += 1
         self.lastConnectRequest = request
         if let err = scriptedConnectError { throw err }
+        if self.scriptedConnectHang {
+            try await Task.sleep(nanoseconds: 60 * 1_000_000_000)
+        }
         for chunk in self.scriptedOutput {
             self.continuation?.yield(chunk)
         }

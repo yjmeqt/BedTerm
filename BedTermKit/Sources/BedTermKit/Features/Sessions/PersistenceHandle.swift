@@ -27,7 +27,14 @@ public final class PersistenceHandle {
     /// Open (or create) the SQLite database at `path`. Returns nil if the
     /// file can't be opened. On first creation, ensures the file is
     /// protected with `.completeUntilFirstUserAuthentication`.
-    public static func open(at path: URL) -> PersistenceHandle? {
+    ///
+    /// `nonisolated` so the caller can dispatch this to a background thread
+    /// — WAL recovery or a stale file lock from a prior force-quit can stall
+    /// for seconds, which would freeze the UI if run on `@MainActor`.
+    /// rusqlite's `Connection` is movable across threads (it is `Send` but
+    /// `!Sync`), so creating it off-main and using it from `@MainActor`
+    /// later is safe.
+    nonisolated public static func open(at path: URL) -> PersistenceHandle? {
         let fm = FileManager.default
         let dir = path.deletingLastPathComponent()
         try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -52,7 +59,7 @@ public final class PersistenceHandle {
         return PersistenceHandle(raw: raw)
     }
 
-    private init(raw: OpaquePointer) {
+    nonisolated private init(raw: OpaquePointer) {
         self.raw = raw
     }
 
