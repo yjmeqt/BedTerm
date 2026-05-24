@@ -77,13 +77,10 @@ fn parse_args() -> Args {
     if let (Some(fs), Some(vw), Some(vh)) = (args.font_size, args.viewport_w, args.viewport_h) {
         let cell_w = (fs * 0.55).max(1.0);
         let cell_h = (fs * 1.25).max(1.0);
-        // Enforce minimum 80 cols so TUIs (claude, codex, vim) aren't
-        // squeezed. The recording captures at native terminal width; the
-        // renderer can scale the viewport independently later.
-        args.cols = ((vw as f32 / cell_w).max(1.0) as u16).max(80);
-        args.rows = ((vh as f32 / cell_h).max(1.0) as u16).max(24);
+        args.cols = (vw as f32 / cell_w).max(1.0) as u16;
+        args.rows = (vh as f32 / cell_h).max(1.0) as u16;
         eprintln!(
-            "[record] viewport={vw}x{vh} font={fs} → cols={}, rows={} (min 80×24)",
+            "[record] viewport={vw}x{vh} font={fs} → cols={}, rows={}",
             args.cols, args.rows
         );
     }
