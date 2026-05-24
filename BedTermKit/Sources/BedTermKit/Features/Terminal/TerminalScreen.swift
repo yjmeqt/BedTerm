@@ -320,7 +320,7 @@ struct TerminalScreen: View {
     /// Resolve the shell-integration payload to push at connect time. Returns
     /// `nil` when the user hasn't opted in, so the channel stays pristine.
     private func bootstrapPayload() -> String? {
-        guard settings.installShellIntegrationOnConnect else { return nil }
+        guard settings.showCommandBlocks else { return nil }
         return ShellIntegrationScript.bootstrapPayload()
     }
 

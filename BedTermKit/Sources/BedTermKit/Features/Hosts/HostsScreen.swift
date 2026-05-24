@@ -344,7 +344,7 @@ public struct HostsScreen: View {
         // BedTermSettings is `@MainActor @Observable` and the closure
         // runs on the main actor.
         viewModel.bootstrapPayloadProvider = { [settings] in
-            guard settings.installShellIntegrationOnConnect else { return nil }
+            guard settings.showCommandBlocks else { return nil }
             return ShellIntegrationScript.bootstrapPayload()
         }
         guard !didFirstAppear else { return }
