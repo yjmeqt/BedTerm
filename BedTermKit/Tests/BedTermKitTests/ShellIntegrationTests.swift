@@ -83,12 +83,12 @@ struct ShellIntegrationTests {
         UserDefaults().removePersistentDomain(forName: suite)
         let defaults = try #require(UserDefaults(suiteName: suite))
         let settings = BedTermSettings(defaults: defaults)
-        // Default — opt-out: on (matches the default-flip in 75cca90).
-        #expect(settings.showCommandBlocks)
-        settings.showCommandBlocks = false
+        // Default — opt-in beta: off until the user toggles it on.
         #expect(!settings.showCommandBlocks)
+        settings.showCommandBlocks = true
+        #expect(settings.showCommandBlocks)
         // Persists
         let reloaded = BedTermSettings(defaults: defaults)
-        #expect(!reloaded.showCommandBlocks)
+        #expect(reloaded.showCommandBlocks)
     }
 }
