@@ -152,20 +152,23 @@ struct TerminalRendererSnapshotTests {
             }
         }
 
-        // Fallback: look up individual files in bundle resource path
+        // Fallback: scan bundle resource URL directly.
         if fixtures.isEmpty {
-            if let resURL = bundle.resourceURL?
+            let resURL = bundle.resourceURL?
                 .appendingPathComponent("Fixtures/byte_streams")
-            {
-                if let enumerator = FileManager.default.enumerator(
+            // swift-format moves the brace to the next line for multi-line
+            // conditions; SwiftLint wants it on the same line.
+            // swiftlint:disable:next opening_brace
+            if let resURL = resURL,
+                let enumerator = FileManager.default.enumerator(
                     at: resURL,
                     includingPropertiesForKeys: [.isRegularFileKey]
-                ) {
-                    for case let url as URL in enumerator
-                    where url.pathExtension == "bin" {
-                        let name = url.deletingPathExtension().lastPathComponent
-                        fixtures.append(FixtureSource(name: name, url: url))
-                    }
+                )
+            {
+                for case let url as URL in enumerator
+                where url.pathExtension == "bin" {
+                    let name = url.deletingPathExtension().lastPathComponent
+                    fixtures.append(FixtureSource(name: name, url: url))
                 }
             }
         }
