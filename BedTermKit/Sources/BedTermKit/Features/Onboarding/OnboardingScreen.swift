@@ -147,54 +147,143 @@ private struct LocationStep: View {
     }
 }
 
-// MARK: - Step 3a: macOS Tutorial (placeholder copy — content TBD)
+// MARK: - Step 3a: macOS Tutorial (paged)
 
 private struct MacTutorialStep: View {
     let onContinue: () -> Void
 
+    @State private var currentStep = 0
+    private let stepCount = 3
+
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                Text("Set up your Mac")
-                    .font(.title.bold())
-
-                tutorialSection(
-                    number: "1",
+        VStack(spacing: 0) {
+            TabView(selection: $currentStep) {
+                macTutorialPage(
+                    step: 1,
                     title: "Enable Remote Login",
-                    body:
-                        """
-                        On your Mac, open System Settings → General → Sharing, then turn on Remote Login. \
-                        (Detailed walkthrough coming soon.)
-                        """
+                    body: "On your Mac, open System Settings → General → Sharing, then turn on Remote Login."
                 )
+                .tag(0)
 
-                tutorialSection(
-                    number: "2",
+                macTutorialPage(
+                    step: 2,
                     title: "Find your Mac's IP address",
                     body:
-                        """
-                        Open System Settings → Network → Wi-Fi → Details. \
-                        Copy the IP address — you'll enter it on the next screen. \
-                        (Detailed walkthrough coming soon.)
-                        """
+                        "Open System Settings → Network → Wi-Fi → Details. "
+                        + "Copy the IP address — you'll enter it on the next screen."
                 )
+                .tag(1)
 
+                sleepPreventionPage
+                    .tag(2)
             }
-            .padding()
-        }
-        .safeAreaInset(edge: .bottom) {
-            Button(action: onContinue) {
-                Text("Continue")
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 4)
-            }
-            .buttonStyle(.borderedProminent)
-            .padding()
-            .accessibilityIdentifier("onboarding.macTutorial.continue")
+            .tabViewStyle(.page(indexDisplayMode: .never))
+
+            bottomBar
         }
         .navigationTitle("macOS Setup")
         .navigationBarTitleDisplayMode(.inline)
     }
+
+    // MARK: Bottom Bar
+
+    private var bottomBar: some View {
+        HStack {
+            HStack(spacing: 6) {
+                ForEach(0..<stepCount, id: \.self) { index in
+                    Circle()
+                        .fill(index == currentStep ? Color.accentColor : Color.secondary.opacity(0.3))
+                        .frame(width: 8, height: 8)
+                }
+            }
+
+            Spacer()
+
+            Button {
+                if currentStep < stepCount - 1 {
+                    withAnimation { currentStep += 1 }
+                } else {
+                    onContinue()
+                }
+            } label: {
+                Text(currentStep == stepCount - 1 ? "Done" : "Continue")
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 4)
+            }
+            .buttonStyle(.borderedProminent)
+            .accessibilityIdentifier("onboarding.macTutorial.continue")
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 12)
+        .background(.bar)
+    }
+
+    // MARK: Shared Page Layout
+
+    private func macTutorialPage(step: Int, title: LocalizedStringKey, body: LocalizedStringKey) -> some View {
+        VStack(alignment: .leading, spacing: 24) {
+            Spacer()
+            tutorialSection(number: String(step), title: title, body: body)
+            Spacer()
+        }
+        .padding()
+    }
+
+    // MARK: Step 3: Prevent Sleep
+
+    private var sleepPreventionPage: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                HStack(alignment: .top, spacing: 12) {
+                    Text("3")
+                        .font(.title2.bold())
+                        .frame(width: 28, height: 28)
+                        .background(Circle().fill(Color.accentColor.opacity(0.15)))
+                        .foregroundStyle(Color.accentColor)
+
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Prevent your Mac from sleeping").font(.headline)
+                        Text(
+                            "A sleeping Mac silently drops SSH connections. "
+                                + "Your display can sleep — the system must stay awake."
+                        )
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("System Settings")
+                                .font(.subheadline.weight(.semibold))
+                            Text(
+                                "Battery → Options → turn on "
+                                    + "\"Prevent automatic sleeping on power adapter"
+                                    + " when the display is off\""
+                            )
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                        }
+
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Or run this in Terminal:")
+                                .font(.subheadline.weight(.semibold))
+
+                            CopyableCodeBlock(command: "sudo pmset -a sleep 0")
+                        }
+
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("To undo, return to the same Battery setting, or run:")
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+
+                            CopyableCodeBlock(command: "sudo pmset -a sleep 1")
+                        }
+                    }
+                }
+            }
+            .padding()
+        }
+    }
+
+    // MARK: Shared Helpers
 
     private func tutorialSection(number: String, title: LocalizedStringKey, body: LocalizedStringKey) -> some View {
         HStack(alignment: .top, spacing: 12) {
@@ -306,28 +395,5 @@ private struct LocalPermissionStep: View {
         Task {
             await viewModel.requestLocalNetworkIfNeeded()
         }
-    }
-}
-
-// MARK: - Shared
-
-private struct OnboardingChoiceLabel: View {
-    let title: LocalizedStringKey
-    let subtitle: LocalizedStringKey
-
-    var body: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title).font(.headline)
-                Text(subtitle).font(.subheadline).foregroundStyle(.secondary)
-            }
-            Spacer()
-            Image(systemName: "chevron.right").foregroundStyle(.tertiary)
-        }
-        .padding()
-        .background(
-            RoundedRectangle(cornerRadius: 14)
-                .fill(.regularMaterial)
-        )
     }
 }
