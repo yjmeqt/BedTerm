@@ -1,0 +1,110 @@
+<prd name="Hosts">
+
+<overview>
+A list of saved SSH hosts on the home screen so the user can tap a row to connect in one step, instead of retyping host, port, username, and credentials every session. Hosts live only on the device; the same hardware is the only place the secrets ever live.
+
+The Hosts experience is a quiet developer tool for people who live in terminals: free of advertising, marketing chrome, and decorative visual noise. The interface should feel modern on current iOS releases without making host names, usernames, ports, or security states harder to scan.
+</overview>
+<implementation platform="iOS" spec="bedterm/docs/specs/saved-connections.md" />
+
+<requirement id="R1" name="Hosts List">
+  <description>
+    After onboarding, the app's home is a list of saved hosts rather than an empty Connection form. Each row represents one saved host and is the user's single tap into a session.
+
+    <figure style="margin:24px 0;display:block;">
+    <iframe src="/api/prd-asset/bedterm/saved-connections/saved-connections-shadcn-mock.html" style="width:100%;height:920px;border:1px solid #d1d1d6;border-radius:8px;background:#222;" title="Saved Connections — shadcn gray mock"/>
+    <figcaption style="font-size:13px;color:#3c3c43;margin-top:8px;line-height:1.4;">Shadcn-gray redesign mock — hosts list, edit form, empty state, and sonner-style toasts (light + dark). Live file at <code>prd/bedterm/saved-connections-shadcn-mock.html</code>.</figcaption>
+    </figure>
+  </description>
+  <rule id="list_is_home" status="✅">After onboarding completes, the user lands on the hosts list (not the host form), provided at least one saved host exists or migration recovered one.</rule>
+  <rule id="first_run_form_shortcut" status="✅" context="fresh install, zero saved hosts after onboarding">On a fresh install with no saved hosts and nothing recovered by migration, onboarding's completion opens the New Host form directly instead of the empty list. Saving the first host lands on the list with that entry visible; cancelling lands on the empty list. The shortcut runs once — every subsequent launch shows the list (empty or populated), never the form.</rule>
+  <rule id="empty_state" status="✅" context="no saved hosts on a return launch">When the list has no entries on a launch that isn't the first-run shortcut (e.g. the user added a host and later deleted it), the screen shows a friendly empty state with a single primary "Add Host" action.</rule>
+  <rule id="row_primary_label" status="✅">Each row's primary line shows the user-chosen label for the entry. When the user has not chosen a label, the primary line defaults to "username@host".</rule>
+  <rule id="row_subtitle" status="✅">Each row's secondary line shows "username@host:port". The port is omitted when it equals the SSH default of 22. The secondary line is suppressed entirely when it would be identical to the primary line (empty label + port 22).</rule>
+  <rule id="row_subtitle_ipv6" status="✅" context="IPv6 literal host">When the host is an IPv6 literal, the secondary line wraps the host in brackets — "user@[::1]:22" — so the port separator is unambiguous. IPv6 zone identifiers ("%en0") are preserved verbatim.</rule>
+  <rule id="row_auth_badge" status="✅">Each row shows a small badge indicating its authentication method (password vs. private key) so the user can tell them apart at a glance. The badge carries an accessibility label naming the method.</rule>
+  <rule id="add_button" status="✅">A "+" button in the screen's top-trailing toolbar opens the New Host form.</rule>
+  <rule id="list_stable_order" status="✅">The list preserves the order in which entries were added (newest at the bottom) across launches. v1 does not auto-sort by recency or usage.</rule>
+  <rule id="app_switcher_blur" status="✅" context="app resigning active">When the app resigns active, the hosts list and form are obscured in the app-switcher snapshot so labels and host names do not appear in screenshots/recents.</rule>
+</requirement>
+
+<requirement id="R2" name="Connect Button">
+  <description>
+    The Hosts list is a pure display + storage surface — tapping a row body never connects. Each row carries its own explicit Connect button (alongside an always-visible Edit button), and that button is the only path from the list into the existing prewarm + SSH flow. The user never sees the form fields again unless they explicitly edit or add an entry.
+  </description>
+  <rule id="connect_button" status="✅">Each saved row carries a primary Connect button (right-aligned, alongside the Edit button and auth badge). Tapping it starts the connection flow for that entry's credential — no intermediate form. Tapping the row body never starts a connection; the list is display + storage only.</rule>
+  <rule id="edit_button_always_visible" status="✅">Each row also exposes an always-visible Edit button next to the Connect button so users who don't discover swipe-actions can still reach the form. The swipe-action Edit and context-menu Edit paths in R4 continue to work as alternative entry points.</rule>
+  <rule id="single_live_session" status="✅">Only one live session may exist at a time. Tapping the Connect button on a different row while a session is live shows a confirmation ("End current session and connect to \"&lt;label-or-user@host&gt;\"?"), then tears down the prior session and connects to the requested host.</rule>
+  <rule id="row_progress" status="✅" context="connect in flight">While a connection attempt is in flight, the row's Connect button is replaced with an inline progress indicator and is disabled until the attempt resolves. The row's other controls (Edit, swipe, context menu) remain available.</rule>
+  <rule id="rapid_switch_cancels" status="✅" context="connect in flight">Tapping the Connect button on a different row while one connect is in flight cancels the prior attempt and starts the new one. The cancelled attempt does not surface an error on its row.</rule>
+  <rule id="row_inline_error" status="✅" context="connect failed">A failed connection replaces the row's secondary line with a one-line error message in the error color. Tapping the row body in this state expands the row to reveal the full error and any recovery affordances (e.g. the "Open Settings / Retry" pair for LAN-permission failures). Tapping the body again collapses it. The Connect button stays available throughout. The error persists until the user retries (Connect or Retry), edits the entry, or starts a successful connection.</rule>
+  <rule id="prewarm_reused" status="✅">The LAN local-network prewarm flow (<a href="prd:bedterm/connection#R3">Connection R3</a>) is reused unchanged — the saved entry's host is fed into the same prewarm check before the SSH handshake.</rule>
+  <rule id="lan_permission_no_auto_retry" status="✅" context="LAN permission granted after failure">When the user returns from Settings after granting local-network permission, the row stays in error state with Retry available. The app does not auto-reconnect on foreground.</rule>
+  <rule id="host_key_mismatch_reused" status="✅">Host-key mismatch handling (<a href="prd:bedterm/connection#R2">Connection R2</a>) is reused unchanged — a mismatch pushes the existing mismatch screen onto the navigation stack; trusting the new key auto-retries the connect.</rule>
+  <rule id="connect_success_to_terminal" status="✅">A successful connection transitions the user to the terminal session the same way the Connection form does today.</rule>
+</requirement>
+
+<requirement id="R3" name="Add and Edit a Host">
+  <description>
+    Adding a new entry and editing an existing one share the same form. The default primary action is "Save", which returns the user to the Hosts list without connecting — connection happens later via the row's Connect button (R2). The first-run shortcut (R1.first_run_form_shortcut) is the one exception: there the primary action becomes "Save &amp; Connect" so a brand-new user goes straight into a session without an extra tap.
+  </description>
+  <rule id="add_form" status="✅" context="add mode">The "+" action opens the form with empty fields, port pre-filled to 22, auth method defaulting to Password.</rule>
+  <rule id="edit_form" status="✅" context="edit mode">A swipe action or context-menu "Edit" on a row opens the same form pre-filled with that entry's host, port, username, label, and auth method.</rule>
+  <rule id="label_field" status="✅">The form exposes an optional "Label" text field. When the user leaves it blank, the entry is saved with an empty label and the row renders "username@host" as its primary line per R1.row_primary_label.</rule>
+  <rule id="save_action" status="✅">The form's primary action is "Save". On Save, validation matches the Connection form today: host, port, username required; port numeric and within 1–65535; private-key file imported when key auth is selected. On success the form is dismissed and the new or updated entry appears in the list.</rule>
+  <rule id="host_paste_with_port" status="✅">If the user pastes "host:port" into the Host field, the value is split into the Host and Port fields on save.</rule>
+  <rule id="host_user_trim" status="✅">Leading and trailing whitespace is trimmed from Host and Username on save. Mid-typing values are not modified.</rule>
+  <rule id="duplicate_host_warning" status="✅">If a saved entry already exists for the same (host, port, username), the form shows an inline notice ("You already have a saved host for this user@host:port (\"&lt;label&gt;\"). Save anyway?"). The warning is not blocking — the user can still proceed. Edit mode excludes the entry being edited from the duplicate check.</rule>
+  <rule id="save_only_default" status="✅">In the normal Add/Edit path, the form's primary action is "Save". On save the form dismisses to the Hosts list with the new or updated entry visible; the user starts the actual connection later from the row's Connect button (R2.connect_button).</rule>
+  <rule id="first_run_save_and_connect" status="✅" context="first-run shortcut">When the form was opened via the first-run shortcut (R1.first_run_form_shortcut), the primary action's label becomes "Save &amp; Connect" and the validation rules are identical to Save. Tapping it persists the entry and, on dismissal back to the Hosts list, immediately starts a connection to the freshly-saved entry — the user never has to tap a separate Connect afterwards. Cancel still discards and lands on the empty list. Edit mode never opens with this variant.</rule>
+  <rule id="secret_edit_masking" status="✅" context="edit mode">In edit mode, the password / passphrase / private-key fields are rendered as masked or "Stored — replace?" placeholders. Leaving them untouched preserves the existing secret; entering new content overwrites it. Clearing a previously-stored secret field is treated as "leave untouched" rather than "clear the secret" — to remove a secret entirely the user must delete the entry.</rule>
+  <rule id="auth_method_switch" status="✅" context="edit mode">When the user changes the auth method (password ↔ key) in edit mode, the previously-stored secret is discarded on save and the new method's secret is required — the placeholder reads "Required" rather than "Stored — replace?".</rule>
+  <rule id="cancel_discards" status="✅">A "Cancel" action discards any unsaved changes and returns to the list without modifying the entry.</rule>
+</requirement>
+
+<requirement id="R4" name="Delete a Host">
+  <description>
+    The user can remove a saved entry. Deletion is destructive but recoverable only by re-entering the credentials manually, so it requires an explicit confirmation.
+  </description>
+  <rule id="swipe_to_delete" status="✅">A trailing swipe action on a row exposes "Delete".</rule>
+  <rule id="context_menu_delete" status="✅">A long-press context menu on a row also exposes "Delete" (alongside "Edit") for users who prefer that gesture.</rule>
+  <rule id="delete_confirms" status="✅">Tapping Delete shows a confirmation prompt ("Delete \"&lt;label&gt;\"? This will remove the saved password or key.") with Cancel and a destructive Delete. When the label is empty, the prompt substitutes "user@host".</rule>
+  <rule id="delete_removes_secret" status="✅">Confirming Delete removes both the index entry and the underlying Keychain item that holds the secret — no orphaned secret remains.</rule>
+  <rule id="delete_in_flight" status="✅" context="connect in flight on this row">Deleting a row whose connect is in flight cancels the attempt before the entry is removed. No error appears on the (now removed) row.</rule>
+  <rule id="delete_live_session" status="✅" context="live session on this row">Deleting a row whose session is currently live shows a stronger confirmation ("Disconnect and delete \"&lt;label-or-user@host&gt;\"?") and tears down the session before removing the entry.</rule>
+  <rule id="delete_animation" status="✅">After confirmation, the row animates out of the list using the standard system list-row removal animation.</rule>
+</requirement>
+
+<requirement id="R5" name="Local-Only Storage">
+  <description>
+    Saved hosts — including passwords, private keys, and passphrases — never leave the device. iCloud Keychain sync, backup-based restore, and any cross-device sharing are explicitly out of scope for v1.
+  </description>
+  <rule id="device_only_secrets" status="✅">Each saved entry's secret material (password, private key, passphrase) is stored in the iOS Keychain with this-device-only accessibility, matching the protection class already used by the MVP credentials store.</rule>
+  <rule id="no_icloud_sync" status="✅">No saved-host material is written to iCloud, iCloud Keychain, or any other off-device store. Restoring the app on a new device starts with an empty list.</rule>
+  <rule id="locked_device_unreadable" status="✅">When the device is locked, the saved entries cannot be read — the app surfaces an inline "Couldn't load saved hosts — device locked. Retry." banner if launched into this state and recovers when the user unlocks. The empty state is not shown while this banner is visible.</rule>
+  <rule id="reconcile_keychain_on_empty_index" status="✅" context="index empty, Keychain not empty">If the saved-hosts index is empty but the Keychain still contains items under the hosts service (e.g. after a UserDefaults wipe or a reinstall with retained Keychain), the app reconciles by listing those Keychain items, treating them as legitimate saved entries, and rebuilding the index from them before any legacy migration runs.</rule>
+</requirement>
+
+<requirement id="R6" name="Migration from Single Credential">
+  <description>
+    Pre-existing installs already store a single most-recent credential. That entry must seed the new list so users don't lose their working host on update.
+  </description>
+  <rule id="migrate_legacy_entry" status="✅">On first launch of the new build, if the legacy single-credential Keychain item exists, the app creates one saved entry from it labeled "Last connection" (the user can rename it later) and removes the legacy item.</rule>
+  <rule id="migration_step_order" status="✅">Migration writes the new Keychain item first, appends to the index second, and deletes the legacy item last. A crash between steps must leave the system in a state that the next launch resolves cleanly: orphan items are recovered by R5.reconcile_keychain_on_empty_index; an undeleted legacy item is handled by re-running migration under R6.migration_is_idempotent.</rule>
+  <rule id="migration_is_idempotent" status="✅">Migration runs only when (a) the legacy item exists and (b) no saved entry already matches its (host, port, username). Repeated launches do not create duplicate entries.</rule>
+  <rule id="migration_tolerates_corruption" status="✅">If the legacy Keychain item exists but cannot be decoded, migration logs the failure and proceeds as if no legacy item were present — the user is not blocked from the empty state.</rule>
+  <rule id="no_legacy_after_first_save" status="✅">After migration completes successfully (or after the user saves any new entry on a fresh install), the legacy single-credential writer is no longer used.</rule>
+</requirement>
+
+<requirement id="R7" name="Visual System and Motion">
+  <description>
+    Hosts adopts the current iOS visual language as a functional layer, not as decoration. The list remains calm and information-dense, while controls and transient recovery affordances can use system glass and motion to show that they are interactive.
+  </description>
+  <rule id="developer_tool_tone" status="✅">The Hosts surface presents itself as a focused developer utility: no ads, promotional panels, gamified decoration, or marketing-style hero content appear in the host manager.</rule>
+  <rule id="functional_glass_layer" status="✅">On platforms that support the current system glass material, glass treatment is reserved for functional controls and transient surfaces such as the add action, Save/Cancel actions, retry/settings recovery actions, active progress affordances, and confirmation surfaces. Host row content itself stays calm and highly legible.</rule>
+  <rule id="system_components_first" status="✅">Navigation, lists, forms, sheets, confirmation prompts, menus, pickers, buttons, and progress indicators use native system components wherever they can satisfy the interaction, so the app feels like part of iOS rather than a custom skin.</rule>
+  <rule id="motion_is_meaningful" status="✅">Motion communicates state changes without spectacle: adding, deleting, connecting, error expansion, recovery actions, and form presentation animate smoothly; idle content does not animate just to attract attention.</rule>
+  <rule id="accessibility_respected" status="✅">The visual system respects reduced motion, reduced transparency, increased contrast, Dynamic Type, and VoiceOver. If system glass or motion is reduced, the interface falls back to equally readable static system materials and controls.</rule>
+</requirement>
+
+</prd>

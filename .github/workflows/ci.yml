@@ -8,7 +8,7 @@ jobs:
   lint:
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Select Xcode
         run: |
           XCODE=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
@@ -17,7 +17,7 @@ jobs:
       - name: Install Mint
         run: brew install mint
       - name: Cache Mint
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.mint
           key: mint-${{ runner.os }}-${{ hashFiles('Mintfile') }}
@@ -25,14 +25,14 @@ jobs:
       - name: Bootstrap tools
         run: mint bootstrap
       - name: swift-format lint
-        run: xcrun swift-format lint -r --strict BedTerm BedTermTests BedTermKit/Sources
+        run: xcrun swift-format lint -r --strict BedTerm BedTermKit/Sources BedTermKit/Tests
       - name: SwiftLint
         run: mint run swiftlint lint --strict
 
   build-test:
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Select Xcode
         # macos-latest runner ships multiple Xcode versions; pick the latest 26.x present,
         # falling back to whatever Xcode is available if 26.x is not yet on the image.
@@ -45,7 +45,7 @@ jobs:
       - name: Install Mint
         run: brew install mint
       - name: Cache Mint
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.mint
           key: mint-${{ runner.os }}-${{ hashFiles('Mintfile') }}
@@ -58,8 +58,30 @@ jobs:
         # flaky download doesn't block CI. If Metal is genuinely missing, the build
         # step below will fail loudly with the actual error.
         run: sudo xcodebuild -downloadComponent MetalToolchain || true
+      - name: Install Rust toolchain & targets
+        # The BedTerm.app scheme has a pre-action that runs
+        # scripts/build-rust-xcframework.sh, which needs the iOS/macOS targets
+        # installed. rust-toolchain.toml pins the channel; `rustup show` is the
+        # canonical way to materialize it.
+        run: |
+          rustup show
+          rustup target add aarch64-apple-ios aarch64-apple-ios-sim aarch64-apple-darwin
+      - name: Cache cargo build
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            rust-core/target
+          # Bump the `v2` segment to invalidate caches that captured stale build-script
+          # stderr (e.g. the rustup SWIFT_DEBUG_INFORMATION_* warnings). The build
+          # script's hash is part of the key too so changes to it bust the cache.
+          key: cargo-v2-${{ runner.os }}-${{ hashFiles('rust-core/Cargo.lock', 'rust-core/rust-toolchain.toml', 'scripts/build-rust-xcframework.sh') }}-${{ hashFiles('rust-core/**/*.rs') }}
+          restore-keys: |
+            cargo-v2-${{ runner.os }}-${{ hashFiles('rust-core/Cargo.lock', 'rust-core/rust-toolchain.toml', 'scripts/build-rust-xcframework.sh') }}-
+            cargo-v2-${{ runner.os }}-
       - name: Cache SwiftPM
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/Library/Developer/Xcode/DerivedData/**/SourcePackages

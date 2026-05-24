@@ -1,0 +1,204 @@
+<prd name="Terminal View">
+
+<overview>
+The terminal viewport: ANSI/VT100 emulation rendered by the Metal renderer, basic UX (copy/paste, scrolling, dark mode, font), and the opt-in Warp-style Block Mode that re-presents the same stream as a chat-like list of command blocks.
+</overview>
+
+<requirement id="R1" name="Terminal Display">
+  <description>
+    Full terminal emulation rendering ANSI escape sequences, VT100 control codes, colors, and cursor positioning correctly.
+  </description>
+  <rule id="ansi_colors" status="✅">ANSI color codes (16-color and 256-color) render with correct foreground and background colors.</rule>
+  <rule id="sgr_bold" status="✅">SGR 1 bold renders the cell's glyph with a heavier weight so emphasized output — <code>ls</code> directory names, <code>git status</code> branch headers, <code>grep --color</code> matches, man-page section titles — visually stands out from regular text. SGR 22 resets to normal weight. Bold cells share the active foreground colour; no faux brightness shift is applied.</rule>
+  <rule id="sgr_italic" status="✅">SGR 3 italic renders the cell's glyph in an italic / oblique style so programs that mark quotations, file paths, or inline emphasis — <code>man</code> page references, some <code>git log</code> formats, certain markdown previews — show slanted text instead of upright. SGR 23 resets to upright.</rule>
+  <rule id="sgr_underline" status="✅">SGR 4 underline draws a horizontal line directly below the cell's baseline. Used by hyperlinks (<code>ls --hyperlink</code>, terminal-image viewers, MUAs), <code>man</code> page argument names, and TUI focus rings. SGR 24 resets to non-underlined. The line spans the cell's full width and inherits the cell's foreground colour so coloured underlines coexist with coloured text.</rule>
+  <rule id="sgr_inverse" status="✅">SGR 7 inverse video swaps the cell's foreground and background colors at render time. Programs that rely on it — vim cursorline / visual selection, fzf selected row, less search hits, htop highlighted process, mc menus — appear with the intended emphasis instead of the underlying fg on fg. SGR 27 resets back to non-inverse without re-issuing the colors.
+    <p>
+      <strong>Verification:</strong> bold / italic / underline / inverse are exercised together by the test scripts under <code>scripts/sgr-test/</code>. From any shell open in BedTerm, <code>cd</code> into that directory on the remote host (the scripts are pure POSIX <code>printf</code>, no install required) and run:
+    </p>
+    <ul>
+      <li><code>./sgr-basic.sh</code> — one row per attribute; colour×style matrix; SGR 22 / 23 / 24 / 27 reset round-trip.</li>
+      <li><code>./sgr-realworld.sh</code> — mocks of <code>ls --color</code>, <code>git status</code>, <code>grep</code>, <code>man</code>, <code>diff -u</code>.</li>
+      <li><code>./sgr-cjk.sh</code> — every attribute applied to CJK strings, verifies the font-fallback cascade still picks up the CJK face under bold / italic.</li>
+      <li><code>./sgr-symbols.sh</code> — block elements, geometric shapes, misc technical, dingbats; exercises font-fallback for non-ASCII symbols.</li>
+    </ul>
+    <p>The composite screenshot below was captured after running <code>./sgr-cjk.sh</code> followed by <code>sh sgr-basic.sh</code> in a single block-mode session:</p>
+    <img src="screenshots/sgr_styles_verified.png" alt="Terminal showing bold, italic, underline, inverse all rendering correctly, including the colour×style matrix and CJK rows"/></rule>
+  <rule id="sgr_strikethrough" status="❌">SGR 9 crossed-out (strikethrough) renders a horizontal line through the cell's glyph, at roughly the x-height midline. SGR 29 resets to non-strikethrough. Used by some TUIs (diff tools, task lists, mc, git log graphs) to mark deleted / completed items without changing color.</rule>
+  <rule id="unicode_symbol_coverage" status="❌">Block-drawing (U+2580–U+259F), geometric shapes (U+25A0–U+25FF), and miscellaneous technical (U+2300–U+23FF) characters render as proper glyphs — not tofu — whether covered by the primary monospace face or resolved through font fallback. This is what makes Warp-style block separators, powerline prompts, and TUI box-drawing work.
+    <p>
+      <strong>Verification:</strong> run <code>./sgr-symbols.sh</code> from <code>scripts/sgr-test/</code> on a remote host and verify every character cell shows its glyph. On Apple platforms the CoreText rasterizer (<code>coretext_raster.rs</code>) resolves fallback glyphs via <code>CTFontCreateForString</code>; on other platforms the swash rasterizer relies on fontdb's cascade.
+    </p>
+    <p>
+      <strong>Known gaps (2026-05-24):</strong> U+2588 Full Block has 1–2 px horizontal gaps when tiled adjacently — CoreText's tight bounding box is narrower than the glyph's advance width. U+23FA Black Circle for Record is rasterised from a system fallback font whose metrics differ from the monospace cell grid, causing misalignment. Both are annotated as TODOs in <code>coretext_raster.rs</code>.
+    </p></rule>
+  <rule id="vt100_cursor" status="✅">VT100 cursor movement and positioning work correctly.</rule>
+  <rule id="clear_screen" status="✅">Clear screen sequences repaint the terminal viewport correctly.</rule>
+  <rule id="vim_display" status="✅">Running vim or nano displays the editor UI correctly, including status lines and cursor positioning.</rule>
+  <rule id="top_display" status="✅">Running top or htop displays the process list with live updates.</rule>
+  <rule id="text_wrap" status="✅">Long lines wrap correctly within the terminal width.</rule>
+  <rule id="glyph_completeness" status="❌">Every rendered character cell shows the complete glyph: descenders (g, j, p, q, y) are fully visible and no row is vertically clipped, regardless of scroll position, input timing, or row position in the viewport.</rule>
+  <rule id="alt_screen_top_inset" status="✅" context="remote in alt-screen mode AND &quot;Keep first row visible in full-screen apps&quot; setting enabled">When the remote application enters alt-screen mode (<code>CSI ?1049h</code>) — vim, htop, less, fzf, claude, etc. — the terminal viewport's top edge clamps to the top safe-area inset so the Dynamic Island, notch, or status bar no longer overlaps the TUI's first row. The PTY resizes to match the reduced row count. The bottom <a href="prd:bedterm/input-bar">special-keys toolbar and compose pill</a> stay visible throughout (the user still needs Esc, Ctrl, etc. inside vim). On exit from alt-screen the viewport returns to drawing under the top safe area (where harmless scrollback flows). Both transitions are instant — no animation — because reflowing a running TUI mid-frame looks worse than a snap.</rule>
+</requirement>
+
+<requirement id="R2" name="Basic Terminal UX">
+  <description>
+    Standard terminal app conventions for copy, paste, scrolling, text selection, and dark mode.
+  </description>
+  <rule id="copy" status="✅">User can select text in the terminal and copy it to the system clipboard.</rule>
+  <rule id="paste" status="✅">User can paste text from the system clipboard into the terminal.</rule>
+  <rule id="scroll" status="✅">User can scroll up and down through terminal history with touch gestures.</rule>
+  <rule id="scroll_sync" status="✅">Scrolling pauses auto-scroll; when scrolled to bottom, auto-scroll resumes and follows new output.</rule>
+  <rule id="scroll_inertia" status="❌">Touch-scroll has native iOS feel: drag tracks the finger 1:1, lifting the finger with velocity decelerates and snaps to whole rows, and tapping during deceleration stops it immediately. Dragging past the top of scrollback or below the live bottom does not produce content — the scroll clamps at the edge.</rule>
+  <rule id="scroll_snap_on_input" status="❌">When the user is scrolled up into scrollback (offset &gt; 0) and types any character, sends a special key from the toolbar, or commits the composer, the viewport snaps back to the live bottom in the same frame as the byte is dispatched to the PTY. Auto-follow resumes from that point. Rationale: typing without seeing the cursor is more disorienting than losing read position; this matches Warp's behavior.</rule>
+  <rule id="prompt_anchored_bottom" status="✅">When the transcript is shorter than the viewport, the active prompt line is anchored to the bottom edge of the terminal viewport (just above the special-keys toolbar) and any empty space sits above it. New output fills upward from the bottom, matching the convention of macOS Terminal, iTerm2, and other iOS terminal apps.</rule>
+  <rule id="dark_mode" status="✅">The terminal and app UI use a dark color scheme by default.</rule>
+  <rule id="font_mono" status="✅">Terminal text renders in a monospace font.</rule>
+  <rule id="landscape" status="❌" context="deferred">Landscape orientation. Dropped from MVP — iPhone target locks to portrait. Revisit if real usage demands it.</rule>
+</requirement>
+
+<requirement id="R3" name="Warp-Style Block Mode">
+  <description>
+    A Warp-inspired alternative terminal view where each shell prompt → command → output cycle is captured as a discrete "block" in a vertically scrolling list, with a persistent composer pinned at the bottom of the screen as the sole input surface. Block Mode replaces the inline cursor-and-prompt model with a chat-like UX better suited to a phone — input lives in one place and output is grouped by command. Block Mode is also the primary delivery vehicle for using the Claude Code CLI (`claude`) over SSH from a phone: the composer's multi-line / voice input (R13, R14) feeds long natural-language prompts into the remote `claude` process, and Block view's alt-screen handling keeps `claude`'s interactive TUI rendering correctly. Block Mode is an opt-in view toggle alongside the classic terminal view (R2), not a replacement; the user can switch between them per session.
+  </description>
+  <rule id="block_mode_toggle" status="❌">A single control in the terminal screen toggles between Classic view (R2, inline prompt) and Block view (this requirement). The choice persists per host and across launches. The same control also gates the per-connect bootstrap push of the shell-integration snippet (R3.shell_integration_install) — there is no separate shell-integration toggle, because the bootstrap markers serve no purpose without Block view.</rule>
+  <rule id="block_mode_beta_default_off" status="✅">Block view is shipped as a beta feature and is off by default. The Settings toggle (see Settings PRD) is labelled with a "Beta" badge, and new users see Classic view (R2) until they explicitly enable command blocks.</rule>
+  <rule id="block_per_command" status="❌" context="block view">Each shell prompt → command → output cycle renders as a distinct block in a top-to-bottom scrolling list. A new block begins on every prompt; the previous block is sealed and shows its command, output, exit code, and duration.</rule>
+  <rule id="block_header" status="❌" context="block view">Each block displays a header row with the command string, a coloured exit-code chip (green for 0, red for non-zero, neutral for still-running), and elapsed duration. Tapping the header collapses the block's output body.</rule>
+  <rule id="block_header_sticky" status="❌" context="block view">While scrolling, the header of the block currently intersecting the top edge of the block list stays pinned to that edge so the user can always see which command the visible output belongs to. When the next block's natural header reaches the top band, the previous sticky header hands off — pushed up by the incoming one — so only one header is pinned at a time. At rest (no scroll) the pinned header coincides with the natural header position and is visually indistinguishable from it.</rule>
+  <rule id="block_body_monospace" status="❌" context="block view">Each block's output body renders the captured grid rows in the same monospace font and ANSI palette as Classic view, preserving colours, cursor positioning, and wrapping for that block's row range.</rule>
+  <rule id="composer_is_only_input" status="❌" context="block view, normal screen">In Block view, the system keyboard's keystrokes route to the composer at the bottom of the screen — not to the PTY. The composer flushes its buffer to the PTY only when the user taps Send or presses Return inside it. This supersedes R13.default_passthrough while Block view is active.</rule>
+  <rule id="composer_bottom_pinned" status="❌" context="block view">The composer is pinned to the bottom of the screen above the R3 toolbar (and above the keyboard when shown), always visible, never scrolled with the block list.</rule>
+  <rule id="composer_typing_while_running" status="❌" context="block view, previous command still running">The user can begin typing the next command in the composer while the previous block's command is still producing output. Composer state is independent of PTY echo until Send.</rule>
+  <rule id="osc133_detection" status="❌">The terminal parser recognises OSC 133 shell-integration sequences (`A` prompt start, `B` command start, `C` output start, `D;&lt;exit&gt;` command end) and emits a block-boundary event on each, used by Block view to delimit blocks.</rule>
+  <rule id="shell_integration_install" status="❌">On first successful connect to a host, the app offers to install an OSC 133 shell-integration snippet for the remote user's detected shell (zsh, bash, fish) by appending to the appropriate rc file. The user can accept, decline, or "ask again later"; the choice is remembered per host. The install-offer preference is independent of the Block view toggle (R3.block_mode_toggle); the toggle controls the per-connect bootstrap push, not the one-time rc-file install.</rule>
+  <rule id="shell_integration_fallback" status="❌" context="OSC 133 not present">If the remote shell has not been instrumented with OSC 133, Block view falls back to a single rolling block that contains all output until the user opens a new session. No heuristic prompt detection is attempted in MVP.</rule>
+  <rule id="alt_screen_collapse" status="❌" context="block view, remote enters alt-screen (CSI ?1049h)">When the remote application enters alt-screen mode (vim, less, htop, fzf, ssh password prompts), Block view automatically collapses into a single fullscreen Classic-style grid and routes keystrokes directly to the PTY. On exit from alt-screen (`CSI ?1049l`), the view restores to Block mode and the alt-screen session is recorded as one block.</rule>
+  <rule id="block_scrollback_cap" status="❌" context="block view">The app caps in-memory block output: the most recent N blocks (target: 50) retain full output; older blocks retain only their command, exit code, duration, and an output byte count. Reopening an old block re-renders from a compressed copy on disk if available, otherwise shows a "truncated" placeholder.</rule>
+  <rule id="block_copy" status="❌" context="block view">Each block exposes a one-tap "Copy output" action that copies the block's full output (or full command + output) to the system clipboard. R5.copy continues to apply for arbitrary text selection within a block.</rule>
+  <rule id="claude_cli_is_remote" status="❌">"Claude support" in BedTerm means first-class support for the Claude Code CLI (`claude`) running as a remote process over SSH, not calling the Anthropic API from the app. BedTerm never holds an Anthropic API key, never makes network calls to `api.anthropic.com`, and never sends terminal contents to any AI service. All AI capability is whatever the user has installed on the remote host.</rule>
+  <rule id="claude_cli_detection" status="❌" context="block view">When the foreground process on the remote PTY is detected as `claude` (via OSC 133 command capture, or via a recognisable banner / title sequence emitted by Claude Code), the active block is tagged as a Claude session and rendered with a distinct accent so the user can tell at a glance that they are talking to Claude, not the shell.</rule>
+  <rule id="claude_cli_alt_screen" status="❌" context="claude session active">Because Claude Code's interactive TUI uses alt-screen, R15.alt_screen_collapse applies: Block view collapses to a single fullscreen grid for the duration of the Claude session and restores to Block mode on exit. The whole session is captured as one Claude-tagged block in the history.</rule>
+  <rule id="claude_cli_composer" status="❌" context="claude session active">The R13 composer (and its R14 voice input) is the recommended input path for sending long natural-language prompts to `claude`. Send uses bracketed paste when the remote advertises it so multi-line prompts arrive as a single message rather than per-keystroke input — preserving Claude Code's own input handling.</rule>
+  <rule id="claude_cli_quick_launch" status="❌" context="block view">Block view offers a quick-launch affordance (e.g. a "Start Claude" button surfaced when no Claude session is active) that sends `claude` (or a user-configured launch command) to the PTY. The launch command is editable per host so users with custom invocations (`claude --model …`, `npx @anthropic-ai/claude-code`, etc.) can override it.</rule>
+  <rule id="claude_cli_no_app_keys" status="❌">BedTerm never prompts for, stores, or transmits an Anthropic API key. Authentication for Claude Code lives entirely on the remote host (its own config / login flow). This is a security guarantee: the app has no AI credentials to leak.</rule>
+</requirement>
+
+<bug id="prompt_floats_at_top" status="Fixed" date="2026-05-17" rule="R2.prompt_anchored_bottom">
+  <current>
+    On a fresh terminal session, when the remote shell has emitted only a few lines (e.g. <code>Last login: …</code> plus the prompt), those lines render at the top of the terminal viewport and a large empty band fills the space between the prompt and the special-keys toolbar at the bottom. The prompt and cursor sit roughly in the middle of the screen instead of just above the keyboard.
+    <img src="screenshots/scroll_drawing_fixed_lsla.jpg" alt="Prompt and short transcript sit near the top of the terminal area with empty space below"/>
+  </current>
+  <expected>
+    The active prompt line is anchored to the bottom edge of the terminal viewport. When the transcript is shorter than the viewport, the empty space sits <em>above</em> the transcript, not below it. As new output arrives, lines push the existing content upward, matching the behaviour of macOS Terminal, iTerm2, and standard iOS terminal apps.
+  </expected>
+  <steps>
+    1. Launch the app and connect to any SSH host.
+    2. Observe the freshly opened terminal session — only the login banner line and a prompt are visible.
+    3. Observe: the prompt sits high in the terminal area with a tall empty band between the prompt and the toolbar.
+    4. Expected: the prompt sits just above the toolbar with the empty band above the login banner instead.
+  </steps>
+</bug>
+
+<bug id="scroll_drawing_ghosting" status="Fixed" date="2026-05-17" rule="R2.scroll">
+  <current>
+    Touch-scrolling the terminal history does not erase previous paints before drawing new rows. Each scroll frame layers on top of the prior one, producing severe visual corruption:
+    <ul>
+    <li>Every row above the live prompt shows doubled / horizontally-offset glyphs (the same line painted twice, shifted by ~1 character).</li>
+    <li>After a single swipe-down gesture to reveal scrollback, the entire viewport becomes a vertical-stripe smear of stacked text frames — readable content disappears.</li>
+    <li>Vertical streaks of stale glyphs persist in the top band even after content scrolls out of view, i.e. that region never fully repaints to the background colour.</li>
+    <li>Only the bottommost line (the live prompt being typed into) renders cleanly, which points at the scroll-copy / redraw path rather than the per-glyph renderer.</li>
+    </ul>
+    <img src="screenshots/scroll_drawing_doubled.jpg" alt="ls -la output with every row doubled and offset"/>
+    <img src="screenshots/scroll_drawing_smear.jpg" alt="Terminal viewport reduced to vertical stripes after one swipe-down"/>
+  </current>
+  <expected>
+    Scrolling the terminal history repaints the viewport cleanly on every frame:
+    <ul>
+    <li>Each row appears exactly once at its scrolled position; no doubled or offset duplicates.</li>
+    <li>Areas that scroll out of view are erased to the terminal background colour with no residual glyphs.</li>
+    <li>Continuous scroll gestures produce a smooth visual translation of the existing content, not an accumulation of overlaid frames.</li>
+    </ul>
+  </expected>
+  <steps>
+    1. Open the app and connect to any SSH host so a shell prompt is visible.
+    2. Run a command that produces enough output to fill the viewport, e.g. <code>ls -la</code>.
+    3. Observe: rows above the live prompt already render with doubled / offset glyphs.
+    4. Swipe down inside the terminal view to reveal scrollback history.
+    5. Observe: the viewport becomes a vertical-stripe smear of stacked text frames; no row is individually legible.
+    6. Swipe up to scroll content off-screen.
+    7. Observe: a band of stale glyph streaks remains at the top of the viewport instead of clean background.
+  </steps>
+</bug>
+
+<bug id="line_cut_after_input" status="Open" date="2026-05-17" rule="R1.glyph_completeness">
+  <current>
+    After typing input and pressing enter, the current line sometimes renders with the bottom portion of characters clipped off — descenders (g, j, p, q, y) are cut, and the bottom few pixels of every character on the affected row are missing. Other rows render correctly. The issue is intermittent, occurring after some inputs but not others.
+    <img src="screenshots/line_cut_after_input.png" alt="Terminal text with bottom of characters clipped on a line"/>
+  </current>
+  <expected>
+    Every character cell renders in full — descenders are fully visible, no row is vertically clipped. All rows in the viewport display complete glyphs regardless of scroll position or input timing.
+  </expected>
+  <steps>
+    1. Connect to an SSH host and get a shell prompt.
+    2. Type several commands and observe the terminal output after each press of enter.
+    3. Notice: on some lines, the bottom portion of characters is visibly cut off.
+  </steps>
+</bug>
+
+<bug id="cjk_ime_broken_in_block_passthrough" status="Open" date="2026-05-22" rule="R3.block_body_monospace">
+  <current>
+    When Block Mode is enabled <em>and</em> a long-running interactive command (the canonical case being <code>claude</code>, but also raw <code>cat</code>/<code>nc</code> etc. that don't switch to the alt-screen) is running as the active block, IME composition with the soft Pinyin / Japanese / 2-set Hangul keyboards does not work: each Latin keystroke ("n", "i", "h", "a", "o") is delivered to the PTY as a raw byte, instead of being held as marked text while the candidate strip composes 你好. The committed CJK characters never reach the running command's stdin.
+
+    Classic mode (Block Mode setting off) is unaffected — IME composes correctly via the terminal Metal view's <code>UITextInput</code> conformance, the preedit floats over the cursor, and committed bytes go to the PTY. The alt-screen path (vim / htop) is also unaffected, because <code>displayMode = .altScreen</code> already hands input back to the terminal Metal view.
+
+    The broken case is specifically: <code>showCommandBlocks = on</code>, no alt-screen flag set, a running block is reading stdin. The block list view captures input via its inner composer's <code>UITextView</code>, whose <code>shouldChangeTextIn</code> path forwards each replacementText fragment as raw bytes — bypassing iOS IME composition.
+  </current>
+  <expected>
+    With Block Mode on and a running interactive command, soft-keyboard IME composition behaves the same as in classic mode:
+    - typed Latin letters under a CJK IME show preedit (e.g. "ni" → "ni"/拼/拟 candidate strip) without leaking to the PTY,
+    - the floating preedit pill is anchored over the live cursor inside the running block's body (not over the hidden global cursor and not in the bottom status row),
+    - selecting a candidate sends the committed UTF-8 (你好) to the running command's stdin,
+    - cancelling the composition sends nothing.
+  </expected>
+  <steps>
+    1. Settings → enable "Show command blocks".
+    2. Connect to a host where <code>claude</code> (or any interactive read-stdin command) is available, and launch it from the block-mode composer.
+    3. Switch the iOS soft keyboard to Pinyin via the globe key.
+    4. Tap inside the block list area (running block visible) and type "nihao" on the soft keyboard.
+    5. Observe: "nihao" appears verbatim in the running command's input — no candidate composition, no 你好.
+  </steps>
+</bug>
+
+<bug id="sticky_header_transparent" status="Open" date="2026-05-24" rule="R3.block_header_sticky">
+  <current>
+    While scrolling the block list, the pinned sticky header at the top edge of the viewport renders semi-transparent: body cells from the block underneath show through the header band, so the command string and exit-code chip overlap with whatever output text happens to be in that row range. At hand-off (next block's natural header reaches the top), both headers can be visible at once during the same frame. The Rust renderer was reworked to split header bands into their own panel/cell vertex buffers and paint them after body cells (renderer/mod.rs:349 / encode_block_pass), but the band still does not fully occlude body content underneath — likely because the header panel rectangle is not opaque (alpha &lt; 1.0) or its Y range does not cover the full glyph height.
+  </current>
+  <expected>
+    The sticky header band is fully opaque: nothing from the block body underneath shows through the pinned header. Only one header is visible at the top edge at any time — during hand-off, the outgoing header is pushed up out of the band by the incoming one in the same frame. At rest, the pinned header is visually indistinguishable from a natural header (same opacity, same background colour token).
+  </expected>
+  <steps>
+    1. Enable Block Mode and run several commands so the list has 4+ blocks of output.
+    2. Scroll up so the first block's header is pinned at the top.
+    3. Observe: body text from the block underneath bleeds through the pinned header band.
+    4. Continue scrolling until the next block's natural header approaches the top.
+    5. Observe: during the hand-off frame, both headers are visible overlapping.
+  </steps>
+</bug>
+
+<bug id="cjk_input_blocked_in_claude_mode" status="Open" date="2026-05-22" rule="R3.claude_cli_alt_screen">
+  <current>
+    In Block view's Claude session (the `claude` CLI running in alt-screen, where R3.alt_screen_collapse routes keystrokes directly to the PTY), the user cannot input CJK / IME text. The system keyboard is forced to ASCII-only passthrough: the globe key does not cycle into Pinyin / Zhuyin / Kana / Hangul, marked-text composition is not committed, and only ASCII characters reach the remote `claude` prompt. The composer (R4) — which handles CJK correctly per the fix to `composer_blocks_language_switch` — is bypassed in this mode because R6.composer_is_only_input is suspended while alt-screen is active.
+  </current>
+  <expected>
+    The user can compose and send CJK / IME text to `claude` while it is running in alt-screen, with the same fidelity as the composer in normal Block view: IME candidate UI works, marked text commits on selection, UTF-8 bytes reach the PTY verbatim (wrapped in bracketed paste per R4.send_uses_bracketed_paste when the remote advertises it). One reasonable shape: in Claude alt-screen sessions, keep the composer (R4) active instead of falling back to raw passthrough, since `claude` reads its prompt as line-buffered text rather than per-keystroke chords.
+  </expected>
+  <steps>
+    1. Add a CJK input source (e.g. Simplified Chinese — Pinyin) in iOS Settings → General → Keyboard.
+    2. Open Block view and start a Claude session (R18.claude_cli_quick_launch, or run `claude` manually).
+    3. With the Claude TUI active (alt-screen), tap the keyboard and press the globe key to switch to Pinyin.
+    4. Observe: the keyboard does not switch, or switches but candidate UI / marked text never commits into the `claude` prompt — only ASCII characters appear.
+  </steps>
+</bug>
+
+</prd>

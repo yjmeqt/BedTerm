@@ -7,6 +7,7 @@ enum SSHErrorMapping {
             switch io.errnoCode {
             case ECONNREFUSED: return .tcpRefused
             case ETIMEDOUT: return .timeout
+            case ECONNRESET, EPIPE: return .peerReset
             default: break
             }
         }

@@ -7,17 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		3BA0EC8B2788B75A6BCFD1FD /* BedTermTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43021D79E9E48C17C8DE52A7 /* BedTermTests.swift */; };
 		89E7D796F5E95867BF23555D /* BedTermApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79DC149F8161013AB2412CF9 /* BedTermApp.swift */; };
-		B1B1B1B100000000000000A3 /* KeyBarStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B1B1B100000000000000F3 /* KeyBarStateTests.swift */; };
-		B1B1B1B100000000000000A4 /* ByteSequenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B1B1B100000000000000F4 /* ByteSequenceTests.swift */; };
-		B1B1B1B100000000000000A7 /* CredentialsStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B1B1B100000000000000F7 /* CredentialsStoreTests.swift */; };
-		B1B1B1B100000000000000A9 /* HostKeyStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B1B1B100000000000000F9 /* HostKeyStoreTests.swift */; };
-		B1B1B1B100000000000000AC /* MockSSHClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B1B1B100000000000000FC /* MockSSHClientTests.swift */; };
-		B1B1B1B100000000000000AE /* SSHErrorMappingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B1B1B100000000000000FE /* SSHErrorMappingTests.swift */; };
-		B1B1B1B1000000000000A300 /* TerminalSessionDescribeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B1B1B1000000000000F300 /* TerminalSessionDescribeTests.swift */; };
-		B1B1B1B1000000000000A401 /* KeyBarControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B1B1B1000000000000F401 /* KeyBarControllerTests.swift */; };
-		B1B1B1B1000000000000A501 /* ComposerControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1B1B1B1000000000000F501 /* ComposerControllerTests.swift */; };
 		C1C1C1C100000000000000A1 /* ConnectionSmokeUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1C1C1C100000000000000F1 /* ConnectionSmokeUITests.swift */; };
 		D1D1D1D100000000000000A1 /* BedTermKit in Frameworks */ = {isa = PBXBuildFile; productRef = D1D1D1D100000000000000B1 /* BedTermKit */; };
 		A55E70AC0000000000000B01 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A55E70AC0000000000000A01 /* Assets.xcassets */; };
@@ -27,13 +17,6 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
-		6F228B9A810249470C042864 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 1011341C9E10EDF476211FB5 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 17DD468B409E31704B6ADB31;
-			remoteInfo = BedTerm;
-		};
 		C1C1C1C100000000000000D1 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 1011341C9E10EDF476211FB5 /* Project object */;
@@ -45,18 +28,7 @@
 
 /* Begin PBXFileReference section */
 		0FCBFA740B0BF25EF848DCE5 /* BedTerm.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = BedTerm.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		1C940442BF6ACF645A679FED /* BedTermTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = BedTermTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		43021D79E9E48C17C8DE52A7 /* BedTermTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BedTermTests.swift; sourceTree = "<group>"; };
 		79DC149F8161013AB2412CF9 /* BedTermApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BedTermApp.swift; sourceTree = "<group>"; };
-		B1B1B1B100000000000000F3 /* KeyBarStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyBarStateTests.swift; sourceTree = "<group>"; };
-		B1B1B1B100000000000000F4 /* ByteSequenceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ByteSequenceTests.swift; sourceTree = "<group>"; };
-		B1B1B1B100000000000000F7 /* CredentialsStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CredentialsStoreTests.swift; sourceTree = "<group>"; };
-		B1B1B1B100000000000000F9 /* HostKeyStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HostKeyStoreTests.swift; sourceTree = "<group>"; };
-		B1B1B1B100000000000000FC /* MockSSHClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockSSHClientTests.swift; sourceTree = "<group>"; };
-		B1B1B1B100000000000000FE /* SSHErrorMappingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSHErrorMappingTests.swift; sourceTree = "<group>"; };
-		B1B1B1B1000000000000F300 /* TerminalSessionDescribeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalSessionDescribeTests.swift; sourceTree = "<group>"; };
-		B1B1B1B1000000000000F401 /* KeyBarControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyBarControllerTests.swift; sourceTree = "<group>"; };
-		B1B1B1B1000000000000F501 /* ComposerControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerControllerTests.swift; sourceTree = "<group>"; };
 		C1C1C1C100000000000000E1 /* BedTermUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = BedTermUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		C1C1C1C100000000000000F1 /* ConnectionSmokeUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionSmokeUITests.swift; sourceTree = "<group>"; };
 		D1D1D1D100000000000000C1 /* BedTermKit */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = BedTermKit; path = BedTermKit; sourceTree = "<group>"; };
@@ -91,23 +63,6 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXGroup section */
-		17D135F5F3C2D922AD89D6B5 /* BedTermTests */ = {
-			isa = PBXGroup;
-			children = (
-				43021D79E9E48C17C8DE52A7 /* BedTermTests.swift */,
-				B1B1B1B100000000000000F3 /* KeyBarStateTests.swift */,
-				B1B1B1B100000000000000F4 /* ByteSequenceTests.swift */,
-				B1B1B1B100000000000000F7 /* CredentialsStoreTests.swift */,
-				B1B1B1B100000000000000F9 /* HostKeyStoreTests.swift */,
-				B1B1B1B100000000000000FC /* MockSSHClientTests.swift */,
-				B1B1B1B100000000000000FE /* SSHErrorMappingTests.swift */,
-				B1B1B1B1000000000000F300 /* TerminalSessionDescribeTests.swift */,
-				B1B1B1B1000000000000F401 /* KeyBarControllerTests.swift */,
-				B1B1B1B1000000000000F501 /* ComposerControllerTests.swift */,
-			);
-			path = BedTermTests;
-			sourceTree = "<group>";
-		};
 		402702E3152E5ACED7511228 /* App */ = {
 			isa = PBXGroup;
 			children = (
@@ -120,7 +75,6 @@
 			isa = PBXGroup;
 			children = (
 				0FCBFA740B0BF25EF848DCE5 /* BedTerm.app */,
-				1C940442BF6ACF645A679FED /* BedTermTests.xctest */,
 				C1C1C1C100000000000000E1 /* BedTermUITests.xctest */,
 			);
 			name = Products;
@@ -150,7 +104,6 @@
 			children = (
 				D1D1D1D100000000000000C1 /* BedTermKit */,
 				BA9B10BF38849AD6FB861D2E /* BedTerm */,
-				17D135F5F3C2D922AD89D6B5 /* BedTermTests */,
 				C1C1C1C1000000000000C001 /* BedTermUITests */,
 				645FE47AA418C2AB27267181 /* Products */,
 			);
@@ -159,24 +112,6 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		053533EBD78519D9A6032A8C /* BedTermTests */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 95B7CBDB4267A74D00A10B4B /* Build configuration list for PBXNativeTarget "BedTermTests" */;
-			buildPhases = (
-				6EFD3FE5E88F63B40A921FFC /* Sources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-				2D16840B3CD0D772BA5819CC /* PBXTargetDependency */,
-			);
-			name = BedTermTests;
-			packageProductDependencies = (
-			);
-			productName = BedTermTests;
-			productReference = 1C940442BF6ACF645A679FED /* BedTermTests.xctest */;
-			productType = "com.apple.product-type.bundle.unit-test";
-		};
 		17DD468B409E31704B6ADB31 /* BedTerm */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 3C002D513CFD97283C15DA0F /* Build configuration list for PBXNativeTarget "BedTerm" */;
@@ -225,10 +160,6 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
-					053533EBD78519D9A6032A8C = {
-						DevelopmentTeam = "";
-						ProvisioningStyle = Automatic;
-					};
 					17DD468B409E31704B6ADB31 = {
 						ProvisioningStyle = Automatic;
 					};
@@ -264,30 +195,12 @@
 			);
 			targets = (
 				17DD468B409E31704B6ADB31 /* BedTerm */,
-				053533EBD78519D9A6032A8C /* BedTermTests */,
 				C1C1C1C1000000000000B001 /* BedTermUITests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXSourcesBuildPhase section */
-		6EFD3FE5E88F63B40A921FFC /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				3BA0EC8B2788B75A6BCFD1FD /* BedTermTests.swift in Sources */,
-				B1B1B1B100000000000000A3 /* KeyBarStateTests.swift in Sources */,
-				B1B1B1B100000000000000A4 /* ByteSequenceTests.swift in Sources */,
-				B1B1B1B100000000000000A7 /* CredentialsStoreTests.swift in Sources */,
-				B1B1B1B100000000000000A9 /* HostKeyStoreTests.swift in Sources */,
-				B1B1B1B100000000000000AC /* MockSSHClientTests.swift in Sources */,
-				B1B1B1B100000000000000AE /* SSHErrorMappingTests.swift in Sources */,
-				B1B1B1B1000000000000A300 /* TerminalSessionDescribeTests.swift in Sources */,
-				B1B1B1B1000000000000A401 /* KeyBarControllerTests.swift in Sources */,
-				B1B1B1B1000000000000A501 /* ComposerControllerTests.swift in Sources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		C1C1C1C1000000000000B101 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -307,11 +220,6 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
-		2D16840B3CD0D772BA5819CC /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = 17DD468B409E31704B6ADB31 /* BedTerm */;
-			targetProxy = 6F228B9A810249470C042864 /* PBXContainerItemProxy */;
-		};
 		C1C1C1C1000000000000B301 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 17DD468B409E31704B6ADB31 /* BedTerm */;
@@ -320,24 +228,6 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
-		00AE6A8A43403DCD0D09D409 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
-				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@loader_path/Frameworks",
-				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.applovin.yi.bedterm.tests;
-				SDKROOT = iphoneos;
-				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/BedTerm.app/BedTerm";
-			};
-			name = Debug;
-		};
 		6262ECAAD0D635CA294026DF /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -422,7 +312,7 @@
 				SDKROOT = iphoneos;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
-				SWIFT_VERSION = 5.0;
+				SWIFT_VERSION = 6.0;
 			};
 			name = Debug;
 		};
@@ -480,25 +370,7 @@
 				SDKROOT = iphoneos;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				SWIFT_OPTIMIZATION_LEVEL = "-O";
-				SWIFT_VERSION = 5.0;
-			};
-			name = Release;
-		};
-		9F9B71E1A465DEFBD4061F73 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
-				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-					"@loader_path/Frameworks",
-				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.applovin.yi.bedterm.tests;
-				SDKROOT = iphoneos;
-				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/BedTerm.app/BedTerm";
+				SWIFT_VERSION = 6.0;
 			};
 			name = Release;
 		};
@@ -516,7 +388,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.applovin.yi.bedterm.uitests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
-				SWIFT_VERSION = 5.0;
+				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_TARGET_NAME = BedTerm;
 			};
@@ -536,7 +408,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.applovin.yi.bedterm.uitests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
-				SWIFT_VERSION = 5.0;
+				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_TARGET_NAME = BedTerm;
 			};
@@ -578,15 +450,6 @@
 			buildConfigurations = (
 				7D615B120852B61EE621CBCB /* Debug */,
 				9A53F2C3794EEC6AB7B106AC /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Debug;
-		};
-		95B7CBDB4267A74D00A10B4B /* Build configuration list for PBXNativeTarget "BedTermTests" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				00AE6A8A43403DCD0D09D409 /* Debug */,
-				9F9B71E1A465DEFBD4061F73 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

@@ -1,0 +1,18 @@
+[workspace]
+resolver = "2"
+members = ["bedterm_core", "bedterm-mock-ssh"]
+
+[workspace.package]
+edition = "2021"
+rust-version = "1.94"
+license = "MIT"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "symbols"
+panic = "abort"
+opt-level = 3
+
+[profile.dev]
+opt-level = 1

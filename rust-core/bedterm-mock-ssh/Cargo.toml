@@ -1,0 +1,20 @@
+[package]
+name = "bedterm-mock-ssh"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "bedterm-mock-ssh"
+path = "src/main.rs"
+
+[dependencies]
+russh = "0.45"
+russh-keys = "0.45"
+tokio = { version = "1", features = ["full"] }
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+async-trait = "0.1"
+rand = "0.8"
+portable-pty = "0.8"

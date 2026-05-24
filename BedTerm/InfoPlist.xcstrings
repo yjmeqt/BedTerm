@@ -1,17 +1,59 @@
 {
   "sourceLanguage" : "en",
-  "version" : "1.0",
   "strings" : {
+    "CFBundleName" : {
+      "comment" : "Bundle name",
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "BedTerm"
+          }
+        }
+      }
+    },
     "NSLocalNetworkUsageDescription" : {
       "extractionState" : "manual",
       "localizations" : {
-        "en" : { "stringUnit" : { "state" : "translated", "value" : "BedTerm needs local network access to connect to SSH servers on your Wi-Fi (Mac, NAS, dev box)." } },
-        "ja" : { "stringUnit" : { "state" : "translated", "value" : "BedTerm が Wi-Fi 上の SSH サーバー（Mac、NAS、開発用マシンなど）に接続するには、ローカルネットワークへのアクセスが必要です。" } },
-        "ko" : { "stringUnit" : { "state" : "translated", "value" : "BedTerm이 Wi-Fi의 SSH 서버(Mac, NAS, 개발용 기기 등)에 연결하려면 로컬 네트워크 권한이 필요합니다." } },
-        "ru" : { "stringUnit" : { "state" : "translated", "value" : "BedTerm нужен доступ к локальной сети, чтобы подключаться к SSH-серверам в вашей сети Wi-Fi (Mac, NAS, рабочая станция)." } },
-        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "BedTerm 需要本地网络权限以连接同一 Wi-Fi 下的 SSH 服务器（Mac、NAS、开发机）。" } },
-        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "BedTerm 需要區域網路權限，以連線同一 Wi-Fi 下的 SSH 伺服器（Mac、NAS、開發機）。" } }
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "BedTerm needs local network access to connect to SSH servers on your Wi-Fi (Mac, NAS, dev box)."
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "BedTerm が Wi-Fi 上の SSH サーバー（Mac、NAS、開発用マシンなど）に接続するには、ローカルネットワークへのアクセスが必要です。"
+          }
+        },
+        "ko" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "BedTerm이 Wi-Fi의 SSH 서버(Mac, NAS, 개발용 기기 등)에 연결하려면 로컬 네트워크 권한이 필요합니다."
+          }
+        },
+        "ru" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "BedTerm нужен доступ к локальной сети, чтобы подключаться к SSH-серверам в вашей сети Wi-Fi (Mac, NAS, рабочая станция)."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "BedTerm 需要本地网络权限以连接同一 Wi-Fi 下的 SSH 服务器（Mac、NAS、开发机）。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "BedTerm 需要區域網路權限，以連線同一 Wi-Fi 下的 SSH 伺服器（Mac、NAS、開發機）。"
+          }
+        }
       }
     }
-  }
+  },
+  "version" : "1.0"
 }

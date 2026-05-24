@@ -9,33 +9,19 @@ Bootstrap once per checkout:
 ```sh
 brew install mint
 mint bootstrap
+rustup show   # materialises the toolchain pinned by rust-core/rust-toolchain.toml
+rustup target add aarch64-apple-ios aarch64-apple-ios-sim aarch64-apple-darwin
 ```
 
-Build & test (iOS 26 simulator):
+The Rust core (`rust-core/bedterm_core`) is packaged into `BedTermKit/BinaryFrameworks/BedTermCore.xcframework` (consumed as a SwiftPM `.binaryTarget`). The `BedTerm.xcscheme` build pre-action runs `scripts/build-rust-xcframework.sh ${CONFIGURATION}` automatically, so any `xcodebuild build|test` rebuilds the xcframework if Rust changed. The script is idempotent — a no-op build skips the `-create-xcframework` step entirely. Slice `.a` files are gitignored; only `Info.plist` is tracked.
 
-```sh
-xcodebuild test \
-  -project BedTerm.xcodeproj \
-  -scheme BedTerm \
-  -destination 'platform=iOS Simulator,name=iPhone 17' \
-  | mint run xcbeautify
-```
-
-Run a single test:
-
-```sh
-xcodebuild test \
-  -project BedTerm.xcodeproj -scheme BedTerm \
-  -destination 'platform=iOS Simulator,name=iPhone 17' \
-  -only-testing:BedTermTests/<ClassName>/<testMethod> \
-  | mint run xcbeautify
-```
+Build & test go through the `worktree-ios-dev` skill (`worktree-ios-dev-tool build|test|run`); the skill picks the right simulator, wires the Rust xcframework pre-action, and pipes through `xcbeautify`. Tests live inside the `BedTermKit` Swift package (`BedTermKit/Tests/BedTermKitTests/`) and use the Swift Testing framework (`import Testing`, `@Suite`, `@Test`, `#expect`, `#require`). New test files don't need any Xcode project bookkeeping — SwiftPM picks them up automatically.
 
 Lint (both must pass):
 
 ```sh
 mint run swiftlint lint --strict
-xcrun swift-format lint -r --strict BedTerm BedTermTests
+xcrun swift-format lint -r --strict BedTerm BedTermKit/Sources BedTermKit/Tests
 ```
 
 `swift-format` ships with Xcode 26 — no install needed. SwiftLint also runs as a SwiftPM build-tool plugin on `BedTermKit` (configured in `BedTermKit/Package.swift`); `xcodebuild` is invoked with package-plugin validation skipped (see commit `58642e8`).
@@ -62,6 +48,16 @@ The app ships in English (base), Simplified Chinese, Traditional Chinese, Japane
 - **Never-localized** — terminal pty bytes (rendered verbatim from the remote shell), the brand name "BedTerm", and developer-only strings (debug logs, asserts, crash messages). Do not wrap those.
 
 When you change English copy, mark the affected non-English entries as `needs_review` in the catalogue so the translator pass picks them up. When you add a new string, the catalogue gains the new key on next build — fill the other locales before merging.
+
+## Colors & appearance
+
+The app follows the iOS system appearance (R9). Every colour the user sees — surface, text, icon, border, accent, error, keybar background/label, disconnect banner, etc. — **must** come from the design system as a named colour set in `Assets.xcassets` with both `Any Appearance` (Light) and `Dark Appearance` variants. Reference them via `Color("TokenName")` / `UIColor(named: "TokenName")`.
+
+- **Never** write literal colours in code or views: no `Color(red:green:blue:)`, no `UIColor(red:green:blue:)`, no hex strings, no `Color.black` / `.white` / `.gray` / other `Color.<name>` system constants on user-visible surfaces.
+- Use **semantic** token names (`surface.primary`, `text.muted`, `keybar.background`, `accent`, `error`) — not raw palette names (`gray800`, `blue500`).
+- Symbolic SwiftUI colours that are already adaptive (`Color.primary`, `Color.secondary`, `.tint`, `.accentColor`) are acceptable when a token isn't needed, but prefer a named token for anything brand- or component-specific.
+
+If you find yourself reaching for a hex value, stop and add the token to the catalogue first.
 
 ## PRDs
 

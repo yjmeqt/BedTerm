@@ -1,0 +1,75 @@
+<prd name="Connection">
+
+<overview>
+SSH transport for terminal sessions: connect to a remote host using standard authentication, verify host identity with trust-on-first-use, and handle the iOS Local Network permission prompt gracefully so the first connect to a LAN dev box does not fail before the user can grant access.
+</overview>
+
+<requirement id="R1" name="SSH Connection">
+  <description>
+    Connect to a remote Linux or macOS host over SSH with standard authentication methods.
+  </description>
+  <rule id="host_port" status="✅">User can enter a hostname and port to connect.</rule>
+  <rule id="username" status="✅">User can enter a username for authentication.</rule>
+  <rule id="password_auth" status="✅">User can authenticate with a password.</rule>
+  <rule id="key_auth" status="✅">User can authenticate with an SSH private key.</rule>
+  <rule id="connect_success" status="✅">A valid connection opens the terminal session and displays the remote shell prompt.</rule>
+  <rule id="connect_failure" status="✅">A failed connection shows a descriptive error message without crashing.</rule>
+  <rule id="tcp_keepalive" status="✅">The TCP socket carrying the SSH session keeps itself alive against idle NAT and firewall timeouts by sending periodic keepalive probes (default idle ~30s). Long pauses without typing do not silently strand the session in a half-open state.</rule>
+  <rule id="peer_reset_message" status="✅" context="TCP connection reset by the remote peer or an intermediate gateway">The disconnect banner shows a human-readable reason — e.g. "Connection reset by the remote host (network change or idle timeout)" — rather than the raw <code>read(descriptor:pointer:size:)</code> / errno text.</rule>
+</requirement>
+
+<requirement id="R2" name="Host Key TOFU">
+  <description>
+    Trust-on-first-use host key verification. The first successful connection to a host stores the host's public key fingerprint; subsequent connections compare and warn on mismatch. Added during MVP design as the security baseline for any terminal app.
+  </description>
+  <rule id="tofu_store" status="✅">On first successful connect, the SHA-256 fingerprint of the remote host key is stored in Keychain, keyed by host:port.</rule>
+  <rule id="tofu_match" status="✅">On subsequent connects, the stored fingerprint is compared to the remote host key; a match proceeds silently.</rule>
+  <rule id="tofu_mismatch" status="✅">A mismatch shows a full-screen warning with both fingerprints (SHA256:base64) and offers Reject or Trust-new-key (with explicit confirmation).</rule>
+</requirement>
+
+<requirement id="R3" name="Local Network Permission">
+  <description>
+    iOS shows a system permission prompt the first time the app sends traffic to a Local Area Network address (RFC1918 IPv4, IPv6 unique-local / link-local, or a `.local` mDNS host). The terminal must handle this prompt gracefully so the first connect to a LAN dev box does not fail before the user can tap Allow. Loopback (`127.0.0.1` / `::1`) and public addresses are unaffected and bypass this flow.
+  </description>
+  <rule id="prewarm_lan" status="✅">Before opening an SSH connection to a LAN host (RFC1918 / ULA / link-local / `.local`), the app first triggers the iOS local-network prompt and waits for the user's response.</rule>
+  <rule id="prewarm_skip" status="✅">Connections to loopback or to public (non-LAN) addresses skip the prewarm and proceed directly to SSH.</rule>
+  <rule id="connect_progress" status="✅">While the prewarm prompt is on screen, the Connect action shows a "Waiting for local network permission…" state instead of returning an immediate failure.</rule>
+  <rule id="auto_retry_after_grant" status="✅">If the user grants permission during prewarm, the app proceeds to the SSH connect automatically — no second tap on Connect required.</rule>
+  <rule id="denied_error_message" status="✅">If prewarm completes with permission denied (or a connect to a LAN host fails with a permission-shaped error), the app shows an actionable error: "Local network access is required to reach &lt;host&gt;. Open Settings to enable it."</rule>
+  <rule id="open_settings_action" status="✅">The denied-error surface includes an "Open Settings" button that deep-links to the app's Settings pane, plus a "Retry" button that re-runs the connect.</rule>
+  <rule id="remember_grant" status="✅">Once a connect has succeeded against a LAN host, subsequent connects skip the prewarm wait and proceed directly to SSH unless the user changes permission in Settings.</rule>
+</requirement>
+
+<bug id="peer_reset_raw_errno" status="Fix Pending" date="2026-05-17" rule="R1.peer_reset_message">
+  <current>
+    On a physical device, after the session has been idle for a few minutes (or after the device switches network), the disconnect banner surfaces the raw SwiftNIO error string: <code>Disconnected: read(descriptor:pointer:size:) Connection reset by peer (errno: 54)</code>. The text is incomprehensible to a non-developer and gives no hint that the cause is usually network idle / NAT timeout / network change.
+  </current>
+  <expected>
+    When the underlying socket reports ECONNRESET (errno 54), the disconnect banner shows a plain-language reason such as "Connection reset by the remote host (network change or idle timeout)". The raw NIO description is not surfaced to the user.
+  </expected>
+  <steps>
+    1. Connect to an SSH host from a physical device.
+    2. Lock the device or switch networks; leave the session idle for several minutes.
+    3. Return to the foreground.
+    4. Observe: the disconnect banner shows the raw <code>read(descriptor:pointer:size:)</code> errno text.
+  </steps>
+</bug>
+
+<bug id="first_connect_blocked_by_permission_prompt" status="Fix Pending" date="2026-05-16" rule="R3.prewarm_lan">
+  <current>
+    On the first launch, tapping Connect against a LAN host (e.g. `192.168.x.x` or a `.local` host) triggers the iOS local-network permission prompt — but the SSH connect attempt has already started in parallel and fails (timeout / no route) before the user can tap Allow. The user sees a confusing error and must tap Connect a second time after granting permission.
+  </current>
+  <expected>
+    The app should detect that the target is a LAN address, run a permission prewarm to surface the iOS prompt, wait for the user's response, and only then start the SSH handshake. If the user grants permission, the connect proceeds automatically; if denied, an actionable error with "Open Settings" and "Retry" is shown.
+  </expected>
+  <steps>
+    1. Fresh-install the app (or reset its local-network permission in Settings).
+    2. Open the Connection screen and enter a LAN host (e.g. `192.168.1.10`), port `22`, username, password.
+    3. Tap Connect.
+    4. Observe: iOS shows the local-network prompt, and a connection error appears behind it before the user can tap Allow.
+    5. Tap Allow on the prompt.
+    6. Observe: the connect does not retry automatically; the user must tap Connect again.
+  </steps>
+</bug>
+
+</prd>

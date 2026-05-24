@@ -32,6 +32,12 @@ public struct HostKeyStore {
         )
     }
 
+    /// Drop the stored fingerprint for `host:port`, if any. No-op when
+    /// none is stored.
+    public func remove(host: String, port: Int) {
+        Keychain.delete(service: self.service, account: self.account(host: host, port: port))
+    }
+
     public func verify(remote: String, host: String, port: Int) throws -> Verdict {
         guard let stored = try fingerprint(host: host, port: port) else { return .unknown }
         if stored == remote { return .match }

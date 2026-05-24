@@ -1,14 +1,11 @@
 //
-// CitadelSSHClient.swift
+// CitadelSSHClient.swift — Production SSH client on Citadel 0.12.1 + NIOSSH.
 //
-// Production SSH client built on Citadel 0.12.1 + SwiftNIO SSH (Wellz26 fork).
+// API notes verified against Citadel 0.12.1 / NIOSSH (2026-05-16, sources
+// under DerivedData/.../SourcePackages/checkouts/{Citadel,swift-nio-ssh}):
 //
-// API notes — verified against Citadel 0.12.1 / NIOSSH on 2026-05-16
-// (sources under DerivedData/.../SourcePackages/checkouts/{Citadel,swift-nio-ssh}):
-//
-//   - Citadel exposes its own `SSHClient` final class
-//     (`Sources/Citadel/Client.swift`). We disambiguate from our own
-//     `BedTerm.SSHClient` protocol with a private typealias `CitadelClient`.
+//   - Citadel's own `SSHClient` final class is aliased to `CitadelClient`
+//     to disambiguate from `BedTerm.SSHClient` protocol.
 //   - Connect entry point used here:
 //         Citadel.SSHClient.connect(
 //             host:port:authenticationMethod:hostKeyValidator:reconnect:
@@ -38,25 +35,22 @@
 //     closure return; we also call `Citadel.SSHClient.close()` afterwards.
 //
 // Limitations / caveats:
-//   - Citadel 0.12.1 only ships ed25519 + RSA OpenSSH private-key parsers.
-//     P256/P384/P521 OpenSSH keys are NOT supported here; we map those to
-//     `.privateKeyParse`. Plain-text password auth and the two supported key
-//     types cover MVP.
+//   - Citadel 0.12.1 only ships ed25519 + RSA OpenSSH parsers; P256/P384/
+//     P521 map to `.privateKeyParse`. Password + the two key types cover MVP.
 //   - Citadel's `InvalidOpenSSHKey` does not distinguish "wrong passphrase"
 //     from "garbage input". We surface `.privateKeyPassphraseRequired` only
 //     when the caller supplied no passphrase and the key parser fails; if the
 //     caller supplied a passphrase and parsing still fails we surface
 //     `.privateKeyParse` (could be wrong passphrase or malformed key — Citadel
 //     does not tell us which).
-//   - Host-key TOFU runs synchronously inside the validation callback. The
-//     Keychain calls there are cheap, but they are blocking; this matches
-//     how `SSHHostKeyValidator.trustedKeys` itself behaves.
+//   - Host-key TOFU is synchronous inside the validation callback (cheap
+//     Keychain calls, matches `SSHHostKeyValidator.trustedKeys`).
 
-import Citadel
+@preconcurrency import Citadel
 import Crypto
 import Foundation
-import NIOCore
-import NIOSSH
+@preconcurrency import NIOCore
+@preconcurrency import NIOSSH
 
 // Disambiguate Citadel's `SSHClient` class from our `SSHClient` protocol.
 private typealias CitadelClient = Citadel.SSHClient
@@ -111,7 +105,8 @@ public final class CitadelSSHClient: BedTermKit.SSHClient, @unchecked Sendable {
                 port: credential.port,
                 authenticationMethod: authMethod,
                 hostKeyValidator: hostKeyValidator,
-                reconnect: .never
+                reconnect: .never,
+                channelHandlers: [TCPKeepaliveHandler()]
             )
         } catch let mismatch as TOFUHostKeyDelegate.Mismatch {
             throw SSHError.hostKeyMismatch(stored: mismatch.stored, remote: mismatch.remote)
@@ -146,17 +141,39 @@ public final class CitadelSSHClient: BedTermKit.SSHClient, @unchecked Sendable {
                 do {
                     try await citadel.withPTY(ptyRequest) { inbound, outbound in
                         self.writer = outbound
-                        ready.resume(returning: ())
+                        self.maybeResume(ready, with: .success(()))
 
-                        // Pump inbound stdout/stderr into our AsyncStream.
+                        // Pump inbound stdout/stderr into our AsyncStream
+                        // AND defer the bootstrap push until the remote
+                        // shell produces its first byte. Writing the
+                        // bootstrap into `outbound` BEFORE the inbound
+                        // pump is active is observed to silently drop
+                        // the bytes on some Citadel + sshd combinations
+                        // (probe sentinel never returns). Waiting for
+                        // first-output guarantees the shell has finished
+                        // PTY setup, loaded `.zshrc`, and is reading from
+                        // stdin in ZLE mode — the bootstrap heredoc then
+                        // arrives as ordinary user input and gets eval'd.
+                        let bootstrapPayload = request.bootstrapPayload
                         let pump = Task { [weak self] in
                             guard let self else { return }
+                            var bootstrapPushed = false
                             do {
                                 for try await chunk in inbound {
                                     switch chunk {
                                     case let .stdout(buffer), let .stderr(buffer):
                                         let data = Data(buffer.readableBytesView)
+                                        logChunk("IN ", data)
                                         self.outputContinuation.yield(data)
+                                    }
+                                    if !bootstrapPushed {
+                                        bootstrapPushed = true
+                                        Task { [citadel] in
+                                            await Self.pushBootstrap(
+                                                payload: bootstrapPayload,
+                                                writer: outbound,
+                                                ssh: citadel)
+                                        }
                                     }
                                 }
                             } catch {
@@ -181,7 +198,7 @@ public final class CitadelSSHClient: BedTermKit.SSHClient, @unchecked Sendable {
                 } catch {
                     // If we have not resumed `ready` yet, surface the error
                     // through it; otherwise the session simply ends.
-                    self.maybeResume(ready, throwing: Self.classifyConnectError(error))
+                    self.maybeResume(ready, with: .failure(Self.classifyConnectError(error)))
                 }
                 self.outputContinuation.finish()
             }
@@ -189,16 +206,21 @@ public final class CitadelSSHClient: BedTermKit.SSHClient, @unchecked Sendable {
     }
 
     // `ready` may already have been resumed by the time withPTY throws. Guard
-    // against double-resume by tracking it via a one-shot lock.
+    // against double-resume by tracking it via a one-shot lock — both the
+    // success path (PTY ready) and the failure path (withPTY threw before/
+    // after ready) funnel through here so the continuation is only resumed once.
     private let readyLock = NSLock()
     private var readyResumed = false
-    private func maybeResume(_ cont: CheckedContinuation<Void, Error>, throwing error: Error) {
+    private func maybeResume(
+        _ cont: CheckedContinuation<Void, Error>,
+        with result: Result<Void, Error>
+    ) {
         self.readyLock.lock()
-        defer { self.readyLock.unlock() }
-        if !self.readyResumed {
-            self.readyResumed = true
-            cont.resume(throwing: error)
-        }
+        let already = self.readyResumed
+        self.readyResumed = true
+        self.readyLock.unlock()
+        if already { return }
+        cont.resume(with: result)
     }
 
     private func releaseDisconnectGate() {
@@ -214,6 +236,7 @@ public final class CitadelSSHClient: BedTermKit.SSHClient, @unchecked Sendable {
         guard let writer = self.writer else {
             throw SSHError.disconnected("not connected")
         }
+        logChunk("OUT", data)
         var buffer = ByteBufferAllocator().buffer(capacity: data.count)
         buffer.writeBytes(data)
         do {
@@ -254,71 +277,9 @@ public final class CitadelSSHClient: BedTermKit.SSHClient, @unchecked Sendable {
         self.writer = nil
     }
 
-    // MARK: - Helpers
+    // MARK: - Helpers (auth construction + error classification live in
+    // `CitadelSSHClient+Auth.swift`).
 
-    private static func makeAuthMethod(for credential: HostCredential) throws -> SSHAuthenticationMethod {
-        switch credential.auth {
-        case let .password(password):
-            return SSHAuthenticationMethod.passwordBased(
-                username: credential.username,
-                password: password
-            )
-
-        case let .privateKey(keyData, passphrase):
-            let passphraseData = passphrase.flatMap { Data($0.utf8) }
-
-            // Try ed25519 first, then RSA. Citadel 0.12.1 ships only these two
-            // OpenSSH private-key parsers; other curves throw `.privateKeyParse`.
-            if let ed = try? Curve25519.Signing.PrivateKey(
-                sshEd25519: keyData,
-                decryptionKey: passphraseData
-            ) {
-                return SSHAuthenticationMethod.ed25519(
-                    username: credential.username,
-                    privateKey: ed
-                )
-            }
-
-            do {
-                let rsa = try Insecure.RSA.PrivateKey(
-                    sshRsa: keyData,
-                    decryptionKey: passphraseData
-                )
-                return SSHAuthenticationMethod.rsa(
-                    username: credential.username,
-                    privateKey: rsa
-                )
-            } catch {
-                // Distinguish "needs passphrase" from "garbage / wrong passphrase":
-                // if caller supplied no passphrase but the failure mentions the
-                // KDF/cipher path, ask for one. Otherwise report a parse error.
-                if passphraseData == nil, Self.errorMentionsEncryption(error) {
-                    throw SSHError.privateKeyPassphraseRequired
-                }
-                throw SSHError.privateKeyParse
-            }
-        }
-    }
-
-    private static func errorMentionsEncryption(_ error: Error) -> Bool {
-        let text = String(describing: error).lowercased()
-        return text.contains("bcrypt") || text.contains("cipher") || text.contains("decrypt") || text.contains("kdf")
-            || text.contains("missingdecryptionkey")
-    }
-
-    private static func classifyConnectError(_ error: Error) -> SSHError {
-        if let ssh = error as? SSHError { return ssh }
-        if error is NIOSSH.NIOSSHError {
-            let text = String(describing: error).lowercased()
-            if text.contains("auth") { return .authenticationFailed }
-            return .handshakeFailed(String(describing: error))
-        }
-        if error is InvalidHostKey {
-            // Should be caught earlier via TOFUHostKeyDelegate.Mismatch, but be safe.
-            return .hostKeyMismatch(stored: "", remote: "")
-        }
-        return SSHErrorMapping.map(error)
-    }
 }
 
 // MARK: - TOFU host-key delegate
