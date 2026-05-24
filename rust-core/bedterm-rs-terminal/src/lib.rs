@@ -281,6 +281,49 @@ mod ios {
                     unsafe { cb(ctx) };
                 }
             }
+
+            #[method(viewDidLayoutSubviews)]
+            fn view_did_layout_subviews(&self) {
+                let _: () = unsafe { msg_send![super(self), viewDidLayoutSubviews] };
+
+                let view = match self.view() {
+                    Some(v) => v,
+                    None => return,
+                };
+
+                let bounds: CGRect = unsafe { msg_send![&*view, bounds] };
+                let insets: UIEdgeInsets = unsafe { msg_send![&*view, safeAreaInsets] };
+
+                let kb = self.ivars().keyboard_height.get();
+                let v2_h = self.ivars().view2_height.get();
+                let width = bounds.size.width;
+                let safe_top = insets.top;
+                let safe_bottom = insets.bottom;
+
+                // When the keyboard is up, ignore safe-area bottom (the keyboard
+                // already covers the home indicator region).
+                let bottom_offset = if kb > 0.0 { kb } else { safe_bottom };
+                let v2_y = bounds.size.height - bottom_offset - v2_h;
+
+                let v2_frame = CGRect {
+                    origin: CGPoint { x: 0.0, y: v2_y },
+                    size: CGSize { width, height: v2_h },
+                };
+                let v1_height = (v2_y - safe_top).max(0.0);
+                let v1_frame = CGRect {
+                    origin: CGPoint { x: 0.0, y: safe_top },
+                    size: CGSize { width, height: v1_height },
+                };
+
+                let v1_borrow = self.ivars().view1.borrow();
+                if let Some(ref v1) = *v1_borrow {
+                    let _: () = unsafe { msg_send![&**v1, setFrame: v1_frame] };
+                }
+                let v2_borrow = self.ivars().view2.borrow();
+                if let Some(ref v2) = *v2_borrow {
+                    let _: () = unsafe { msg_send![&**v2, setFrame: v2_frame] };
+                }
+            }
         }
     );
 
