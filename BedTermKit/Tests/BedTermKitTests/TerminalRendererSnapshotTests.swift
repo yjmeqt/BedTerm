@@ -1,3 +1,7 @@
+// swift-format puts braces on the next line for multi-line conditions
+// and for-loop headers; SwiftLint's opening_brace disagrees.
+// swiftlint:disable opening_brace
+
 import Foundation
 import Metal
 import Testing
@@ -156,9 +160,6 @@ struct TerminalRendererSnapshotTests {
         if fixtures.isEmpty {
             let resURL = bundle.resourceURL?
                 .appendingPathComponent("Fixtures/byte_streams")
-            // swift-format moves the brace to the next line for multi-line
-            // conditions; SwiftLint wants it on the same line.
-            // swiftlint:disable:next opening_brace
             if let resURL = resURL,
                 let enumerator = FileManager.default.enumerator(
                     at: resURL,
