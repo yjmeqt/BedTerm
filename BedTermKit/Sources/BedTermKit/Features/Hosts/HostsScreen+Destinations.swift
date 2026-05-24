@@ -7,7 +7,6 @@ extension HostsScreen {
             let hostName = viewModel.displayName(for: entry.id)
             if settings.useRustTerminal {
                 RsTerminalView(onBack: handleTerminalBack)
-                    .ignoresSafeArea(.keyboard, edges: .bottom)
                     .navigationTitle(hostName)
                     .navigationBarTitleDisplayMode(.inline)
             } else {

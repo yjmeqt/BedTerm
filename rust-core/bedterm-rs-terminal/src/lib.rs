@@ -57,9 +57,8 @@ mod ios {
     use super::BtRsBackCallback;
     use objc2::encode::{Encode, Encoding, RefEncode};
     use objc2::rc::{Allocated, Retained};
-    use objc2::runtime::{AnyObject, NSObject};
     use objc2::{declare_class, msg_send, msg_send_id, sel, ClassType, DeclaredClass};
-    use objc2_foundation::{MainThreadMarker, NSNotificationCenter, NSString};
+    use objc2_foundation::{MainThreadMarker, NSString};
     use objc2_ui_kit::{
         UIBarButtonItem, UIBarButtonItemStyle, UIColor, UIFont, UINavigationItem, UITextView,
         UIViewController,
@@ -148,8 +147,6 @@ mod ios {
         view1: RefCell<Option<Retained<UITextView>>>,
         /// Lower composer text view — sits above the keyboard, 1–3 lines tall.
         view2: RefCell<Option<Retained<UITextView>>>,
-        /// Current keyboard height (0 when hidden). Updated by notifications.
-        keyboard_height: Cell<CGFloat>,
         /// Current dynamic height of view2 (clamped 1–3 lines).
         view2_height: Cell<CGFloat>,
         /// One-line height (font.lineHeight + textContainerInset.top/bottom).
@@ -246,7 +243,6 @@ mod ios {
                 self.ivars().one_line_height.set(one_line);
                 self.ivars().three_line_height.set(three_line);
                 self.ivars().view2_height.set(one_line);
-                self.ivars().keyboard_height.set(0.0);
 
                 // Add as subviews.
                 if let Some(view) = self.view() {
@@ -257,31 +253,6 @@ mod ios {
                 // Store strong refs.
                 *self.ivars().view1.borrow_mut() = Some(view1);
                 *self.ivars().view2.borrow_mut() = Some(view2);
-
-                // Register keyboard observers.
-                let center: Retained<NSNotificationCenter> =
-                    unsafe { msg_send_id![NSNotificationCenter::class(), defaultCenter] };
-                let show_name = NSString::from_str("UIKeyboardWillShowNotification");
-                let hide_name = NSString::from_str("UIKeyboardWillHideNotification");
-                let null_obj: *const AnyObject = std::ptr::null();
-                let _: () = unsafe {
-                    msg_send![
-                        &*center,
-                        addObserver: self as *const _ as *const AnyObject,
-                        selector: sel!(keyboardWillShow:),
-                        name: &*show_name,
-                        object: null_obj,
-                    ]
-                };
-                let _: () = unsafe {
-                    msg_send![
-                        &*center,
-                        addObserver: self as *const _ as *const AnyObject,
-                        selector: sel!(keyboardWillHide:),
-                        name: &*hide_name,
-                        object: null_obj,
-                    ]
-                };
             }
 
             #[method(backButtonTapped)]
@@ -305,16 +276,14 @@ mod ios {
                 let bounds: CGRect = unsafe { msg_send![&*view, bounds] };
                 let insets: UIEdgeInsets = unsafe { msg_send![&*view, safeAreaInsets] };
 
-                let kb = self.ivars().keyboard_height.get();
                 let v2_h = self.ivars().view2_height.get();
                 let width = bounds.size.width;
                 let safe_top = insets.top;
                 let safe_bottom = insets.bottom;
 
-                // When the keyboard is up, ignore safe-area bottom (the keyboard
-                // already covers the home indicator region).
-                let bottom_offset = if kb > 0.0 { kb } else { safe_bottom };
-                let v2_y = bounds.size.height - bottom_offset - v2_h;
+                // SwiftUI shrinks the host view when the keyboard appears, so
+                // bounds.size.height already reflects the keyboard-aware area.
+                let v2_y = bounds.size.height - safe_bottom - v2_h;
 
                 let v2_frame = CGRect {
                     origin: CGPoint { x: 0.0, y: v2_y },
@@ -334,40 +303,6 @@ mod ios {
                 if let Some(ref v2) = *v2_borrow {
                     let _: () = unsafe { msg_send![&**v2, setFrame: v2_frame] };
                 }
-            }
-
-            #[method(keyboardWillShow:)]
-            fn keyboard_will_show(&self, notification: &NSObject) {
-                // notification.userInfo
-                let user_info: *mut AnyObject =
-                    unsafe { msg_send![notification, userInfo] };
-                if user_info.is_null() {
-                    return;
-                }
-                let key = NSString::from_str("UIKeyboardFrameEndUserInfoKey");
-                let value: *mut AnyObject =
-                    unsafe { msg_send![user_info, objectForKey: &*key] };
-                if value.is_null() {
-                    return;
-                }
-                // NSValue.CGRectValue
-                let kb_frame: CGRect = unsafe { msg_send![value, CGRectValue] };
-                self.ivars().keyboard_height.set(kb_frame.size.height);
-                self.relayout();
-            }
-
-            #[method(keyboardWillHide:)]
-            fn keyboard_will_hide(&self, _notification: &NSObject) {
-                self.ivars().keyboard_height.set(0.0);
-                self.relayout();
-            }
-
-            #[method(viewWillDisappear:)]
-            fn view_will_disappear(&self, animated: bool) {
-                let _: () = unsafe { msg_send![super(self), viewWillDisappear: animated] };
-                let center: Retained<NSNotificationCenter> =
-                    unsafe { msg_send_id![NSNotificationCenter::class(), defaultCenter] };
-                let _: () = unsafe { msg_send![&*center, removeObserver: self as *const _ as *const AnyObject] };
             }
 
             #[method(textViewDidChange:)]
