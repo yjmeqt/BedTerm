@@ -97,11 +97,15 @@ fn derive_pty_dims(args: &Args) -> (u16, u16) {
     };
     let vp_px_w = (device.viewport_pt.0 as f32 * device.scale).round() as u32;
     let vp_px_h = (device.viewport_pt.1 as f32 * device.scale).round() as u32;
-    let font_px = args.font_size * device.scale;
-    let Some(metrics) = bedterm_core::renderer::glyph_raster::measure_cell(font_px) else {
+    let mut rasterizer = bedterm_core::renderer::glyph_raster::SwashRasterizer::new();
+    let Some(metrics) = bedterm_core::renderer::glyph_raster::GlyphRasterizer::measure_cell(
+        &mut rasterizer,
+        args.font_size,
+        device.scale,
+    ) else {
         eprintln!(
-            "[bedterm-mock-ssh] cannot measure font at {}px, using 80×24",
-            font_px
+            "[bedterm-mock-ssh] cannot measure font at {}pt @{}x, using 80×24",
+            args.font_size, device.scale
         );
         return (80, 24);
     };

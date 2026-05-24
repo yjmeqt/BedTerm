@@ -36,27 +36,27 @@ enum PNGWriter {
         let data = Data(bytes: rgba, count: rgba.count) as CFData
 
         guard let provider = CGDataProvider(data: data),
-              let cgImage = CGImage(
-                  width: width,
-                  height: height,
-                  bitsPerComponent: 8,
-                  bitsPerPixel: 32,
-                  bytesPerRow: width * 4,
-                  space: colorSpace,
-                  bitmapInfo: bitmapInfo,
-                  provider: provider,
-                  decode: nil,
-                  shouldInterpolate: false,
-                  intent: .defaultIntent
-              )
+            let cgImage = CGImage(
+                width: width,
+                height: height,
+                bitsPerComponent: 8,
+                bitsPerPixel: 32,
+                bytesPerRow: width * 4,
+                space: colorSpace,
+                bitmapInfo: bitmapInfo,
+                provider: provider,
+                decode: nil,
+                shouldInterpolate: false,
+                intent: .defaultIntent
+            )
         else { throw Error.imageCreationFailed }
 
-        guard let dest = CGImageDestinationCreateWithURL(
-            url as CFURL,
-            UTType.png.identifier as CFString,
-            1,
-            nil
-        )
+        guard
+            let dest = CGImageDestinationCreateWithURL(
+                url as CFURL,
+                UTType.png.identifier as CFString,
+                1,
+                nil)
         else { throw Error.destinationCreationFailed }
 
         CGImageDestinationAddImage(dest, cgImage, nil)

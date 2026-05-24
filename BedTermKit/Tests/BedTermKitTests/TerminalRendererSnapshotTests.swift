@@ -81,7 +81,7 @@ struct TerminalRendererSnapshotTests {
                     .init(r: 0x66, g: 0x99, b: 0xFF),
                     .init(r: 0xFF, g: 0x66, b: 0xFF),
                     .init(r: 0x66, g: 0xFF, b: 0xFF),
-                    .init(r: 0xFF, g: 0xFF, b: 0xFF),
+                    .init(r: 0xFF, g: 0xFF, b: 0xFF)
                 ])
         case .bedtermLight:
             TerminalPalette(
@@ -103,7 +103,7 @@ struct TerminalRendererSnapshotTests {
                     .init(r: 0x00, g: 0x71, b: 0xFF),
                     .init(r: 0xE0, g: 0x00, b: 0xE0),
                     .init(r: 0x00, g: 0xC8, b: 0xC8),
-                    .init(r: 0x1A, g: 0x1A, b: 0x1A),
+                    .init(r: 0x1A, g: 0x1A, b: 0x1A)
                 ])
         }
     }

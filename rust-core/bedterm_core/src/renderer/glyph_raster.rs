@@ -47,7 +47,7 @@ pub struct CellMetrics {
 /// display-scale multiplication). `scale` is the display's pixel scale
 /// factor (DPR). The returned `RasterizedGlyph` is always in device-pixel
 /// coordinates.
-pub(crate) trait GlyphRasterizer {
+pub trait GlyphRasterizer {
     fn rasterize(
         &mut self,
         ch: char,
