@@ -911,7 +911,7 @@
         }
       }
     },
-    "Delete \"%@\"?" : {
+    "Delete \"%@\"?": {
       "extractionState" : "stale",
       "localizations" : {
         "ja" : {
@@ -981,7 +981,7 @@
         }
       }
     },
-    "Disconnect and delete \"%@\"?" : {
+    "Disconnect and delete \"%@\"?": {
       "extractionState" : "stale",
       "localizations" : {
         "ja" : {
@@ -1226,7 +1226,7 @@
         }
       }
     },
-    "End current session and connect to \"%@\"?" : {
+    "End current session and connect to \"%@\"?": {
       "extractionState" : "stale",
       "localizations" : {
         "ja" : {
@@ -3536,7 +3536,7 @@
         }
       }
     },
-    "You already have a saved host for this user@host:port (\"%@\"). Save anyway?" : {
+    "You already have a saved host for this user@host:port (\"%@\"). Save anyway?": {
       "extractionState" : "stale",
       "localizations" : {
         "ja" : {
@@ -3886,111 +3886,6 @@
         }
       }
     },
-    "Shell integration" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "シェル統合"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "셸 통합"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Интеграция с shell"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Shell 集成"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Shell 整合"
-          }
-        }
-      }
-    },
-    "Install shell integration on connect" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "接続時にシェル統合をインストール"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "연결 시 셸 통합 설치"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Устанавливать интеграцию с shell при подключении"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "连接时安装 shell 集成"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "連線時安裝 shell 整合"
-          }
-        }
-      }
-    },
-    "Push a small zsh / bash snippet into each new SSH session so prompt and command boundaries are reported back (OSC 133). Required for upcoming Block view; harmless if unused." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "新しい SSH セッションごとに小さな zsh / bash スニペットを送り、プロンプトとコマンドの境界(OSC 133)を取得します。今後の Block ビューに必要で、未使用でも害はありません。"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "각 새 SSH 세션에 작은 zsh / bash 스니펫을 전송해 프롬프트와 명령 경계(OSC 133)를 받습니다. 곧 출시될 Block 뷰에 필요하며, 사용하지 않아도 무해합니다."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Отправлять небольшой фрагмент zsh / bash в каждый новый сеанс SSH, чтобы получать границы приглашений и команд (OSC 133). Нужно для будущего Block-вида; безвредно, если не используется."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "向每个新 SSH 会话推送一段小型 zsh / bash 脚本,用于回报提示符和命令边界(OSC 133)。即将上线的 Block 视图需要它;不用也无害。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "向每個新 SSH 連線推送一段小型 zsh / bash 指令稿,用於回報提示字元和命令邊界(OSC 133)。即將上線的 Block 視圖需要它;未使用也無害。"
-          }
-        }
-      }
-    },
     "No command blocks yet" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -4201,36 +4096,36 @@
         }
       }
     },
-    "Show each command and its output as a separate block (Warp-style). Needs the shell-integration toggle on, or a host already running an OSC 133 integration (iTerm2 / kitty / VSCode)." : {
+    "Show each command and its output as a separate block (Warp-style). When on, BedTerm writes a small shell-integration script into every new SSH session to track prompt and command boundaries. Without shell integration, blocks won’t show command metadata. BedTerm uses Warp’s DCS hook protocol, not OSC 133, so third-party integrations won’t drive it." : {
       "extractionState" : "manual",
       "localizations" : {
         "ja" : {
           "stringUnit" : {
-            "state" : "translated",
+            "state" : "needs_review",
             "value" : "各コマンドとその出力を独立したブロック (Warp 風) として表示します。シェル統合トグルを有効にするか、OSC 133 統合 (iTerm2 / kitty / VSCode) が稼働しているホストが必要です。"
           }
         },
         "ko" : {
           "stringUnit" : {
-            "state" : "translated",
+            "state" : "needs_review",
             "value" : "각 명령과 출력을 별도의 블록(Warp 스타일)으로 표시합니다. 셸 통합 토글이 켜져 있거나 OSC 133 통합(iTerm2 / kitty / VSCode)이 이미 실행 중인 호스트가 필요합니다."
           }
         },
         "ru" : {
           "stringUnit" : {
-            "state" : "translated",
+            "state" : "needs_review",
             "value" : "Показывать каждую команду и её вывод отдельным блоком (в стиле Warp). Требует включённой интеграции с shell или хоста с уже работающей интеграцией OSC 133 (iTerm2 / kitty / VSCode)."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
-            "state" : "translated",
+            "state" : "needs_review",
             "value" : "将每条命令及其输出显示为单独的区块(Warp 风格)。需要打开 shell 集成开关,或主机已运行 OSC 133 集成(iTerm2 / kitty / VSCode)。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
-            "state" : "translated",
+            "state" : "needs_review",
             "value" : "將每條命令及其輸出顯示為獨立的區塊(Warp 風格)。需要打開 shell 整合開關,或主機已執行 OSC 133 整合(iTerm2 / kitty / VSCode)。"
           }
         }
