@@ -10,7 +10,14 @@ crate-type = ["staticlib", "rlib"]
 
 [target.'cfg(target_os = "ios")'.dependencies]
 objc2 = "0.5"
-objc2-foundation = { version = "0.2", features = ["NSString"] }
+objc2-foundation = { version = "0.2", features = [
+    "NSString",
+    "NSNotification",
+    "NSValue",
+    "NSArray",
+    "NSDictionary",
+    "NSRange",
+] }
 objc2-ui-kit = { version = "0.2", features = [
     "UIResponder",
     "UIViewController",
@@ -23,6 +30,27 @@ objc2-ui-kit = { version = "0.2", features = [
     "UIColor",
     "UIFont",
     "UIControl",
+    "UIScrollView",
+    "UITextView",
+    "UITextInput",
+    "UITextInputTraits",
+    "NSText",
+    "UIGestureRecognizer",
+    "UITapGestureRecognizer",
+    "UIKitDefines",
+    "UIEvent",
+    "UITouch",
+] }
+objc2-metal = { version = "0.2", features = [
+    "MTLDevice",
+    "MTLCommandQueue",
+    "MTLTexture",
+    "MTLPixelFormat",
+    "MTLDefines",
+] }
+objc2-metal-kit = { version = "0.2", features = [
+    "MTKView",
+    "MTKDefines",
 ] }
 
 [target.'cfg(not(target_os = "ios"))'.dependencies]
