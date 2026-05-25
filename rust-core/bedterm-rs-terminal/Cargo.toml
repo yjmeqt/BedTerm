@@ -26,6 +26,8 @@ objc2-ui-kit = { version = "0.2", features = [
     "UINavigationItem",
     "UIBarItem",
     "UIBarButtonItem",
+    "UIToolbar",
+    "UIImage",
     "UINavigationController",
     "UIColor",
     "UIFont",

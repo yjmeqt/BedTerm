@@ -10,6 +10,8 @@ mod coordinator;
 #[cfg(target_os = "ios")]
 mod geometry;
 #[cfg(target_os = "ios")]
+mod keybar;
+#[cfg(target_os = "ios")]
 mod metal_view;
 #[cfg(target_os = "ios")]
 mod text_input;

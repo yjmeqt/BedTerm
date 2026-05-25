@@ -170,6 +170,10 @@ declare_class!(
                 let _: () = unsafe { msg_send![&**v1, addGestureRecognizer: &*tap] };
             }
 
+            // ---------- Keybar (Tab / Newline / Esc / Ctrl) above view2 ----------
+            let keybar = crate::keybar::make_keybar(mtm, &coordinator);
+            let _: () = unsafe { msg_send![&*view2, setInputAccessoryView: &*keybar] };
+
             // Store strong refs.
             *self.ivars().view1.borrow_mut() = view1_opt;
             *self.ivars().view2.borrow_mut() = Some(view2);
