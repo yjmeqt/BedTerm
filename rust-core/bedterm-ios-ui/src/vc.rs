@@ -1,9 +1,9 @@
 //! The experimental Rust-backed view controller.
 
-use crate::coordinator::BtRsKeyboardCoordinator;
+use crate::coordinator::BtIosKeyboardCoordinator;
 use crate::geometry::{CGFloat, CGPoint, CGRect, CGSize, UIEdgeInsets};
-use crate::metal_view::BtRsMetalInputView;
-use crate::BtRsBackCallback;
+use crate::metal_view::BtIosMetalInputView;
+use crate::BtIosBackCallback;
 use objc2::rc::{Allocated, Retained};
 use objc2::runtime::{AnyClass, AnyObject, NSObject, ProtocolObject};
 use objc2::{declare_class, msg_send, msg_send_id, sel, ClassType, DeclaredClass};
@@ -24,15 +24,20 @@ extern "C" {
 #[derive(Default)]
 pub struct Ivars {
     /// C callback to fire on back-tap (may be None).
-    on_back: Cell<Option<BtRsBackCallback>>,
+    on_back: Cell<Option<BtIosBackCallback>>,
     /// Context pointer for the callback. Only accessed on the main thread.
     ctx: Cell<*mut std::ffi::c_void>,
     /// Upper view — Metal-backed input surface.
-    view1: RefCell<Option<Retained<BtRsMetalInputView>>>,
+    view1: RefCell<Option<Retained<BtIosMetalInputView>>>,
     /// Lower composer text view — sits above the keyboard, 1–3 lines tall.
     view2: RefCell<Option<Retained<UITextView>>>,
+    /// Persistent keybar (Tab / Newline / Esc / Ctrl) sandwiched between view1
+    /// and view2 — always visible, independent of view2's focus state.
+    keybar: RefCell<Option<Retained<objc2_ui_kit::UIView>>>,
     /// Centralised focus / keyboard router.
-    coordinator: RefCell<Option<Retained<BtRsKeyboardCoordinator>>>,
+    coordinator: RefCell<Option<Retained<BtIosKeyboardCoordinator>>>,
+    /// Top-right debug HUD (FPS + hardware keyboard indicator).
+    debug_hud: RefCell<Option<Retained<crate::debug_hud::BtIosDebugHUD>>>,
     /// Current dynamic height of view2 (clamped 1–3 lines).
     view2_height: Cell<CGFloat>,
     /// One-line height (font.lineHeight + textContainerInset.top/bottom).
@@ -52,7 +57,7 @@ declare_class!(
     unsafe impl ClassType for RsTerminalViewController {
         type Super = UIViewController;
         type Mutability = objc2::mutability::MainThreadOnly;
-        const NAME: &'static str = "BtRsTerminalViewController";
+        const NAME: &'static str = "BtIosTerminalViewController";
     }
 
     impl DeclaredClass for RsTerminalViewController {
@@ -98,12 +103,12 @@ declare_class!(
             let device_ptr = unsafe { MTLCreateSystemDefaultDevice() };
             // Probe: try to instantiate a vanilla MTKView (NOT our subclass).
             // If even this crashes the issue is in MetalKit, not our subclass.
-            let view1_opt: Option<Retained<BtRsMetalInputView>> = if device_ptr.is_null() {
+            let view1_opt: Option<Retained<BtIosMetalInputView>> = if device_ptr.is_null() {
                 None
             } else {
                 let device: Retained<ProtocolObject<dyn MTLDevice>> =
                     unsafe { Retained::from_raw(device_ptr).expect("MTL device") };
-                let opt = BtRsMetalInputView::new(mtm, &device);
+                let opt = BtIosMetalInputView::new(mtm, &device);
                 if let Some(ref v) = opt {
                     v.set_bg_color((0.55, 0.55, 0.55, 1.0));
                 }
@@ -152,7 +157,7 @@ declare_class!(
                 .map(|v| &**v as *const _ as *const AnyObject)
                 .unwrap_or(std::ptr::null());
             let view2_obj: *const AnyObject = &*view2 as *const _ as *const AnyObject;
-            let coordinator = BtRsKeyboardCoordinator::new(mtm, view1_obj, view2_obj);
+            let coordinator = BtIosKeyboardCoordinator::new(mtm, view1_obj, view2_obj);
 
             if let Some(ref v1) = view1_opt {
                 // Give view1 a weak ref back to the coordinator (for touchesBegan routing).
@@ -172,12 +177,22 @@ declare_class!(
 
             // ---------- Keybar (Tab / Newline / Esc / Ctrl) above view2 ----------
             let keybar = crate::keybar::make_keybar(mtm, &coordinator);
-            let _: () = unsafe { msg_send![&*view2, setInputAccessoryView: &*keybar] };
+            if let Some(view) = self.view() {
+                let _: () = unsafe { msg_send![&*view, addSubview: &*keybar] };
+            }
+
+            // ---------- Debug HUD (FPS + HW keyboard) top-right ----------
+            let hud = crate::debug_hud::BtIosDebugHUD::new(mtm);
+            if let Some(view) = self.view() {
+                let _: () = unsafe { msg_send![&*view, addSubview: &*hud] };
+            }
 
             // Store strong refs.
             *self.ivars().view1.borrow_mut() = view1_opt;
             *self.ivars().view2.borrow_mut() = Some(view2);
+            *self.ivars().keybar.borrow_mut() = Some(keybar);
             *self.ivars().coordinator.borrow_mut() = Some(coordinator);
+            *self.ivars().debug_hud.borrow_mut() = Some(hud);
         }
 
         #[method(backButtonTapped)]
@@ -205,11 +220,18 @@ declare_class!(
             let width = bounds.size.width;
             let safe_top = insets.top;
             let safe_bottom = insets.bottom;
+            let keybar_h: CGFloat = crate::keybar::BAR_HEIGHT;
 
+            // Layout, top → bottom: view1, view2, keybar.
             // SwiftUI shrinks the host view when the keyboard appears, so
             // bounds.size.height already reflects the keyboard-aware area.
-            let v2_y = bounds.size.height - safe_bottom - v2_h;
+            let keybar_y = bounds.size.height - safe_bottom - keybar_h;
+            let v2_y = keybar_y - v2_h;
 
+            let keybar_frame = CGRect {
+                origin: CGPoint { x: 0.0, y: keybar_y },
+                size: CGSize { width, height: keybar_h },
+            };
             let v2_frame = CGRect {
                 origin: CGPoint { x: 0.0, y: v2_y },
                 size: CGSize { width, height: v2_h },
@@ -224,9 +246,28 @@ declare_class!(
             if let Some(ref v1) = *v1_borrow {
                 let _: () = unsafe { msg_send![&**v1, setFrame: v1_frame] };
             }
+            let kb_borrow = self.ivars().keybar.borrow();
+            if let Some(ref kb) = *kb_borrow {
+                let _: () = unsafe { msg_send![&**kb, setFrame: keybar_frame] };
+            }
             let v2_borrow = self.ivars().view2.borrow();
             if let Some(ref v2) = *v2_borrow {
                 let _: () = unsafe { msg_send![&**v2, setFrame: v2_frame] };
+            }
+
+            // Debug HUD — pinned to top-right inside the safe area.
+            let hud_borrow = self.ivars().debug_hud.borrow();
+            if let Some(ref hud) = *hud_borrow {
+                let hud_w = crate::debug_hud::HUD_WIDTH;
+                let hud_h = crate::debug_hud::HUD_HEIGHT;
+                let hud_frame = CGRect {
+                    origin: CGPoint {
+                        x: width - insets.right - hud_w - 8.0,
+                        y: safe_top + 8.0,
+                    },
+                    size: CGSize { width: hud_w, height: hud_h },
+                };
+                let _: () = unsafe { msg_send![&**hud, setFrame: hud_frame] };
             }
         }
 
@@ -277,7 +318,7 @@ impl RsTerminalViewController {
 }
 
 pub(crate) unsafe fn create_vc(
-    on_back: Option<BtRsBackCallback>,
+    on_back: Option<BtIosBackCallback>,
     ctx: *mut std::ffi::c_void,
 ) -> *mut std::ffi::c_void {
     let mtm = unsafe { MainThreadMarker::new_unchecked() };

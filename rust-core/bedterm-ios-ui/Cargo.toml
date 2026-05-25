@@ -1,13 +1,17 @@
 [package]
-name = "bedterm-rs-terminal"
+name = "bedterm-ios-ui"
 version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 
 [lib]
+name = "bedterm_ios_ui"
 crate-type = ["staticlib", "rlib"]
 
+# iOS-only crate. On non-iOS targets the library compiles to an empty stub
+# via `#![cfg(target_os = "ios")]` at the top of `lib.rs`; we still need the
+# objc2 dependencies guarded so they only resolve under the iOS target.
 [target.'cfg(target_os = "ios")'.dependencies]
 objc2 = "0.5"
 objc2-foundation = { version = "0.2", features = [
@@ -26,8 +30,16 @@ objc2-ui-kit = { version = "0.2", features = [
     "UINavigationItem",
     "UIBarItem",
     "UIBarButtonItem",
-    "UIToolbar",
     "UIImage",
+    "UIImageConfiguration",
+    "UIImageSymbolConfiguration",
+    "UIButton",
+    "UIButtonConfiguration",
+    "UIBackgroundConfiguration",
+    "UIStackView",
+    "UIGeometry",
+    "UIFontDescriptor",
+    "UILabel",
     "UINavigationController",
     "UIColor",
     "UIFont",
@@ -54,7 +66,8 @@ objc2-metal-kit = { version = "0.2", features = [
     "MTKView",
     "MTKDefines",
 ] }
+objc2-quartz-core = { version = "0.2", features = [
+    "CADisplayLink",
+    "CALayer",
+] }
 
-[target.'cfg(not(target_os = "ios"))'.dependencies]
-objc2 = "0.5"
-objc2-foundation = { version = "0.2", features = ["NSString"] }

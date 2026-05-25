@@ -4,12 +4,12 @@ import UIKit
 
 @testable import BedTermKit
 
-@Suite("RsTerminalViewController lifecycle")
+@Suite("IosTerminalViewController lifecycle")
 @MainActor
-struct RsTerminalVCTests {
+struct IosTerminalVCTests {
     @Test("create returns non-nil and view loads without crashing")
     func createAndLoadView() throws {
-        let ptr = try #require(bt_rs_terminal_create_vc(nil, nil))
+        let ptr = try #require(bt_ios_create_vc(nil, nil))
         let vc = Unmanaged<UIViewController>.fromOpaque(ptr).takeRetainedValue()
 
         // Force viewDidLoad to run.
@@ -23,16 +23,16 @@ struct RsTerminalVCTests {
         #expect(vc.view.subviews.count >= 1)
     }
 
-    @Test("view1 is BtRsMetalInputView when a Metal device is available")
+    @Test("view1 is BtIosMetalInputView when a Metal device is available")
     func view1IsMetal() throws {
         try #require(MTLCreateSystemDefaultDevice() != nil)
 
-        let ptr = try #require(bt_rs_terminal_create_vc(nil, nil))
+        let ptr = try #require(bt_ios_create_vc(nil, nil))
         let vc = Unmanaged<UIViewController>.fromOpaque(ptr).takeRetainedValue()
         _ = vc.view
 
-        // The Metal-backed view is registered under the ObjC name "BtRsMetalInputView".
-        let metalCls: AnyClass = try #require(NSClassFromString("BtRsMetalInputView"))
+        // The Metal-backed view is registered under the ObjC name "BtIosMetalInputView".
+        let metalCls: AnyClass = try #require(NSClassFromString("BtIosMetalInputView"))
         let hasMetalSubview = vc.view.subviews.contains { $0.isKind(of: metalCls) }
         #expect(hasMetalSubview)
     }
@@ -40,11 +40,11 @@ struct RsTerminalVCTests {
     @Test("view1 accepts UITextInput selectors")
     func view1AcceptsInput() throws {
         try #require(MTLCreateSystemDefaultDevice() != nil)
-        let ptr = try #require(bt_rs_terminal_create_vc(nil, nil))
+        let ptr = try #require(bt_ios_create_vc(nil, nil))
         let vc = Unmanaged<UIViewController>.fromOpaque(ptr).takeRetainedValue()
         _ = vc.view
 
-        let metalCls: AnyClass = try #require(NSClassFromString("BtRsMetalInputView"))
+        let metalCls: AnyClass = try #require(NSClassFromString("BtIosMetalInputView"))
         let view1 = try #require(vc.view.subviews.first { $0.isKind(of: metalCls) })
 
         // view1 should claim it can become first responder.

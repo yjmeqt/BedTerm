@@ -1,6 +1,6 @@
 //! Centralised keyboard / first-responder router.
 //!
-//! Both `view1` (BtRsMetalInputView) and `view2` (UITextView) report focus
+//! Both `view1` (BtIosMetalInputView) and `view2` (UITextView) report focus
 //! transitions through this object instead of talking to each other. Future
 //! keyboard logic (custom accessory views, modifier tracking, key-command
 //! routing) goes here.
@@ -9,7 +9,7 @@ use objc2::rc::{Allocated, Retained};
 use objc2::runtime::{AnyObject, NSObject};
 use objc2::{declare_class, msg_send, msg_send_id, ClassType, DeclaredClass};
 use objc2_foundation::NSString;
-use objc2_ui_kit::{UIBarButtonItem, UIColor};
+use objc2_ui_kit::{UIButton, UIColor};
 use std::cell::{Cell, RefCell};
 
 #[repr(u8)]
@@ -38,28 +38,28 @@ pub struct Ivars {
     /// (in a real PTY world) be Ctrl-modified. For now it just drives the
     /// Ctrl button's tint.
     ctrl_pending: Cell<bool>,
-    /// Retained ref to the Ctrl `UIBarButtonItem` so we can re-tint it when
-    /// the latch toggles.
-    ctrl_item: RefCell<Option<Retained<UIBarButtonItem>>>,
+    /// Retained ref to the Ctrl chip button so we can re-tint it when the
+    /// latch toggles.
+    ctrl_button: RefCell<Option<Retained<UIButton>>>,
 }
 
 unsafe impl Send for Ivars {}
 unsafe impl Sync for Ivars {}
 
 declare_class!(
-    pub struct BtRsKeyboardCoordinator;
+    pub struct BtIosKeyboardCoordinator;
 
-    unsafe impl ClassType for BtRsKeyboardCoordinator {
+    unsafe impl ClassType for BtIosKeyboardCoordinator {
         type Super = NSObject;
         type Mutability = objc2::mutability::MainThreadOnly;
-        const NAME: &'static str = "BtRsKeyboardCoordinator";
+        const NAME: &'static str = "BtIosKeyboardCoordinator";
     }
 
-    impl DeclaredClass for BtRsKeyboardCoordinator {
+    impl DeclaredClass for BtIosKeyboardCoordinator {
         type Ivars = Ivars;
     }
 
-    unsafe impl BtRsKeyboardCoordinator {
+    unsafe impl BtIosKeyboardCoordinator {
         #[method_id(init)]
         fn init(this: Allocated<Self>) -> Option<Retained<Self>> {
             let this = this.set_ivars(Ivars::default());
@@ -126,7 +126,7 @@ declare_class!(
     }
 );
 
-impl BtRsKeyboardCoordinator {
+impl BtIosKeyboardCoordinator {
     pub fn new(
         mtm: objc2_foundation::MainThreadMarker,
         view1: *const AnyObject,
@@ -158,9 +158,9 @@ impl BtRsKeyboardCoordinator {
         self.ivars().focused.set(FocusTarget::View2 as u8);
     }
 
-    /// Stash the Ctrl `UIBarButtonItem` so the latch can re-tint it.
-    pub(crate) fn set_ctrl_item(&self, item: &UIBarButtonItem) {
-        *self.ivars().ctrl_item.borrow_mut() = Some(item.retain());
+    /// Stash the Ctrl chip button so the latch can re-tint it.
+    pub(crate) fn set_ctrl_button(&self, button: &UIButton) {
+        *self.ivars().ctrl_button.borrow_mut() = Some(button.retain());
     }
 
     /// Send `insertText:` to view2 — UITextView is a UIKeyInput conformer, so
@@ -176,15 +176,20 @@ impl BtRsKeyboardCoordinator {
     }
 
     fn apply_ctrl_tint(&self, pending: bool) {
-        let item_ref = self.ivars().ctrl_item.borrow();
-        let Some(item) = item_ref.as_ref() else {
+        let button_ref = self.ivars().ctrl_button.borrow();
+        let Some(button) = button_ref.as_ref() else {
             return;
         };
-        let tint: Option<Retained<UIColor>> = if pending {
-            Some(unsafe { msg_send_id![UIColor::class(), systemBlueColor] })
+        // Re-fetch the existing configuration, swap the foreground colour, and
+        // write it back — UIButtonConfiguration is value-semantic.
+        let cfg = unsafe { button.configuration() };
+        let Some(cfg) = cfg else { return };
+        let colour: Retained<UIColor> = if pending {
+            unsafe { msg_send_id![UIColor::class(), systemBlueColor] }
         } else {
-            None
+            unsafe { msg_send_id![UIColor::class(), secondaryLabelColor] }
         };
-        unsafe { item.setTintColor(tint.as_deref()) };
+        unsafe { cfg.setBaseForegroundColor(Some(&colour)) };
+        unsafe { button.setConfiguration(Some(&cfg)) };
     }
 }

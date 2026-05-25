@@ -1,4 +1,4 @@
-//! `BtRsMetalInputView` — an `MTKView` subclass that conforms to `UITextInput`.
+//! `BtIosMetalInputView` — an `MTKView` subclass that conforms to `UITextInput`.
 //!
 //! Phase 1 doesn't render glyphs; it just clears the drawable to a background
 //! colour derived from view2's text. All UIKit/Metal interop lives here.
@@ -10,7 +10,7 @@
 
 use crate::color::hash_to_rgba;
 use crate::geometry::{CGPoint, CGRect, CGSize};
-use crate::text_input::{BtRsUITextPosition, BtRsUITextRange};
+use crate::text_input::{BtIosUITextPosition, BtIosUITextRange};
 use objc2::encode::{Encode, Encoding, RefEncode};
 use objc2::rc::{Allocated, Retained};
 use objc2::runtime::{AnyObject, NSObject, ProtocolObject};
@@ -92,7 +92,7 @@ pub struct Ivars {
     input_delegate: Cell<*const AnyObject>,
     /// Lazily initialised `UITextInputStringTokenizer` (caches once built).
     tokenizer: RefCell<Option<Retained<NSObject>>>,
-    /// Weak ref to `BtRsKeyboardCoordinator` — set after construction.
+    /// Weak ref to `BtIosKeyboardCoordinator` — set after construction.
     coordinator: Cell<*const AnyObject>,
 }
 
@@ -105,21 +105,21 @@ unsafe impl Sync for Ivars {}
 declare_class!(
     /// `MTKView` subclass that drives view1's clear-color background and
     /// conforms to `UITextInput` so it can host a keyboard.
-    pub struct BtRsMetalInputView;
+    pub struct BtIosMetalInputView;
 
-    unsafe impl ClassType for BtRsMetalInputView {
+    unsafe impl ClassType for BtIosMetalInputView {
         // DIAGNOSTIC: temporarily inherit UIView (not MTKView) to test whether
         // MTKView is what's suppressing the keyboard.
         type Super = UIView;
         type Mutability = objc2::mutability::MainThreadOnly;
-        const NAME: &'static str = "BtRsMetalInputView";
+        const NAME: &'static str = "BtIosMetalInputView";
     }
 
-    impl DeclaredClass for BtRsMetalInputView {
+    impl DeclaredClass for BtIosMetalInputView {
         type Ivars = Ivars;
     }
 
-    unsafe impl BtRsMetalInputView {
+    unsafe impl BtIosMetalInputView {
         // ---- Init ----------------------------------------------------------
 
         #[method_id(initWithFrame:)]
@@ -163,9 +163,9 @@ declare_class!(
         #[method_id(selectedTextRange)]
         fn get_selected_text_range(&self) -> Option<Retained<UITextRange>> {
             let mtm = unsafe { MainThreadMarker::new_unchecked() };
-            let s = BtRsUITextPosition::new(mtm, self.ivars().selected_start.get());
-            let e = BtRsUITextPosition::new(mtm, self.ivars().selected_end.get());
-            let range = BtRsUITextRange::new(mtm, s, e);
+            let s = BtIosUITextPosition::new(mtm, self.ivars().selected_start.get());
+            let e = BtIosUITextPosition::new(mtm, self.ivars().selected_end.get());
+            let range = BtIosUITextRange::new(mtm, s, e);
             // Upcast.
             Some(unsafe { Retained::cast::<UITextRange>(range) })
         }
@@ -174,10 +174,10 @@ declare_class!(
         fn set_selected_text_range(&self, range: Option<&UITextRange>) {
             match range {
                 Some(r) => {
-                    // SAFETY: we only ever vend BtRsUITextRange instances to
+                    // SAFETY: we only ever vend BtIosUITextRange instances to
                     // UIKit, so anything coming back is one of ours.
-                    let r: &BtRsUITextRange =
-                        unsafe { &*(r as *const UITextRange as *const BtRsUITextRange) };
+                    let r: &BtIosUITextRange =
+                        unsafe { &*(r as *const UITextRange as *const BtIosUITextRange) };
                     let len = self.ivars().text.borrow().len();
                     self.ivars().selected_start.set(r.start_index().min(len));
                     self.ivars().selected_end.set(r.end_index().min(len));
@@ -200,9 +200,9 @@ declare_class!(
                 None
             } else {
                 let mtm = unsafe { MainThreadMarker::new_unchecked() };
-                let sp = BtRsUITextPosition::new(mtm, s as usize);
-                let ep = BtRsUITextPosition::new(mtm, e as usize);
-                let r = BtRsUITextRange::new(mtm, sp, ep);
+                let sp = BtIosUITextPosition::new(mtm, s as usize);
+                let ep = BtIosUITextPosition::new(mtm, e as usize);
+                let r = BtIosUITextRange::new(mtm, sp, ep);
                 Some(unsafe { Retained::cast::<UITextRange>(r) })
             }
         }
@@ -269,14 +269,14 @@ declare_class!(
         #[method_id(beginningOfDocument)]
         fn beginning_of_document(&self) -> Retained<UITextPosition> {
             let mtm = unsafe { MainThreadMarker::new_unchecked() };
-            BtRsUITextPosition::into_super(BtRsUITextPosition::new(mtm, 0))
+            BtIosUITextPosition::into_super(BtIosUITextPosition::new(mtm, 0))
         }
 
         #[method_id(endOfDocument)]
         fn end_of_document(&self) -> Retained<UITextPosition> {
             let mtm = unsafe { MainThreadMarker::new_unchecked() };
             let len = self.ivars().text.borrow().len();
-            BtRsUITextPosition::into_super(BtRsUITextPosition::new(mtm, len))
+            BtIosUITextPosition::into_super(BtIosUITextPosition::new(mtm, len))
         }
 
         #[method_id(textRangeFromPosition:toPosition:)]
@@ -289,9 +289,9 @@ declare_class!(
             let a = downcast_position(from).index();
             let b = downcast_position(to).index();
             let (lo, hi) = if a <= b { (a, b) } else { (b, a) };
-            let s = BtRsUITextPosition::new(mtm, lo);
-            let e = BtRsUITextPosition::new(mtm, hi);
-            Some(unsafe { Retained::cast::<UITextRange>(BtRsUITextRange::new(mtm, s, e)) })
+            let s = BtIosUITextPosition::new(mtm, lo);
+            let e = BtIosUITextPosition::new(mtm, hi);
+            Some(unsafe { Retained::cast::<UITextRange>(BtIosUITextRange::new(mtm, s, e)) })
         }
 
         #[method_id(positionFromPosition:offset:)]
@@ -304,7 +304,7 @@ declare_class!(
             let cur = downcast_position(position).index() as i64;
             let len = self.ivars().text.borrow().len() as i64;
             let new = (cur + offset as i64).clamp(0, len) as usize;
-            Some(BtRsUITextPosition::into_super(BtRsUITextPosition::new(mtm, new)))
+            Some(BtIosUITextPosition::into_super(BtIosUITextPosition::new(mtm, new)))
         }
 
         #[method_id(positionFromPosition:inDirection:offset:)]
@@ -325,7 +325,7 @@ declare_class!(
                 UITextLayoutDirection::Down => len,
                 _ => cur,
             } as usize;
-            Some(BtRsUITextPosition::into_super(BtRsUITextPosition::new(mtm, new)))
+            Some(BtIosUITextPosition::into_super(BtIosUITextPosition::new(mtm, new)))
         }
 
         #[method(comparePosition:toPosition:)]
@@ -398,7 +398,7 @@ declare_class!(
                 UITextLayoutDirection::Left | UITextLayoutDirection::Up => r.start_index(),
                 _ => r.end_index(),
             };
-            Some(BtRsUITextPosition::into_super(BtRsUITextPosition::new(mtm, idx)))
+            Some(BtIosUITextPosition::into_super(BtIosUITextPosition::new(mtm, idx)))
         }
 
         #[method_id(characterRangeByExtendingPosition:inDirection:)]
@@ -414,9 +414,9 @@ declare_class!(
                 UITextLayoutDirection::Left | UITextLayoutDirection::Up => (0, cur),
                 _ => (cur, len),
             };
-            let s = BtRsUITextPosition::new(mtm, lo);
-            let e = BtRsUITextPosition::new(mtm, hi);
-            Some(unsafe { Retained::cast::<UITextRange>(BtRsUITextRange::new(mtm, s, e)) })
+            let s = BtIosUITextPosition::new(mtm, lo);
+            let e = BtIosUITextPosition::new(mtm, hi);
+            Some(unsafe { Retained::cast::<UITextRange>(BtIosUITextRange::new(mtm, s, e)) })
         }
 
         #[method(baseWritingDirectionForPosition:inDirection:)]
@@ -471,7 +471,7 @@ declare_class!(
         ) -> Option<Retained<UITextPosition>> {
             let mtm = unsafe { MainThreadMarker::new_unchecked() };
             let len = self.ivars().text.borrow().len();
-            Some(BtRsUITextPosition::into_super(BtRsUITextPosition::new(mtm, len)))
+            Some(BtIosUITextPosition::into_super(BtIosUITextPosition::new(mtm, len)))
         }
 
         #[method_id(closestPositionToPoint:withinRange:)]
@@ -482,16 +482,16 @@ declare_class!(
         ) -> Option<Retained<UITextPosition>> {
             let mtm = unsafe { MainThreadMarker::new_unchecked() };
             let end = downcast_range(range).end_index();
-            Some(BtRsUITextPosition::into_super(BtRsUITextPosition::new(mtm, end)))
+            Some(BtIosUITextPosition::into_super(BtIosUITextPosition::new(mtm, end)))
         }
 
         #[method_id(characterRangeAtPoint:)]
         fn character_range_at_point(&self, _point: CGPoint) -> Option<Retained<UITextRange>> {
             let mtm = unsafe { MainThreadMarker::new_unchecked() };
             let len = self.ivars().text.borrow().len();
-            let s = BtRsUITextPosition::new(mtm, len);
-            let e = BtRsUITextPosition::new(mtm, len);
-            Some(unsafe { Retained::cast::<UITextRange>(BtRsUITextRange::new(mtm, s, e)) })
+            let s = BtIosUITextPosition::new(mtm, len);
+            let e = BtIosUITextPosition::new(mtm, len);
+            Some(unsafe { Retained::cast::<UITextRange>(BtIosUITextRange::new(mtm, s, e)) })
         }
 
         // ---- UITextInput: text-in-range / replace ---------------------------
@@ -529,7 +529,7 @@ declare_class!(
     // Methods MUST live inside this `unsafe impl UIKeyInput` block (not in the
     // class impl above) so objc2's macro-time required-method check sees them
     // and registers protocol conformance with the ObjC runtime.
-    unsafe impl UIKeyInput for BtRsMetalInputView {
+    unsafe impl UIKeyInput for BtIosMetalInputView {
         #[method(hasText)]
         fn has_text(&self) -> bool {
             !self.ivars().text.borrow().is_empty()
@@ -581,13 +581,13 @@ declare_class!(
 // Rust trait conformances for parent / sibling protocols. UIKeyInput's
 // registration lives inside declare_class!; these are no-method shims
 // satisfying Rust's trait coherence for UITextInput.
-unsafe impl NSObjectProtocol for BtRsMetalInputView {}
-unsafe impl UITextInputTraits for BtRsMetalInputView {}
-unsafe impl UITextInput for BtRsMetalInputView {}
+unsafe impl NSObjectProtocol for BtIosMetalInputView {}
+unsafe impl UITextInputTraits for BtIosMetalInputView {}
+unsafe impl UITextInput for BtIosMetalInputView {}
 
 // -------- Public Rust-side helpers ------------------------------------------
 
-impl BtRsMetalInputView {
+impl BtIosMetalInputView {
     /// Build a view bound to a Metal device. The caller retains ownership.
     /// Returns `None` if MTKView's designated initialiser bails (rare; happens
     /// in some headless test contexts).
@@ -646,14 +646,14 @@ impl BtRsMetalInputView {
 // -------- Helpers -----------------------------------------------------------
 
 /// Trust-the-runtime downcast. UIKit only ever hands us positions we vended.
-fn downcast_position(p: &UITextPosition) -> &BtRsUITextPosition {
+fn downcast_position(p: &UITextPosition) -> &BtIosUITextPosition {
     // SAFETY: see contract above.
-    unsafe { &*(p as *const UITextPosition as *const BtRsUITextPosition) }
+    unsafe { &*(p as *const UITextPosition as *const BtIosUITextPosition) }
 }
 
-fn downcast_range(r: &UITextRange) -> &BtRsUITextRange {
+fn downcast_range(r: &UITextRange) -> &BtIosUITextRange {
     // SAFETY: see contract above.
-    unsafe { &*(r as *const UITextRange as *const BtRsUITextRange) }
+    unsafe { &*(r as *const UITextRange as *const BtIosUITextRange) }
 }
 
 /// Round `idx` down to the nearest UTF-8 character boundary in `s`.

@@ -47,7 +47,7 @@ public final class BedTermSettings {
     }
 
     /// **Experimental.** Route the terminal screen through the Rust-backed
-    /// `BtRsTerminalViewController`. Default: off.
+    /// `BtIosTerminalViewController`. Default: off.
     public var useRustTerminal: Bool {
         didSet {
             if useRustTerminal != oldValue {
