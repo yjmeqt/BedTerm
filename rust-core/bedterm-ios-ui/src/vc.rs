@@ -21,7 +21,7 @@ use objc2_foundation::NSString;
 use objc2_metal::MTLDevice;
 use objc2_ui_kit::{
     UIBarButtonItem, UIBarButtonItemStyle, UIButton, UIColor, UIFont, UINavigationItem,
-    UITapGestureRecognizer, UITextView, UIView, UIViewController,
+    UITapGestureRecognizer, UITextView, UIViewController,
 };
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
@@ -47,11 +47,11 @@ pub struct Ivars {
     keybar: RefCell<Option<Retained<objc2_ui_kit::UIView>>>,
     /// State3 keybar variant (with newline chip prepended).
     keybar_with_newline: RefCell<Option<Retained<objc2_ui_kit::UIView>>>,
-    /// State1 inline input bar (text field + send chip).
-    input_bar: RefCell<Option<Retained<UIView>>>,
-    /// State2 composer chip — pinned to the right of the standard keybar.
+    /// State1 Run/Send chip — same row as the keybar.
+    send_chip: RefCell<Option<Retained<UIButton>>>,
+    /// State2 composer chip (icon-only) — same row as the keybar.
     composer_chip: RefCell<Option<Retained<UIButton>>>,
-    /// State3 close-composer chip — pinned to the right of the newline keybar.
+    /// State3 close-composer chip (icon-only) — same row as the keybar.
     close_composer_chip: RefCell<Option<Retained<UIButton>>>,
     /// Tap recognizer on view1 — we toggle its `enabled` flag per mode.
     view1_tap: RefCell<Option<Retained<UITapGestureRecognizer>>>,
@@ -217,32 +217,38 @@ define_class!(
                 crate::keybar::ChipSet::WithNewline,
             );
 
-            // State1 inline input bar (input field + send chip).
-            let input_bar = crate::input_bar::make_input_bar(mtm, &coordinator);
-
-            // State2 composer chip — opens the composer (promotes to State3).
+            // State1 Run/Send chip — same row as the keybar.
+            let send_chip = make_action_chip(
+                mtm,
+                "return",
+                "Run",
+                true,
+                coordinator.as_ref(),
+                sel!(keybarSend:),
+            );
+            // State2 composer chip — icon only.
             let composer_chip = make_action_chip(
                 mtm,
                 "square.and.pencil",
-                "Composer",
+                "",
                 true,
                 coordinator.as_ref(),
                 sel!(openComposer:),
             );
-            // State3 close-composer chip.
+            // State3 close-composer chip — icon only.
             let close_chip = make_action_chip(
                 mtm,
                 "xmark",
-                "Close",
+                "",
                 true,
                 coordinator.as_ref(),
                 sel!(closeComposer:),
             );
 
             if let Some(view) = self.view() {
-                let _: () = unsafe { msg_send![&*view, addSubview: &*input_bar] };
                 let _: () = unsafe { msg_send![&*view, addSubview: &*keybar_std] };
                 let _: () = unsafe { msg_send![&*view, addSubview: &*keybar_nl] };
+                let _: () = unsafe { msg_send![&*view, addSubview: &*send_chip] };
                 let _: () = unsafe { msg_send![&*view, addSubview: &*composer_chip] };
                 let _: () = unsafe { msg_send![&*view, addSubview: &*close_chip] };
             }
@@ -259,7 +265,7 @@ define_class!(
             *self.ivars().view2.borrow_mut() = Some(view2);
             *self.ivars().keybar.borrow_mut() = Some(keybar_std);
             *self.ivars().keybar_with_newline.borrow_mut() = Some(keybar_nl);
-            *self.ivars().input_bar.borrow_mut() = Some(input_bar);
+            *self.ivars().send_chip.borrow_mut() = Some(send_chip);
             *self.ivars().composer_chip.borrow_mut() = Some(composer_chip);
             *self.ivars().close_composer_chip.borrow_mut() = Some(close_chip);
             *self.ivars().coordinator.borrow_mut() = Some(coordinator);
@@ -296,7 +302,6 @@ define_class!(
             let safe_top = insets.top;
             let safe_bottom = insets.bottom;
             let keybar_h: CGFloat = crate::keybar::BAR_HEIGHT;
-            let input_h: CGFloat = crate::input_bar::INPUT_BAR_HEIGHT;
 
             let mode = self
                 .ivars()
@@ -306,46 +311,58 @@ define_class!(
                 .map(|m| m.mode())
                 .unwrap_or(InputMode::State2);
 
-            // ---- Bottom strip (varies per state) --------------------------
-            // The bottom strip pins to (view bottom - safe_bottom).
+            // ---- Bottom strip ---------------------------------------------
+            // One composer surface (view2) is reused as the input row in
+            // both State1 and State3 — same auto-growing UITextView, just
+            // a different trailing action chip + keybar variant. Layout,
+            // top → bottom:
+            //
+            //   State1: view1 | view2 | [tab esc ctrl]                 [Run]
+            //   State2: view1         | [tab esc ctrl]            [Composer]
+            //   State3: view1 | view2 | [newline tab esc ctrl]       [Close]
             let bottom_y_end = bounds.size.height - safe_bottom;
-
-            // Trailing chip width estimate — we let UIButton size itself
-            // but reserve a fixed amount at the right edge.
-            let trailing_chip_w: CGFloat = 96.0;
+            let keybar_y = bottom_y_end - keybar_h;
             let chip_inset: CGFloat = 6.0;
 
-            let (keybar_y, input_bar_frame, v1_bottom) = match mode {
-                InputMode::State1 => {
-                    // input_bar above keybar.
-                    let keybar_y = bottom_y_end - keybar_h;
-                    let input_y = keybar_y - input_h;
-                    let ib_frame = CGRect {
-                        origin: CGPoint { x: 0.0, y: input_y },
-                        size: CGSize { width, height: input_h },
-                    };
-                    (keybar_y, Some(ib_frame), input_y)
-                }
-                InputMode::State2 => {
-                    let keybar_y = bottom_y_end - keybar_h;
-                    (keybar_y, None, keybar_y)
-                }
-                InputMode::State3 => {
-                    let keybar_y = bottom_y_end - keybar_h;
-                    // view1 stops at the top of view2.
-                    let v2_y = keybar_y - v2_h;
-                    (keybar_y, None, v2_y)
-                }
+            // Active action chip — sized to its intrinsic content so the
+            // icon-only Composer/Close are narrower than the text-bearing
+            // Run chip.
+            let active_chip: Option<Retained<UIButton>> = match mode {
+                InputMode::State1 => self.ivars().send_chip.borrow().clone(),
+                InputMode::State2 => self.ivars().composer_chip.borrow().clone(),
+                InputMode::State3 => self.ivars().close_composer_chip.borrow().clone(),
+            };
+            let chip_w: CGFloat = if let Some(ref c) = active_chip {
+                let sz: CGSize = unsafe { msg_send![&**c, intrinsicContentSize] };
+                sz.width.max(36.0)
+            } else {
+                0.0
+            };
+            let chip_h: CGFloat = keybar_h - 8.0;
+            let chip_x = width - chip_w - chip_inset;
+            let chip_y = keybar_y + 4.0;
+            let chip_frame = CGRect {
+                origin: CGPoint { x: chip_x, y: chip_y },
+                size: CGSize { width: chip_w, height: chip_h },
             };
 
+            // Keybar (the [tab esc ctrl] strip) shares the row with the chip.
+            let keybar_w = (chip_x - chip_inset).max(0.0);
             let keybar_frame = CGRect {
                 origin: CGPoint { x: 0.0, y: keybar_y },
-                size: CGSize { width, height: keybar_h },
+                size: CGSize { width: keybar_w, height: keybar_h },
             };
-            // view2 (composer) frame — only meaningful in State3.
+
+            // view2 (composer) sits above the keybar row in State1 + State3.
             let v2_frame = CGRect {
                 origin: CGPoint { x: 0.0, y: keybar_y - v2_h },
                 size: CGSize { width, height: v2_h },
+            };
+
+            // view1 fills everything above view2 (or the keybar in State2).
+            let v1_bottom = match mode {
+                InputMode::State1 | InputMode::State3 => keybar_y - v2_h,
+                InputMode::State2 => keybar_y,
             };
             let v1_height = (v1_bottom - safe_top).max(0.0);
             let v1_frame = CGRect {
@@ -356,38 +373,25 @@ define_class!(
             if let Some(ref v1) = *self.ivars().view1.borrow() {
                 let _: () = unsafe { msg_send![&**v1, setFrame: v1_frame] };
             }
-            // Standard keybar frame (used in State1+State2).
-            if let Some(ref kb) = *self.ivars().keybar.borrow() {
-                let _: () = unsafe { msg_send![&**kb, setFrame: keybar_frame] };
-            }
-            // Newline keybar frame (used in State3).
-            if let Some(ref kb) = *self.ivars().keybar_with_newline.borrow() {
-                let _: () = unsafe { msg_send![&**kb, setFrame: keybar_frame] };
-            }
             if let Some(ref v2) = *self.ivars().view2.borrow() {
                 let _: () = unsafe { msg_send![&**v2, setFrame: v2_frame] };
             }
-            if let (Some(ib), Some(frame)) =
-                (self.ivars().input_bar.borrow().as_ref(), input_bar_frame)
-            {
-                let _: () = unsafe { msg_send![&**ib, setFrame: frame] };
-                crate::input_bar::layout_input_bar_children(ib);
+
+            // Keybar row leading widget (the [tab esc ctrl] strip).
+            // In all three states *some* keybar variant occupies that strip.
+            let active_keybar = match mode {
+                InputMode::State1 | InputMode::State2 => self.ivars().keybar.borrow().clone(),
+                InputMode::State3 => self.ivars().keybar_with_newline.borrow().clone(),
+            };
+            if let Some(ref kb) = active_keybar {
+                let _: () = unsafe { msg_send![&***kb, setFrame: keybar_frame] };
             }
 
-            // Trailing chips — sized to fit, pinned to the right edge of
-            // the keybar row.
-            let chip_size: CGSize = CGSize {
-                width: trailing_chip_w,
-                height: keybar_h - 8.0,
-            };
-            let chip_y = keybar_y + 4.0;
-            let chip_frame = CGRect {
-                origin: CGPoint {
-                    x: width - trailing_chip_w - chip_inset,
-                    y: chip_y,
-                },
-                size: chip_size,
-            };
+            // Frame the active trailing chip (the inactive ones are hidden
+            // by apply_mode_visibility but we still keep their frames sane).
+            if let Some(ref c) = *self.ivars().send_chip.borrow() {
+                let _: () = unsafe { msg_send![&**c, setFrame: chip_frame] };
+            }
             if let Some(ref c) = *self.ivars().composer_chip.borrow() {
                 let _: () = unsafe { msg_send![&**c, setFrame: chip_frame] };
             }
@@ -462,29 +466,20 @@ define_class!(
                 .map(|m| m.mode())
                 .unwrap_or(InputMode::State2);
             match mode {
-                InputMode::State1 => {
-                    // Resign view1 / view2; the input field becomes
-                    // first responder on its own tap.
+                InputMode::State1 | InputMode::State3 => {
+                    // view2 owns input. Drop view1's responder if it has
+                    // it (canBecomeFirstResponder is now false here).
                     if let Some(ref v1) = *self.ivars().view1.borrow() {
                         let _: bool = unsafe { msg_send![&**v1, resignFirstResponder] };
                     }
-                    if let Some(ref v2) = *self.ivars().view2.borrow() {
-                        let _: bool = unsafe { msg_send![&**v2, resignFirstResponder] };
+                    let coord_borrow = self.ivars().coordinator.borrow();
+                    if let Some(ref coord) = *coord_borrow {
+                        let _: () = unsafe { msg_send![&**coord, focusView2] };
                     }
                 }
                 InputMode::State2 => {
                     if let Some(ref v2) = *self.ivars().view2.borrow() {
                         let _: bool = unsafe { msg_send![&**v2, resignFirstResponder] };
-                    }
-                }
-                InputMode::State3 => {
-                    if let Some(ref v1) = *self.ivars().view1.borrow() {
-                        let _: bool = unsafe { msg_send![&**v1, resignFirstResponder] };
-                    }
-                    // Focus the composer.
-                    let coord_borrow = self.ivars().coordinator.borrow();
-                    if let Some(ref coord) = *coord_borrow {
-                        let _: () = unsafe { msg_send![&**coord, focusView2] };
                     }
                 }
             }
@@ -511,25 +506,27 @@ impl RsTerminalViewController {
             .map(|m| m.mode())
             .unwrap_or(InputMode::State2);
 
-        // view2 (composer) — only in State3.
-        let v2_hidden = !matches!(mode, InputMode::State3);
+        // view2 (the shared composer) — visible in State1 and State3,
+        // hidden in State2.
+        let v2_hidden = matches!(mode, InputMode::State2);
         if let Some(ref v2) = *self.ivars().view2.borrow() {
             let _: () = unsafe { msg_send![&**v2, setHidden: v2_hidden] };
         }
-        // input_bar (State1 only).
-        let input_hidden = !matches!(mode, InputMode::State1);
-        if let Some(ref ib) = *self.ivars().input_bar.borrow() {
-            let _: () = unsafe { msg_send![&**ib, setHidden: input_hidden] };
-        }
-        // Standard keybar shown in State1 + State2.
+        // Standard keybar — State1 + State2 share the [tab esc ctrl]
+        // strip; State3 swaps in the newline variant.
         let std_hidden = matches!(mode, InputMode::State3);
         if let Some(ref kb) = *self.ivars().keybar.borrow() {
             let _: () = unsafe { msg_send![&**kb, setHidden: std_hidden] };
         }
-        // Newline keybar only in State3.
+        // Newline keybar — State3 only.
         let nl_hidden = !matches!(mode, InputMode::State3);
         if let Some(ref kb) = *self.ivars().keybar_with_newline.borrow() {
             let _: () = unsafe { msg_send![&**kb, setHidden: nl_hidden] };
+        }
+        // Send chip — State1 only.
+        let send_hidden = !matches!(mode, InputMode::State1);
+        if let Some(ref c) = *self.ivars().send_chip.borrow() {
+            let _: () = unsafe { msg_send![&**c, setHidden: send_hidden] };
         }
         // Composer chip — State2 only.
         let comp_hidden = !matches!(mode, InputMode::State2);

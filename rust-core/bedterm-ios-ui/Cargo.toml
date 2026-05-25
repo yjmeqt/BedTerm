@@ -26,6 +26,7 @@ objc2-foundation = { version = "0.3", features = [
     "NSArray",
     "NSDictionary",
     "NSRange",
+    "NSBundle",
 ] }
 objc2-ui-kit = { version = "0.3", features = [
     "UIResponder",
@@ -50,7 +51,6 @@ objc2-ui-kit = { version = "0.3", features = [
     "UIControl",
     "UIScrollView",
     "UITextView",
-    "UITextField",
     "UITextInput",
     "UITextInputTraits",
     "NSText",

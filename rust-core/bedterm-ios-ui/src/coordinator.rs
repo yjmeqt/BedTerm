@@ -10,7 +10,7 @@ use objc2::rc::{Allocated, Retained};
 use objc2::runtime::{AnyObject, NSObject};
 use objc2::{define_class, msg_send, ClassType, DefinedClass, MainThreadOnly};
 use objc2_foundation::NSString;
-use objc2_ui_kit::{UIButton, UIColor, UITextField};
+use objc2_ui_kit::{UIButton, UIColor};
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
@@ -45,8 +45,6 @@ pub struct Ivars {
     ctrl_button: RefCell<Option<Retained<UIButton>>>,
     /// Mode state shared with VC / HUD / metal_view. `Rc` — main-thread only.
     mode_state: RefCell<Option<Rc<ModeState>>>,
-    /// State1 input field; the coordinator is its delegate.
-    input_field: RefCell<Option<Retained<UITextField>>>,
 }
 
 unsafe impl Send for Ivars {}
@@ -124,29 +122,25 @@ define_class!(
             self.apply_ctrl_tint(next);
         }
 
-        /// State1 send chip — pushes the input field's buffer into the
-        /// view1 pipeline (stubbed: insert into view2 with a "[send] "
-        /// marker so the side effect is visible).
+        /// State1 send chip — reads view2's buffer, fires the (stubbed)
+        /// pipeline, then clears the composer. Real submission lands here
+        /// once a PTY is wired up.
         #[unsafe(method(keybarSend:))]
         fn keybar_send(&self, _sender: &AnyObject) {
-            let field_ref = self.ivars().input_field.borrow();
-            let Some(field) = field_ref.as_ref() else {
+            let v2 = self.ivars().view2.get();
+            if v2.is_null() {
                 return;
-            };
-            let text: Option<Retained<NSString>> = unsafe { msg_send![&**field, text] };
-            let s = text.map(|t| t.to_string()).unwrap_or_default();
-            drop(field_ref);
-            if !s.is_empty() {
-                // Stub: visible feedback into view2.
-                eprintln!("[bedterm-ios-ui] keybarSend: {}", s);
-                self.insert_into_view2(&format!("[send] {}\n", s));
-                // Clear the field.
-                let field_ref = self.ivars().input_field.borrow();
-                if let Some(f) = field_ref.as_ref() {
-                    let empty = NSString::from_str("");
-                    let _: () = unsafe { msg_send![&**f, setText: &*empty] };
-                }
             }
+            let text: Option<Retained<NSString>> = unsafe { msg_send![v2, text] };
+            let s = text.map(|t| t.to_string()).unwrap_or_default();
+            if s.is_empty() {
+                return;
+            }
+            // Stub: log + echo the submitted text back into the composer
+            // so the side effect is visible until a PTY pipeline lands.
+            eprintln!("[bedterm-ios-ui] keybarSend: {}", s);
+            let echo = NSString::from_str(&format!("[send] {}\n", s));
+            let _: () = unsafe { msg_send![v2, setText: &*echo] };
         }
 
         /// Composer chip — promotes to State3 then focuses view2.
@@ -186,22 +180,6 @@ define_class!(
             self.ivars().focused.set(FocusTarget::None as u8);
         }
 
-        /// UITextField delegate: Return pressed.
-        ///
-        /// We return NO so UIKit doesn't dismiss the keyboard; instead we
-        /// insert `"\n"` into the field's text. (Single-line text fields
-        /// don't render the newline visually, but the buffer carries it
-        /// for the send-chip pipeline.)
-        #[unsafe(method(textFieldShouldReturn:))]
-        fn text_field_should_return(&self, field: &AnyObject) -> bool {
-            // Append a newline to the field's current text.
-            let current: Option<Retained<NSString>> = unsafe { msg_send![field, text] };
-            let mut s = current.map(|t| t.to_string()).unwrap_or_default();
-            s.push('\n');
-            let ns = NSString::from_str(&s);
-            let _: () = unsafe { msg_send![field, setText: &*ns] };
-            false
-        }
     }
 );
 
@@ -241,9 +219,10 @@ impl BtIosKeyboardCoordinator {
     }
 
     fn do_focus_view2(&self) {
-        // Gate on mode: view2 (composer) is only valid in State3.
+        // view2 is the shared composer — valid in State1 and State3,
+        // but not in State2 (where it's hidden).
         if let Some(ms) = self.ivars().mode_state.borrow().as_ref() {
-            if ms.mode() != InputMode::State3 {
+            if ms.mode() == InputMode::State2 {
                 return;
             }
         }
@@ -258,17 +237,6 @@ impl BtIosKeyboardCoordinator {
     /// Install the shared mode state. Called once from the VC.
     pub(crate) fn set_mode_state(&self, ms: &Rc<ModeState>) {
         *self.ivars().mode_state.borrow_mut() = Some(ms.clone());
-    }
-
-    /// Stash a strong ref to the State1 input field.
-    pub(crate) fn set_input_field(&self, field: &UITextField) {
-        // 0.6 dropped the inherent `retain()` on `&T`; round-trip the +1 via
-        // `Retained::retain` over the raw pointer.
-        let retained = unsafe {
-            Retained::retain(field as *const UITextField as *mut UITextField)
-                .expect("non-null field")
-        };
-        *self.ivars().input_field.borrow_mut() = Some(retained);
     }
 
     /// Stash the Ctrl chip button so the latch can re-tint it.

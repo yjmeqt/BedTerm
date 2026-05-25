@@ -12,9 +12,6 @@ struct TerminalScreen: View {
     @State private var dpadOpen = false
     @State private var metalView: TerminalMetalUIView?
     @Namespace private var composerMorph
-    #if DEBUG
-        @State private var fpsMeter = FPSMeter()
-    #endif
     let credential: HostCredential
     /// Display name surfaced in the top bar centre title (PRD R3.title_shows_host_and_count).
     let hostName: String
@@ -71,14 +68,13 @@ struct TerminalScreen: View {
     }
 
     #if DEBUG
-        /// Floating debug chip: live PTY geometry + display mode + FPS.
+        /// Floating debug chip: live PTY geometry + display mode.
         /// `cols=32` means claude is starved; `mode=alt` lingering after
-        /// a TUI exits means we leaked the bit; FPS spots renderer stalls.
+        /// a TUI exits means we leaked the bit.
         private var geomHUD: some View {
             VStack(alignment: .trailing, spacing: 2) {
                 debugChip(text: "\(session.terminalCore.screenCols)×\(session.terminalCore.screenRows)")
                 debugChip(text: debugModeIndicator ?? "")
-                debugChip(text: "\(fpsMeter.fps) fps")
             }
         }
 

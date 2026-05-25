@@ -1,23 +1,33 @@
 //! Unified action chip used for the [send / composer / close-composer]
-//! buttons. SF Symbol leading + 12 pt label trailing, compact insets.
-//! Optionally `tint_filled = true` for a filled accent (systemBlue) chip
-//! with white foreground.
+//! buttons. SF Symbol leading + label trailing, pill background.
+//!
+//! Styling mirrors the Swift `runButton` (see `ComposerBar.swift` history):
+//! 12 pt bold SF Symbol, 13 pt semibold label, 12h/6v padding, 6 pt
+//! corner radius, `ShadcnPrimary` fill with `ShadcnPrimaryForeground` text.
+//! Non-tinted variant uses `secondaryLabel` over a transparent ground.
 
 use crate::geometry::CGFloat;
+use crate::tokens::token_color;
 use objc2::rc::Retained;
 use objc2::runtime::{AnyObject, Sel};
 use objc2::{msg_send, ClassType};
 use objc2_foundation::{MainThreadMarker, NSAttributedString, NSDictionary, NSString};
 use objc2_ui_kit::{
-    NSDirectionalEdgeInsets, UIButton, UIButtonConfiguration, UIColor, UIFont, UIImage,
-    UIImageSymbolConfiguration, UIImageSymbolWeight,
+    NSDirectionalEdgeInsets, UIBackgroundConfiguration, UIButton, UIButtonConfiguration, UIColor,
+    UIFont, UIImage, UIImageSymbolConfiguration, UIImageSymbolWeight,
 };
 
-const FONT_SIZE: CGFloat = 12.0;
-const SYMBOL_SIZE: CGFloat = 11.0;
-const PADDING_H: CGFloat = 10.0;
-const PADDING_V: CGFloat = 5.0;
-const IMAGE_PADDING: CGFloat = 4.0;
+const LABEL_FONT_SIZE: CGFloat = 13.0;
+const SYMBOL_SIZE: CGFloat = 12.0;
+const PADDING_H: CGFloat = 12.0;
+const PADDING_V: CGFloat = 6.0;
+const IMAGE_PADDING: CGFloat = 6.0;
+const CORNER_RADIUS: CGFloat = 6.0;
+
+// `UIFontWeight*` constants are typed `CGFloat`; UIKit defines them as raw
+// floats matching the design-system weight axis.
+const FONT_WEIGHT_SEMIBOLD: CGFloat = 0.3;
+const FONT_WEIGHT_BOLD: CGFloat = 0.4;
 
 /// `UIControlEventTouchUpInside` = 1 << 6.
 const CONTROL_EVENT_TOUCH_UP_INSIDE: u64 = 1 << 6;
@@ -25,9 +35,9 @@ const CONTROL_EVENT_TOUCH_UP_INSIDE: u64 = 1 << 6;
 /// Build the unified send/composer/close-composer chip.
 ///
 /// `tint_filled`:
-/// - `true`: `filledButtonConfiguration` with `systemBlue` background and
-///   white foreground (the send / composer / close-composer "primary" look).
-/// - `false`: `plainButtonConfiguration` with `secondaryLabel` foreground.
+/// - `true`: `ShadcnPrimary` background + `ShadcnPrimaryForeground` text
+///   (the send / composer / close-composer primary look).
+/// - `false`: transparent background + `secondaryLabel` foreground.
 pub(crate) fn make_action_chip(
     mtm: MainThreadMarker,
     icon: &str,
@@ -42,25 +52,36 @@ pub(crate) fn make_action_chip(
         UIButtonConfiguration::plainButtonConfiguration(mtm)
     };
 
-    let title_ns = NSString::from_str(label);
-    let font: Retained<UIFont> = unsafe { msg_send![UIFont::class(), systemFontOfSize: FONT_SIZE] };
-    let font_attr_key = NSString::from_str("NSFont");
-    let font_obj: Retained<AnyObject> = unsafe { Retained::cast_unchecked(font.clone()) };
-    let attrs: Retained<NSDictionary<NSString, AnyObject>> =
-        NSDictionary::from_retained_objects(&[&*font_attr_key], &[font_obj]);
-    let attributed: Retained<NSAttributedString> = unsafe {
-        NSAttributedString::initWithString_attributes(
-            mtm.alloc::<NSAttributedString>(),
-            &title_ns,
-            Some(&attrs),
-        )
-    };
-    cfg.setAttributedTitle(Some(&attributed));
+    // Title: 13 pt semibold. Skip entirely for icon-only chips
+    // (Composer / Close pass `label = ""`).
+    if !label.is_empty() {
+        let title_ns = NSString::from_str(label);
+        let font: Retained<UIFont> = unsafe {
+            msg_send![
+                UIFont::class(),
+                systemFontOfSize: LABEL_FONT_SIZE,
+                weight: FONT_WEIGHT_SEMIBOLD,
+            ]
+        };
+        let font_attr_key = NSString::from_str("NSFont");
+        let font_obj: Retained<AnyObject> = unsafe { Retained::cast_unchecked(font.clone()) };
+        let attrs: Retained<NSDictionary<NSString, AnyObject>> =
+            NSDictionary::from_retained_objects(&[&*font_attr_key], &[font_obj]);
+        let attributed: Retained<NSAttributedString> = unsafe {
+            NSAttributedString::initWithString_attributes(
+                mtm.alloc::<NSAttributedString>(),
+                &title_ns,
+                Some(&attrs),
+            )
+        };
+        cfg.setAttributedTitle(Some(&attributed));
+    }
 
+    // Icon: 12 pt bold SF Symbol.
     let icon_ns = NSString::from_str(icon);
     let sym_cfg = UIImageSymbolConfiguration::configurationWithPointSize_weight(
         SYMBOL_SIZE,
-        UIImageSymbolWeight::Medium,
+        UIImageSymbolWeight::Bold,
     );
     if let Some(image) = UIImage::systemImageNamed(&icon_ns) {
         let configured: Retained<UIImage> =
@@ -69,6 +90,7 @@ pub(crate) fn make_action_chip(
     }
     cfg.setImagePadding(IMAGE_PADDING);
 
+    // 12h/6v content insets.
     let insets = NSDirectionalEdgeInsets {
         top: PADDING_V,
         leading: PADDING_H,
@@ -77,15 +99,25 @@ pub(crate) fn make_action_chip(
     };
     cfg.setContentInsets(insets);
 
+    // Background: explicit UIBackgroundConfiguration so we control the
+    // corner radius (filledButtonConfiguration defaults to a larger
+    // capsule-ish radius). The Swift sibling uses `cornerRadius: 6`.
+    let bg_cfg = UIBackgroundConfiguration::clearConfiguration(mtm);
+    bg_cfg.setCornerRadius(CORNER_RADIUS);
+
     if tint_filled {
-        let bg: Retained<UIColor> = unsafe { msg_send![UIColor::class(), systemBlueColor] };
-        let fg: Retained<UIColor> = unsafe { msg_send![UIColor::class(), whiteColor] };
-        cfg.setBaseBackgroundColor(Some(&bg));
+        let bg_fallback: Retained<UIColor> = unsafe { msg_send![UIColor::class(), labelColor] };
+        let fg_fallback: Retained<UIColor> =
+            unsafe { msg_send![UIColor::class(), systemBackgroundColor] };
+        let bg = token_color("ShadcnPrimary", bg_fallback);
+        let fg = token_color("ShadcnPrimaryForeground", fg_fallback);
+        bg_cfg.setBackgroundColor(Some(&bg));
         cfg.setBaseForegroundColor(Some(&fg));
     } else {
         let fg: Retained<UIColor> = unsafe { msg_send![UIColor::class(), secondaryLabelColor] };
         cfg.setBaseForegroundColor(Some(&fg));
     }
+    cfg.setBackground(&bg_cfg);
 
     // `buttonWithType: 0` = `.custom`.
     let button: Retained<UIButton> = unsafe { msg_send![UIButton::class(), buttonWithType: 0_i64] };
@@ -99,3 +131,8 @@ pub(crate) fn make_action_chip(
     };
     button
 }
+
+// Touch the bold weight constant so a future caller that wants a "bold"
+// label can grab it from here instead of hard-coding the magic number.
+#[allow(dead_code)]
+pub(crate) const ACTION_CHIP_BOLD: CGFloat = FONT_WEIGHT_BOLD;

@@ -17,11 +17,11 @@ mod coordinator;
 mod debug_hud;
 mod dpad;
 mod geometry;
-mod input_bar;
 mod input_mode;
 mod keybar;
 mod metal_view;
 mod text_input;
+mod tokens;
 mod vc;
 
 /// Opaque callback type fired when the in-VC back button is tapped.
