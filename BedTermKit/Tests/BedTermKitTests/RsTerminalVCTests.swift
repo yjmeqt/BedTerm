@@ -9,9 +9,8 @@ import UIKit
 struct RsTerminalVCTests {
     @Test("create returns non-nil and view loads without crashing")
     func createAndLoadView() throws {
-        let ptr = bt_rs_terminal_create_vc(nil, nil)
-        try #require(ptr != nil)
-        let vc = Unmanaged<UIViewController>.fromOpaque(ptr!).takeRetainedValue()
+        let ptr = try #require(bt_rs_terminal_create_vc(nil, nil))
+        let vc = Unmanaged<UIViewController>.fromOpaque(ptr).takeRetainedValue()
 
         // Force viewDidLoad to run.
         _ = vc.view
@@ -28,9 +27,8 @@ struct RsTerminalVCTests {
     func view1IsMetal() throws {
         try #require(MTLCreateSystemDefaultDevice() != nil)
 
-        let ptr = bt_rs_terminal_create_vc(nil, nil)
-        try #require(ptr != nil)
-        let vc = Unmanaged<UIViewController>.fromOpaque(ptr!).takeRetainedValue()
+        let ptr = try #require(bt_rs_terminal_create_vc(nil, nil))
+        let vc = Unmanaged<UIViewController>.fromOpaque(ptr).takeRetainedValue()
         _ = vc.view
 
         // The Metal-backed view is registered under the ObjC name "BtRsMetalInputView".
@@ -42,9 +40,8 @@ struct RsTerminalVCTests {
     @Test("view1 accepts UITextInput selectors")
     func view1AcceptsInput() throws {
         try #require(MTLCreateSystemDefaultDevice() != nil)
-        let ptr = bt_rs_terminal_create_vc(nil, nil)
-        try #require(ptr != nil)
-        let vc = Unmanaged<UIViewController>.fromOpaque(ptr!).takeRetainedValue()
+        let ptr = try #require(bt_rs_terminal_create_vc(nil, nil))
+        let vc = Unmanaged<UIViewController>.fromOpaque(ptr).takeRetainedValue()
         _ = vc.view
 
         let metalCls: AnyClass = try #require(NSClassFromString("BtRsMetalInputView"))
