@@ -1,9 +1,9 @@
 //! UITextInput protocol conformance for the Metal-backed view1.
 //!
 //! Phase 1 lives in three pieces:
-//!   * `BtRsUITextPosition` — `UITextPosition` subclass storing a byte index.
-//!   * `BtRsUITextRange`    — `UITextRange` subclass holding start/end positions.
-//!   * `UITextInput` method bodies on `BtRsMetalInputView` (see `metal_view.rs`).
+//!   * `BtIosUITextPosition` — `UITextPosition` subclass storing a byte index.
+//!   * `BtIosUITextRange`    — `UITextRange` subclass holding start/end positions.
+//!   * `UITextInput` method bodies on `BtIosMetalInputView` (see `metal_view.rs`).
 
 use objc2::rc::{Allocated, Retained};
 use objc2::{declare_class, msg_send_id, ClassType, DeclaredClass};
@@ -11,7 +11,7 @@ use objc2_foundation::MainThreadMarker;
 use objc2_ui_kit::{UITextPosition, UITextRange};
 use std::cell::{Cell, RefCell};
 
-// -------- BtRsUITextPosition ------------------------------------------------
+// -------- BtIosUITextPosition ------------------------------------------------
 
 #[derive(Default)]
 pub struct PositionIvars {
@@ -23,19 +23,19 @@ unsafe impl Send for PositionIvars {}
 unsafe impl Sync for PositionIvars {}
 
 declare_class!(
-    pub struct BtRsUITextPosition;
+    pub struct BtIosUITextPosition;
 
-    unsafe impl ClassType for BtRsUITextPosition {
+    unsafe impl ClassType for BtIosUITextPosition {
         type Super = UITextPosition;
         type Mutability = objc2::mutability::MainThreadOnly;
-        const NAME: &'static str = "BtRsUITextPosition";
+        const NAME: &'static str = "BtIosUITextPosition";
     }
 
-    impl DeclaredClass for BtRsUITextPosition {
+    impl DeclaredClass for BtIosUITextPosition {
         type Ivars = PositionIvars;
     }
 
-    unsafe impl BtRsUITextPosition {
+    unsafe impl BtIosUITextPosition {
         #[method_id(init)]
         fn init(this: Allocated<Self>) -> Option<Retained<Self>> {
             let this = this.set_ivars(PositionIvars::default());
@@ -44,7 +44,7 @@ declare_class!(
     }
 );
 
-impl BtRsUITextPosition {
+impl BtIosUITextPosition {
     pub fn new(mtm: MainThreadMarker, index: usize) -> Retained<Self> {
         let this: Retained<Self> = unsafe { msg_send_id![mtm.alloc::<Self>(), init] };
         this.ivars().index.set(index);
@@ -59,36 +59,36 @@ impl BtRsUITextPosition {
     /// caller's expectation. `Retained::cast` is safe because the runtime
     /// guarantees Self IS-A UITextPosition.
     pub fn into_super(this: Retained<Self>) -> Retained<UITextPosition> {
-        // SAFETY: BtRsUITextPosition is a subclass of UITextPosition.
+        // SAFETY: BtIosUITextPosition is a subclass of UITextPosition.
         unsafe { Retained::cast(this) }
     }
 }
 
-// -------- BtRsUITextRange ---------------------------------------------------
+// -------- BtIosUITextRange ---------------------------------------------------
 
 #[derive(Default)]
 pub struct RangeIvars {
-    pub start: RefCell<Option<Retained<BtRsUITextPosition>>>,
-    pub end: RefCell<Option<Retained<BtRsUITextPosition>>>,
+    pub start: RefCell<Option<Retained<BtIosUITextPosition>>>,
+    pub end: RefCell<Option<Retained<BtIosUITextPosition>>>,
 }
 
 unsafe impl Send for RangeIvars {}
 unsafe impl Sync for RangeIvars {}
 
 declare_class!(
-    pub struct BtRsUITextRange;
+    pub struct BtIosUITextRange;
 
-    unsafe impl ClassType for BtRsUITextRange {
+    unsafe impl ClassType for BtIosUITextRange {
         type Super = UITextRange;
         type Mutability = objc2::mutability::MainThreadOnly;
-        const NAME: &'static str = "BtRsUITextRange";
+        const NAME: &'static str = "BtIosUITextRange";
     }
 
-    impl DeclaredClass for BtRsUITextRange {
+    impl DeclaredClass for BtIosUITextRange {
         type Ivars = RangeIvars;
     }
 
-    unsafe impl BtRsUITextRange {
+    unsafe impl BtIosUITextRange {
         #[method_id(init)]
         fn init(this: Allocated<Self>) -> Option<Retained<Self>> {
             let this = this.set_ivars(RangeIvars::default());
@@ -101,7 +101,7 @@ declare_class!(
                 .start
                 .borrow()
                 .as_ref()
-                .map(|p| BtRsUITextPosition::into_super(p.clone()))
+                .map(|p| BtIosUITextPosition::into_super(p.clone()))
         }
 
         #[method_id(end)]
@@ -110,7 +110,7 @@ declare_class!(
                 .end
                 .borrow()
                 .as_ref()
-                .map(|p| BtRsUITextPosition::into_super(p.clone()))
+                .map(|p| BtIosUITextPosition::into_super(p.clone()))
         }
 
         #[method(isEmpty)]
@@ -122,11 +122,11 @@ declare_class!(
     }
 );
 
-impl BtRsUITextRange {
+impl BtIosUITextRange {
     pub fn new(
         mtm: MainThreadMarker,
-        start: Retained<BtRsUITextPosition>,
-        end: Retained<BtRsUITextPosition>,
+        start: Retained<BtIosUITextPosition>,
+        end: Retained<BtIosUITextPosition>,
     ) -> Retained<Self> {
         let this: Retained<Self> = unsafe { msg_send_id![mtm.alloc::<Self>(), init] };
         *this.ivars().start.borrow_mut() = Some(start);

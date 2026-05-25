@@ -2,8 +2,8 @@ import BedTermCoreC
 import SwiftUI
 import UIKit
 
-/// Hosts the Rust-backed `BtRsTerminalViewController` in a SwiftUI navigation stack.
-struct RsTerminalView: UIViewControllerRepresentable {
+/// Hosts the Rust-backed `BtIosTerminalViewController` in a SwiftUI navigation stack.
+struct IosTerminalView: UIViewControllerRepresentable {
     let onBack: () -> Void
 
     func makeCoordinator() -> Coordinator { Coordinator(onBack: onBack) }
@@ -24,7 +24,7 @@ struct RsTerminalView: UIViewControllerRepresentable {
         @MainActor func makeVC() -> UIViewController {
             // Pass a raw pointer to self as the callback context.
             let ctx = Unmanaged.passRetained(self).toOpaque()
-            let ptr = bt_rs_terminal_create_vc(
+            let ptr = bt_ios_create_vc(
                 { rawCtx in
                     guard let rawCtx else { return }
                     let coordinator = Unmanaged<Coordinator>.fromOpaque(rawCtx)

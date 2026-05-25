@@ -6,7 +6,7 @@ extension HostsScreen {
         if let session = viewModel.lastSession, let entry = currentSessionEntry() {
             let hostName = viewModel.displayName(for: entry.id)
             if settings.useRustTerminal {
-                RsTerminalView(onBack: handleTerminalBack)
+                IosTerminalView(onBack: handleTerminalBack)
                     .navigationTitle(hostName)
                     .navigationBarTitleDisplayMode(.inline)
             } else {

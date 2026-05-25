@@ -9,8 +9,8 @@ path = "BedTerm.xcworkspace"
 scheme = "BedTerm"
 configuration = "Debug"
 simulator_prefix = "BedTerm"
-bundle_id = "com.applovin.yi.bedterm"
-product_name = "BedTerm"
+bundle_id = "dev.yjmeqt.bedterm.debug"
+product_name = "BedTerm Debug"
 min_ios_version = "26.0"
 
 [extras]
