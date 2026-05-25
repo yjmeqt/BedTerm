@@ -11,10 +11,14 @@
 
 #![cfg(target_os = "ios")]
 
+mod action_chip;
 mod color;
 mod coordinator;
 mod debug_hud;
+mod dpad;
 mod geometry;
+mod input_bar;
+mod input_mode;
 mod keybar;
 mod metal_view;
 mod text_input;

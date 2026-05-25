@@ -13,8 +13,13 @@ crate-type = ["staticlib", "rlib"]
 # via `#![cfg(target_os = "ios")]` at the top of `lib.rs`; we still need the
 # objc2 dependencies guarded so they only resolve under the iOS target.
 [target.'cfg(target_os = "ios")'.dependencies]
-objc2 = "0.5"
-objc2-foundation = { version = "0.2", features = [
+# `disable-encoding-assertions` is the upstream-blessed escape hatch for
+# `UITextInputTraits` protocol-property setters that the runtime sees as
+# missing during debug-time `class_getInstanceMethod` verification (see
+# https://github.com/madsmtm/objc2/issues/645). It replaces the
+# `raw_set_i64` workaround previously living in `input_bar.rs`.
+objc2 = { version = "0.6", features = ["disable-encoding-assertions"] }
+objc2-foundation = { version = "0.3", features = [
     "NSString",
     "NSNotification",
     "NSValue",
@@ -22,7 +27,7 @@ objc2-foundation = { version = "0.2", features = [
     "NSDictionary",
     "NSRange",
 ] }
-objc2-ui-kit = { version = "0.2", features = [
+objc2-ui-kit = { version = "0.3", features = [
     "UIResponder",
     "UIViewController",
     "UIView",
@@ -39,13 +44,13 @@ objc2-ui-kit = { version = "0.2", features = [
     "UIStackView",
     "UIGeometry",
     "UIFontDescriptor",
-    "UILabel",
     "UINavigationController",
     "UIColor",
     "UIFont",
     "UIControl",
     "UIScrollView",
     "UITextView",
+    "UITextField",
     "UITextInput",
     "UITextInputTraits",
     "NSText",
@@ -55,19 +60,18 @@ objc2-ui-kit = { version = "0.2", features = [
     "UIEvent",
     "UITouch",
 ] }
-objc2-metal = { version = "0.2", features = [
+objc2-metal = { version = "0.3", features = [
     "MTLDevice",
     "MTLCommandQueue",
     "MTLTexture",
     "MTLPixelFormat",
     "MTLDefines",
 ] }
-objc2-metal-kit = { version = "0.2", features = [
+objc2-metal-kit = { version = "0.3", features = [
     "MTKView",
     "MTKDefines",
 ] }
-objc2-quartz-core = { version = "0.2", features = [
+objc2-quartz-core = { version = "0.3", features = [
     "CADisplayLink",
     "CALayer",
 ] }
-

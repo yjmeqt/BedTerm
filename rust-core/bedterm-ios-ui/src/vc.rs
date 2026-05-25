@@ -1,19 +1,30 @@
 //! The experimental Rust-backed view controller.
+//!
+//! See [`crate::input_mode`] for the 3-state input subsystem this VC hosts:
+//! State1 (inline input bar), State2 (no input, view1 focusable), and
+//! State3 (composer). The current state lives in `Ivars.mode_state` and
+//! drives subview visibility + first-responder eligibility on every
+//! `modeStateDidChange` post.
 
+use crate::action_chip::make_action_chip;
 use crate::coordinator::BtIosKeyboardCoordinator;
 use crate::geometry::{CGFloat, CGPoint, CGRect, CGSize, UIEdgeInsets};
+use crate::input_mode::{InputMode, ModeState};
 use crate::metal_view::BtIosMetalInputView;
 use crate::BtIosBackCallback;
 use objc2::rc::{Allocated, Retained};
-use objc2::runtime::{AnyClass, AnyObject, NSObject, ProtocolObject};
-use objc2::{declare_class, msg_send, msg_send_id, sel, ClassType, DeclaredClass};
-use objc2_foundation::{MainThreadMarker, NSString};
+use objc2::runtime::{AnyObject, ProtocolObject};
+use objc2::{
+    define_class, msg_send, sel, ClassType, DefinedClass, MainThreadMarker, MainThreadOnly,
+};
+use objc2_foundation::NSString;
 use objc2_metal::MTLDevice;
 use objc2_ui_kit::{
-    UIBarButtonItem, UIBarButtonItemStyle, UIColor, UIFont, UINavigationItem,
-    UITapGestureRecognizer, UITextView, UIViewController,
+    UIBarButtonItem, UIBarButtonItemStyle, UIButton, UIColor, UIFont, UINavigationItem,
+    UITapGestureRecognizer, UITextView, UIView, UIViewController,
 };
 use std::cell::{Cell, RefCell};
+use std::rc::Rc;
 
 extern "C" {
     /// `MTLCreateSystemDefaultDevice()` — returns the system-preferred GPU.
@@ -34,6 +45,18 @@ pub struct Ivars {
     /// Persistent keybar (Tab / Newline / Esc / Ctrl) sandwiched between view1
     /// and view2 — always visible, independent of view2's focus state.
     keybar: RefCell<Option<Retained<objc2_ui_kit::UIView>>>,
+    /// State3 keybar variant (with newline chip prepended).
+    keybar_with_newline: RefCell<Option<Retained<objc2_ui_kit::UIView>>>,
+    /// State1 inline input bar (text field + send chip).
+    input_bar: RefCell<Option<Retained<UIView>>>,
+    /// State2 composer chip — pinned to the right of the standard keybar.
+    composer_chip: RefCell<Option<Retained<UIButton>>>,
+    /// State3 close-composer chip — pinned to the right of the newline keybar.
+    close_composer_chip: RefCell<Option<Retained<UIButton>>>,
+    /// Tap recognizer on view1 — we toggle its `enabled` flag per mode.
+    view1_tap: RefCell<Option<Retained<UITapGestureRecognizer>>>,
+    /// Shared 3-state input mode holder (see `input_mode.rs`).
+    mode_state: RefCell<Option<Rc<ModeState>>>,
     /// Centralised focus / keyboard router.
     coordinator: RefCell<Option<Retained<BtIosKeyboardCoordinator>>>,
     /// Top-right debug HUD (FPS + hardware keyboard indicator).
@@ -50,28 +73,22 @@ pub struct Ivars {
 unsafe impl Send for Ivars {}
 unsafe impl Sync for Ivars {}
 
-declare_class!(
+define_class!(
     /// Experimental Rust-backed terminal view controller.
+    #[unsafe(super(UIViewController))]
+    #[thread_kind = MainThreadOnly]
+    #[name = "BtIosTerminalViewController"]
+    #[ivars = Ivars]
     pub struct RsTerminalViewController;
 
-    unsafe impl ClassType for RsTerminalViewController {
-        type Super = UIViewController;
-        type Mutability = objc2::mutability::MainThreadOnly;
-        const NAME: &'static str = "BtIosTerminalViewController";
-    }
-
-    impl DeclaredClass for RsTerminalViewController {
-        type Ivars = Ivars;
-    }
-
-    unsafe impl RsTerminalViewController {
-        #[method_id(init)]
+    impl RsTerminalViewController {
+        #[unsafe(method_id(init))]
         fn init(this: Allocated<Self>) -> Option<Retained<Self>> {
             let this = this.set_ivars(Ivars::default());
-            unsafe { msg_send_id![super(this), init] }
+            unsafe { msg_send![super(this), init] }
         }
 
-        #[method(viewDidLoad)]
+        #[unsafe(method(viewDidLoad))]
         fn view_did_load(&self) {
             let _: () = unsafe { msg_send![super(self), viewDidLoad] };
 
@@ -79,7 +96,7 @@ declare_class!(
 
             // Background colour — system background so it respects dark mode.
             let bg: Retained<UIColor> =
-                unsafe { msg_send_id![UIColor::class(), systemBackgroundColor] };
+                unsafe { msg_send![UIColor::class(), systemBackgroundColor] };
             if let Some(view) = self.view() {
                 view.setBackgroundColor(Some(&bg));
             }
@@ -96,8 +113,8 @@ declare_class!(
                 )
             };
             let nav_item: Retained<UINavigationItem> =
-                unsafe { msg_send_id![self, navigationItem] };
-            unsafe { nav_item.setLeftBarButtonItem(Some(&back_btn)) };
+                unsafe { msg_send![self, navigationItem] };
+            nav_item.setLeftBarButtonItem(Some(&back_btn));
 
             // ---------- Metal device + view1 (Metal canvas) ----------
             let device_ptr = unsafe { MTLCreateSystemDefaultDevice() };
@@ -118,11 +135,11 @@ declare_class!(
             // ---------- view2 (UITextView composer) ----------
             let zero = CGRect::default();
             let view2: Retained<UITextView> =
-                unsafe { msg_send_id![mtm.alloc::<UITextView>(), initWithFrame: zero] };
+                unsafe { msg_send![mtm.alloc::<UITextView>(), initWithFrame: zero] };
 
             // Make view2 visually distinct so the user can see the boundary.
             let secondary_bg: Retained<UIColor> =
-                unsafe { msg_send_id![UIColor::class(), secondarySystemBackgroundColor] };
+                unsafe { msg_send![UIColor::class(), secondarySystemBackgroundColor] };
             let _: () = unsafe { msg_send![&*view2, setBackgroundColor: &*secondary_bg] };
 
             // Set self as view2's delegate so we can react to text changes.
@@ -131,7 +148,7 @@ declare_class!(
             // Set a known font on view2 and use it to measure line height.
             // A freshly-init'd UITextView can return nil for `font`, so set it explicitly.
             let font: Retained<UIFont> =
-                unsafe { msg_send_id![UIFont::class(), systemFontOfSize: 17.0_f64] };
+                unsafe { msg_send![UIFont::class(), systemFontOfSize: 17.0_f64] };
             let _: () = unsafe { msg_send![&*view2, setFont: &*font] };
 
             let line_h: CGFloat = unsafe { msg_send![&*font, lineHeight] };
@@ -159,6 +176,7 @@ declare_class!(
             let view2_obj: *const AnyObject = &*view2 as *const _ as *const AnyObject;
             let coordinator = BtIosKeyboardCoordinator::new(mtm, view1_obj, view2_obj);
 
+            let mut tap_opt: Option<Retained<UITapGestureRecognizer>> = None;
             if let Some(ref v1) = view1_opt {
                 // Give view1 a weak ref back to the coordinator (for touchesBegan routing).
                 v1.set_coordinator(&*coordinator as *const _ as *const AnyObject);
@@ -166,23 +184,72 @@ declare_class!(
                 // Belt + braces: also install a UITapGestureRecognizer on view1.
                 let tap: Retained<UITapGestureRecognizer> = unsafe {
                     let alloc = mtm.alloc::<UITapGestureRecognizer>();
-                    msg_send_id![
+                    msg_send![
                         alloc,
                         initWithTarget: &*coordinator,
                         action: sel!(handleView1Tap:),
                     ]
                 };
                 let _: () = unsafe { msg_send![&**v1, addGestureRecognizer: &*tap] };
+                tap_opt = Some(tap);
+            }
+            *self.ivars().view1_tap.borrow_mut() = tap_opt;
+
+            // ---------- ModeState (shared) ----------
+            let self_ptr = self as *const Self as *const AnyObject;
+            let mode_state = Rc::new(ModeState::new(self_ptr));
+            coordinator.set_mode_state(&mode_state);
+            if let Some(ref v1) = view1_opt {
+                v1.set_mode_state(Rc::as_ptr(&mode_state));
             }
 
-            // ---------- Keybar (Tab / Newline / Esc / Ctrl) above view2 ----------
-            let keybar = crate::keybar::make_keybar(mtm, &coordinator);
+            // ---------- Build all bottom-row variants up front ----------
+            // State1+State2 share a no-newline keybar; State3 uses one
+            // with the newline chip.
+            let keybar_std = crate::keybar::make_keybar_with(
+                mtm,
+                &coordinator,
+                crate::keybar::ChipSet::Standard,
+            );
+            let keybar_nl = crate::keybar::make_keybar_with(
+                mtm,
+                &coordinator,
+                crate::keybar::ChipSet::WithNewline,
+            );
+
+            // State1 inline input bar (input field + send chip).
+            let input_bar = crate::input_bar::make_input_bar(mtm, &coordinator);
+
+            // State2 composer chip — opens the composer (promotes to State3).
+            let composer_chip = make_action_chip(
+                mtm,
+                "square.and.pencil",
+                "Composer",
+                true,
+                coordinator.as_ref(),
+                sel!(openComposer:),
+            );
+            // State3 close-composer chip.
+            let close_chip = make_action_chip(
+                mtm,
+                "xmark",
+                "Close",
+                true,
+                coordinator.as_ref(),
+                sel!(closeComposer:),
+            );
+
             if let Some(view) = self.view() {
-                let _: () = unsafe { msg_send![&*view, addSubview: &*keybar] };
+                let _: () = unsafe { msg_send![&*view, addSubview: &*input_bar] };
+                let _: () = unsafe { msg_send![&*view, addSubview: &*keybar_std] };
+                let _: () = unsafe { msg_send![&*view, addSubview: &*keybar_nl] };
+                let _: () = unsafe { msg_send![&*view, addSubview: &*composer_chip] };
+                let _: () = unsafe { msg_send![&*view, addSubview: &*close_chip] };
             }
 
             // ---------- Debug HUD (FPS + HW keyboard) top-right ----------
             let hud = crate::debug_hud::BtIosDebugHUD::new(mtm);
+            hud.set_mode_state(&mode_state);
             if let Some(view) = self.view() {
                 let _: () = unsafe { msg_send![&*view, addSubview: &*hud] };
             }
@@ -190,12 +257,20 @@ declare_class!(
             // Store strong refs.
             *self.ivars().view1.borrow_mut() = view1_opt;
             *self.ivars().view2.borrow_mut() = Some(view2);
-            *self.ivars().keybar.borrow_mut() = Some(keybar);
+            *self.ivars().keybar.borrow_mut() = Some(keybar_std);
+            *self.ivars().keybar_with_newline.borrow_mut() = Some(keybar_nl);
+            *self.ivars().input_bar.borrow_mut() = Some(input_bar);
+            *self.ivars().composer_chip.borrow_mut() = Some(composer_chip);
+            *self.ivars().close_composer_chip.borrow_mut() = Some(close_chip);
             *self.ivars().coordinator.borrow_mut() = Some(coordinator);
             *self.ivars().debug_hud.borrow_mut() = Some(hud);
+            *self.ivars().mode_state.borrow_mut() = Some(mode_state);
+
+            // Initial visibility (State2 by default).
+            self.apply_mode_visibility();
         }
 
-        #[method(backButtonTapped)]
+        #[unsafe(method(backButtonTapped))]
         fn back_button_tapped(&self) {
             let ivars = self.ivars();
             if let Some(cb) = ivars.on_back.get() {
@@ -204,7 +279,7 @@ declare_class!(
             }
         }
 
-        #[method(viewDidLayoutSubviews)]
+        #[unsafe(method(viewDidLayoutSubviews))]
         fn view_did_layout_subviews(&self) {
             let _: () = unsafe { msg_send![super(self), viewDidLayoutSubviews] };
 
@@ -221,38 +296,103 @@ declare_class!(
             let safe_top = insets.top;
             let safe_bottom = insets.bottom;
             let keybar_h: CGFloat = crate::keybar::BAR_HEIGHT;
+            let input_h: CGFloat = crate::input_bar::INPUT_BAR_HEIGHT;
 
-            // Layout, top → bottom: view1, view2, keybar.
-            // SwiftUI shrinks the host view when the keyboard appears, so
-            // bounds.size.height already reflects the keyboard-aware area.
-            let keybar_y = bounds.size.height - safe_bottom - keybar_h;
-            let v2_y = keybar_y - v2_h;
+            let mode = self
+                .ivars()
+                .mode_state
+                .borrow()
+                .as_ref()
+                .map(|m| m.mode())
+                .unwrap_or(InputMode::State2);
+
+            // ---- Bottom strip (varies per state) --------------------------
+            // The bottom strip pins to (view bottom - safe_bottom).
+            let bottom_y_end = bounds.size.height - safe_bottom;
+
+            // Trailing chip width estimate — we let UIButton size itself
+            // but reserve a fixed amount at the right edge.
+            let trailing_chip_w: CGFloat = 96.0;
+            let chip_inset: CGFloat = 6.0;
+
+            let (keybar_y, input_bar_frame, v1_bottom) = match mode {
+                InputMode::State1 => {
+                    // input_bar above keybar.
+                    let keybar_y = bottom_y_end - keybar_h;
+                    let input_y = keybar_y - input_h;
+                    let ib_frame = CGRect {
+                        origin: CGPoint { x: 0.0, y: input_y },
+                        size: CGSize { width, height: input_h },
+                    };
+                    (keybar_y, Some(ib_frame), input_y)
+                }
+                InputMode::State2 => {
+                    let keybar_y = bottom_y_end - keybar_h;
+                    (keybar_y, None, keybar_y)
+                }
+                InputMode::State3 => {
+                    let keybar_y = bottom_y_end - keybar_h;
+                    // view1 stops at the top of view2.
+                    let v2_y = keybar_y - v2_h;
+                    (keybar_y, None, v2_y)
+                }
+            };
 
             let keybar_frame = CGRect {
                 origin: CGPoint { x: 0.0, y: keybar_y },
                 size: CGSize { width, height: keybar_h },
             };
+            // view2 (composer) frame — only meaningful in State3.
             let v2_frame = CGRect {
-                origin: CGPoint { x: 0.0, y: v2_y },
+                origin: CGPoint { x: 0.0, y: keybar_y - v2_h },
                 size: CGSize { width, height: v2_h },
             };
-            let v1_height = (v2_y - safe_top).max(0.0);
+            let v1_height = (v1_bottom - safe_top).max(0.0);
             let v1_frame = CGRect {
                 origin: CGPoint { x: 0.0, y: safe_top },
                 size: CGSize { width, height: v1_height },
             };
 
-            let v1_borrow = self.ivars().view1.borrow();
-            if let Some(ref v1) = *v1_borrow {
+            if let Some(ref v1) = *self.ivars().view1.borrow() {
                 let _: () = unsafe { msg_send![&**v1, setFrame: v1_frame] };
             }
-            let kb_borrow = self.ivars().keybar.borrow();
-            if let Some(ref kb) = *kb_borrow {
+            // Standard keybar frame (used in State1+State2).
+            if let Some(ref kb) = *self.ivars().keybar.borrow() {
                 let _: () = unsafe { msg_send![&**kb, setFrame: keybar_frame] };
             }
-            let v2_borrow = self.ivars().view2.borrow();
-            if let Some(ref v2) = *v2_borrow {
+            // Newline keybar frame (used in State3).
+            if let Some(ref kb) = *self.ivars().keybar_with_newline.borrow() {
+                let _: () = unsafe { msg_send![&**kb, setFrame: keybar_frame] };
+            }
+            if let Some(ref v2) = *self.ivars().view2.borrow() {
                 let _: () = unsafe { msg_send![&**v2, setFrame: v2_frame] };
+            }
+            if let (Some(ib), Some(frame)) =
+                (self.ivars().input_bar.borrow().as_ref(), input_bar_frame)
+            {
+                let _: () = unsafe { msg_send![&**ib, setFrame: frame] };
+                crate::input_bar::layout_input_bar_children(ib);
+            }
+
+            // Trailing chips — sized to fit, pinned to the right edge of
+            // the keybar row.
+            let chip_size: CGSize = CGSize {
+                width: trailing_chip_w,
+                height: keybar_h - 8.0,
+            };
+            let chip_y = keybar_y + 4.0;
+            let chip_frame = CGRect {
+                origin: CGPoint {
+                    x: width - trailing_chip_w - chip_inset,
+                    y: chip_y,
+                },
+                size: chip_size,
+            };
+            if let Some(ref c) = *self.ivars().composer_chip.borrow() {
+                let _: () = unsafe { msg_send![&**c, setFrame: chip_frame] };
+            }
+            if let Some(ref c) = *self.ivars().close_composer_chip.borrow() {
+                let _: () = unsafe { msg_send![&**c, setFrame: chip_frame] };
             }
 
             // Debug HUD — pinned to top-right inside the safe area.
@@ -271,11 +411,11 @@ declare_class!(
             }
         }
 
-        #[method(textViewDidChange:)]
+        #[unsafe(method(textViewDidChange:))]
         fn text_view_did_change(&self, text_view: &UITextView) {
             // Tell the coordinator about the new text so it can pre-compute
             // view1's next background color.
-            let text: Retained<NSString> = unsafe { msg_send_id![text_view, text] };
+            let text: Retained<NSString> = unsafe { msg_send![text_view, text] };
             let coord_borrow = self.ivars().coordinator.borrow();
             if let Some(ref coord) = *coord_borrow {
                 let _: () = unsafe { msg_send![&**coord, notifyText2Changed: &*text] };
@@ -296,13 +436,57 @@ declare_class!(
             }
         }
 
-        #[method(textViewDidBeginEditing:)]
+        #[unsafe(method(textViewDidBeginEditing:))]
         fn text_view_did_begin_editing(&self, _text_view: &UITextView) {
             // view2 became first responder via its own tap — tell the
             // coordinator so currentFocus stays in sync.
             let coord_borrow = self.ivars().coordinator.borrow();
             if let Some(ref coord) = *coord_borrow {
                 let _: () = unsafe { msg_send![&**coord, focusView2] };
+            }
+        }
+
+        /// Posted by `ModeState::notify`. Re-applies subview visibility
+        /// and triggers a relayout.
+        #[unsafe(method(modeStateDidChange))]
+        fn mode_state_did_change(&self) {
+            self.apply_mode_visibility();
+            self.relayout();
+            // Resign first responder on every mode flip so UIKit doesn't
+            // keep a now-disallowed view as the active responder.
+            let mode = self
+                .ivars()
+                .mode_state
+                .borrow()
+                .as_ref()
+                .map(|m| m.mode())
+                .unwrap_or(InputMode::State2);
+            match mode {
+                InputMode::State1 => {
+                    // Resign view1 / view2; the input field becomes
+                    // first responder on its own tap.
+                    if let Some(ref v1) = *self.ivars().view1.borrow() {
+                        let _: bool = unsafe { msg_send![&**v1, resignFirstResponder] };
+                    }
+                    if let Some(ref v2) = *self.ivars().view2.borrow() {
+                        let _: bool = unsafe { msg_send![&**v2, resignFirstResponder] };
+                    }
+                }
+                InputMode::State2 => {
+                    if let Some(ref v2) = *self.ivars().view2.borrow() {
+                        let _: bool = unsafe { msg_send![&**v2, resignFirstResponder] };
+                    }
+                }
+                InputMode::State3 => {
+                    if let Some(ref v1) = *self.ivars().view1.borrow() {
+                        let _: bool = unsafe { msg_send![&**v1, resignFirstResponder] };
+                    }
+                    // Focus the composer.
+                    let coord_borrow = self.ivars().coordinator.borrow();
+                    if let Some(ref coord) = *coord_borrow {
+                        let _: () = unsafe { msg_send![&**coord, focusView2] };
+                    }
+                }
             }
         }
     }
@@ -315,6 +499,56 @@ impl RsTerminalViewController {
             let _: () = unsafe { msg_send![&*view, layoutIfNeeded] };
         }
     }
+
+    /// Per-state subview visibility. Show / hide instead of remove / add so
+    /// strong refs and gesture recognizers stay attached.
+    fn apply_mode_visibility(&self) {
+        let mode = self
+            .ivars()
+            .mode_state
+            .borrow()
+            .as_ref()
+            .map(|m| m.mode())
+            .unwrap_or(InputMode::State2);
+
+        // view2 (composer) — only in State3.
+        let v2_hidden = !matches!(mode, InputMode::State3);
+        if let Some(ref v2) = *self.ivars().view2.borrow() {
+            let _: () = unsafe { msg_send![&**v2, setHidden: v2_hidden] };
+        }
+        // input_bar (State1 only).
+        let input_hidden = !matches!(mode, InputMode::State1);
+        if let Some(ref ib) = *self.ivars().input_bar.borrow() {
+            let _: () = unsafe { msg_send![&**ib, setHidden: input_hidden] };
+        }
+        // Standard keybar shown in State1 + State2.
+        let std_hidden = matches!(mode, InputMode::State3);
+        if let Some(ref kb) = *self.ivars().keybar.borrow() {
+            let _: () = unsafe { msg_send![&**kb, setHidden: std_hidden] };
+        }
+        // Newline keybar only in State3.
+        let nl_hidden = !matches!(mode, InputMode::State3);
+        if let Some(ref kb) = *self.ivars().keybar_with_newline.borrow() {
+            let _: () = unsafe { msg_send![&**kb, setHidden: nl_hidden] };
+        }
+        // Composer chip — State2 only.
+        let comp_hidden = !matches!(mode, InputMode::State2);
+        if let Some(ref c) = *self.ivars().composer_chip.borrow() {
+            let _: () = unsafe { msg_send![&**c, setHidden: comp_hidden] };
+        }
+        // Close-composer chip — State3 only.
+        let close_hidden = !matches!(mode, InputMode::State3);
+        if let Some(ref c) = *self.ivars().close_composer_chip.borrow() {
+            let _: () = unsafe { msg_send![&**c, setHidden: close_hidden] };
+        }
+
+        // Disable view1's tap recognizer in State1 / State3 — view1 cannot
+        // become first responder, so tapping it shouldn't try to.
+        let tap_enabled = matches!(mode, InputMode::State2);
+        if let Some(ref tap) = *self.ivars().view1_tap.borrow() {
+            let _: () = unsafe { msg_send![&**tap, setEnabled: tap_enabled] };
+        }
+    }
 }
 
 pub(crate) unsafe fn create_vc(
@@ -324,7 +558,7 @@ pub(crate) unsafe fn create_vc(
     let mtm = unsafe { MainThreadMarker::new_unchecked() };
 
     let vc: Retained<RsTerminalViewController> =
-        unsafe { msg_send_id![mtm.alloc::<RsTerminalViewController>(), init] };
+        unsafe { msg_send![mtm.alloc::<RsTerminalViewController>(), init] };
 
     vc.ivars().on_back.set(on_back);
     vc.ivars().ctx.set(ctx);

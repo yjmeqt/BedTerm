@@ -6,8 +6,7 @@
 //!   * `UITextInput` method bodies on `BtIosMetalInputView` (see `metal_view.rs`).
 
 use objc2::rc::{Allocated, Retained};
-use objc2::{declare_class, msg_send_id, ClassType, DeclaredClass};
-use objc2_foundation::MainThreadMarker;
+use objc2::{define_class, msg_send, DefinedClass, MainThreadMarker, MainThreadOnly};
 use objc2_ui_kit::{UITextPosition, UITextRange};
 use std::cell::{Cell, RefCell};
 
@@ -22,31 +21,25 @@ pub struct PositionIvars {
 unsafe impl Send for PositionIvars {}
 unsafe impl Sync for PositionIvars {}
 
-declare_class!(
+define_class!(
+    #[unsafe(super(UITextPosition))]
+    #[thread_kind = MainThreadOnly]
+    #[name = "BtIosUITextPosition"]
+    #[ivars = PositionIvars]
     pub struct BtIosUITextPosition;
 
-    unsafe impl ClassType for BtIosUITextPosition {
-        type Super = UITextPosition;
-        type Mutability = objc2::mutability::MainThreadOnly;
-        const NAME: &'static str = "BtIosUITextPosition";
-    }
-
-    impl DeclaredClass for BtIosUITextPosition {
-        type Ivars = PositionIvars;
-    }
-
-    unsafe impl BtIosUITextPosition {
-        #[method_id(init)]
+    impl BtIosUITextPosition {
+        #[unsafe(method_id(init))]
         fn init(this: Allocated<Self>) -> Option<Retained<Self>> {
             let this = this.set_ivars(PositionIvars::default());
-            unsafe { msg_send_id![super(this), init] }
+            unsafe { msg_send![super(this), init] }
         }
     }
 );
 
 impl BtIosUITextPosition {
     pub fn new(mtm: MainThreadMarker, index: usize) -> Retained<Self> {
-        let this: Retained<Self> = unsafe { msg_send_id![mtm.alloc::<Self>(), init] };
+        let this: Retained<Self> = unsafe { msg_send![Self::alloc(mtm), init] };
         this.ivars().index.set(index);
         this
     }
@@ -56,11 +49,11 @@ impl BtIosUITextPosition {
     }
 
     /// Upcast to the parent class without bumping the retain count beyond the
-    /// caller's expectation. `Retained::cast` is safe because the runtime
-    /// guarantees Self IS-A UITextPosition.
+    /// caller's expectation. `Retained::cast_unchecked` is safe because the
+    /// runtime guarantees Self IS-A UITextPosition.
     pub fn into_super(this: Retained<Self>) -> Retained<UITextPosition> {
         // SAFETY: BtIosUITextPosition is a subclass of UITextPosition.
-        unsafe { Retained::cast(this) }
+        unsafe { Retained::cast_unchecked(this) }
     }
 }
 
@@ -75,27 +68,21 @@ pub struct RangeIvars {
 unsafe impl Send for RangeIvars {}
 unsafe impl Sync for RangeIvars {}
 
-declare_class!(
+define_class!(
+    #[unsafe(super(UITextRange))]
+    #[thread_kind = MainThreadOnly]
+    #[name = "BtIosUITextRange"]
+    #[ivars = RangeIvars]
     pub struct BtIosUITextRange;
 
-    unsafe impl ClassType for BtIosUITextRange {
-        type Super = UITextRange;
-        type Mutability = objc2::mutability::MainThreadOnly;
-        const NAME: &'static str = "BtIosUITextRange";
-    }
-
-    impl DeclaredClass for BtIosUITextRange {
-        type Ivars = RangeIvars;
-    }
-
-    unsafe impl BtIosUITextRange {
-        #[method_id(init)]
+    impl BtIosUITextRange {
+        #[unsafe(method_id(init))]
         fn init(this: Allocated<Self>) -> Option<Retained<Self>> {
             let this = this.set_ivars(RangeIvars::default());
-            unsafe { msg_send_id![super(this), init] }
+            unsafe { msg_send![super(this), init] }
         }
 
-        #[method_id(start)]
+        #[unsafe(method_id(start))]
         fn start_override(&self) -> Option<Retained<UITextPosition>> {
             self.ivars()
                 .start
@@ -104,7 +91,7 @@ declare_class!(
                 .map(|p| BtIosUITextPosition::into_super(p.clone()))
         }
 
-        #[method_id(end)]
+        #[unsafe(method_id(end))]
         fn end_override(&self) -> Option<Retained<UITextPosition>> {
             self.ivars()
                 .end
@@ -113,7 +100,7 @@ declare_class!(
                 .map(|p| BtIosUITextPosition::into_super(p.clone()))
         }
 
-        #[method(isEmpty)]
+        #[unsafe(method(isEmpty))]
         fn is_empty_override(&self) -> bool {
             let s = self.start_index();
             let e = self.end_index();
@@ -128,7 +115,7 @@ impl BtIosUITextRange {
         start: Retained<BtIosUITextPosition>,
         end: Retained<BtIosUITextPosition>,
     ) -> Retained<Self> {
-        let this: Retained<Self> = unsafe { msg_send_id![mtm.alloc::<Self>(), init] };
+        let this: Retained<Self> = unsafe { msg_send![Self::alloc(mtm), init] };
         *this.ivars().start.borrow_mut() = Some(start);
         *this.ivars().end.borrow_mut() = Some(end);
         this

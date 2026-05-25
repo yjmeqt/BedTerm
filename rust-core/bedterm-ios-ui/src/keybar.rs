@@ -10,7 +10,7 @@ use crate::coordinator::BtIosKeyboardCoordinator;
 use crate::geometry::{CGFloat, CGPoint, CGRect, CGSize};
 use objc2::rc::Retained;
 use objc2::runtime::{AnyObject, Sel};
-use objc2::{msg_send, msg_send_id, sel, ClassType};
+use objc2::{msg_send, sel, ClassType};
 use objc2_foundation::{MainThreadMarker, NSAttributedString, NSDictionary, NSString};
 use objc2_ui_kit::{
     NSDirectionalEdgeInsets, UIButton, UIButtonConfiguration, UIColor, UIFont, UIImage,
@@ -37,9 +37,28 @@ const AUTORESIZE_FLEXIBLE_W: u64 = 1 << 1;
 /// `UIViewAutoresizingFlexibleHeight` = 1 << 4.
 const AUTORESIZE_FLEXIBLE_H: u64 = 1 << 4;
 
+/// Which chips to include in the keybar. State1/State2 use `Standard`
+/// (no newline chip; newline isn't meaningful when the input field is
+/// single-line and the composer is hidden). State3 uses `WithNewline`
+/// to expose the explicit newline chip on the action row.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ChipSet {
+    Standard,
+    WithNewline,
+}
+
+#[allow(dead_code)]
 pub(crate) fn make_keybar(
     mtm: MainThreadMarker,
     coordinator: &BtIosKeyboardCoordinator,
+) -> Retained<UIView> {
+    make_keybar_with(mtm, coordinator, ChipSet::WithNewline)
+}
+
+pub(crate) fn make_keybar_with(
+    mtm: MainThreadMarker,
+    coordinator: &BtIosKeyboardCoordinator,
+    set: ChipSet,
 ) -> Retained<UIView> {
     let bar_frame = CGRect {
         origin: CGPoint { x: 0.0, y: 0.0 },
@@ -49,21 +68,19 @@ pub(crate) fn make_keybar(
         },
     };
     let wrapper: Retained<UIView> =
-        unsafe { msg_send_id![mtm.alloc::<UIView>(), initWithFrame: bar_frame] };
+        unsafe { msg_send![mtm.alloc::<UIView>(), initWithFrame: bar_frame] };
     let _: () = unsafe { msg_send![&*wrapper, setAutoresizingMask: AUTORESIZE_FLEXIBLE_W] };
 
     let bg: Retained<UIColor> =
-        unsafe { msg_send_id![UIColor::class(), secondarySystemBackgroundColor] };
+        unsafe { msg_send![UIColor::class(), secondarySystemBackgroundColor] };
     let _: () = unsafe { msg_send![&*wrapper, setBackgroundColor: &*bg] };
 
     let stack: Retained<UIStackView> =
-        unsafe { msg_send_id![mtm.alloc::<UIStackView>(), initWithFrame: bar_frame] };
-    unsafe {
-        stack.setAxis(UILayoutConstraintAxis::Horizontal);
-        stack.setAlignment(UIStackViewAlignment::Center);
-        stack.setDistribution(UIStackViewDistribution::Fill);
-        stack.setSpacing(0.0);
-    }
+        unsafe { msg_send![mtm.alloc::<UIStackView>(), initWithFrame: bar_frame] };
+    stack.setAxis(UILayoutConstraintAxis::Horizontal);
+    stack.setAlignment(UIStackViewAlignment::Center);
+    stack.setDistribution(UIStackViewDistribution::Fill);
+    stack.setSpacing(0.0);
     let _: () = unsafe {
         msg_send![&*stack, setAutoresizingMask: AUTORESIZE_FLEXIBLE_W | AUTORESIZE_FLEXIBLE_H]
     };
@@ -73,29 +90,29 @@ pub(crate) fn make_keybar(
 
     let muted = muted_foreground();
     let tab = make_chip(mtm, ICON_TAB, "Tab", &muted, target, sel!(keybarTab));
-    let newline = make_chip(
-        mtm,
-        ICON_NEWLINE,
-        "Newline",
-        &muted,
-        target,
-        sel!(keybarNewline),
-    );
     let esc = make_chip(mtm, ICON_ESC, "Esc", &muted, target, sel!(keybarEsc));
     let ctrl = make_chip(mtm, ICON_CTRL, "Ctrl", &muted, target, sel!(keybarCtrl));
 
-    unsafe {
-        stack.addArrangedSubview(&tab);
+    if set == ChipSet::WithNewline {
+        let newline = make_chip(
+            mtm,
+            ICON_NEWLINE,
+            "Newline",
+            &muted,
+            target,
+            sel!(keybarNewline),
+        );
         stack.addArrangedSubview(&newline);
-        stack.addArrangedSubview(&esc);
-        stack.addArrangedSubview(&ctrl);
     }
+    stack.addArrangedSubview(&tab);
+    stack.addArrangedSubview(&esc);
+    stack.addArrangedSubview(&ctrl);
 
     // Trailing spacer view so chips left-align under .fill distribution.
     let spacer_frame = CGRect::default();
     let spacer: Retained<UIView> =
-        unsafe { msg_send_id![mtm.alloc::<UIView>(), initWithFrame: spacer_frame] };
-    unsafe { stack.addArrangedSubview(&spacer) };
+        unsafe { msg_send![mtm.alloc::<UIView>(), initWithFrame: spacer_frame] };
+    stack.addArrangedSubview(&spacer);
 
     coordinator.set_ctrl_button(&ctrl);
 
@@ -110,18 +127,14 @@ fn make_chip(
     target: &AnyObject,
     action: Sel,
 ) -> Retained<UIButton> {
-    let cfg = unsafe { UIButtonConfiguration::plainButtonConfiguration(mtm) };
+    let cfg = UIButtonConfiguration::plainButtonConfiguration(mtm);
 
     let title_ns = NSString::from_str(label);
-    let font: Retained<UIFont> =
-        unsafe { msg_send_id![UIFont::class(), systemFontOfSize: FONT_SIZE] };
+    let font: Retained<UIFont> = unsafe { msg_send![UIFont::class(), systemFontOfSize: FONT_SIZE] };
     let font_attr_key = NSString::from_str("NSFont");
-    let attrs: Retained<NSDictionary<NSString, AnyObject>> = unsafe {
-        NSDictionary::from_vec(
-            &[&*font_attr_key],
-            vec![Retained::cast::<AnyObject>(font.clone())],
-        )
-    };
+    let font_obj: Retained<AnyObject> = unsafe { Retained::cast_unchecked(font.clone()) };
+    let attrs: Retained<NSDictionary<NSString, AnyObject>> =
+        NSDictionary::from_retained_objects(&[&*font_attr_key], &[font_obj]);
     let attributed: Retained<NSAttributedString> = unsafe {
         NSAttributedString::initWithString_attributes(
             mtm.alloc::<NSAttributedString>(),
@@ -129,34 +142,31 @@ fn make_chip(
             Some(&attrs),
         )
     };
-    unsafe { cfg.setAttributedTitle(Some(&attributed)) };
+    cfg.setAttributedTitle(Some(&attributed));
 
     let icon_ns = NSString::from_str(icon);
-    let sym_cfg = unsafe {
-        UIImageSymbolConfiguration::configurationWithPointSize_weight(
-            SYMBOL_SIZE,
-            UIImageSymbolWeight::Medium,
-        )
-    };
-    if let Some(image) = unsafe { UIImage::systemImageNamed(&icon_ns) } {
+    let sym_cfg = UIImageSymbolConfiguration::configurationWithPointSize_weight(
+        SYMBOL_SIZE,
+        UIImageSymbolWeight::Medium,
+    );
+    if let Some(image) = UIImage::systemImageNamed(&icon_ns) {
         let configured: Retained<UIImage> =
-            unsafe { msg_send_id![&*image, imageByApplyingSymbolConfiguration: &*sym_cfg] };
-        unsafe { cfg.setImage(Some(&configured)) };
+            unsafe { msg_send![&*image, imageByApplyingSymbolConfiguration: &*sym_cfg] };
+        cfg.setImage(Some(&configured));
     }
-    unsafe { cfg.setImagePadding(IMAGE_PADDING) };
+    cfg.setImagePadding(IMAGE_PADDING);
     let insets = NSDirectionalEdgeInsets {
         top: PADDING_V,
         leading: PADDING_H,
         bottom: PADDING_V,
         trailing: PADDING_H,
     };
-    unsafe { cfg.setContentInsets(insets) };
-    unsafe { cfg.setBaseForegroundColor(Some(foreground)) };
+    cfg.setContentInsets(insets);
+    cfg.setBaseForegroundColor(Some(foreground));
 
     // `buttonWithType: 0` = `.custom`; setConfiguration overrides visuals.
-    let button: Retained<UIButton> =
-        unsafe { msg_send_id![UIButton::class(), buttonWithType: 0_i64] };
-    unsafe { button.setConfiguration(Some(&cfg)) };
+    let button: Retained<UIButton> = unsafe { msg_send![UIButton::class(), buttonWithType: 0_i64] };
+    button.setConfiguration(Some(&cfg));
     let _: () = unsafe {
         msg_send![&*button,
             addTarget: target,
@@ -171,5 +181,5 @@ fn make_chip(
 /// adaptive (lighter on dark, darker on light) and visually matches the
 /// shadcn token (0.451 light / 0.631 dark) closely enough.
 fn muted_foreground() -> Retained<UIColor> {
-    unsafe { msg_send_id![UIColor::class(), secondaryLabelColor] }
+    unsafe { msg_send![UIColor::class(), secondaryLabelColor] }
 }

@@ -4,6 +4,12 @@ import UIKit
 
 @testable import BedTermKit
 
+extension UIView {
+    fileprivate var subviewsRecursive: [UIView] {
+        subviews.flatMap { [$0] + $0.subviewsRecursive }
+    }
+}
+
 @Suite("IosTerminalViewController lifecycle")
 @MainActor
 struct IosTerminalVCTests {
@@ -35,6 +41,28 @@ struct IosTerminalVCTests {
         let metalCls: AnyClass = try #require(NSClassFromString("BtIosMetalInputView"))
         let hasMetalSubview = vc.view.subviews.contains { $0.isKind(of: metalCls) }
         #expect(hasMetalSubview)
+    }
+
+    @Test("VC view loads when attached to a key UIWindow (responder chain present)")
+    func loadsInsideKeyWindow() throws {
+        let ptr = try #require(bt_ios_create_vc(nil, nil))
+        let vc = Unmanaged<UIViewController>.fromOpaque(ptr).takeRetainedValue()
+
+        // Build a real window + screen + responder chain — this is what the
+        // simulator app provides and what some UITextField init paths rely on.
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = vc
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+
+        // Force two layout passes — first builds subviews, second reflows them.
+        vc.view.layoutIfNeeded()
+        vc.view.setNeedsLayout()
+        vc.view.layoutIfNeeded()
+
+        // The State1 input bar must exist as a subview (UITextField inside).
+        let hasTextField = vc.view.subviewsRecursive.contains { $0 is UITextField }
+        #expect(hasTextField)
     }
 
     @Test("view1 accepts UITextInput selectors")

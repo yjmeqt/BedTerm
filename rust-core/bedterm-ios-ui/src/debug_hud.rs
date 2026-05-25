@@ -7,20 +7,26 @@
 //! state is re-polled on the same cadence via `GCKeyboard.coalescedKeyboard`.
 
 use crate::geometry::{CGFloat, CGPoint, CGRect, CGSize};
+use crate::input_mode::{InputMode, ModeState};
 use objc2::rc::{Allocated, Retained};
 use objc2::runtime::{AnyClass, AnyObject};
-use objc2::{declare_class, msg_send, msg_send_id, sel, ClassType, DeclaredClass};
-use objc2_foundation::{
-    MainThreadMarker, NSNotificationCenter, NSRunLoop, NSRunLoopCommonModes, NSString,
+use objc2::{
+    define_class, msg_send, sel, AnyThread, ClassType, DefinedClass, MainThreadMarker,
+    MainThreadOnly,
 };
+use objc2_foundation::{NSNotificationCenter, NSRunLoop, NSRunLoopCommonModes, NSString};
 use objc2_quartz_core::CADisplayLink;
-use objc2_ui_kit::{UIColor, UIFont, UIFontWeight, UILabel, UIView};
+use objc2_ui_kit::{UIButton, UIColor, UIFont, UIFontWeight, UILabel, UIView};
 use std::cell::{Cell, RefCell};
+use std::rc::Rc;
 
 pub(crate) const HUD_WIDTH: CGFloat = 70.0;
 const ROW_HEIGHT: CGFloat = 16.0;
 const ROW_SPACING: CGFloat = 2.0;
-pub(crate) const HUD_HEIGHT: CGFloat = ROW_HEIGHT * 2.0 + ROW_SPACING;
+pub(crate) const HUD_HEIGHT: CGFloat = ROW_HEIGHT * 3.0 + ROW_SPACING * 2.0;
+
+/// `UIControlEventTouchUpInside` = 1 << 6.
+const CONTROL_EVENT_TOUCH_UP_INSIDE: u64 = 1 << 6;
 
 #[derive(Default)]
 pub struct Ivars {
@@ -35,51 +41,73 @@ pub struct Ivars {
     /// / `UIKeyboardWillHide`). When the SW keyboard is up, HW kbd is not in
     /// effective use so we hide the indicator.
     sw_keyboard_visible: Cell<bool>,
+    /// Shared mode state — used by the input-mode switcher row to drive
+    /// State1 vs State2/3 transitions and to highlight the active button.
+    mode_state: RefCell<Option<Rc<ModeState>>>,
+    /// Input-mode switcher buttons (1, 2/3).
+    input1_btn: RefCell<Option<Retained<UIButton>>>,
+    input23_btn: RefCell<Option<Retained<UIButton>>>,
 }
 
 unsafe impl Send for Ivars {}
 unsafe impl Sync for Ivars {}
 
-declare_class!(
+define_class!(
     /// Top-right floating debug HUD. Subclasses `UIView`.
+    #[unsafe(super(UIView))]
+    #[thread_kind = MainThreadOnly]
+    #[name = "BtIosDebugHUD"]
+    #[ivars = Ivars]
     pub struct BtIosDebugHUD;
 
-    unsafe impl ClassType for BtIosDebugHUD {
-        type Super = UIView;
-        type Mutability = objc2::mutability::MainThreadOnly;
-        const NAME: &'static str = "BtIosDebugHUD";
-    }
-
-    impl DeclaredClass for BtIosDebugHUD {
-        type Ivars = Ivars;
-    }
-
-    unsafe impl BtIosDebugHUD {
-        #[method_id(initWithFrame:)]
+    impl BtIosDebugHUD {
+        #[unsafe(method_id(initWithFrame:))]
         fn init_with_frame(this: Allocated<Self>, frame: CGRect) -> Option<Retained<Self>> {
             let this = this.set_ivars(Ivars::default());
-            let this: Retained<Self> = unsafe { msg_send_id![super(this), initWithFrame: frame] };
+            let this: Retained<Self> = unsafe { msg_send![super(this), initWithFrame: frame] };
             Some(this)
         }
 
         /// `UIKeyboardWillShowNotification` observer.
-        #[method(onKeyboardWillShow:)]
+        #[unsafe(method(onKeyboardWillShow:))]
         fn on_keyboard_will_show(&self, _note: &AnyObject) {
             self.ivars().sw_keyboard_visible.set(true);
             self.refresh_keyboard();
         }
 
         /// `UIKeyboardWillHideNotification` observer.
-        #[method(onKeyboardWillHide:)]
+        #[unsafe(method(onKeyboardWillHide:))]
         fn on_keyboard_will_hide(&self, _note: &AnyObject) {
             self.ivars().sw_keyboard_visible.set(false);
             self.refresh_keyboard();
         }
 
+        /// HUD input-mode switcher — force State1.
+        #[unsafe(method(onSelectInput1:))]
+        fn on_select_input1(&self, _sender: &AnyObject) {
+            let ms_ref = self.ivars().mode_state.borrow();
+            let Some(ms) = ms_ref.as_ref().cloned() else { return };
+            drop(ms_ref);
+            ms.set_mode(InputMode::State1);
+            self.refresh_input_buttons();
+        }
+
+        /// HUD input-mode switcher — leave State1 (defaults to State2).
+        #[unsafe(method(onSelectInput23:))]
+        fn on_select_input23(&self, _sender: &AnyObject) {
+            let ms_ref = self.ivars().mode_state.borrow();
+            let Some(ms) = ms_ref.as_ref().cloned() else { return };
+            drop(ms_ref);
+            if ms.mode() == InputMode::State1 {
+                ms.set_mode(InputMode::State2);
+            }
+            self.refresh_input_buttons();
+        }
+
         /// `CADisplayLink` target — fires every screen refresh.
-        #[method(onDisplayTick:)]
+        #[unsafe(method(onDisplayTick:))]
         fn on_display_tick(&self, link: &CADisplayLink) {
-            let ts: f64 = unsafe { link.timestamp() };
+            let ts: f64 = link.timestamp();
             if self.ivars().window_start.get() == 0.0 {
                 self.ivars().window_start.set(ts);
             }
@@ -106,27 +134,29 @@ impl BtIosDebugHUD {
                 height: HUD_HEIGHT,
             },
         };
-        let this: Retained<Self> =
-            unsafe { msg_send_id![mtm.alloc::<Self>(), initWithFrame: frame] };
+        let this: Retained<Self> = unsafe { msg_send![Self::alloc(mtm), initWithFrame: frame] };
 
-        // Two chip rows stacked vertically. We position them manually rather
-        // than via a UIStackView to keep the dependency surface small.
+        // Three chip rows stacked vertically. We position them manually
+        // rather than via a UIStackView to keep the dependency surface small.
         let (fps_row, fps_label) = make_row(mtm, 0.0);
         let (kbd_row, kbd_label) = make_row(mtm, ROW_HEIGHT + ROW_SPACING);
-        unsafe {
-            this.addSubview(&fps_row);
-            this.addSubview(&kbd_row);
-        }
+        let input_y = (ROW_HEIGHT + ROW_SPACING) * 2.0;
+        let (input_row, input1_btn, input23_btn) = make_input_switcher_row(mtm, input_y, &this);
+        this.addSubview(&fps_row);
+        this.addSubview(&kbd_row);
+        this.addSubview(&input_row);
         // Hide the keyboard row until something is attached.
         let _: () = unsafe { msg_send![&*kbd_row, setHidden: true] };
 
         *this.ivars().fps_label.borrow_mut() = Some(fps_label);
         *this.ivars().kbd_row.borrow_mut() = Some(kbd_row);
         *this.ivars().kbd_label.borrow_mut() = Some(kbd_label);
+        *this.ivars().input1_btn.borrow_mut() = Some(input1_btn);
+        *this.ivars().input23_btn.borrow_mut() = Some(input23_btn);
 
         // Start the display link — retains `this` for the runloop's lifetime.
         let link: Retained<CADisplayLink> =
-            unsafe { CADisplayLink::displayLinkWithTarget_selector(&*this, sel!(onDisplayTick:)) };
+            unsafe { CADisplayLink::displayLinkWithTarget_selector(&this, sel!(onDisplayTick:)) };
         unsafe {
             let runloop = NSRunLoop::mainRunLoop();
             link.addToRunLoop_forMode(&runloop, NSRunLoopCommonModes);
@@ -160,7 +190,7 @@ impl BtIosDebugHUD {
     #[allow(dead_code)]
     pub(crate) fn invalidate(&self) {
         if let Some(link) = self.ivars().display_link.borrow_mut().take() {
-            unsafe { link.invalidate() };
+            link.invalidate();
         }
     }
 
@@ -198,6 +228,160 @@ impl BtIosDebugHUD {
     fn frame_count_initialized(&self) -> bool {
         self.ivars().window_start.get() > 0.0
     }
+
+    /// Install the shared mode state and refresh the switcher buttons.
+    pub(crate) fn set_mode_state(&self, ms: &Rc<ModeState>) {
+        *self.ivars().mode_state.borrow_mut() = Some(ms.clone());
+        self.refresh_input_buttons();
+    }
+
+    fn refresh_input_buttons(&self) {
+        let ms_ref = self.ivars().mode_state.borrow();
+        let Some(ms) = ms_ref.as_ref() else { return };
+        let mode = ms.mode();
+        drop(ms_ref);
+        let active_color: Retained<UIColor> =
+            unsafe { msg_send![UIColor::class(), systemBlueColor] };
+        let inactive_color: Retained<UIColor> =
+            unsafe { msg_send![UIColor::class(), secondaryLabelColor] };
+
+        let one_active = matches!(mode, InputMode::State1);
+        if let Some(b) = self.ivars().input1_btn.borrow().as_ref() {
+            tint_button(
+                b,
+                if one_active {
+                    &active_color
+                } else {
+                    &inactive_color
+                },
+            );
+        }
+        if let Some(b) = self.ivars().input23_btn.borrow().as_ref() {
+            tint_button(
+                b,
+                if !one_active {
+                    &active_color
+                } else {
+                    &inactive_color
+                },
+            );
+        }
+    }
+}
+
+fn tint_button(button: &UIButton, color: &UIColor) {
+    let cfg = button.configuration();
+    let Some(cfg) = cfg else { return };
+    cfg.setBaseForegroundColor(Some(color));
+    button.setConfiguration(Some(&cfg));
+}
+
+/// Build the third row: two compact title-only buttons (`1` and `2/3`).
+fn make_input_switcher_row(
+    mtm: MainThreadMarker,
+    y_offset: CGFloat,
+    target: &BtIosDebugHUD,
+) -> (Retained<UIView>, Retained<UIButton>, Retained<UIButton>) {
+    let row_frame = CGRect {
+        origin: CGPoint {
+            x: 0.0,
+            y: y_offset,
+        },
+        size: CGSize {
+            width: HUD_WIDTH,
+            height: ROW_HEIGHT,
+        },
+    };
+    let row: Retained<UIView> = unsafe { msg_send![UIView::alloc(mtm), initWithFrame: row_frame] };
+    let bg: Retained<UIColor> = unsafe {
+        let base: Retained<UIColor> = msg_send![UIColor::class(), secondaryLabelColor];
+        msg_send![&*base, colorWithAlphaComponent: 0.15_f64]
+    };
+    let _: () = unsafe { msg_send![&*row, setBackgroundColor: &*bg] };
+    let layer: Retained<AnyObject> = unsafe { msg_send![&*row, layer] };
+    let _: () = unsafe { msg_send![&*layer, setCornerRadius: 4.0_f64] };
+    let _: () = unsafe { msg_send![&*layer, setMasksToBounds: true] };
+
+    let btn_w = HUD_WIDTH / 2.0;
+    let b1 = make_switcher_button(
+        mtm,
+        "1",
+        CGRect {
+            origin: CGPoint { x: 0.0, y: 0.0 },
+            size: CGSize {
+                width: btn_w,
+                height: ROW_HEIGHT,
+            },
+        },
+        target as &AnyObject,
+        sel!(onSelectInput1:),
+    );
+    let b23 = make_switcher_button(
+        mtm,
+        "2/3",
+        CGRect {
+            origin: CGPoint { x: btn_w, y: 0.0 },
+            size: CGSize {
+                width: btn_w,
+                height: ROW_HEIGHT,
+            },
+        },
+        target as &AnyObject,
+        sel!(onSelectInput23:),
+    );
+    let _: () = unsafe { msg_send![&*row, addSubview: &*b1] };
+    let _: () = unsafe { msg_send![&*row, addSubview: &*b23] };
+
+    (row, b1, b23)
+}
+
+fn make_switcher_button(
+    mtm: MainThreadMarker,
+    title: &str,
+    frame: CGRect,
+    target: &AnyObject,
+    action: objc2::runtime::Sel,
+) -> Retained<UIButton> {
+    use objc2_foundation::{NSAttributedString, NSDictionary};
+    use objc2_ui_kit::{NSDirectionalEdgeInsets, UIButtonConfiguration};
+
+    let cfg = UIButtonConfiguration::plainButtonConfiguration(mtm);
+
+    let title_ns = NSString::from_str(title);
+    let font: Retained<UIFont> =
+        UIFont::monospacedSystemFontOfSize_weight(10.0, 0.0 as UIFontWeight);
+    let key = NSString::from_str("NSFont");
+    let font_obj: Retained<AnyObject> = unsafe { Retained::cast_unchecked(font.clone()) };
+    let attrs: Retained<NSDictionary<NSString, AnyObject>> =
+        NSDictionary::from_retained_objects(&[&*key], &[font_obj]);
+    let attributed: Retained<NSAttributedString> = unsafe {
+        NSAttributedString::initWithString_attributes(
+            NSAttributedString::alloc(),
+            &title_ns,
+            Some(&attrs),
+        )
+    };
+    cfg.setAttributedTitle(Some(&attributed));
+    cfg.setContentInsets(NSDirectionalEdgeInsets {
+        top: 0.0,
+        leading: 2.0,
+        bottom: 0.0,
+        trailing: 2.0,
+    });
+    let fg: Retained<UIColor> = unsafe { msg_send![UIColor::class(), secondaryLabelColor] };
+    cfg.setBaseForegroundColor(Some(&fg));
+
+    let button: Retained<UIButton> = unsafe { msg_send![UIButton::class(), buttonWithType: 0_i64] };
+    button.setConfiguration(Some(&cfg));
+    let _: () = unsafe { msg_send![&*button, setFrame: frame] };
+    let _: () = unsafe {
+        msg_send![&*button,
+            addTarget: target,
+            action: action,
+            forControlEvents: CONTROL_EVENT_TOUCH_UP_INSIDE,
+        ]
+    };
+    button
 }
 
 /// Build one HUD row at `y_offset`: a rounded-corner container holding a
@@ -213,27 +397,26 @@ fn make_row(mtm: MainThreadMarker, y_offset: CGFloat) -> (Retained<UIView>, Reta
             height: ROW_HEIGHT,
         },
     };
-    let row: Retained<UIView> =
-        unsafe { msg_send_id![mtm.alloc::<UIView>(), initWithFrame: row_frame] };
+    let row: Retained<UIView> = unsafe { msg_send![UIView::alloc(mtm), initWithFrame: row_frame] };
 
     // 15 %-opacity gray pill.
     let bg: Retained<UIColor> = unsafe {
-        let base: Retained<UIColor> = msg_send_id![UIColor::class(), secondaryLabelColor];
-        msg_send_id![&*base, colorWithAlphaComponent: 0.15_f64]
+        let base: Retained<UIColor> = msg_send![UIColor::class(), secondaryLabelColor];
+        msg_send![&*base, colorWithAlphaComponent: 0.15_f64]
     };
     let _: () = unsafe { msg_send![&*row, setBackgroundColor: &*bg] };
 
-    let layer: Retained<AnyObject> = unsafe { msg_send_id![&*row, layer] };
+    let layer: Retained<AnyObject> = unsafe { msg_send![&*row, layer] };
     let _: () = unsafe { msg_send![&*layer, setCornerRadius: 4.0_f64] };
     let _: () = unsafe { msg_send![&*layer, setMasksToBounds: true] };
 
     let label: Retained<UILabel> =
-        unsafe { msg_send_id![mtm.alloc::<UILabel>(), initWithFrame: row.bounds()] };
+        unsafe { msg_send![UILabel::alloc(mtm), initWithFrame: row.bounds()] };
     let _: () = unsafe { msg_send![&*label, setAutoresizingMask: (1u64 << 1) | (1u64 << 4)] };
     let font: Retained<UIFont> =
-        unsafe { UIFont::monospacedSystemFontOfSize_weight(10.0, 0.0 as UIFontWeight) };
+        UIFont::monospacedSystemFontOfSize_weight(10.0, 0.0 as UIFontWeight);
     unsafe { label.setFont(Some(&font)) };
-    let fg: Retained<UIColor> = unsafe { msg_send_id![UIColor::class(), secondaryLabelColor] };
+    let fg: Retained<UIColor> = unsafe { msg_send![UIColor::class(), secondaryLabelColor] };
     unsafe { label.setTextColor(Some(&fg)) };
     let _: () = unsafe { msg_send![&*label, setTextAlignment: 1_i64] }; // .center
     let _: () = unsafe { msg_send![&*row, addSubview: &*label] };
@@ -244,7 +427,8 @@ fn make_row(mtm: MainThreadMarker, y_offset: CGFloat) -> (Retained<UIView>, Reta
 /// Polls `GCKeyboard.coalescedKeyboard` via runtime class lookup so we don't
 /// have to depend on `objc2-game-controller`.
 fn hardware_keyboard_attached() -> bool {
-    let Some(cls) = AnyClass::get("GCKeyboard") else {
+    // 0.6's `AnyClass::get` takes `&CStr` (was `&str` in 0.5).
+    let Some(cls) = AnyClass::get(c"GCKeyboard") else {
         return false;
     };
     let kb: *const AnyObject = unsafe { msg_send![cls, coalescedKeyboard] };

@@ -31,8 +31,8 @@ struct TerminalScreen: View {
     /// setting on. In that state the terminal viewport's top edge clamps to
     /// the top safe-area inset so the Dynamic Island / notch / status bar
     /// stops covering the TUI's first row (terminal-view
-    /// R1.alt_screen_top_inset). The bottom toolbar (KeyBar + ComposePill)
-    /// stays visible regardless — the user still needs Esc / Ctrl inside vim.
+    /// R1.alt_screen_top_inset). The bottom toolbar stays visible
+    /// regardless — the user still needs Esc / Ctrl inside vim.
     private var reserveTopSafeArea: Bool {
         settings.reserveTopSafeAreaInAltScreen && session.mode.contains(.altScreen)
     }
@@ -56,8 +56,7 @@ struct TerminalScreen: View {
 
     /// Three-state display mode derived from settings + the live terminal
     /// mode flags. Drives both the upper visual stack (block list vs
-    /// live grid) and the lower input stack (Warp-style flat composer
-    /// vs the legacy ComposePill → ComposerBar morph).
+    /// live grid) and the lower input stack.
     private var displayMode: TerminalDisplayMode {
         if session.mode.contains(.altScreen) { return .altScreen }
         return settings.showCommandBlocks ? .blockList : .inline
