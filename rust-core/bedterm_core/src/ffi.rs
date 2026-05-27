@@ -2,45 +2,28 @@
 //!
 //! Lifetime contract:
 //! - `bt_term_new` returns an owned handle; caller must `bt_term_free` exactly once.
-//! - `bt_term_snapshot` borrows-out cell pointers valid until the next call to
-//!   `bt_term_feed` / `bt_term_resize` / `bt_term_snapshot` / `bt_term_free`,
-//!   OR until `bt_term_snapshot_release` is called — whichever happens first.
-//!   Swift must copy out cells before mutating the terminal.
+//! - All other accessors borrow out POD-by-value plus opaque pointers
+//!   into per-handle scratch (e.g. `block_string_scratch`); Swift must
+//!   copy out before the next mutating call.
 
-use std::os::raw::c_int;
-
-use crate::snapshot::{CellSnapshot, GridSnapshot};
+use crate::snapshot::GridSnapshot;
 use crate::term::{BtRgb24, Palette, Terminal};
-
-#[repr(C)]
-pub struct BtSnapshotView {
-    pub cols: u16,
-    pub rows: u16,
-    pub cursor_col: u16,
-    /// Equals `rows` when the cursor is scrolled off-screen.
-    pub cursor_row: u16,
-    /// 0 = at live bottom; positive = N rows into scrollback.
-    pub display_offset: u32,
-    pub cells: *const CellSnapshot,
-    pub cell_count: usize,
-}
 
 pub struct BtTerm {
     inner: Terminal,
+    /// Holds the most recent renderer-side snapshot so callers of
+    /// [`Self::snapshot_for_renderer`] get a stable borrow until the
+    /// next mutating call.
     cached: Option<GridSnapshot>,
-    /// Scratch for any block-string outparam (command / cwd). Same
-    /// invalidation contract as `bt_term_snapshot`: pointer valid only
-    /// until the next mutating call OR the next block-string read.
+    /// Scratch for any block-string outparam (command / cwd). Pointer
+    /// valid only until the next mutating call OR the next block-string
+    /// read.
     block_string_scratch: Vec<u8>,
-    /// Cached snapshot for the most recent frozen-block snapshot view we
-    /// handed out. Pointer in `BtSnapshotView` is valid until the next
-    /// snapshot read / mutating call / explicit release.
-    block_snapshot_cached: Option<GridSnapshot>,
 }
 
 impl BtTerm {
     /// Internal helper for the renderer module — produces a fresh snapshot
-    /// without going through the cached-pointer FFI ceremony.
+    /// without going through any FFI ceremony.
     pub(crate) fn snapshot_for_renderer(&mut self) -> &GridSnapshot {
         let snap = self.inner.snapshot();
         self.cached = Some(snap);
@@ -54,14 +37,6 @@ impl BtTerm {
     pub(crate) fn block_string_scratch_mut(&mut self) -> &mut Vec<u8> {
         &mut self.block_string_scratch
     }
-
-    pub(crate) fn set_block_snapshot_cached(&mut self, snap: crate::snapshot::GridSnapshot) {
-        self.block_snapshot_cached = Some(snap);
-    }
-
-    pub(crate) fn clear_block_snapshot_cached(&mut self) {
-        self.block_snapshot_cached = None;
-    }
 }
 
 #[no_mangle]
@@ -72,7 +47,6 @@ pub extern "C" fn bt_term_new(cols: u16, rows: u16) -> *mut BtTerm {
         inner: Terminal::new(cols, rows),
         cached: None,
         block_string_scratch: Vec::new(),
-        block_snapshot_cached: None,
     }))
 }
 
@@ -109,30 +83,6 @@ pub unsafe extern "C" fn bt_term_resize(h: *mut BtTerm, cols: u16, rows: u16) {
     let term = &mut *h;
     term.cached = None;
     term.inner.resize(cols.max(1), rows.max(1));
-}
-
-/// # Safety
-/// `h` must be a valid, non-freed handle. `out` must be a valid pointer to a `BtSnapshotView`.
-/// The cell pointer in `*out` is valid until the next mutating call or `bt_term_snapshot_release`.
-#[no_mangle]
-pub unsafe extern "C" fn bt_term_snapshot(h: *mut BtTerm, out: *mut BtSnapshotView) -> c_int {
-    if h.is_null() || out.is_null() {
-        return -1;
-    }
-    let term = &mut *h;
-    let snap = term.inner.snapshot();
-    let view = BtSnapshotView {
-        cols: snap.cols,
-        rows: snap.rows,
-        cursor_col: snap.cursor_col,
-        cursor_row: snap.cursor_row,
-        display_offset: snap.display_offset,
-        cells: snap.cells.as_ptr(),
-        cell_count: snap.cells.len(),
-    };
-    term.cached = Some(snap);
-    *out = view;
-    0
 }
 
 /// # Safety
@@ -219,50 +169,6 @@ pub unsafe extern "C" fn bt_term_screen_bottom_line(h: *const BtTerm) -> i32 {
         return 0;
     }
     (*h).inner.screen_bottom_line()
-}
-
-/// Snapshot a row range from the active screen + scrollback. Same lifetime
-/// contract as `bt_term_snapshot` — the cell pointer in `*out` is valid
-/// until the next mutating call. `start_line` inclusive, `end_line`
-/// exclusive; values outside the grid extent are clamped.
-///
-/// # Safety
-/// `h` must be a valid, non-freed handle. `out` must be writable.
-#[no_mangle]
-pub unsafe extern "C" fn bt_term_snapshot_range(
-    h: *mut BtTerm,
-    start_line: i32,
-    end_line: i32,
-    out: *mut BtSnapshotView,
-) -> c_int {
-    if h.is_null() || out.is_null() {
-        return -1;
-    }
-    let term = &mut *h;
-    let snap = term.inner.snapshot_range(start_line, end_line);
-    let view = BtSnapshotView {
-        cols: snap.cols,
-        rows: snap.rows,
-        cursor_col: snap.cursor_col,
-        cursor_row: snap.cursor_row,
-        display_offset: snap.display_offset,
-        cells: snap.cells.as_ptr(),
-        cell_count: snap.cells.len(),
-    };
-    term.cached = Some(snap);
-    *out = view;
-    0
-}
-
-/// # Safety
-/// `h` must be a valid, non-freed handle.
-#[no_mangle]
-pub unsafe extern "C" fn bt_term_snapshot_release(h: *mut BtTerm) {
-    if h.is_null() {
-        return;
-    }
-    let term = &mut *h;
-    term.cached = None;
 }
 
 /// Flat C view of a `Palette`. 18 × `BtRgb24` = 54 bytes (no padding —

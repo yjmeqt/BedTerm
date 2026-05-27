@@ -313,41 +313,6 @@ typedef struct BtBlockView {
   uint32_t body_rows;
 } BtBlockView;
 
-typedef struct CellSnapshot {
-  /**
-   * Unicode scalar of the cell. 0 = blank. Wide-char trailing halves use char 0 with WIDE_TRAILING flag.
-   */
-  uint32_t ch;
-  /**
-   * Foreground colour, RGBA packed big-endian-style: 0xRRGGBBAA.
-   */
-  uint32_t fg_rgba;
-  /**
-   * Background colour, same encoding.
-   */
-  uint32_t bg_rgba;
-  /**
-   * Bitfield: 1=bold, 2=underline, 4=inverse, 8=italic, 16=wide_leading, 32=wide_trailing, 64=strikethrough.
-   */
-  uint16_t flags;
-} CellSnapshot;
-
-typedef struct BtSnapshotView {
-  uint16_t cols;
-  uint16_t rows;
-  uint16_t cursor_col;
-  /**
-   * Equals `rows` when the cursor is scrolled off-screen.
-   */
-  uint16_t cursor_row;
-  /**
-   * 0 = at live bottom; positive = N rows into scrollback.
-   */
-  uint32_t display_offset;
-  const struct CellSnapshot *cells;
-  uintptr_t cell_count;
-} BtSnapshotView;
-
 typedef double CGFloat;
 
 /**
@@ -1440,23 +1405,6 @@ uintptr_t bt_term_block_count(const struct BtTerm *h);
  */
 int bt_term_block_at(struct BtTerm *h, uintptr_t idx, struct BtBlockView *out);
 
-/**
- * Fetch the frozen body of a sealed block. Returns -1 if the block is
- * still running, missing, or the index is out of bounds. The cell
- * pointer in `*out` follows the same invalidation rules as
- * `bt_term_snapshot`.
- *
- * # Safety
- * `h` valid; `out` writable.
- */
-int bt_term_block_snapshot(struct BtTerm *h, uintptr_t idx, struct BtSnapshotView *out);
-
-/**
- * # Safety
- * `h` valid.
- */
-void bt_term_block_snapshot_release(struct BtTerm *h);
-
 struct BtTerm *bt_term_new(uint16_t cols, uint16_t rows);
 
 /**
@@ -1476,13 +1424,6 @@ void bt_term_feed(struct BtTerm *h, const uint8_t *bytes, uintptr_t len);
  * `h` must be a valid, non-freed handle.
  */
 void bt_term_resize(struct BtTerm *h, uint16_t cols, uint16_t rows);
-
-/**
- * # Safety
- * `h` must be a valid, non-freed handle. `out` must be a valid pointer to a `BtSnapshotView`.
- * The cell pointer in `*out` is valid until the next mutating call or `bt_term_snapshot_release`.
- */
-int bt_term_snapshot(struct BtTerm *h, struct BtSnapshotView *out);
 
 /**
  * # Safety
@@ -1537,26 +1478,6 @@ int32_t bt_term_current_line(const struct BtTerm *h);
  * `h` must be a valid, non-freed handle.
  */
 int32_t bt_term_screen_bottom_line(const struct BtTerm *h);
-
-/**
- * Snapshot a row range from the active screen + scrollback. Same lifetime
- * contract as `bt_term_snapshot` — the cell pointer in `*out` is valid
- * until the next mutating call. `start_line` inclusive, `end_line`
- * exclusive; values outside the grid extent are clamped.
- *
- * # Safety
- * `h` must be a valid, non-freed handle. `out` must be writable.
- */
-int bt_term_snapshot_range(struct BtTerm *h,
-                           int32_t start_line,
-                           int32_t end_line,
-                           struct BtSnapshotView *out);
-
-/**
- * # Safety
- * `h` must be a valid, non-freed handle.
- */
-void bt_term_snapshot_release(struct BtTerm *h);
 
 #ifdef __cplusplus
 }  // extern "C"
