@@ -1,3 +1,4 @@
+import BedTermCoreC
 import Foundation
 import Testing
 
@@ -12,18 +13,10 @@ import Testing
 struct HostsBridgeTests {
     @Test("snapshot JSON returns an empty array for an empty store")
     func snapshotEmpty() throws {
-        TestKeychain.installInMemory()
-        let suite = UUID().uuidString
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defer { defaults.removePersistentDomain(forName: suite) }
-        let store = HostsStore(
-            service: "bt.hostsbridge.test.\(suite)",
-            orderKey: "bt.hostsbridge.test.order.\(suite)",
-            migrationKey: "bt.hostsbridge.test.migration.\(suite)",
-            defaults: defaults
-        )
+        installTestService()
+        defer { clearTestService() }
         let prior = HostsBridge.store
-        HostsBridge.store = store
+        HostsBridge.store = HostsStore()
         defer { HostsBridge.store = prior }
 
         let json = HostsBridge.snapshotJSON()
@@ -74,18 +67,10 @@ struct HostsBridgeTests {
 
     @Test("snapshot pointer round-trips through strdup/free")
     func snapshotPointerRoundTrip() throws {
-        TestKeychain.installInMemory()
-        let suite = UUID().uuidString
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defer { defaults.removePersistentDomain(forName: suite) }
-        let store = HostsStore(
-            service: "bt.hostsbridge.test.\(suite)",
-            orderKey: "bt.hostsbridge.test.order.\(suite)",
-            migrationKey: "bt.hostsbridge.test.migration.\(suite)",
-            defaults: defaults
-        )
+        installTestService()
+        defer { clearTestService() }
         let prior = HostsBridge.store
-        HostsBridge.store = store
+        HostsBridge.store = HostsStore()
         defer { HostsBridge.store = prior }
 
         let ptr = btSwiftHostsSnapshotJSON()
@@ -96,6 +81,21 @@ struct HostsBridgeTests {
             #expect(((try? JSONSerialization.jsonObject(with: Data(json.utf8))) != nil))
             btSwiftHostsFreeSnapshot(ptr)
         }
+    }
+
+    private func installTestService() {
+        let suffix = UUID().uuidString
+        let svc = "bt.hostsbridge.test.\(suffix)"
+        let ord = "bt.hostsbridge.test.order.\(suffix)"
+        svc.withCString { sPtr in
+            ord.withCString { oPtr in
+                bt_ios_hosts_set_test_service(sPtr, oPtr)
+            }
+        }
+    }
+
+    private func clearTestService() {
+        bt_ios_hosts_set_test_service(nil, nil)
     }
 
     @Test("C symbols are reachable via dlsym")

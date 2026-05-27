@@ -49,6 +49,16 @@ objc2-foundation = { version = "0.3", features = [
 # UIKit / Metal frameworks only exist on iOS — gate the bindings on the
 # target so host builds don't try to link `-framework UIKit`.
 [target.'cfg(target_os = "ios")'.dependencies]
+# `security-framework` (+ `-sys` and the `core-foundation` companions) back
+# the Rust-owned saved-hosts persistence (`hosts_store`). Cfg-iOS only —
+# host unit tests never touch the Keychain.
+security-framework = "3"
+security-framework-sys = "2"
+core-foundation = "0.10"
+core-foundation-sys = "0.8"
+# Used by `hosts_store` to crack open the Swift-Codable SavedHost blob
+# (opaque to Rust except for the display-snapshot fields).
+serde_json = "1"
 objc2-ui-kit = { version = "0.3", features = [
     "block2",
     "UITraitCollection",

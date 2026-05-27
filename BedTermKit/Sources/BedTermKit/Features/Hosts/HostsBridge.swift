@@ -1,3 +1,4 @@
+import BedTermCoreC
 import Foundation
 
 /// Swift→Rust bridge for the W24b Rust Hosts list VC.
@@ -41,8 +42,22 @@ public enum HostsBridge {
     /// Render the current `[SavedHost]` array as a JSON blob the Rust
     /// `parse_entries_json` helper understands. Returns "[]" when the
     /// store is empty or the device is locked.
+    ///
+    /// When `entriesProvider` is installed (UI tests + the live hosts
+    /// screen so injected stub hosts surface), the JSON is built in
+    /// Swift so the array can include in-memory rows that never reach
+    /// the Keychain. Otherwise this delegates to Rust's
+    /// `bt_ios_hosts_snapshot_json`, which is the production fast path.
     public static func snapshotJSON() -> String {
-        let entries = self.entriesProvider?() ?? self.store.list()
+        if let provider = self.entriesProvider {
+            return Self.buildSnapshotJSON(from: provider())
+        }
+        guard let cStr = bt_ios_hosts_snapshot_json() else { return "[]" }
+        defer { bt_ios_hosts_free_string(cStr) }
+        return String(cString: cStr)
+    }
+
+    private static func buildSnapshotJSON(from entries: [SavedHost]) -> String {
         var items: [[String: Any]] = []
         items.reserveCapacity(entries.count)
         for entry in entries {

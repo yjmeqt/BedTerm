@@ -567,6 +567,48 @@ void *bt_ios_create_hosts_list_vc(BtIosHostsAddCallback on_add,
 /// `bt_ios_create_hosts_list_vc`. Safe to call with NULL.
 void bt_ios_release_hosts_list_vc(void *vc_ptr);
 
+// ── Hosts store ──────────────────────────────────────────────────────────
+//
+// Per-UUID Keychain blob storage + UserDefaults order index for saved
+// hosts. Swift retains the Codable `SavedHost` shape; Rust sees opaque
+// blobs except when building the display snapshot JSON.
+
+/// Return the saved-hosts display snapshot as a +1 retained UTF-8 string.
+/// Caller frees via `bt_ios_hosts_free_string`. Never NULL — empty store
+/// yields `"[]"`. JSON shape:
+///   `[{id, label, host, port, username, authIsKey}, ...]`
+char *bt_ios_hosts_snapshot_json(void);
+
+/// Free a string returned by any `bt_ios_hosts_*` UTF-8 accessor.
+/// NULL-safe.
+void bt_ios_hosts_free_string(char *ptr);
+
+/// Load the raw `SavedHost` JSON blob for `uuid`. Returns NULL when no
+/// item is stored. `*out_len` is set to the buffer length on success.
+/// Free with `bt_ios_hosts_free_blob`.
+uint8_t *bt_ios_hosts_load_blob(const char *uuid, uintptr_t *out_len);
+
+/// Free a blob returned by `bt_ios_hosts_load_blob`. NULL-safe.
+void bt_ios_hosts_free_blob(uint8_t *ptr, uintptr_t len);
+
+/// Persist `bytes` as the `SavedHost` blob for `uuid`. Returns false on
+/// Keychain error or invalid input.
+bool bt_ios_hosts_save_blob(const char *uuid, const uint8_t *bytes, uintptr_t len);
+
+/// Delete the entry for `uuid` from the Keychain + order index. No-op
+/// when `uuid` is missing.
+void bt_ios_hosts_delete(const char *uuid);
+
+/// Test-only seam — route subsequent reads/writes to a per-test
+/// `(service, order_key)` pair so simulator-backed unit tests don't
+/// pollute the production Keychain / UserDefaults entries. Pass
+/// `(NULL, NULL)` to restore the production defaults.
+void bt_ios_hosts_set_test_service(const char *service, const char *order_key);
+
+/// Test-only — wipe just the order index, leaving Keychain blobs intact.
+/// Used by the reconciliation test.
+void bt_ios_hosts_test_clear_order(void);
+
 // ── Connect form VC (W24c R-port) ───────────────────────────────────────────
 
 /// Callback fired on the main thread when the user successfully saves the

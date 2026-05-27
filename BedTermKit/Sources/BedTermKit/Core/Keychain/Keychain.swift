@@ -35,7 +35,7 @@ enum Keychain {
     }
 
     /// Returns every account name currently stored under the given service.
-    /// Used by `HostsStore` to reconcile its UserDefaults index against the Keychain.
+    /// Used by `HostKeyStore` and tests.
     static func allAccounts(service: String) -> [String] {
         backend.allAccounts(service: service)
     }

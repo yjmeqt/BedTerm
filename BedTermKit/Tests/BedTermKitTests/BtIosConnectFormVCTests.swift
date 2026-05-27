@@ -11,16 +11,16 @@ import UIKit
 @MainActor
 struct BtIosConnectFormVCTests {
     private func withIsolatedBridge<R>(_ body: (HostsStore) throws -> R) throws -> R {
-        TestKeychain.installInMemory()
-        let suite = UUID().uuidString
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defer { defaults.removePersistentDomain(forName: suite) }
-        let store = HostsStore(
-            service: "bt.connectformvc.test.\(suite)",
-            orderKey: "bt.connectformvc.test.order.\(suite)",
-            migrationKey: "bt.connectformvc.test.migration.\(suite)",
-            defaults: defaults
-        )
+        let suffix = UUID().uuidString
+        let svc = "bt.connectformvc.test.\(suffix)"
+        let ord = "bt.connectformvc.test.order.\(suffix)"
+        svc.withCString { sPtr in
+            ord.withCString { oPtr in
+                bt_ios_hosts_set_test_service(sPtr, oPtr)
+            }
+        }
+        defer { bt_ios_hosts_set_test_service(nil, nil) }
+        let store = HostsStore()
         let priorStore = ConnectFormBridge.store
         let priorError = ConnectFormBridge.lastError
         ConnectFormBridge.store = store

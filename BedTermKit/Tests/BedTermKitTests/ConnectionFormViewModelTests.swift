@@ -1,3 +1,4 @@
+import BedTermCoreC
 import Foundation
 import Testing
 
@@ -6,28 +7,21 @@ import Testing
 @MainActor
 @Suite("ConnectionFormViewModel", .serialized)
 struct ConnectionFormViewModelTests {
-    private let service = "com.applovin.yi.bedterm.tests.formvm"
-    private let orderKey: String
-    private let migrationKey: String
-    private let defaults: UserDefaults
-
     init() {
-        TestKeychain.installInMemory()
-        let suite = "BedTermTests.FormVM." + UUID().uuidString
-        defaults = UserDefaults(suiteName: suite) ?? .standard
-        defaults.removePersistentDomain(forName: suite)
-        orderKey = "tests.formvm.order"
-        migrationKey = "tests.formvm.migrationDone"
+        // Per-test service/orderKey so the production Keychain entry
+        // stays clean across test runs.
+        let suffix = UUID().uuidString
+        let svc = "com.applovin.yi.bedterm.tests.formvm.\(suffix)"
+        let ord = "tests.formvm.order.\(suffix)"
+        svc.withCString { sPtr in
+            ord.withCString { oPtr in
+                bt_ios_hosts_set_test_service(sPtr, oPtr)
+            }
+        }
     }
 
     private func makeStore() -> HostsStore {
-        HostsStore(
-            service: service,
-            orderKey: orderKey,
-            migrationKey: migrationKey,
-            defaults: defaults,
-            legacy: CredentialsStore(service: service + ".legacy")
-        )
+        HostsStore()
     }
 
     @Test("save in add mode appends a new entry with all fields")

@@ -1,3 +1,4 @@
+import BedTermCoreC
 import Foundation
 import Testing
 
@@ -11,15 +12,15 @@ import Testing
 @MainActor
 struct ConnectFormBridgeTests {
     private func makeStore() throws -> HostsStore {
-        TestKeychain.installInMemory()
-        let suite = UUID().uuidString
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        return HostsStore(
-            service: "bt.connectformbridge.test.\(suite)",
-            orderKey: "bt.connectformbridge.test.order.\(suite)",
-            migrationKey: "bt.connectformbridge.test.migration.\(suite)",
-            defaults: defaults
-        )
+        let suffix = UUID().uuidString
+        let svc = "bt.connectformbridge.test.\(suffix)"
+        let ord = "bt.connectformbridge.test.order.\(suffix)"
+        svc.withCString { sPtr in
+            ord.withCString { oPtr in
+                bt_ios_hosts_set_test_service(sPtr, oPtr)
+            }
+        }
+        return HostsStore()
     }
 
     @Test("prefill returns nil for unknown UUIDs")

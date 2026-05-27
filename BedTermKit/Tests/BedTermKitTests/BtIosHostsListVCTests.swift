@@ -24,16 +24,16 @@ struct BtIosHostsListVCTests {
     /// SPM xctest bundles have no host-app entitlement for the real
     /// `SecItem*` path.
     private func withIsolatedBridge<R>(_ body: (HostsStore) throws -> R) throws -> R {
-        TestKeychain.installInMemory()
-        let suite = UUID().uuidString
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defer { defaults.removePersistentDomain(forName: suite) }
-        let store = HostsStore(
-            service: "bt.hostsvc.test.\(suite)",
-            orderKey: "bt.hostsvc.test.order.\(suite)",
-            migrationKey: "bt.hostsvc.test.migration.\(suite)",
-            defaults: defaults
-        )
+        let suffix = UUID().uuidString
+        let svc = "bt.hostsvc.test.\(suffix)"
+        let ord = "bt.hostsvc.test.order.\(suffix)"
+        svc.withCString { sPtr in
+            ord.withCString { oPtr in
+                bt_ios_hosts_set_test_service(sPtr, oPtr)
+            }
+        }
+        defer { bt_ios_hosts_set_test_service(nil, nil) }
+        let store = HostsStore()
         let priorStore = HostsBridge.store
         let priorConnect = HostsBridge.connectHandler
         HostsBridge.store = store

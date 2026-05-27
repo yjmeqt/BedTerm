@@ -86,7 +86,7 @@ public final class HostsViewModel {
             self.loadFailed = true
             return
         }
-        self.didMigrate = self.store.migrateLegacyIfNeeded()
+        self.didMigrate = false
         var loaded = self.store.list()
         // UI-test override: append injected stub hosts so the test can
         // tap a known row without driving the add-host form. Production

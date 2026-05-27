@@ -97,6 +97,12 @@ mod prompt_context_chips;
 // host unit-test runner.
 #[cfg(target_os = "ios")]
 mod settings_store;
+// Saved-hosts persistence — owns the per-UUID Keychain blobs +
+// `NSUserDefaults` order index that used to live in Swift's `HostsStore`.
+// iOS-gated because the Keychain and `NSUserDefaults` aren't useful
+// from the host unit-test runner.
+#[cfg(target_os = "ios")]
+mod hosts_store;
 #[cfg(target_os = "ios")]
 mod settings_vc;
 // `ssh_bridge` exposes a vtable + result enum the Swift side fills in
