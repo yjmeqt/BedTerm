@@ -1,16 +1,18 @@
+import BedTermCoreC
 import Foundation
 
 /// Bundled DCS shell-integration snippet. Returns the raw bytes (UTF-8
 /// shell script) that the SSH client writes to a remote PTY's stdin once
 /// the shell has produced its first byte.
 ///
-/// The script body lives at
-/// `Resources/ShellIntegration/bedterm-integration.sh` inside
-/// `BedTermKit`. Always reachable via `Bundle.module`; failure to load
-/// it means the resource was dropped from the SwiftPM target on build,
-/// which is a programmer error rather than a runtime one.
+/// The script body lives in the Rust crate at
+/// `rust-core/bedterm_ios/assets/bedterm-integration.sh` and is embedded
+/// into the staticlib at build time via `include_bytes!`. Swift fetches
+/// the bytes from `.rodata` via [`bt_ios_shell_integration_payload`] —
+/// no SwiftPM resource, no `Bundle.module` lookup, no failure mode short
+/// of a corrupt binary.
 ///
-/// ## Bootstrap wrapper format — base64 single-liner
+/// ## Bootstrap wrapper format — base64 single-liner (historical)
 ///
 /// We do **not** ship the body as an inline heredoc the way Warp does.
 /// Heredocs require multi-line stdin parsing on the remote zsh; with
@@ -20,28 +22,23 @@ import Foundation
 /// reliably across zsh versions.
 ///
 /// Instead we base64-encode the body and ship a single-line `eval`
-/// statement:
-///
-///   eval "$(printf %s '<base64>' | base64 -d)"
-///
-/// One line, no continuation prompts, no heredoc terminator hunting,
-/// no ZLE multi-line echo. The encoded payload arrives as one logical
-/// line of "user input" — ZLE submits it, the shell decodes inline,
-/// and `eval` runs the script body in the current shell context.
+/// statement. One line, no continuation prompts, no heredoc terminator
+/// hunting, no ZLE multi-line echo. The encoded payload arrives as one
+/// logical line of "user input" — ZLE submits it, the shell decodes
+/// inline, and `eval` runs the script body in the current shell
+/// context.
 enum ShellIntegrationScript {
-    /// Read the script body. Returns `nil` only on a packaging
-    /// accident (the SPM `.copy("ShellIntegrationResources")` resource
-    /// declaration missing, the file deleted, etc).
+    /// Read the script body from the embedded staticlib payload. Returns
+    /// `nil` only if the embedded bytes aren't valid UTF-8, which would
+    /// indicate a corrupt build artefact rather than a runtime
+    /// condition.
     static func load() -> String? {
-        guard
-            let url = Bundle.module.url(
-                forResource: "bedterm-integration",
-                withExtension: "sh",
-                subdirectory: "ShellIntegrationResources")
-        else {
+        var length: Int = 0
+        guard let ptr = bt_ios_shell_integration_payload(&length), length > 0 else {
             return nil
         }
-        return try? String(contentsOf: url, encoding: .utf8)
+        let buffer = UnsafeBufferPointer(start: ptr, count: length)
+        return String(bytes: buffer, encoding: .utf8)
     }
 
     /// Return the raw script body. The SFTP path in

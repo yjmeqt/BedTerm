@@ -103,6 +103,8 @@ fn main() {
     println!("cargo:rerun-if-changed=cbindgen.toml");
     println!("cargo:rerun-if-changed=src/lib.rs");
     println!("cargo:rerun-if-changed=src/l10n.rs");
+    println!("cargo:rerun-if-changed=src/shell_integration.rs");
+    println!("cargo:rerun-if-changed=assets/bedterm-integration.sh");
     println!("cargo:rerun-if-changed=src/ssh_bridge.rs");
     println!("cargo:rerun-if-changed=src/ffi/mod.rs");
     println!("cargo:rerun-if-changed=src/ffi/connect_form.rs");

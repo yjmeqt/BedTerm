@@ -82,6 +82,11 @@ mod l10n;
 mod metal_cursor_layer;
 #[cfg(target_os = "ios")]
 mod metal_view;
+// Compile-time-embedded shell-integration script. Bytes come from
+// `assets/bedterm-integration.sh` via `include_bytes!`; runtime FFI is
+// one `bt_ios_shell_integration_payload` call from Swift. Pure data —
+// compiles and unit-tests on macOS host too.
+mod shell_integration;
 // `hosts::model` is pure (no UIKit); the iOS-only VC + bridge live
 // behind a `target_os = "ios"` gate inside the module.
 mod hosts;

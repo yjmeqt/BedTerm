@@ -8,12 +8,15 @@ import Testing
 struct ShellIntegrationTests {
     // MARK: - Resource loading
 
-    @Test("script resource loads via Bundle.module")
+    @Test("embedded payload loads via Rust FFI")
     func scriptResourceLoads() {
-        // The bundled bedterm-integration.sh must always be reachable via
-        // Bundle.module. If this fails, the resource was dropped from the
-        // SPM target — a packaging accident, not a runtime concern.
-        #expect(ShellIntegrationScript.load() != nil)
+        // The bedterm-integration.sh body is embedded into the bedterm_ios
+        // staticlib at build time via `include_bytes!`. If `load()` returns
+        // nil, the staticlib was built from a missing or non-UTF-8 source
+        // file — a build accident, not a runtime concern.
+        let body = ShellIntegrationScript.load()
+        #expect(body != nil)
+        #expect((body?.count ?? 0) > 0)
     }
 
     @Test("script emits the DCS sequences the parser expects")

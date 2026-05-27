@@ -569,6 +569,21 @@ extern double CACurrentMediaTime(void);
 void bt_ios_set_locale(const char *code);
 
 /**
+ * Return a pointer to the embedded `bedterm-integration.sh` payload
+ * and write its length through `out_len`.
+ *
+ * The returned pointer is **static** — it lives in the staticlib's
+ * `.rodata` for the lifetime of the process. Callers must not free it
+ * and must not mutate the bytes. The payload is not nul-terminated;
+ * always use the returned length.
+ *
+ * # Safety
+ * `out_len` must be a valid, writable pointer to a `usize`. Pass NULL
+ * to skip the length write (only useful as a liveness check).
+ */
+const uint8_t *bt_ios_shell_integration_payload(uintptr_t *out_len);
+
+/**
  * Return a +1 retained UTF-8, nul-terminated C string of the
  * current hosts snapshot as JSON. Caller (Rust) owns the buffer
  * and must free it via [`bt_swift_hosts_free_snapshot`]. Returns
