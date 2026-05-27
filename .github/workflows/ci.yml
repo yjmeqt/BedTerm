@@ -90,6 +90,15 @@ jobs:
             ~/Library/Caches/org.swift.swiftpm
           key: spm-${{ runner.os }}-${{ hashFiles('**/Package.resolved') }}
           restore-keys: spm-${{ runner.os }}-
+      - name: Build Rust xcframework (sim slice)
+        # The Swift package's `.binaryTarget` points at BedTermCore.xcframework;
+        # SwiftPM resolution fails if the directory is empty. The scheme's
+        # PreAction only fires during `xcodebuild build|test`, not during
+        # `-resolvePackageDependencies`, so build the sim slice explicitly
+        # here. PLATFORM_NAME=iphonesimulator narrows to the one slice CI tests
+        # against; subsequent xcodebuild invocations are a no-op via the
+        # script's digest-based idempotency check.
+        run: scripts/build-rust-xcframework.sh Debug iphonesimulator
       - name: Resolve SwiftPM packages
         run: xcodebuild -resolvePackageDependencies -workspace BedTerm.xcworkspace -scheme BedTerm
       - name: Build & test
