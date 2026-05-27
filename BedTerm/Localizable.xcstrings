@@ -1646,6 +1646,41 @@
         }
       }
     },
+    "Host key changed · %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "ホストキーが変更されました · %@"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "호스트 키가 변경되었습니다 · %@"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Ключ хоста изменился · %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "主机密钥已变更 · %@"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "主機金鑰已變更 · %@"
+          }
+        }
+      }
+    },
     "Host key changed.\nStored: %1$@\nRemote: %2$@": {
       "extractionState": "manual",
       "localizations": {
@@ -2941,6 +2976,41 @@
         }
       }
     },
+    "Review": {
+      "extractionState": "manual",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "確認"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "검토"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Просмотреть"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "查看"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "查看"
+          }
+        }
+      }
+    },
     "Run a command at the remote shell prompt. Each prompt → command → output cycle becomes a block here.": {
       "extractionState": "manual",
       "localizations": {
@@ -3462,6 +3532,41 @@
           "stringUnit": {
             "state": "needs_review",
             "value": "已儲存 — 取代？"
+          }
+        }
+      }
+    },
+    "Tap to review and accept or reject.": {
+      "extractionState": "manual",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "タップして確認し、承認または拒否してください。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "탭하여 검토하고 수락 또는 거부하세요."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Нажмите, чтобы просмотреть и принять или отклонить."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "点击查看以接受或拒绝。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "輕點查看以接受或拒絕。"
           }
         }
       }

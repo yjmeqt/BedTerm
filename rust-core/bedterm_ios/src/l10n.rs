@@ -58,6 +58,27 @@ pub fn t(key: &str) -> String {
     key.to_string()
 }
 
+/// Substitute a single `%@` placeholder in the translated string. Other
+/// placeholders (`%1$@`, `%2$@`, …) are left untouched. Used by the hosts
+/// alert formatters where the template comes from `xcstrings`.
+#[allow(dead_code)] // only called from iOS-gated UIKit VC modules
+pub fn format1(key: &str, arg: &str) -> String {
+    t(key).replacen("%@", arg, 1)
+}
+
+/// Substitute positional `%1$@` / `%2$@` placeholders. Falls back to
+/// sequential `%@` substitution when the template only has bare `%@`s
+/// (lets xcstrings authors pick whichever style fits the locale).
+#[allow(dead_code)] // only called from iOS-gated UIKit VC modules
+pub fn format2(key: &str, arg1: &str, arg2: &str) -> String {
+    let raw = t(key);
+    if raw.contains("%1$@") || raw.contains("%2$@") {
+        raw.replace("%1$@", arg1).replace("%2$@", arg2)
+    } else {
+        raw.replacen("%@", arg1, 1).replacen("%@", arg2, 1)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

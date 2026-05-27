@@ -294,6 +294,73 @@ impl HostsVM {
     pub fn cancel_delete(&mut self) {
         self.delete_confirmation = None;
     }
+
+    // MARK: - Alert rendering
+    //
+    // Formatted, localized alert text for the three dialog flows. Each
+    // method returns `None` when no confirmation/mismatch is pending.
+    // Strings flow through `crate::l10n` so the active locale wins —
+    // Swift just feeds them straight into `UIAlertController`.
+
+    pub fn swap_alert(&self) -> Option<AlertText> {
+        let s = self.swap_confirmation.as_ref()?;
+        Some(AlertText {
+            title: crate::l10n::format1(
+                "End current session and connect to \"%@\"?",
+                &s.display_name,
+            ),
+            message: crate::l10n::t("Your current SSH session will be disconnected."),
+            confirm_label: crate::l10n::t("Connect"),
+            cancel_label: crate::l10n::t("Cancel"),
+        })
+    }
+
+    pub fn delete_alert(&self) -> Option<AlertText> {
+        let d = self.delete_confirmation.as_ref()?;
+        let title = if d.is_live {
+            crate::l10n::format1("Disconnect and delete \"%@\"?", &d.display_name)
+        } else {
+            crate::l10n::format1("Delete \"%@\"?", &d.display_name)
+        };
+        let message = if d.is_live {
+            crate::l10n::t(
+                "You are currently connected. The session will end and the saved password or key will be removed.",
+            )
+        } else {
+            crate::l10n::t("This will remove the saved password or key.")
+        };
+        Some(AlertText {
+            title,
+            message,
+            confirm_label: crate::l10n::t("Delete"),
+            cancel_label: crate::l10n::t("Cancel"),
+        })
+    }
+
+    /// Toast-style "alert" for the host-key mismatch flow. The actual
+    /// review is a SwiftUI sheet; this powers the toast that prompts the
+    /// user to open it. `confirm_label` is the toast action ("Review"),
+    /// `cancel_label` is unused but kept so the FFI shape stays uniform.
+    pub fn mismatch_alert(&self) -> Option<AlertText> {
+        let m = self.pending_mismatch.as_ref()?;
+        Some(AlertText {
+            title: crate::l10n::format1("Host key changed · %@", &m.host),
+            message: crate::l10n::t("Tap to review and accept or reject."),
+            confirm_label: crate::l10n::t("Review"),
+            cancel_label: String::new(),
+        })
+    }
+}
+
+/// Formatted, localized alert text bundle returned by the swap / delete /
+/// mismatch alert formatters. Pure Rust — the FFI layer translates this
+/// into a `#[repr(C)]` struct of C strings.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AlertText {
+    pub title: String,
+    pub message: String,
+    pub confirm_label: String,
+    pub cancel_label: String,
 }
 
 /// Process-wide singleton. Main-thread-only in practice (`@MainActor`
@@ -558,5 +625,118 @@ mod tests {
         vm.request_delete("a");
         vm.cancel_delete();
         assert!(vm.delete_confirmation.is_none());
+    }
+
+    // MARK: - Alert rendering
+
+    #[test]
+    fn swap_alert_none_when_no_pending() {
+        let vm = HostsVM::new();
+        assert!(vm.swap_alert().is_none());
+    }
+
+    #[test]
+    fn swap_alert_formats_display_name_into_title() {
+        unsafe { crate::l10n::bt_ios_set_locale(c"en".as_ptr()) };
+        let mut vm = HostsVM::new();
+        vm.set_entries_from_snapshot(&snapshot(&[entry("a", "alpha"), entry("b", "beta-box")]));
+        let _ = vm.request_connect("a");
+        vm.connect_completed_session("a");
+        let _ = vm.request_connect("b");
+        let alert = vm.swap_alert().expect("swap pending");
+        assert!(alert.title.contains("beta-box"), "title={}", alert.title);
+        assert!(!alert.message.is_empty());
+        assert_eq!(alert.confirm_label, "Connect");
+        assert_eq!(alert.cancel_label, "Cancel");
+    }
+
+    #[test]
+    fn swap_alert_translates_to_zh_hans() {
+        let mut vm = HostsVM::new();
+        vm.set_entries_from_snapshot(&snapshot(&[entry("a", "alpha"), entry("b", "beta-box")]));
+        let _ = vm.request_connect("a");
+        vm.connect_completed_session("a");
+        let _ = vm.request_connect("b");
+
+        unsafe { crate::l10n::bt_ios_set_locale(c"en".as_ptr()) };
+        let en = vm.swap_alert().unwrap();
+        unsafe { crate::l10n::bt_ios_set_locale(c"zh-Hans".as_ptr()) };
+        let zh = vm.swap_alert().unwrap();
+        unsafe { crate::l10n::bt_ios_set_locale(c"en".as_ptr()) };
+
+        // Both should contain the unlocalised display name…
+        assert!(zh.title.contains("beta-box"));
+        // …but the surrounding template should differ between locales
+        // (xcstrings ships zh-Hans for both the title and the buttons).
+        assert_ne!(en.title, zh.title, "zh title should differ from en");
+        assert_ne!(en.confirm_label, zh.confirm_label);
+    }
+
+    #[test]
+    fn delete_alert_uses_live_copy_when_currently_connected() {
+        unsafe { crate::l10n::bt_ios_set_locale(c"en".as_ptr()) };
+        let mut vm = HostsVM::new();
+        vm.set_entries_from_snapshot(&snapshot(&[entry("a", "alpha")]));
+        let _ = vm.request_connect("a");
+        vm.connect_completed_session("a");
+        vm.request_delete("a");
+        let alert = vm.delete_alert().expect("delete pending");
+        assert!(alert.title.contains("alpha"));
+        assert!(
+            alert.title.to_lowercase().contains("disconnect"),
+            "live-delete title should mention disconnect: {}",
+            alert.title
+        );
+        assert!(alert.message.contains("currently connected"));
+        assert_eq!(alert.confirm_label, "Delete");
+        assert_eq!(alert.cancel_label, "Cancel");
+    }
+
+    #[test]
+    fn delete_alert_uses_plain_copy_when_offline() {
+        unsafe { crate::l10n::bt_ios_set_locale(c"en".as_ptr()) };
+        let mut vm = HostsVM::new();
+        vm.set_entries_from_snapshot(&snapshot(&[entry("a", "alpha")]));
+        vm.request_delete("a");
+        let alert = vm.delete_alert().expect("delete pending");
+        assert!(alert.title.contains("alpha"));
+        assert!(!alert.title.to_lowercase().contains("disconnect"));
+        assert_eq!(alert.message, "This will remove the saved password or key.");
+    }
+
+    #[test]
+    fn delete_alert_translates_to_zh_hans() {
+        let mut vm = HostsVM::new();
+        vm.set_entries_from_snapshot(&snapshot(&[entry("a", "alpha")]));
+        vm.request_delete("a");
+
+        unsafe { crate::l10n::bt_ios_set_locale(c"en".as_ptr()) };
+        let en = vm.delete_alert().unwrap();
+        unsafe { crate::l10n::bt_ios_set_locale(c"zh-Hans".as_ptr()) };
+        let zh = vm.delete_alert().unwrap();
+        unsafe { crate::l10n::bt_ios_set_locale(c"en".as_ptr()) };
+
+        assert!(zh.title.contains("alpha"));
+        assert_ne!(en.confirm_label, zh.confirm_label);
+        assert_ne!(en.title, zh.title);
+    }
+
+    #[test]
+    fn mismatch_alert_none_when_no_pending() {
+        let vm = HostsVM::new();
+        assert!(vm.mismatch_alert().is_none());
+    }
+
+    #[test]
+    fn mismatch_alert_formats_host_into_title() {
+        unsafe { crate::l10n::bt_ios_set_locale(c"en".as_ptr()) };
+        let mut vm = HostsVM::new();
+        vm.set_entries_from_snapshot(&snapshot(&[entry("a", "alpha")]));
+        let _ = vm.request_connect("a");
+        vm.connect_completed_mismatch("a", "STORED", "REMOTE", "example.com", 22);
+        let alert = vm.mismatch_alert().expect("mismatch pending");
+        assert!(alert.title.contains("example.com"));
+        assert!(!alert.message.is_empty());
+        assert_eq!(alert.confirm_label, "Review");
     }
 }

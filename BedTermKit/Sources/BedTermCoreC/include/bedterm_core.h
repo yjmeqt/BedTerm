@@ -238,6 +238,21 @@ typedef struct BtSSHClientVTable {
   void (*release)(void *ctx);
 } BtSSHClientVTable;
 
+/**
+ * Localized alert-text bundle handed across the FFI. All fields are
+ * `+1` retained UTF-8 C strings owned by the caller — free the whole
+ * struct via [`bt_ios_hosts_free_alert_text`] (which also frees the
+ * inner strings). Never partially-NULL: when the formatter has nothing
+ * to say (e.g. mismatch toast has no cancel button) the field is an
+ * empty string, not NULL.
+ */
+typedef struct BtIosHostsAlertText {
+  char *title;
+  char *message;
+  char *confirm_label;
+  char *cancel_label;
+} BtIosHostsAlertText;
+
 typedef struct BtBlockView {
   uint64_t id;
   int32_t start_line;
@@ -1127,6 +1142,43 @@ void bt_ios_hosts_vm_request_delete(const char *uuid);
 char *bt_ios_hosts_vm_confirm_delete(void);
 
 void bt_ios_hosts_vm_cancel_delete(void);
+
+/**
+ * Free a `BtIosHostsAlertText *` returned by one of the
+ * `bt_ios_hosts_vm_*_alert` getters. NULL-safe.
+ *
+ * # Safety
+ * `ptr` must have been returned by `bt_ios_hosts_vm_swap_alert`,
+ * `bt_ios_hosts_vm_delete_alert`, or `bt_ios_hosts_vm_mismatch_alert`
+ * and not yet freed.
+ */
+void bt_ios_hosts_free_alert_text(struct BtIosHostsAlertText *ptr);
+
+/**
+ * Formatted, localized swap-confirmation alert text — title / message
+ * / confirm / cancel labels with the target host's display name already
+ * interpolated. Returns NULL when no swap is pending. Free via
+ * [`bt_ios_hosts_free_alert_text`].
+ */
+struct BtIosHostsAlertText *bt_ios_hosts_vm_swap_alert(void);
+
+/**
+ * Formatted, localized delete-confirmation alert text. Live vs idle
+ * branch (whether the session is currently connected) is chosen Rust-
+ * side — Swift just renders the strings. Returns NULL when no delete
+ * is pending. Free via [`bt_ios_hosts_free_alert_text`].
+ */
+struct BtIosHostsAlertText *bt_ios_hosts_vm_delete_alert(void);
+
+/**
+ * Formatted, localized host-key-mismatch toast text. The actual review
+ * is a SwiftUI sheet; this only powers the toast that opens it. The
+ * `cancel_label` field is always empty (toast has no cancel button)
+ * but is included so the struct shape stays uniform across all three
+ * flows. Returns NULL when no mismatch is pending. Free via
+ * [`bt_ios_hosts_free_alert_text`].
+ */
+struct BtIosHostsAlertText *bt_ios_hosts_vm_mismatch_alert(void);
 
 /**
  * Test-only seam — wipe just the order index, leaving Keychain blobs

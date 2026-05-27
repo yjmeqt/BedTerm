@@ -346,13 +346,15 @@ public final class HostsConnectController {
             self.toaster.dismiss(id: id)
             self.mismatchToastID = nil
         }
-        guard let mismatch = self.viewModel.pendingMismatch else { return }
+        // Title / body / action label all come from Rust — see
+        // `hosts_vm::mismatch_alert`. Swift owns toast presentation only.
+        guard let text = Self.readAlertText(bt_ios_hosts_vm_mismatch_alert()) else { return }
         self.mismatchToastID = self.toaster.show(
             .warning,
-            title: String(localized: "Host key changed · \(mismatch.host)"),
-            description: String(localized: "Tap to review and accept or reject."),
+            title: text.title,
+            description: text.message,
             actions: [
-                Toaster.Action(String(localized: "Review")) { [weak self] in
+                Toaster.Action(text.confirmLabel) { [weak self] in
                     self?.presentMismatchReview()
                 }
             ],

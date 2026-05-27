@@ -464,6 +464,99 @@ pub extern "C" fn bt_ios_hosts_vm_cancel_delete() {
     vm_lock().cancel_delete();
 }
 
+// ── Alert rendering ─────────────────────────────────────────────────────
+//
+// Formatted, localized alert text bundles for the swap / delete / mismatch
+// flows. The Rust `hosts_vm::AlertText` is mirrored as a `#[repr(C)]`
+// struct of owned C strings; Swift feeds the fields directly into
+// `UIAlertController` (no per-call-site `String(localized:)`).
+
+/// Localized alert-text bundle handed across the FFI. All fields are
+/// `+1` retained UTF-8 C strings owned by the caller — free the whole
+/// struct via [`bt_ios_hosts_free_alert_text`] (which also frees the
+/// inner strings). Never partially-NULL: when the formatter has nothing
+/// to say (e.g. mismatch toast has no cancel button) the field is an
+/// empty string, not NULL.
+#[repr(C)]
+pub struct BtIosHostsAlertText {
+    pub title: *mut c_char,
+    pub message: *mut c_char,
+    pub confirm_label: *mut c_char,
+    pub cancel_label: *mut c_char,
+}
+
+fn alert_to_c(alert: hosts_vm::AlertText) -> *mut BtIosHostsAlertText {
+    let boxed = Box::new(BtIosHostsAlertText {
+        title: into_c(alert.title),
+        message: into_c(alert.message),
+        confirm_label: into_c(alert.confirm_label),
+        cancel_label: into_c(alert.cancel_label),
+    });
+    Box::into_raw(boxed)
+}
+
+/// Free a `BtIosHostsAlertText *` returned by one of the
+/// `bt_ios_hosts_vm_*_alert` getters. NULL-safe.
+///
+/// # Safety
+/// `ptr` must have been returned by `bt_ios_hosts_vm_swap_alert`,
+/// `bt_ios_hosts_vm_delete_alert`, or `bt_ios_hosts_vm_mismatch_alert`
+/// and not yet freed.
+#[no_mangle]
+pub unsafe extern "C" fn bt_ios_hosts_free_alert_text(ptr: *mut BtIosHostsAlertText) {
+    if ptr.is_null() {
+        return;
+    }
+    let boxed = unsafe { Box::from_raw(ptr) };
+    let free = |p: *mut c_char| {
+        if !p.is_null() {
+            drop(unsafe { CString::from_raw(p) });
+        }
+    };
+    free(boxed.title);
+    free(boxed.message);
+    free(boxed.confirm_label);
+    free(boxed.cancel_label);
+}
+
+/// Formatted, localized swap-confirmation alert text — title / message
+/// / confirm / cancel labels with the target host's display name already
+/// interpolated. Returns NULL when no swap is pending. Free via
+/// [`bt_ios_hosts_free_alert_text`].
+#[no_mangle]
+pub extern "C" fn bt_ios_hosts_vm_swap_alert() -> *mut BtIosHostsAlertText {
+    match vm_lock().swap_alert() {
+        Some(a) => alert_to_c(a),
+        None => std::ptr::null_mut(),
+    }
+}
+
+/// Formatted, localized delete-confirmation alert text. Live vs idle
+/// branch (whether the session is currently connected) is chosen Rust-
+/// side — Swift just renders the strings. Returns NULL when no delete
+/// is pending. Free via [`bt_ios_hosts_free_alert_text`].
+#[no_mangle]
+pub extern "C" fn bt_ios_hosts_vm_delete_alert() -> *mut BtIosHostsAlertText {
+    match vm_lock().delete_alert() {
+        Some(a) => alert_to_c(a),
+        None => std::ptr::null_mut(),
+    }
+}
+
+/// Formatted, localized host-key-mismatch toast text. The actual review
+/// is a SwiftUI sheet; this only powers the toast that opens it. The
+/// `cancel_label` field is always empty (toast has no cancel button)
+/// but is included so the struct shape stays uniform across all three
+/// flows. Returns NULL when no mismatch is pending. Free via
+/// [`bt_ios_hosts_free_alert_text`].
+#[no_mangle]
+pub extern "C" fn bt_ios_hosts_vm_mismatch_alert() -> *mut BtIosHostsAlertText {
+    match vm_lock().mismatch_alert() {
+        Some(a) => alert_to_c(a),
+        None => std::ptr::null_mut(),
+    }
+}
+
 /// Test-only seam — wipe just the order index, leaving Keychain blobs
 /// intact. Used by the reconciliation test to assert that the next
 /// `bt_ios_hosts_snapshot_json` call rebuilds the order from surviving
