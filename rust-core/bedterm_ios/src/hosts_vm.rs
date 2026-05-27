@@ -55,7 +55,9 @@ pub struct PendingMismatch {
 pub struct SwapConfirmation {
     #[serde(rename = "targetID")]
     pub target_id: String,
-    #[serde(rename = "displayName")]
+    /// Only used Rust-side for alert formatting (`swap_alert()`).
+    /// Swift no longer decodes this field — see HostsViewModelState trim.
+    #[serde(skip_serializing)]
     pub display_name: String,
 }
 
@@ -63,11 +65,17 @@ pub struct SwapConfirmation {
 pub struct DeleteConfirmation {
     #[serde(rename = "targetID")]
     pub target_id: String,
-    #[serde(rename = "displayName")]
+    /// Only used Rust-side for alert formatting (`delete_alert()`).
+    /// Swift no longer decodes this field — see HostsViewModelState trim.
+    #[serde(skip_serializing)]
     pub display_name: String,
-    #[serde(rename = "isLive")]
+    /// Only used Rust-side for state cleanup (`confirm_delete()`).
+    /// Swift no longer decodes this field — see HostsViewModelState trim.
+    #[serde(skip_serializing)]
     pub is_live: bool,
-    #[serde(rename = "isInFlight")]
+    /// Only used Rust-side for state cleanup (`confirm_delete()`).
+    /// Swift no longer decodes this field — see HostsViewModelState trim.
+    #[serde(skip_serializing)]
     pub is_in_flight: bool,
 }
 

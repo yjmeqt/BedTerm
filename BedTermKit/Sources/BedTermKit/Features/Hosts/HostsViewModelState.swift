@@ -54,14 +54,12 @@ public struct HostsPendingMismatch: Equatable, Codable {
 
 public struct HostsSwapConfirmation: Equatable, Identifiable, Codable {
     public let targetID: UUID
-    public let displayName: String
     public var id: UUID { self.targetID }
 
-    enum CodingKeys: String, CodingKey { case targetID, displayName }
+    enum CodingKeys: String, CodingKey { case targetID }
 
-    public init(targetID: UUID, displayName: String) {
+    public init(targetID: UUID) {
         self.targetID = targetID
-        self.displayName = displayName
     }
 
     public init(from decoder: Decoder) throws {
@@ -73,30 +71,22 @@ public struct HostsSwapConfirmation: Equatable, Identifiable, Codable {
                 debugDescription: "targetID is not a UUID")
         }
         self.targetID = uuid
-        self.displayName = try container.decode(String.self, forKey: .displayName)
     }
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(targetID.uuidString, forKey: .targetID)
-        try container.encode(displayName, forKey: .displayName)
     }
 }
 
 public struct HostsDeleteConfirmation: Equatable, Identifiable, Codable {
     public let targetID: UUID
-    public let displayName: String
-    public let isLive: Bool
-    public let isInFlight: Bool
     public var id: UUID { self.targetID }
 
-    enum CodingKeys: String, CodingKey { case targetID, displayName, isLive, isInFlight }
+    enum CodingKeys: String, CodingKey { case targetID }
 
-    public init(targetID: UUID, displayName: String, isLive: Bool, isInFlight: Bool) {
+    public init(targetID: UUID) {
         self.targetID = targetID
-        self.displayName = displayName
-        self.isLive = isLive
-        self.isInFlight = isInFlight
     }
 
     public init(from decoder: Decoder) throws {
@@ -108,17 +98,11 @@ public struct HostsDeleteConfirmation: Equatable, Identifiable, Codable {
                 debugDescription: "targetID is not a UUID")
         }
         self.targetID = uuid
-        self.displayName = try container.decode(String.self, forKey: .displayName)
-        self.isLive = try container.decode(Bool.self, forKey: .isLive)
-        self.isInFlight = try container.decode(Bool.self, forKey: .isInFlight)
     }
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(targetID.uuidString, forKey: .targetID)
-        try container.encode(displayName, forKey: .displayName)
-        try container.encode(isLive, forKey: .isLive)
-        try container.encode(isInFlight, forKey: .isInFlight)
     }
 }
 
