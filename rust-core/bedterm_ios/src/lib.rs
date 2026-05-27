@@ -91,6 +91,12 @@ mod connect_form;
 mod onboarding;
 #[cfg(target_os = "ios")]
 mod prompt_context_chips;
+// App settings persistence — owns the `NSUserDefaults` reads/writes
+// that used to live in Swift's `BedTermSettings`. iOS-gated because
+// `NSUserDefaults::standardUserDefaults` isn't useful from the macOS
+// host unit-test runner.
+#[cfg(target_os = "ios")]
+mod settings_store;
 #[cfg(target_os = "ios")]
 mod settings_vc;
 // `ssh_bridge` exposes a vtable + result enum the Swift side fills in

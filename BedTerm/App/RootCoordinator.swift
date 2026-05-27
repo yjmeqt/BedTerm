@@ -9,7 +9,6 @@ import UIKit
 final class RootCoordinator {
     private let window: UIWindow
     private let toaster = Toaster()
-    private let settings = BedTermSettings()
     private var navigationController: UINavigationController?
     private var toasterHost: UIHostingController<AnyView>?
     private var onboardingDone: Bool = OnboardingPersistenceBridge.hasCompleted
@@ -21,11 +20,6 @@ final class RootCoordinator {
 
     init(window: UIWindow) {
         self.window = window
-        // Install the shared settings store handle so the Rust Settings
-        // VC (W23b) can round-trip values through the `bt_swift_settings_*`
-        // C ABI. Done at coordinator-init time, before any Rust VC can be
-        // constructed downstream.
-        SettingsBridge.observableHandle = settings
     }
 
     func start() {
@@ -49,7 +43,6 @@ final class RootCoordinator {
         // its representable. We don't need a UINavigationController here.
         let view = RustTerminalUITestHarness(fixture: fixture)
             .environment(\.toaster, toaster)
-            .environment(settings)
         let host = UIHostingController(rootView: AnyView(view))
         window.rootViewController = host
     }
@@ -88,7 +81,6 @@ final class RootCoordinator {
     private func installHostsRoot() {
         let controller = HostsConnectController(
             toaster: toaster,
-            settings: settings,
             onShowHostForm: { [weak self] id, connectOnSave, onFinish in
                 self?.pushHostForm(id: id, connectOnSave: connectOnSave, onFinish: onFinish)
             },

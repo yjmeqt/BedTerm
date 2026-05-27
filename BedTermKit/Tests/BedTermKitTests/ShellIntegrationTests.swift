@@ -75,20 +75,4 @@ struct ShellIntegrationTests {
         #expect(mock.lastConnectRequest?.bootstrapPayload == nil)
     }
 
-    // MARK: - Settings gating
-
-    @Test("settings toggle controls bootstrap default")
-    func settingsToggleControlsBootstrap() throws {
-        let suite = UUID().uuidString
-        UserDefaults().removePersistentDomain(forName: suite)
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        let settings = BedTermSettings(defaults: defaults)
-        // Default — opt-in beta: off until the user toggles it on.
-        #expect(!settings.showCommandBlocks)
-        settings.showCommandBlocks = true
-        #expect(settings.showCommandBlocks)
-        // Persists
-        let reloaded = BedTermSettings(defaults: defaults)
-        #expect(reloaded.showCommandBlocks)
-    }
 }

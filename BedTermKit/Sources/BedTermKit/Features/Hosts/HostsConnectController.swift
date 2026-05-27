@@ -24,7 +24,6 @@ public final class HostsConnectController {
     // Internal: dialog extension reads swap/delete state.
     let viewModel = HostsViewModel()
     private let toaster: Toaster
-    private let settings: BedTermSettings
     private let onShowHostForm: ShowHostForm
     private let onShowTerminal: ShowTerminal
     private let onShowSettings: ShowSettings
@@ -57,14 +56,12 @@ public final class HostsConnectController {
 
     public init(
         toaster: Toaster,
-        settings: BedTermSettings,
         onShowHostForm: @escaping ShowHostForm,
         onShowTerminal: @escaping ShowTerminal,
         onPopToHosts: @escaping () -> Void,
         onShowSettings: @escaping ShowSettings
     ) {
         self.toaster = toaster
-        self.settings = settings
         self.onShowHostForm = onShowHostForm
         self.onShowTerminal = onShowTerminal
         self.onPopToHosts = onPopToHosts
@@ -169,8 +166,8 @@ public final class HostsConnectController {
     }
 
     private func wireBridge() {
-        self.viewModel.bootstrapPayloadProvider = { [settings] in
-            guard settings.showCommandBlocks else { return nil }
+        self.viewModel.bootstrapPayloadProvider = {
+            guard bt_ios_settings_show_command_blocks() else { return nil }
             return ShellIntegrationScript.bootstrapPayload()
         }
         self.viewModel.onConnectError = { [weak self] id, message, perm in
@@ -270,8 +267,8 @@ public final class HostsConnectController {
         else { return }
         let hostName = self.viewModel.displayName(for: id)
         let entryID = entry.id
-        let payloadProvider: @MainActor () -> String? = { [settings] in
-            guard settings.showCommandBlocks else { return nil }
+        let payloadProvider: @MainActor () -> String? = {
+            guard bt_ios_settings_show_command_blocks() else { return nil }
             return ShellIntegrationScript.bootstrapPayload()
         }
         let onBack: () -> Void = { [weak self] in

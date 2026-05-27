@@ -418,6 +418,26 @@ void *bt_ios_create_settings_vc(BtIosSettingsDoneCallback on_done,
 /// `bt_ios_create_settings_vc`. Safe to call with NULL.
 void bt_ios_release_settings_vc(void *vc_ptr);
 
+// ── Settings store ──────────────────────────────────────────────────────────
+//
+// Persisted boolean settings, backed by NSUserDefaults.standard. The Rust
+// Settings VC reads/writes these directly; Swift callers (hosts list,
+// terminal session bootstrap) use them to gate optional behaviour.
+
+/// True iff the user wants vim/htop/claude/etc. to leave the top safe
+/// area visible. Defaults to true on first launch.
+bool bt_ios_settings_reserve_top_safe_area(void);
+
+/// Persist the "reserve top safe area" setting.
+void bt_ios_settings_set_reserve_top_safe_area(bool value);
+
+/// True iff the Warp-style command-blocks UI (and its shell-integration
+/// bootstrap) is enabled. Beta — defaults to false on first launch.
+bool bt_ios_settings_show_command_blocks(void);
+
+/// Persist the "show command blocks" setting.
+void bt_ios_settings_set_show_command_blocks(bool value);
+
 // ── View ────────────────────────────────────────────────────────────────────
 
 /// Resolve the `BtIosMetalInputView *` embedded inside a VC returned by

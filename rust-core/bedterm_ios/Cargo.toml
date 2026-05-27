@@ -43,6 +43,7 @@ objc2-foundation = { version = "0.3", features = [
     "NSDictionary",
     "NSRange",
     "NSBundle",
+    "NSUserDefaults",
 ] }
 
 # UIKit / Metal frameworks only exist on iOS — gate the bindings on the

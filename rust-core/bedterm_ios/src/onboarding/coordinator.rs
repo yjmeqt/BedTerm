@@ -190,7 +190,7 @@ unsafe extern "C" fn host_kind_choice_cb(ctx: *mut c_void, choice: i32) {
         return;
     };
     flow.coordinator().state.borrow_mut().select_host_kind(kind);
-    let location_vc = unsafe { create_location_vc(Some(location_choice_cb), ctx as *mut c_void) };
+    let location_vc = unsafe { create_location_vc(Some(location_choice_cb), ctx) };
     flow.push_next(location_vc);
 }
 

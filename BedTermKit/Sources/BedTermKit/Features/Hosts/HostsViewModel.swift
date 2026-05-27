@@ -48,9 +48,9 @@ public final class HostsViewModel {
     /// connect dispatch; tests can leave it nil.
     public var onConnectError: ((UUID, String, Bool) -> Void)?
     /// Resolves the shell-integration heredoc to push at connect time.
-    /// Set by `HostsScreen` after the SwiftUI environment is wired so we
-    /// can read `BedTermSettings.showCommandBlocks`. Nil
-    /// keeps the channel pristine.
+    /// Installed by `HostsConnectController` against the persisted
+    /// "show command blocks" setting (via `bt_ios_settings_*`). Nil keeps
+    /// the channel pristine.
     public var bootstrapPayloadProvider: (@MainActor () -> String?)?
 
     private let store: HostsStore
