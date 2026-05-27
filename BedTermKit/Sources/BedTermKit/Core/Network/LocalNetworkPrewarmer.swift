@@ -1,3 +1,4 @@
+import BedTermCoreC
 import Foundation
 import Network
 
@@ -98,39 +99,14 @@ final class LocalNetworkPrewarmer {
         return false
     }
 
-    // swiftlint:disable cyclomatic_complexity
     /// True when `host` is on the local network in the sense iOS gates with the
     /// permission prompt: RFC1918 IPv4, IPv6 unique-local / link-local, or an
     /// mDNS `.local` name. Loopback and public addresses return false.
+    ///
+    /// Implementation moved to `rust-core/bedterm_ios/src/net_util.rs`.
     static func isLAN(host: String) -> Bool {
-        let trimmed = host.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty else { return false }
-        if trimmed == "localhost" { return false }
-        if trimmed.hasSuffix(".local") { return true }
-
-        if let v4 = IPv4Address(trimmed) {
-            let bytes = v4.rawValue
-            guard bytes.count == 4 else { return false }
-            let b0 = bytes[0], b1 = bytes[1]
-            if b0 == 127 { return false }  // loopback
-            if b0 == 10 { return true }  // 10.0.0.0/8
-            if b0 == 192 && b1 == 168 { return true }  // 192.168.0.0/16
-            if b0 == 172 && (16...31).contains(b1) { return true }  // 172.16.0.0/12
-            if b0 == 169 && b1 == 254 { return true }  // link-local
-            return false
-        }
-
-        if let v6 = IPv6Address(trimmed) {
-            let bytes = v6.rawValue
-            guard bytes.count == 16 else { return false }
-            let b0 = bytes[0]
-            if b0 == 0xFE && (bytes[1] & 0xC0) == 0x80 { return true }  // fe80::/10 link-local
-            if (b0 & 0xFE) == 0xFC { return true }  // fc00::/7 unique-local
-            return false
-        }
-        return false
+        host.withCString { bt_ios_net_is_lan_host($0) }
     }
-    // swiftlint:enable cyclomatic_complexity
 }
 
 private final class ResolvedFlag: @unchecked Sendable {

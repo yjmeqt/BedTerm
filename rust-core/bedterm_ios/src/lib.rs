@@ -41,6 +41,7 @@ mod display_mode;
 mod geometry;
 mod input_mode;
 mod metal_selection_layer;
+mod net_util;
 mod prompt_context;
 mod scroll_physics;
 
