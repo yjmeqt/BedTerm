@@ -74,6 +74,14 @@ bool bt_ios_settings_show_command_blocks(void);
 /// Persist the "show command blocks" setting.
 void bt_ios_settings_set_show_command_blocks(bool value);
 
+/// True iff the user has finished onboarding. Defaults to false on
+/// first launch. Same NSUserDefaults key the previous Swift
+/// `OnboardingPersistenceBridge` wrote.
+bool bt_ios_settings_onboarding_completed(void);
+
+/// Persist the onboarding-completion flag.
+void bt_ios_settings_set_onboarding_completed(bool value);
+
 // ── View ────────────────────────────────────────────────────────────────────
 
 /// Resolve the `BtIosMetalInputView *` embedded inside a VC returned by

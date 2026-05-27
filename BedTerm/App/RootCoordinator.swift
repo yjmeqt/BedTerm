@@ -11,7 +11,7 @@ final class RootCoordinator {
     private let toaster = Toaster()
     private var navigationController: UINavigationController?
     private var toasterHost: UIHostingController<AnyView>?
-    private var onboardingDone: Bool = OnboardingPersistenceBridge.hasCompleted
+    private var onboardingDone: Bool = bt_ios_settings_onboarding_completed()
 
     /// Strong reference to the active hosts controller (W24d). Owns
     /// the Rust hosts list VC, the `HostsViewModel`, and the

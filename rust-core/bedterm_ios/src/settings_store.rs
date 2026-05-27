@@ -15,6 +15,7 @@ use objc2_foundation::{NSString, NSUserDefaults};
 
 const KEY_RESERVE_TOP: &str = "settings.reserveTopSafeAreaInAltScreen";
 const KEY_SHOW_BLOCKS: &str = "settings.showCommandBlocks";
+const KEY_ONBOARDING_COMPLETED: &str = "com.applovin.yi.bedterm.onboardingCompleted";
 
 fn defaults() -> Retained<NSUserDefaults> {
     NSUserDefaults::standardUserDefaults()
@@ -59,4 +60,12 @@ pub fn show_command_blocks() -> bool {
 
 pub fn set_show_command_blocks(value: bool) {
     write_bool(&defaults(), KEY_SHOW_BLOCKS, value);
+}
+
+pub fn onboarding_completed() -> bool {
+    read_bool(&defaults(), KEY_ONBOARDING_COMPLETED, false)
+}
+
+pub fn set_onboarding_completed(value: bool) {
+    write_bool(&defaults(), KEY_ONBOARDING_COMPLETED, value);
 }

@@ -73,3 +73,18 @@ pub extern "C" fn bt_ios_settings_show_command_blocks() -> bool {
 pub extern "C" fn bt_ios_settings_set_show_command_blocks(value: bool) {
     settings_store::set_show_command_blocks(value);
 }
+
+/// True iff the user has finished the onboarding flow. Defaults to
+/// `false` on first launch — same key the previous Swift
+/// `OnboardingPersistenceBridge` wrote.
+#[no_mangle]
+pub extern "C" fn bt_ios_settings_onboarding_completed() -> bool {
+    settings_store::onboarding_completed()
+}
+
+/// Persist the onboarding-completion flag. Called from
+/// `onboarding::coordinator` once the user lands on the final step.
+#[no_mangle]
+pub extern "C" fn bt_ios_settings_set_onboarding_completed(value: bool) {
+    settings_store::set_onboarding_completed(value);
+}

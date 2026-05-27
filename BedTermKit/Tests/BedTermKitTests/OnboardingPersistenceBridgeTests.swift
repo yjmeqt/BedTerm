@@ -1,21 +1,17 @@
+import BedTermCoreC
 import Foundation
 import Testing
 
 @testable import BedTermKit
 
-/// Exercises the W23d `@_cdecl` shims (`bt_swift_onboarding_get_completed`
-/// / `bt_swift_onboarding_set_completed`) round-trip through the same
-/// `UserDefaults` key the Swift `OnboardingViewModel` used to read.
-///
-/// The bridge has no business logic — these tests guard against
-/// accidentally renaming the key (which would silently re-run onboarding
-/// for upgraded users) and confirm the C symbols resolve.
+/// Round-trips the persisted "onboarding completed" flag through the
+/// Rust-owned `bt_ios_settings_*` C ABI. The flag lives in the same
+/// `NSUserDefaults` key the Swift `OnboardingPersistenceBridge` used
+/// to write — guards against accidental key renames.
 @Suite("OnboardingPersistenceBridge")
 struct OnboardingPersistenceBridgeTests {
     private static let key = "com.applovin.yi.bedterm.onboardingCompleted"
 
-    /// Reset the persisted value before and after each test so the suite
-    /// is order-independent.
     private func withCleanDefaults(_ body: () throws -> Void) rethrows {
         let defaults = UserDefaults.standard
         let prior = defaults.object(forKey: Self.key)
@@ -33,37 +29,26 @@ struct OnboardingPersistenceBridgeTests {
     @Test("get returns false when key is absent")
     func getDefaultsToFalse() throws {
         try withCleanDefaults {
-            // Bridge enum view — same code path the @_cdecl uses.
-            #expect(OnboardingPersistenceBridge.hasCompleted == false)
+            #expect(bt_ios_settings_onboarding_completed() == false)
         }
     }
 
-    @Test("set persists the value under the documented key")
+    @Test("set persists under the documented key")
     func setPersistsValue() throws {
         try withCleanDefaults {
-            OnboardingPersistenceBridge.setCompleted(true)
+            bt_ios_settings_set_onboarding_completed(true)
             #expect(UserDefaults.standard.bool(forKey: Self.key) == true)
-            #expect(OnboardingPersistenceBridge.hasCompleted == true)
+            #expect(bt_ios_settings_onboarding_completed() == true)
         }
     }
 
     @Test("round-trip true → false")
     func roundTripTrueFalse() throws {
         try withCleanDefaults {
-            OnboardingPersistenceBridge.setCompleted(true)
-            #expect(OnboardingPersistenceBridge.hasCompleted == true)
-            OnboardingPersistenceBridge.setCompleted(false)
-            #expect(OnboardingPersistenceBridge.hasCompleted == false)
+            bt_ios_settings_set_onboarding_completed(true)
+            #expect(bt_ios_settings_onboarding_completed() == true)
+            bt_ios_settings_set_onboarding_completed(false)
+            #expect(bt_ios_settings_onboarding_completed() == false)
         }
-    }
-
-    @Test("C symbols are reachable via dlsym")
-    func cdeclSymbolsReachable() throws {
-        // `dlsym(RTLD_DEFAULT, …)` finds @_cdecl exports linked into the
-        // test bundle. Confirms the names match what the Rust extern "C"
-        // block in coordinator.rs reaches for.
-        #expect(dlsym(UnsafeMutableRawPointer(bitPattern: -2), "bt_swift_onboarding_get_completed") != nil)
-        #expect(dlsym(UnsafeMutableRawPointer(bitPattern: -2), "bt_swift_onboarding_set_completed") != nil)
-        #expect(dlsym(UnsafeMutableRawPointer(bitPattern: -2), "bt_swift_request_local_network") != nil)
     }
 }
