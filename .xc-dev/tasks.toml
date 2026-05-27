@@ -1,0 +1,120 @@
+# .xc-dev/tasks.toml
+
+# ---------------------------------------------------------------- iOS
+[tasks.build]
+args = ["config=Debug"]
+desc = "Build the app for the default simulator into .xc-dev/DerivedData"
+cmd  = """
+set -o pipefail
+xcrun xcodebuild -scheme {{scheme}} \
+  -configuration {{config}} \
+  -derivedDataPath {{derived_data}} \
+  -destination 'id={{sim_id}}' \
+  build \
+  | {{xcbeautify}}
+"""
+
+[tasks.run]
+depends = ["build"]
+desc = "Build, boot the default sim, install, launch"
+cmd  = """
+xcrun simctl boot {{sim_id}} 2>/dev/null || true
+xcrun simctl install {{sim_id}} {{app_path}}
+xcrun simctl launch {{sim_id}} {{bundle_id}}
+"""
+
+[tasks.test]
+desc = "Run xcodebuild test on the default simulator"
+cmd  = """
+set -o pipefail
+xcrun xcodebuild test \
+  -scheme {{scheme}} \
+  -destination 'id={{sim_id}}' \
+  -derivedDataPath {{derived_data}} \
+  | {{xcbeautify}}
+"""
+
+[tasks.build-device]
+desc = "Build for a generic iOS device (Debug-iphoneos/)"
+cmd  = """
+set -o pipefail
+xcrun xcodebuild -scheme {{scheme}} \
+  -configuration {{configuration}} \
+  -derivedDataPath {{derived_data}} \
+  -destination 'generic/platform=iOS' \
+  build \
+  | {{xcbeautify}}
+"""
+
+[tasks.devices]
+desc = "List paired iOS devices (use the Identifier column as udid for run-device)"
+cmd  = "xcrun devicectl list devices"
+
+[tasks.run-device]
+args = ["udid"]
+depends = ["build-device"]
+desc = "Install + launch on a specific iOS device. Usage: xc-dev run-device <udid> (see `xc-dev devices`)"
+cmd  = """
+set -euo pipefail
+APP="{{derived_data}}/Build/Products/{{configuration}}-iphoneos/{{product_name}}.app"
+[ -d "$APP" ] || { echo "device .app missing: $APP" >&2; exit 1; }
+
+xcrun devicectl device install app    --device {{udid}} "$APP"
+xcrun devicectl device process launch --device {{udid}} {{bundle_id}}
+"""
+
+[tasks.sim-bootstrap]
+desc = "Print the resolved simulator (forces lazy create on first reference)"
+cmd  = """
+echo "name:    {{sim_name}}"
+echo "udid:    {{sim_id}}"
+echo "runtime: {{sim_runtime}}"
+"""
+
+[tasks.sim-delete]
+desc = "Delete the worktree simulator and clear the cache"
+cmd  = """
+NAME="{{sim_name}}"
+xcrun simctl delete "$NAME" 2>/dev/null && echo "Deleted $NAME" || echo "Not present: $NAME"
+rm -f {{xc_dev_dir}}/simulator.local.toml
+"""
+
+[tasks.clean]
+depends = ["sim-delete"]
+desc = "Wipe DerivedData, delete the worktree simulator, and cargo clean rust-core"
+cmd  = """
+rm -rf {{derived_data}}
+cargo clean --manifest-path rust-core/Cargo.toml
+"""
+
+# ---------------------------------------------------------------- Rust
+[tasks.rust-test]
+desc = "cargo test in rust-core/ (workspace, host target)"
+cmd  = "cargo test --manifest-path rust-core/Cargo.toml --workspace"
+
+[tasks.rust-check]
+desc = "cargo check on rust-core workspace"
+cmd  = "cargo check --manifest-path rust-core/Cargo.toml --workspace --all-targets"
+
+[tasks.rust-clippy]
+desc = "cargo clippy with -D warnings"
+cmd  = "cargo clippy --manifest-path rust-core/Cargo.toml --workspace --all-targets -- -D warnings"
+
+[tasks.rust-fmt-check]
+desc = "Verify Rust formatting (no changes)"
+cmd  = "cargo fmt --manifest-path rust-core/Cargo.toml --all -- --check"
+
+[tasks.rust-xcframework]
+args = ["mode=debug", "platform="]
+desc = "Build BedTermCore.xcframework (mode: debug|release; platform: iphonesimulator|iphoneos|macosx|empty=all)"
+cmd  = "./scripts/build-rust-xcframework.sh {{mode}} {{platform}}"
+
+[tasks.rust-check-no-mock]
+desc = "Verify Release builds contain no mock symbols"
+cmd  = "./scripts/check-release-no-mock-symbols.sh"
+
+# ---------------------------------------------------------------- Aggregate
+[tasks.ci]
+depends = ["rust-fmt-check", "rust-clippy", "rust-test", "build", "test"]
+desc    = "Full CI: Rust lint+test, then iOS build+test"
+cmd     = "echo 'CI OK on {{git_branch}} ({{git_sha}})'"
