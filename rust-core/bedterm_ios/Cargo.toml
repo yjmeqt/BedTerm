@@ -1,0 +1,117 @@
+[package]
+name = "bedterm_ios"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lib]
+name = "bedterm_ios"
+crate-type = ["staticlib", "rlib"]
+
+# UIKit/Metal-coupled modules are gated per-module on `target_os = "ios"`
+# (see `lib.rs`). Pure-logic modules (scroll physics, block-list layout,
+# input-mode state machine, etc.) compile and test on every host so the
+# arithmetic stays unit-testable without an iOS simulator.
+#
+# objc2 et al. compile cleanly on macOS hosts (the bindings exist, they
+# just resolve to no-op-at-runtime stubs because UIKit isn't linkable
+# off-iOS). That's fine — host tests never actually instantiate UIKit
+# objects; they exercise the pure-Rust code paths only.
+[dependencies]
+bedterm_core = { path = "../bedterm_core" }
+# `disable-encoding-assertions` is the upstream-blessed escape hatch for
+# `UITextInputTraits` protocol-property setters that the runtime sees as
+# missing during debug-time `class_getInstanceMethod` verification (see
+# https://github.com/madsmtm/objc2/issues/645). It replaces the
+# `raw_set_i64` workaround previously living in `input_bar.rs`.
+#
+# objc2 / objc2-foundation compile cleanly on macOS hosts (Foundation
+# links, UIKit does not), so we keep them unconditional for the pure-
+# logic modules that need `Encode` impls + `msg_send!` macro type
+# plumbing.
+objc2 = { version = "0.6", features = ["disable-encoding-assertions"] }
+# `block2` is needed (iOS-only target dep below pulls it in for objc2-ui-kit's
+# block-taking selectors, e.g. `colorWithDynamicProvider:`). Pulled here as
+# the explicit version pin matching what objc2 0.6 transitively requires.
+block2 = "0.6"
+objc2-foundation = { version = "0.3", features = [
+    "NSString",
+    "NSNotification",
+    "NSValue",
+    "NSArray",
+    "NSDictionary",
+    "NSRange",
+    "NSBundle",
+] }
+
+# UIKit / Metal frameworks only exist on iOS — gate the bindings on the
+# target so host builds don't try to link `-framework UIKit`.
+[target.'cfg(target_os = "ios")'.dependencies]
+objc2-ui-kit = { version = "0.3", features = [
+    "block2",
+    "UITraitCollection",
+    "UIInterface",
+    "UIResponder",
+    "UIViewController",
+    "UIView",
+    "UIActivityIndicatorView",
+    "UILabel",
+    "UINavigationItem",
+    "UIBarItem",
+    "UIBarButtonItem",
+    "UIImage",
+    "UIImageConfiguration",
+    "UIImageSymbolConfiguration",
+    "UIButton",
+    "UIButtonConfiguration",
+    "UIBackgroundConfiguration",
+    "UIStackView",
+    "UIGeometry",
+    "UIFontDescriptor",
+    "UINavigationController",
+    "UIColor",
+    "UIFont",
+    "UIControl",
+    "UISwitch",
+    "UIScrollView",
+    "UITextView",
+    "UITextField",
+    "UISegmentedControl",
+    "UITextInput",
+    "UITextInputTraits",
+    "NSText",
+    "UIGestureRecognizer",
+    "UITapGestureRecognizer",
+    "UILongPressGestureRecognizer",
+    "UIPanGestureRecognizer",
+    "UIPress",
+    "UIPressesEvent",
+    "UIKey",
+    "UIKeyConstants",
+    "UIKeyCommand",
+    "UIKitDefines",
+    "UIEvent",
+    "UITouch",
+    "UIBezierPath",
+] }
+objc2-metal = { version = "0.3", features = [
+    "MTLDevice",
+    "MTLCommandQueue",
+    "MTLTexture",
+    "MTLPixelFormat",
+    "MTLDefines",
+] }
+objc2-metal-kit = { version = "0.3", features = [
+    "MTKView",
+    "MTKDefines",
+] }
+objc2-quartz-core = { version = "0.3", features = [
+    "CADisplayLink",
+    "CALayer",
+    "CAShapeLayer",
+    "CATransaction",
+    "CAMediaTimingFunction",
+    "CAAnimation",
+    "CAMediaTiming",
+] }

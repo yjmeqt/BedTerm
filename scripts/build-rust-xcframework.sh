@@ -1,9 +1,24 @@
 #!/usr/bin/env bash
-# Builds bedterm_core for iOS device + iOS sim + macOS, then assembles
-# BedTermCore.xcframework consumed by BedTermKit as a binary target.
+# Builds bedterm_ios (the Swift-facing crate, which links bedterm_core in
+# transitively as a workspace dep) for iOS device + iOS sim + macOS, then
+# assembles BedTermCore.xcframework consumed by BedTermKit as a binary target.
+#
+# The xcframework keeps its legacy `BedTermCore.xcframework` name and its
+# legacy `BedTermCoreC` SwiftPM module / `bedterm_core.h` header name to
+# avoid churning every `import BedTermCoreC` call site in Swift. The
+# contents, however, are now produced from `bedterm_ios`: the static
+# library is `libbedterm_ios.a` (which transitively contains all of
+# `bedterm_core`'s symbols by Rust staticlib linkage), and the staged
+# header is `cbindgen(bedterm_core)` + the hand-written `bedterm_ios.h`
+# FFI fragment appended before the include-guard closer.
 #
 # Run from repo root or via Xcode pre-action / build phase:
-#     ./scripts/build-rust-xcframework.sh [debug|release|Debug|Release]
+#     ./scripts/build-rust-xcframework.sh [debug|release|Debug|Release] [PLATFORM_NAME]
+#
+# Second arg is Xcode's `$PLATFORM_NAME` (iphonesimulator | iphoneos | macosx).
+# When given, the script builds ONLY the matching slice — sim-only test runs
+# (e.g. CI) skip the device + macOS slices entirely. Empty / unrecognized
+# value falls back to building all three slices (release / archive path).
 #
 # Idempotent: if the staged .a in the xcframework is byte-identical to the
 # fresh cargo output for every slice, we skip the `xcodebuild
@@ -35,37 +50,55 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 RUST_DIR="$REPO_ROOT/rust-core"
 OUT_DIR="$REPO_ROOT/BedTermKit/BinaryFrameworks"
 FW_DIR="$OUT_DIR/BedTermCore.xcframework"
+# The xcframework slice library is now `libbedterm_ios.a`. Because
+# `bedterm_ios` depends on `bedterm_core` (path dep) and is built as a
+# `staticlib`, Rust links bedterm_core's object files into the produced
+# `.a` automatically, so the single staticlib carries every `bt_*` /
+# `bedterm_*` symbol Swift currently calls. We keep the staged file name
+# inside the xcframework as `libbedterm_core.a` (the legacy name the
+# committed xcframework Info.plist references) to avoid editing
+# Info.plist + Package.swift in this wave; logically it is just a copy
+# of `libbedterm_ios.a`.
 LIB_NAME="libbedterm_core.a"
-IOS_LIB_NAME="libbedterm_ios_ui.a"
+IOS_LIB_NAME="libbedterm_ios.a"
 HEADER="$RUST_DIR/bedterm_core/include/bedterm_core.h"
-# Supplemental header with declarations for crates outside bedterm_core.
-# cbindgen regenerates HEADER on every bedterm_core build, so we keep extra
-# declarations in a separate file and cat them together into every staged copy.
-IOS_UI_HEADER="$RUST_DIR/bedterm-ios-ui/include/bedterm_ios_ui.h"
+# Supplemental header with declarations for symbols `bedterm_ios` itself
+# exports (the hand-written `bt_ios_*` C ABI fragment). cbindgen
+# regenerates HEADER on every bedterm_core build, so we keep extra
+# declarations in a separate file and cat them together into every
+# staged copy.
+IOS_UI_HEADER="$RUST_DIR/bedterm_ios/include/bedterm_ios.h"
 
 # rust-target → xcframework slice id (matches the Info.plist committed alongside).
-TARGETS=(
+ALL_TARGETS=(
   "aarch64-apple-ios"
   "aarch64-apple-ios-sim"
   "aarch64-apple-darwin"
 )
-SLICE_IDS=(
+ALL_SLICE_IDS=(
   "ios-arm64"
   "ios-arm64-simulator"
   "macos-arm64"
 )
 
-cd "$RUST_DIR"
-for t in "${TARGETS[@]}"; do
-  echo "==> cargo build -p bedterm_core --target $t ($PROFILE)"
-  cargo build -p bedterm_core \
-    "${CARGO_PROFILE_ARG[@]+"${CARGO_PROFILE_ARG[@]}"}" \
-    --target "$t"
-done
+# Narrow the build set to one slice when Xcode tells us which platform it's
+# building for. Empty / unrecognized value → keep all three (release path).
+PLATFORM_NAME_RAW="${2:-}"
+case "$PLATFORM_NAME_RAW" in
+  iphonesimulator) TARGETS=("aarch64-apple-ios-sim"); SLICE_IDS=("ios-arm64-simulator") ;;
+  iphoneos)        TARGETS=("aarch64-apple-ios");      SLICE_IDS=("ios-arm64") ;;
+  macosx)          TARGETS=("aarch64-apple-darwin");   SLICE_IDS=("macos-arm64") ;;
+  *)               TARGETS=("${ALL_TARGETS[@]}");      SLICE_IDS=("${ALL_SLICE_IDS[@]}") ;;
+esac
+echo "==> building slices: ${SLICE_IDS[*]} (PLATFORM_NAME='${PLATFORM_NAME_RAW}')"
 
+cd "$RUST_DIR"
+# Building `bedterm_ios` transitively builds `bedterm_core` (path dep)
+# and triggers its `build.rs` cbindgen step, which keeps
+# `bedterm_core/include/bedterm_core.h` up to date.
 for t in "${TARGETS[@]}"; do
-  echo "==> cargo build -p bedterm-ios-ui --target $t ($PROFILE)"
-  cargo build -p bedterm-ios-ui \
+  echo "==> cargo build -p bedterm_ios --target $t ($PROFILE)"
+  cargo build -p bedterm_ios \
     "${CARGO_PROFILE_ARG[@]+"${CARGO_PROFILE_ARG[@]}"}" \
     --target "$t"
 done
@@ -77,7 +110,6 @@ done
 # change to either crate triggers a rebuild.
 need_rebuild=0
 for i in "${!TARGETS[@]}"; do
-  src="$RUST_DIR/target/${TARGETS[$i]}/$PROFILE_DIR/$LIB_NAME"
   ios_src="$RUST_DIR/target/${TARGETS[$i]}/$PROFILE_DIR/$IOS_LIB_NAME"
   digest_file="$FW_DIR/${SLICE_IDS[$i]}/.bedterm_input_digest"
   staged="$FW_DIR/${SLICE_IDS[$i]}/$LIB_NAME"
@@ -85,7 +117,7 @@ for i in "${!TARGETS[@]}"; do
     need_rebuild=1
     break
   fi
-  current_digest="$(shasum -a 256 "$src" "$ios_src" 2>/dev/null | shasum -a 256 | awk '{print $1}')"
+  current_digest="$(shasum -a 256 "$ios_src" 2>/dev/null | awk '{print $1}')"
   stored_digest="$(cat "$digest_file" 2>/dev/null || true)"
   if [ "$current_digest" != "$stored_digest" ]; then
     need_rebuild=1
@@ -104,13 +136,12 @@ trap 'rm -rf "$STAGE"' EXIT
 for t in "${TARGETS[@]}"; do
   slice_dir="$STAGE/$t"
   mkdir -p "$slice_dir/Headers"
-  # Merge bedterm_core and bedterm-ios-ui into a single .a per slice so
-  # the xcframework remains a single-library bundle (as before).
-  libtool -static -o "$slice_dir/$LIB_NAME" \
-    "$RUST_DIR/target/$t/$PROFILE_DIR/libbedterm_core.a" \
-    "$RUST_DIR/target/$t/$PROFILE_DIR/libbedterm_ios_ui.a"
+  # `libbedterm_ios.a` already contains all of bedterm_core's object
+  # files (Rust staticlib linkage), so we copy it straight in under the
+  # legacy `libbedterm_core.a` slice filename — no libtool merge needed.
+  cp "$RUST_DIR/target/$t/$PROFILE_DIR/$IOS_LIB_NAME" "$slice_dir/$LIB_NAME"
   # Compose the staged header: cbindgen-generated bedterm_core.h plus the
-  # hand-written ios-ui supplement (appended before the final #endif).
+  # hand-written bedterm_ios supplement (appended before the final #endif).
   python3 - "$HEADER" "$IOS_UI_HEADER" "$slice_dir/Headers/bedterm_core.h" <<'PYEOF'
 import sys, re
 core_h = open(sys.argv[1]).read()
@@ -143,10 +174,9 @@ mv "$TMP_FW" "$FW_DIR"
 
 # Write per-slice digest files so the idempotency check works on the next run.
 for i in "${!TARGETS[@]}"; do
-  src="$RUST_DIR/target/${TARGETS[$i]}/$PROFILE_DIR/$LIB_NAME"
   ios_src="$RUST_DIR/target/${TARGETS[$i]}/$PROFILE_DIR/$IOS_LIB_NAME"
   digest_file="$FW_DIR/${SLICE_IDS[$i]}/.bedterm_input_digest"
-  shasum -a 256 "$src" "$ios_src" 2>/dev/null | shasum -a 256 | awk '{print $1}' > "$digest_file"
+  shasum -a 256 "$ios_src" 2>/dev/null | awk '{print $1}' > "$digest_file"
 done
 
 # Keep the tracked header copy in sync so `import BedTermCoreC` stays correct.

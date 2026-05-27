@@ -18,6 +18,18 @@ struct BedTermSettingsTests {
         let settings = BedTermSettings(defaults: try makeDefaults())
         #expect(settings.reserveTopSafeAreaInAltScreen)
         #expect(!settings.showCommandBlocks)
+        #expect(!settings.useRustHostsList)
+        #expect(!settings.useRustConnectForm)
+    }
+
+    @Test("useRustConnectForm persists across reloads")
+    func useRustConnectFormPersists() throws {
+        let defaults = try makeDefaults()
+        let first = BedTermSettings(defaults: defaults)
+        first.useRustConnectForm = true
+
+        let second = BedTermSettings(defaults: defaults)
+        #expect(second.useRustConnectForm)
     }
 
     @Test("toggle persists across reloads")

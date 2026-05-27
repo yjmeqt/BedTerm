@@ -55,12 +55,6 @@
 
 #define BT_CLI_AGENT_VIBE 13
 
-#define MAX_BLOCKS_PER_SNAPSHOT 100
-
-#define CURRENT_VERSION 1
-
-#define MAX_SNAPSHOTS_PER_HOST 10
-
 /**
  * Two triangles per cell.
  */
@@ -131,22 +125,7 @@
 
 #define BT_MODE_FOCUS_IN_OUT (1 << 5)
 
-typedef struct BtRenderer BtRenderer;
-
 typedef struct BtTerm BtTerm;
-
-/**
- * Backing storage that keeps the `CString` allocations alive for as long as
- * the `CSnapshotList` is live.
- */
-typedef struct OwnedListBacking OwnedListBacking;
-
-/**
- * Opaque handle. Allocated by `init`, freed by `close`.
- */
-typedef struct PersistenceHandle PersistenceHandle;
-
-typedef struct Terminal Terminal;
 
 typedef struct BtBlockView {
   uint64_t id;
@@ -243,172 +222,6 @@ typedef struct BtSnapshotView {
   uintptr_t cell_count;
 } BtSnapshotView;
 
-/**
- * 8-bit-per-channel sRGB triple. The renderer-facing snapshot stores
- * premultiplied RGBA u32s; this type only exists at the host-config boundary.
- */
-typedef struct BtRgb24 {
-  uint8_t r;
-  uint8_t g;
-  uint8_t b;
-} BtRgb24;
-
-/**
- * Flat C view of a `Palette`. 18 × `BtRgb24` = 54 bytes (no padding —
- * `#[repr(C)]` `BtRgb24` is 3 × u8). Swift passes a pointer; Rust copies in.
- */
-typedef struct BtPaletteView {
-  struct BtRgb24 default_fg;
-  struct BtRgb24 default_bg;
-  struct BtRgb24 ansi[16];
-} BtPaletteView;
-
-/**
- * A single snapshot row as seen from Swift / C.
- */
-typedef struct CSnapshot {
-  const char *id;
-  const char *host_id;
-  /**
-   * -1 if no kill_reason was recorded.
-   */
-  int32_t kill_reason;
-  /**
-   * 0.0 if no killed_at was recorded.
-   */
-  double killed_at;
-  /**
-   * null if no last_cwd was recorded.
-   */
-  const char *last_cwd;
-  /**
-   * null if no last_command was recorded.
-   */
-  const char *last_command;
-  /**
-   * `i32::MIN` if no exit code was recorded.
-   */
-  int32_t last_exit_code;
-  int64_t block_count;
-} CSnapshot;
-
-/**
- * Heap-allocated list returned by `bedterm_persistence_list`.
- * Free with `bedterm_persistence_free_list`.
- */
-typedef struct CSnapshotList {
-  const struct CSnapshot *items;
-  uintptr_t count;
-  struct OwnedListBacking *_owned;
-} CSnapshotList;
-
-/**
- * One entry per block: the BODY cell region plus the panel chrome
- * rect. Headers are emitted separately via `BtBlockHeaderEntry`.
- */
-typedef struct BtBlockLayoutEntry {
-  /**
-   * Matches `Block::id`. Looked up by linear scan over `term.blocks()`.
-   */
-  uint64_t block_id;
-  /**
-   * Top-left Y of the BODY (cells start here) in logical content
-   * coordinates (pixels).
-   */
-  float body_y_top_px;
-  /**
-   * Body height in pixels (row_count × cell_height_px).
-   */
-  float body_height_px;
-  /**
-   * Top-left Y of the PANEL chrome (includes header). The rounded
-   * panel BG paints from this Y down to `panel_y_top_px + panel_height_px`.
-   */
-  float panel_y_top_px;
-  /**
-   * Panel height in pixels (header + body + any inset).
-   */
-  float panel_height_px;
-  /**
-   * Panel left edge X in pixels.
-   */
-  float panel_x_left_px;
-  /**
-   * Panel width in pixels.
-   */
-  float panel_width_px;
-  /**
-   * Panel background RGBA (0xRRGGBBAA, big-endian packed). Pass 0 to
-   * skip panel rendering for this entry (terminal pane fallback).
-   */
-  uint32_t panel_bg_rgba;
-  /**
-   * Panel corner radius in pixels.
-   */
-  float panel_corner_radius_px;
-} BtBlockLayoutEntry;
-
-/**
- * One entry per visible block header band. Sticky descriptors use the
- * same struct with `is_sticky = 1` and `header_y_top_px` in
- * **screen-space** (post-scroll) rather than content-space.
- */
-typedef struct BtBlockHeaderEntry {
-  uint64_t block_id;
-  /**
-   * For natural headers: top Y in **content** coords (pre-scroll).
-   * For sticky (is_sticky=1): top Y in **screen** coords.
-   */
-  float header_y_top_px;
-  float header_height_px;
-  float panel_x_left_px;
-  float panel_width_px;
-  /**
-   * UTF-8 bytes of the command string. Nullable when `command_len == 0`.
-   */
-  const uint8_t *command_utf8;
-  uint32_t command_len;
-  /**
-   * UTF-8 bytes of the subtitle string (e.g. "exit 0 · 1.2s").
-   * Nullable when `subtitle_len == 0`.
-   */
-  const uint8_t *subtitle_utf8;
-  uint32_t subtitle_len;
-  /**
-   * 0 = no badge; nonzero values mirror the Swift `CLIAgent` enum.
-   * Branded slots known to the icon atlas (Claude=1, Codex=2);
-   * everything else falls back to the generic glyph.
-   */
-  uint8_t agent_id;
-  uint8_t _pad[3];
-  /**
-   * Badge circle fill (0xRRGGBBAA).
-   */
-  uint32_t badge_tint_rgba;
-  /**
-   * Command text colour.
-   */
-  uint32_t command_fg_rgba;
-  /**
-   * Subtitle text colour.
-   */
-  uint32_t subtitle_fg_rgba;
-  /**
-   * Hairline divider rgba. For natural headers, painted ABOVE the
-   * band; for sticky headers, painted BELOW (so the pinned chrome
-   * reads as a section header floating above the scrolling body).
-   * Pass 0 to skip.
-   */
-  uint32_t divider_rgba;
-  /**
-   * 1 = this is the pinned sticky band. Drawn last (z-sorted on top)
-   * and given an opaque surface-coloured fill so scrolling body
-   * cells underneath don't bleed through.
-   */
-  uint8_t is_sticky;
-  uint8_t _pad2[3];
-} BtBlockHeaderEntry;
-
 #ifdef __cplusplus
 extern "C" {
 #endif // __cplusplus
@@ -445,16 +258,6 @@ int bt_term_block_snapshot(struct BtTerm *h, uintptr_t idx, struct BtSnapshotVie
 void bt_term_block_snapshot_release(struct BtTerm *h);
 
 struct BtTerm *bt_term_new(uint16_t cols, uint16_t rows);
-
-/**
- * Construct a replay-only `BtTerm` — no PTY backing, no persistence sink.
- * Feed stored block bytes into this terminal to reconstruct the block list.
- * Caller owns the returned pointer; release via `bt_term_free`.
- *
- * # Safety
- * Same as `bt_term_new`. The returned pointer must be freed with `bt_term_free`.
- */
-struct BtTerm *bt_term_new_replay(uint16_t cols, uint16_t rows);
 
 /**
  * # Safety
@@ -555,323 +358,22 @@ int bt_term_snapshot_range(struct BtTerm *h,
  */
 void bt_term_snapshot_release(struct BtTerm *h);
 
-/**
- * # Safety
- * `h` must be a valid, non-freed handle. `palette` must point to a valid,
- * aligned `BtPaletteView`, or be null (a null palette is a no-op).
- */
-void bt_term_set_palette(struct BtTerm *h, const struct BtPaletteView *palette);
-
-/**
- * Attach persistence to a `BtTerm` handle — a convenience shim over
- * `bedterm_persistence_attach` that accepts the opaque `BtTerm *` Swift
- * already owns rather than requiring Swift to materialise a bare `Terminal *`.
- *
- * # Safety
- * `h` must be a valid `BtTerm *` returned by `bt_term_new`.
- * `handle`, `snapshot_id`, and `host_id` follow the same safety contract
- * as `bedterm_persistence_attach`.
- */
-void bt_term_attach_persistence(struct BtTerm *h,
-                                struct PersistenceHandle *handle,
-                                const char *snapshot_id,
-                                const char *host_id);
-
-/**
- * # Safety
- * `db_path` must be a valid NUL-terminated UTF-8 C string or null.
- * The returned pointer must be freed with `bedterm_persistence_close`.
- */
-struct PersistenceHandle *bedterm_persistence_init(const char *db_path);
-
-/**
- * # Safety
- * `handle` must be a pointer previously returned by
- * `bedterm_persistence_init` and not yet freed.
- */
-void bedterm_persistence_close(struct PersistenceHandle *handle);
-
-/**
- * Wire `terminal` to the persistence database held in `handle`, scoped to
- * `snapshot_id`. This function also ensures a `snapshots` row exists for
- * `snapshot_id` (idempotent — harmlessly fails with a constraint error if
- * the row was already inserted).
- *
- * After this call, every `CommandFinished` event processed by `terminal`
- * inserts a row into the `blocks` table. Blocks sealed by Ctrl-C
- * (Precmd-over-running-command path) are also persisted, with `exit_code`
- * set to NULL.
- *
- * # Safety
- *
- * - `handle`, `terminal`, `snapshot_id`, and `host_id` must all be valid
- *   non-null pointers.
- * - `snapshot_id` and `host_id` must be NUL-terminated UTF-8 C strings.
- * - The caller MUST keep `handle` alive until `terminal` is freed. The
- *   persistence sink installed by this function holds a raw pointer into
- *   `handle.db` — if the handle is freed while the terminal is still live,
- *   any subsequent block finalization will access freed memory.
- *
- * The intended call order is:
- *   1. `bedterm_persistence_attach(handle, term, sid, hid)` — on session open.
- *   2. Feed PTY bytes to `term` via `bedterm_feed` as usual.
- *   3. Free `term` (e.g. `bedterm_free`).
- *   4. `bedterm_persistence_close(handle)` — after the terminal is gone.
- */
-void bedterm_persistence_attach(struct PersistenceHandle *handle,
-                                struct Terminal *terminal,
-                                const char *snapshot_id,
-                                const char *host_id);
-
-/**
- * Record that a session was killed.
- *
- * - `reason`: a `KillReason` discriminant (0–4).
- * - `last_cwd`, `last_command`: NUL-terminated UTF-8 or null.
- * - `last_exit_code` / `has_exit_code`: use `has_exit_code != 0` to pass a
- *   real exit code; `i32::MIN` is a legal exit code so a sentinel is not safe.
- *
- * # Safety
- * All non-null pointer arguments must point to valid NUL-terminated UTF-8.
- */
-void bedterm_persistence_record_kill(struct PersistenceHandle *handle,
-                                     const char *snapshot_id,
-                                     int32_t reason,
-                                     const char *last_cwd,
-                                     const char *last_command,
-                                     int32_t last_exit_code,
-                                     int32_t has_exit_code);
-
-/**
- * List all killed snapshots for a host, ordered newest-first.
- *
- * Returns a heap-allocated `CSnapshotList` that must be freed with
- * `bedterm_persistence_free_list`. Returns null on error.
- *
- * # Safety
- * `handle` and `host_id` must be valid non-null pointers.
- */
-struct CSnapshotList *bedterm_persistence_list(struct PersistenceHandle *handle,
-                                               const char *host_id);
-
-/**
- * Free a list previously returned by `bedterm_persistence_list`.
- *
- * # Safety
- * `list` must have been returned by `bedterm_persistence_list` and not yet
- * freed.
- */
-void bedterm_persistence_free_list(struct CSnapshotList *list);
-
-/**
- * Open a replay terminal pre-loaded with the stored blocks for `snapshot_id`.
- *
- * Returns a newly-allocated `BtTerm` that has been fed all stored block bytes
- * for the given snapshot. The terminal has no PTY backing and no persistence
- * sink — it is read-only and renders the session history via the normal Metal
- * renderer. Free the returned pointer with `bt_term_free`.
- *
- * Returns null if `snapshot_id` is unknown, has no blocks, or an error occurs.
- *
- * # Safety
- * `handle` and `snapshot_id` must be valid non-null pointers.
- * `snapshot_id` must be a NUL-terminated UTF-8 C string.
- * The returned `BtTerm *` must be freed with `bt_term_free` (existing FFI).
- */
-struct BtTerm *bedterm_persistence_open_replay(struct PersistenceHandle *handle,
-                                               const char *snapshot_id);
-
-/**
- * Delete a snapshot (and its blocks) from the database.
- *
- * # Safety
- * `handle` and `snapshot_id` must be valid non-null pointers; `snapshot_id`
- * must be a NUL-terminated UTF-8 C string.
- */
-void bedterm_persistence_discard(struct PersistenceHandle *handle, const char *snapshot_id);
-
-/**
- * Paint visible block bodies + header bands into `texture` for one
- * frame. First visible block clears the viewport; subsequent calls use
- * Load. If no block intersects the viewport, the viewport is still
- * cleared.
- *
- * # Safety
- * `r`, `term`, `texture_ptr` must be valid live pointers. `entries`
- * must point to at least `entry_count` `BtBlockLayoutEntry` values
- * (or be null with `entry_count == 0`). Same for `headers` /
- * `header_count`. UTF-8 pointers inside header entries must outlive
- * the call.
- */
-int bt_renderer_draw_block_list(struct BtRenderer *r,
-                                struct BtTerm *term,
-                                const void *texture_ptr,
-                                uint32_t viewport_w,
-                                uint32_t viewport_h,
-                                float scroll_y_px,
-                                const struct BtBlockLayoutEntry *entries,
-                                uintptr_t entry_count,
-                                const struct BtBlockHeaderEntry *headers,
-                                uintptr_t header_count);
-
-/**
- * Push current UI font sizes into the renderer. Called by Swift on
- * init and whenever the trait collection changes (Dynamic Type, scale).
- * `*_px` are in **pixels** (point size × screen scale).
- *
- * # Safety
- * `r` must be a valid live pointer.
- */
-int bt_renderer_set_ui_font_sizes_px(struct BtRenderer *r,
-                                     float subheadline_px,
-                                     float caption2_px,
-                                     float scale);
-
-/**
- * # Safety
- * `mtl_device` and `mtl_queue` must be non-null `id<MTLDevice>` /
- * `id<MTLCommandQueue>` pointers. They are borrowed for the renderer's
- * lifetime; the caller (Swift) retains them.
- */
-struct BtRenderer *bt_renderer_new(const void *mtl_device, const void *mtl_queue);
-
-/**
- * # Safety
- * `r` must be a pointer returned by `bt_renderer_new` not yet freed.
- */
-void bt_renderer_free(struct BtRenderer *r);
-
-/**
- * # Safety
- * `r` must be a live `BtRenderer` pointer.
- */
-void bt_renderer_set_font(struct BtRenderer *r, float pixel_size, float device_pixel_ratio);
-
-/**
- * Write the renderer's current cell size (in PIXELS, scaled by the dpr
- * passed to `bt_renderer_set_font`) into `*out_w` and `*out_h`. Swift
- * divides by its display scale to obtain the point-space cell size used
- * for laying out CALayer overlays (cursor, selection) — keeping them
- * pixel-aligned with the glyphs the renderer paints.
- *
- * # Safety
- * `r` must be a live `BtRenderer`. `out_w` and `out_h` must be valid
- * pointers to `u32` slots the caller owns.
- */
-void bt_renderer_cell_pixel_size(const struct BtRenderer *r, uint32_t *out_w, uint32_t *out_h);
-
-/**
- * # Safety
- * `r` must be a live `BtRenderer` pointer, or null (null is a no-op).
- * Components are clamped to `[0, 1]` downstream by Metal; values outside
- * that range are tolerated.
- */
-void bt_renderer_set_clear_color(struct BtRenderer *r,
-                                 float red,
-                                 float green,
-                                 float blue,
-                                 float alpha);
-
-/**
- * # Safety
- * `r` must be a live `BtRenderer`. `term` must be a live `BtTerm` or null
- * (null is treated as "no terminal yet"). `drawable_texture` must be a
- * live `id<MTLTexture>`.
- */
-int bt_renderer_draw(struct BtRenderer *r,
-                     const struct BtTerm *term,
-                     const void *drawable_texture,
-                     uint32_t viewport_width_px,
-                     uint32_t viewport_height_px,
-                     double time_seconds);
-
-/**
- * Render an arbitrary cell array — used by Block view to draw each
- * block's body (either a frozen snapshot of a sealed block or a fresh
- * row-range snapshot of a running block) through the same Metal pipeline
- * the main terminal view uses.
- *
- * `cells_len` must equal `cols as usize * rows as usize`. `cells` may be
- * null with `cells_len == 0` for an empty draw (clears the viewport).
- *
- * # Safety
- * `r` must be a live `BtRenderer`. `cells` (when non-null) must point to
- * `cells_len` valid `CellSnapshot` values for the duration of the call.
- * `drawable_texture` must be a live `id<MTLTexture>`.
- */
-int bt_renderer_draw_cells(struct BtRenderer *r,
-                           const struct CellSnapshot *cells,
-                           uintptr_t cells_len,
-                           uint16_t cols,
-                           uint16_t rows,
-                           const void *drawable_texture,
-                           uint32_t viewport_width_px,
-                           uint32_t viewport_height_px,
-                           double time_seconds);
-
-/**
- * Register a host-supplied font face (TTF / TTC / OTF bytes) and
- * promote it to the primary terminal family. Used by Swift to wire
- * iOS's SF Mono / Menlo into the Rust rasterizer at app launch.
- *
- * **The family name is sourced from the sfnt `name` table by fontdb**,
- * not from the caller — this closes the trap where iOS's CTFont
- * surface name (`.AppleSystemUIFontMonospaced`) doesn't match what
- * the font file actually declares (`SF Mono`), which would otherwise
- * make `Family::Name(...)` at shape time silently fall through to
- * the bundled JetBrains Mono.
- *
- * The resolved family is written back into `out_family_ptr` (up to
- * `out_family_capacity` bytes, no NUL terminator) so the caller can
- * log it. If `out_family_ptr` is null or capacity is 0, registration
- * still happens and the return value just reports the length that
- * would have been written.
- *
- * Returns the family name length on success (≥ 0), or `-1` if
- * `bytes_ptr` is null / `bytes_len == 0`, or fontdb couldn't extract
- * any face from the bytes.
- *
- * # Safety
- * `bytes_ptr` must point to `bytes_len` readable bytes for the
- * duration of the call. `out_family_ptr`, if non-null, must point to
- * `out_family_capacity` writable bytes.
- */
-int bt_font_register_terminal_face(const uint8_t *bytes_ptr,
-                                   uintptr_t bytes_len,
-                                   uint8_t *out_family_ptr,
-                                   uintptr_t out_family_capacity);
-
-/**
- * Register an **auxiliary** font face (Bold / Italic / BoldItalic
- * companions of the primary terminal family). Unlike
- * `bt_font_register_terminal_face`, this does **not** promote the
- * face to the primary family — cosmic-text resolves the weight/style
- * variant by matching `Attrs::weight` / `Attrs::style` against fontdb
- * after the family lookup. Use this for every non-Regular Menlo cut.
- *
- * Returns 0 on success, -1 if `bytes_ptr` is null / `bytes_len == 0`,
- * or fontdb couldn't extract any face from the bytes.
- *
- * # Safety
- * `bytes_ptr` must point to `bytes_len` readable bytes for the
- * duration of the call.
- */
-int bt_font_register_aux_face(const uint8_t *bytes_ptr, uintptr_t bytes_len);
-
 #ifdef __cplusplus
 }  // extern "C"
 #endif  // __cplusplus
 
-// bedterm-ios-ui FFI declarations.
+// bedterm_ios FFI declarations.
 // Appended to bedterm_core.h by build-rust-xcframework.sh after cbindgen
 // regenerates the core header. Do not place include guards here — this
 // fragment is spliced inside the existing BEDTERM_CORE_H guard.
 
-// ── bedterm-ios-ui ──────────────────────────────────────────────────────────
+// ── bedterm_ios ──────────────────────────────────────────────────────────
 
 /// Callback invoked on the main thread when the iOS terminal's back button
 /// is tapped.
 typedef void (*BtIosBackCallback)(void *ctx);
+
+// ── VC ──────────────────────────────────────────────────────────────────────
 
 /// Create the iOS terminal `UIViewController *` (returned as opaque `void *`).
 /// The returned pointer is +1 retained; release with `bt_ios_release_vc`.
@@ -885,5 +387,272 @@ void *bt_ios_create_vc(BtIosBackCallback on_back,
 /// Release a `UIViewController *` previously returned by `bt_ios_create_vc`.
 /// Safe to call with NULL.
 void bt_ios_release_vc(void *vc_ptr);
+
+// ── Settings VC ─────────────────────────────────────────────────────────────
+
+/// Callback invoked on the main thread when the Rust Settings sheet's
+/// navigation-bar Done button is tapped.
+typedef void (*BtIosSettingsDoneCallback)(void *ctx);
+
+/// Create the iOS Rust-built Settings `UIViewController *` (returned as
+/// opaque `void *`). +1 retained; release with
+/// `bt_ios_release_settings_vc`. The caller wraps the returned VC in a
+/// `UINavigationController` and presents it as a `.formSheet`.
+///
+/// @param on_done  Done-tap callback (may be NULL).
+/// @param ctx      Context pointer passed through to `on_done` (may be NULL).
+void *bt_ios_create_settings_vc(BtIosSettingsDoneCallback on_done,
+                                void *ctx);
+
+/// Release a Settings `UIViewController *` previously returned by
+/// `bt_ios_create_settings_vc`. Safe to call with NULL.
+void bt_ios_release_settings_vc(void *vc_ptr);
+
+// ── View ────────────────────────────────────────────────────────────────────
+
+/// Resolve the `BtIosMetalInputView *` embedded inside a VC returned by
+/// `bt_ios_create_vc`. Returns NULL when the view didn't construct.
+void *bt_ios_vc_metal_view(void *vc_ptr);
+
+/// Feed raw terminal bytes into a `BtIosMetalInputView`'s owned grid.
+/// `view_ptr` must be a live `BtIosMetalInputView *`. No-op on NULL / empty.
+void bt_ios_view_feed_bytes(void *view_ptr,
+                            const unsigned char *bytes,
+                            uintptr_t len);
+
+/// Query the cell pixel size (width, height) as reported by the view's
+/// glyph atlas. Either out-param may be NULL. Returns zeros if the view
+/// has no live renderer.
+void bt_ios_view_cell_size_px(void *view_ptr,
+                              uint32_t *out_w,
+                              uint32_t *out_h);
+
+/// C-style PTY-byte sink callback invoked when the metal view emits
+/// hardware-keyboard / IME-commit bytes. `bytes` is valid only for the
+/// duration of the call.
+typedef void (*BtIosOnSendCallback)(void *ctx,
+                                    const unsigned char *bytes,
+                                    uintptr_t len);
+
+/// Install a C-callback PTY sink on the metal view. Pass `cb = NULL` to
+/// clear. Replaces any prior sink.
+void bt_ios_view_set_on_send(void *view_ptr,
+                             BtIosOnSendCallback cb,
+                             void *ctx);
+
+/// C-style resize callback: fired from the metal view's `layoutSubviews`
+/// whenever the renderer-derived `(cols, rows)` changes. Main-thread only.
+typedef void (*BtIosOnResizeCallback)(void *ctx,
+                                      uint16_t cols,
+                                      uint16_t rows);
+
+/// Install a resize-notification callback on the metal view. The callback
+/// fires once per change of the renderer-derived `(cols, rows)`. Pass
+/// `cb = NULL` to clear.
+void bt_ios_view_set_on_resize(void *view_ptr,
+                               BtIosOnResizeCallback cb,
+                               void *ctx);
+
+/// Read the most recent `(cols, rows)` the metal view derived from its
+/// bounds + cell pixel size. Either out-param may be NULL. Returns
+/// `(0, 0)` before the first layout pass.
+void bt_ios_view_grid_dim(void *view_ptr,
+                          uint16_t *out_cols,
+                          uint16_t *out_rows);
+
+// ── Onboarding VCs (R10 Rust port) ──────────────────────────────────────────
+
+/// Callback fired when the user picks a choice on a picker-step VC.
+/// `choice` is the discriminant of the picked option:
+///   HostKindVC:  0 = macOS, 1 = Linux/other
+///   LocationVC:  0 = same-Wi-Fi, 1 = remote
+typedef void (*BtIosOnboardingChoiceCallback)(void *ctx, int32_t choice);
+
+/// Callback fired when the user taps the primary "Continue" button on the
+/// MacTutorial or LocalPermission step.
+typedef void (*BtIosOnboardingContinueCallback)(void *ctx);
+
+/// Create the host-kind onboarding step VC (returned as opaque `void *`).
+/// The returned pointer is +1 retained; release with `bt_ios_release_vc`.
+void *bt_ios_create_onboarding_host_kind_vc(BtIosOnboardingChoiceCallback on_choice,
+                                            void *ctx);
+
+/// Create the location onboarding step VC. Same release contract.
+void *bt_ios_create_onboarding_location_vc(BtIosOnboardingChoiceCallback on_choice,
+                                           void *ctx);
+
+/// Create the macOS-tutorial onboarding step VC. Fires `on_continue` once
+/// on Continue tap. Same release contract.
+void *bt_ios_create_onboarding_mac_tutorial_vc(BtIosOnboardingContinueCallback on_continue,
+                                               void *ctx);
+
+/// Create the local-network-permission terminator step VC. `is_remote`
+/// selects the "All set" copy variant; pass `false` for the same-Wi-Fi
+/// prose. The actual Bonjour probe lives in Swift — this VC just fires
+/// `on_continue(ctx)` on tap.
+void *bt_ios_create_onboarding_local_permission_vc(BtIosOnboardingContinueCallback on_continue,
+                                                   void *ctx,
+                                                   bool is_remote);
+
+/// Callback fired once when the entire onboarding flow has completed.
+/// The Swift host swaps to the hosts root in response. The `ctx`
+/// pointer is the same value the host passed into
+/// `bt_ios_create_onboarding_flow_vc`.
+typedef void (*BtIosOnboardingFlowCompletedCallback)(void *ctx);
+
+/// Create the Rust-owned onboarding flow VC — a
+/// `UINavigationController` subclass that owns the R10 state machine and
+/// pushes each step VC as the user advances. The Swift host installs the
+/// returned VC as the window root and reacts to `on_completed(ctx)` by
+/// swapping to the hosts root.
+///
+/// Returns a `+1` retained `UIViewController *`; release with
+/// `bt_ios_release_vc`. The coordinator reaches back into Swift via
+/// `bt_swift_request_local_network` (Bonjour probe) and
+/// `bt_swift_onboarding_set_completed` (UserDefaults flag).
+void *bt_ios_create_onboarding_flow_vc(BtIosOnboardingFlowCompletedCallback on_completed,
+                                       void *ctx);
+
+// ── Hosts list VC (W24b R-port phase 1) ─────────────────────────────────────
+
+/// Callback fired on the main thread when the user taps the navigation-bar
+/// `+` button on the Rust hosts list VC. Swift owns the response
+/// (presenting the SwiftUI connect-form sheet).
+typedef void (*BtIosHostsAddCallback)(void *ctx);
+
+/// Create the iOS Rust-built Hosts list `UIViewController *` (returned as
+/// opaque `void *`). +1 retained; release with
+/// `bt_ios_release_hosts_list_vc`.
+///
+/// Row taps invoke `bt_swift_hosts_connect(id)` directly; swipe-delete
+/// invokes `bt_swift_hosts_delete(id)`. Both round-trip through the
+/// `@_cdecl` shims in `HostsBridge.swift`.
+///
+/// @param on_add  `+`-tap callback (may be NULL).
+/// @param ctx     Context pointer passed through to `on_add` (may be NULL).
+void *bt_ios_create_hosts_list_vc(BtIosHostsAddCallback on_add,
+                                  void *ctx);
+
+/// Release a Hosts list `UIViewController *` previously returned by
+/// `bt_ios_create_hosts_list_vc`. Safe to call with NULL.
+void bt_ios_release_hosts_list_vc(void *vc_ptr);
+
+// ── Connect form VC (W24c R-port) ───────────────────────────────────────────
+
+/// Callback fired on the main thread when the user successfully saves the
+/// connect-form. `id_string` is a UTF-8 nul-terminated UUID of the saved
+/// entry, valid only for the duration of the call. `connect_now` mirrors
+/// the SwiftUI `connectOnSave` shortcut.
+typedef void (*BtIosConnectFormDoneCallback)(void *ctx,
+                                             const char *id_string,
+                                             bool connect_now);
+
+/// Callback fired on the main thread when the user taps Cancel on the
+/// Rust connect-form VC.
+typedef void (*BtIosConnectFormCancelCallback)(void *ctx);
+
+/// Create the iOS Rust-built connect-form `UIViewController *` (returned
+/// as opaque `void *`). +1 retained; release via
+/// `bt_ios_release_connect_form_vc`.
+///
+/// @param editing_id_or_null  UTF-8, nul-terminated UUID-string of an
+///                            existing host to edit, or NULL for "Add Host".
+/// @param on_done             Save-success callback (may be NULL).
+/// @param on_cancel           Cancel-tap callback (may be NULL).
+/// @param ctx                 Context pointer threaded into both callbacks.
+void *bt_ios_create_connect_form_vc(const char *editing_id_or_null,
+                                    BtIosConnectFormDoneCallback on_done,
+                                    BtIosConnectFormCancelCallback on_cancel,
+                                    void *ctx);
+
+/// Release a connect-form `UIViewController *` previously returned by
+/// `bt_ios_create_connect_form_vc`. Safe to call with NULL.
+void bt_ios_release_connect_form_vc(void *vc_ptr);
+
+// ── SSH bridge ──────────────────────────────────────────────────────────────
+//
+// The Rust-side TerminalSession port (not yet landed) will drive Swift's
+// CitadelSSHClient through a function-pointer vtable filled by Swift.
+// Declarations below pin down the C ABI early so the Swift wrapper and the
+// Rust trait stay in lock-step.
+
+/// Result code passed to every completion callback. Mirrors `SSHError`.
+typedef enum BtSSHResultCode {
+  BtSSHResultOk = 0,
+  BtSSHResultDnsResolution = 1,
+  BtSSHResultTcpRefused = 2,
+  BtSSHResultTimeout = 3,
+  BtSSHResultHandshakeFailed = 4,
+  BtSSHResultAuthenticationFailed = 5,
+  BtSSHResultPrivateKeyParse = 6,
+  BtSSHResultPrivateKeyPassphraseRequired = 7,
+  BtSSHResultHostKeyMismatch = 8,
+  BtSSHResultDisconnected = 9,
+  BtSSHResultPeerReset = 10,
+  BtSSHResultShellExited = 11,
+  BtSSHResultOther = 99,
+} BtSSHResultCode;
+
+/// C mirror of `SSHConnectionRequest`. Lifetimes: every pointer is borrowed
+/// only for the duration of the `connect` call.
+typedef struct BtSSHConnectRequest {
+  const void *credential_opaque;
+  int cols;
+  int rows;
+  /// UTF-8, nul-terminated; NULL == no bootstrap payload.
+  const char *bootstrap_payload;
+} BtSSHConnectRequest;
+
+/// Completion callback for connect/write/resize/disconnect. `msg` is a
+/// retained `NSString *` (may be NULL); the receiver releases it. `extra`
+/// carries shell-exit codes etc.
+typedef void (*BtSSHCompletion)(void *ctx,
+                                BtSSHResultCode code,
+                                const void *msg,
+                                int extra);
+
+/// Output-data sink installed by Rust on the bridge. Called per inbound
+/// chunk on the main queue. `bytes` is valid only for the duration of
+/// the call.
+typedef void (*BtSSHOutputSink)(void *ctx, const unsigned char *bytes, uintptr_t len);
+
+/// Function-pointer table filled by Swift's `SSHClientBridge`.
+typedef struct BtSSHClientVTable {
+  void (*connect)(void *ctx,
+                  BtSSHConnectRequest req,
+                  BtSSHCompletion completion,
+                  void *completion_ctx);
+  void (*write)(void *ctx,
+                const unsigned char *bytes,
+                uintptr_t len,
+                BtSSHCompletion completion,
+                void *completion_ctx);
+  void (*resize)(void *ctx,
+                 int cols,
+                 int rows,
+                 BtSSHCompletion completion,
+                 void *completion_ctx);
+  void (*disconnect)(void *ctx,
+                     BtSSHCompletion completion,
+                     void *completion_ctx);
+  void (*set_output_sink)(void *ctx, BtSSHOutputSink sink, void *sink_ctx);
+  /// Balance the +1 retain Swift gave us when constructing `ctx`.
+  void (*release)(void *ctx);
+} BtSSHClientVTable;
+
+/// Opaque Rust-owned handle wrapping a Swift `SSHClientBridge` vtable + ctx.
+/// Returned by `bt_ios_register_ssh_bridge`; released with
+/// `bt_ios_ssh_bridge_release`.
+typedef struct SSHBridgeHandle SSHBridgeHandle;
+
+/// Register a Swift-built SSH bridge with the Rust side. `vtable` is copied
+/// by value; `ctx` ownership transfers to the returned handle (its `Drop`
+/// invokes `vtable.release(ctx)`).
+SSHBridgeHandle *bt_ios_register_ssh_bridge(const BtSSHClientVTable *vtable,
+                                            void *ctx);
+
+/// Release a handle previously returned by `bt_ios_register_ssh_bridge`.
+/// Safe to call with NULL.
+void bt_ios_ssh_bridge_release(SSHBridgeHandle *handle);
 
 #endif  /* BEDTERM_CORE_H */

@@ -1,0 +1,823 @@
+//! `BtIosConnectFormViewController` — Rust port of `ConnectionFormScreen`.
+//!
+//! Owns a `UIScrollView` + vertical `UIStackView` of three form
+//! sections: Identity (label), Connection (host / port / username), and
+//! Authentication (segmented control + password OR key picker + optional
+//! passphrase). Save validates locally then dispatches Swift's
+//! `bt_swift_connect_form_save`; Cancel fires the cancel callback.
+
+#![cfg(target_os = "ios")]
+
+use crate::a11y;
+use crate::connect_form::bridge::{
+    bt_swift_connect_form_free_snapshot, bt_swift_connect_form_last_error,
+    bt_swift_connect_form_pick_key, bt_swift_connect_form_prefill_json, bt_swift_connect_form_save,
+};
+use crate::connect_form::model::{AuthMode, ConnectFormDraft};
+use crate::connect_form::{BtIosConnectFormCancelCallback, BtIosConnectFormDoneCallback};
+use crate::design_system::{
+    colors,
+    components::{
+        form_card_external_header, make_secure_text_field, make_segmented_control, make_text_field,
+        primary_button, TextFieldConfig, TextFieldHandle,
+    },
+    spacing, typography,
+};
+use crate::geometry::{CGFloat, CGPoint, CGRect, CGSize, UIEdgeInsets};
+use objc2::rc::{Allocated, Retained};
+use objc2::runtime::AnyObject;
+use objc2::{define_class, msg_send, sel, DefinedClass, MainThreadMarker, MainThreadOnly};
+use objc2_foundation::NSString;
+use objc2_ui_kit::{
+    NSDirectionalEdgeInsets, UIBarButtonItem, UIBarButtonItemStyle, UIButton,
+    UILayoutConstraintAxis, UINavigationItem, UIScrollView, UISegmentedControl, UIStackView,
+    UIStackViewAlignment, UIStackViewDistribution, UIView, UIViewController,
+};
+use std::cell::{Cell, RefCell};
+use std::ffi::{c_char, c_void, CStr, CString};
+
+/// Internal layout pin — the auth section's secret rows toggle visibility
+/// when the segmented control flips. We keep retained refs to both
+/// stacks and to all field handles so the selectors can read state out.
+#[derive(Default)]
+pub struct Ivars {
+    on_done: Cell<Option<BtIosConnectFormDoneCallback>>,
+    on_cancel: Cell<Option<BtIosConnectFormCancelCallback>>,
+    /// SAFETY: never dereffed on Rust side.
+    ctx: Cell<*mut c_void>,
+
+    scroll: RefCell<Option<Retained<UIScrollView>>>,
+    content: RefCell<Option<Retained<UIStackView>>>,
+
+    label_field: RefCell<Option<TextFieldHandle>>,
+    host_field: RefCell<Option<TextFieldHandle>>,
+    port_field: RefCell<Option<TextFieldHandle>>,
+    username_field: RefCell<Option<TextFieldHandle>>,
+    password_field: RefCell<Option<TextFieldHandle>>,
+    passphrase_field: RefCell<Option<TextFieldHandle>>,
+
+    segmented: RefCell<Option<Retained<UISegmentedControl>>>,
+    password_row: RefCell<Option<Retained<UIView>>>,
+    key_row: RefCell<Option<Retained<UIView>>>,
+    passphrase_row: RefCell<Option<Retained<UIView>>>,
+    key_button: RefCell<Option<Retained<UIButton>>>,
+    error_label: RefCell<Option<Retained<UIView>>>,
+
+    /// Editing UUID (if any) — pinned at construction time.
+    editing_id: RefCell<Option<String>>,
+    /// Set once the user touches the password field. Reserved for a
+    /// future "the field has been edited even if empty" signal that the
+    /// SwiftUI form tracks via `onChange`; today the in-buffer text
+    /// drives the touched flag in `current_draft`.
+    #[allow(dead_code)]
+    password_touched: Cell<bool>,
+    /// Set once the user picks a key file.
+    key_touched: Cell<bool>,
+    /// Backing flags pulled from the prefill snapshot.
+    password_set: Cell<bool>,
+    key_set: Cell<bool>,
+}
+
+// SAFETY: only accessed on the main thread (MainThreadOnly).
+unsafe impl Send for Ivars {}
+unsafe impl Sync for Ivars {}
+
+define_class!(
+    #[unsafe(super(UIViewController))]
+    #[thread_kind = MainThreadOnly]
+    #[name = "BtIosConnectFormViewController"]
+    #[ivars = Ivars]
+    pub struct BtIosConnectFormViewController;
+
+    impl BtIosConnectFormViewController {
+        #[unsafe(method_id(init))]
+        fn init(this: Allocated<Self>) -> Option<Retained<Self>> {
+            let this = this.set_ivars(Ivars::default());
+            unsafe { msg_send![super(this), init] }
+        }
+
+        #[unsafe(method(viewDidLoad))]
+        fn view_did_load(&self) {
+            let _: () = unsafe { msg_send![super(self), viewDidLoad] };
+            let mtm = unsafe { MainThreadMarker::new_unchecked() };
+
+            if let Some(view) = self.view() {
+                view.setBackgroundColor(Some(&colors::shadcn_background()));
+                a11y::set_a11y_id(&*view as &AnyObject, "connection.rust.root");
+            }
+
+            // Bar buttons.
+            let nav_item: Retained<UINavigationItem> =
+                unsafe { msg_send![self, navigationItem] };
+            let is_edit = self.ivars().editing_id.borrow().is_some();
+            let title = if is_edit { "Edit Host" } else { "New Host" };
+            nav_item.setTitle(Some(&NSString::from_str(title)));
+            // Cancel replaces the inherited back chevron — the parent
+            // navigation controller would otherwise push us with the
+            // default back button visible alongside our Cancel bar item.
+            unsafe {
+                let _: () = msg_send![&*nav_item, setHidesBackButton: true];
+            }
+
+            let cancel_title = NSString::from_str("Cancel");
+            let cancel_btn: Retained<UIBarButtonItem> = unsafe {
+                UIBarButtonItem::initWithTitle_style_target_action(
+                    mtm.alloc::<UIBarButtonItem>(),
+                    Some(&cancel_title),
+                    UIBarButtonItemStyle::Plain,
+                    Some(self.as_ref()),
+                    Some(sel!(cancelTapped)),
+                )
+            };
+            a11y::set_a11y_id(&*cancel_btn as &AnyObject, "connection.cancel");
+            nav_item.setLeftBarButtonItem(Some(&cancel_btn));
+
+            let save_title = NSString::from_str("Save");
+            let save_btn: Retained<UIBarButtonItem> = unsafe {
+                UIBarButtonItem::initWithTitle_style_target_action(
+                    mtm.alloc::<UIBarButtonItem>(),
+                    Some(&save_title),
+                    UIBarButtonItemStyle::Plain,
+                    Some(self.as_ref()),
+                    Some(sel!(saveTapped)),
+                )
+            };
+            a11y::set_a11y_id(&*save_btn as &AnyObject, "connection.save");
+            nav_item.setRightBarButtonItem(Some(&save_btn));
+
+            // ---- Scroll + content stack -----------------------------------
+            let scroll: Retained<UIScrollView> = unsafe {
+                let alloc = mtm.alloc::<UIScrollView>();
+                msg_send![alloc, initWithFrame: CGRect::default()]
+            };
+            let content = UIStackView::new(mtm);
+            content.setAxis(UILayoutConstraintAxis::Vertical);
+            content.setAlignment(UIStackViewAlignment::Fill);
+            content.setDistribution(UIStackViewDistribution::Fill);
+            // Classic iOS grouped-form spacing between sections: 24 pt
+            // between the description-or-card-bottom of one section and
+            // the uppercase header of the next.
+            content.setSpacing(spacing::XL);
+            content.setLayoutMarginsRelativeArrangement(true);
+            content.setDirectionalLayoutMargins(NSDirectionalEdgeInsets {
+                top: spacing::LG,
+                leading: spacing::LG,
+                bottom: spacing::LG,
+                trailing: spacing::LG,
+            });
+
+            // ---- Identity section ----------------------------------------
+            // Classic iOS grouped-form: external uppercase "IDENTITY"
+            // header above a card holding just the Label field. The
+            // SwiftUI baseline lumps Label into the Connection card but
+            // user screenshots confirm a three-section split with an
+            // external header per section.
+            // TODO(localization): the SwiftUI source uses `String(localized:)`
+            // for these section titles + descriptions; mirror once the
+            // Rust layer has a string-catalogue bridge.
+            let (label_row, label_handle) = make_text_field(
+                mtm,
+                "Label",
+                "Personal Mac",
+                TextFieldConfig {
+                    secure: false,
+                    keyboard_type: 0,
+                    autocapitalization: 0,
+                    autocorrection: 1,
+                },
+            );
+            a11y::set_a11y_id(&*label_handle.field as &AnyObject, "connection.label");
+
+            let (host_row, host_handle) = make_text_field(
+                mtm,
+                "Host",
+                "10.0.0.5",
+                TextFieldConfig {
+                    secure: false,
+                    keyboard_type: 0,
+                    autocapitalization: 0,
+                    autocorrection: 1,
+                },
+            );
+            a11y::set_a11y_id(&*host_handle.field as &AnyObject, "connection.host");
+            let (port_row, port_handle) = make_text_field(
+                mtm,
+                "Port",
+                "22",
+                TextFieldConfig {
+                    secure: false,
+                    keyboard_type: 4, // UIKeyboardTypeNumberPad
+                    autocapitalization: 0,
+                    autocorrection: 1,
+                },
+            );
+            a11y::set_a11y_id(&*port_handle.field as &AnyObject, "connection.port");
+            port_handle.set_text("22");
+            let (username_row, username_handle) = make_text_field(
+                mtm,
+                "Username",
+                "root",
+                TextFieldConfig {
+                    secure: false,
+                    keyboard_type: 0,
+                    autocapitalization: 0,
+                    autocorrection: 1,
+                },
+            );
+            a11y::set_a11y_id(&*username_handle.field as &AnyObject, "connection.username");
+
+            let identity_section =
+                form_card_external_header(mtm, "Identity", None, &[label_row]);
+            content.addArrangedSubview(&identity_section);
+
+            let connection_section = form_card_external_header(
+                mtm,
+                "Connection",
+                Some("Where to reach the server. Host can be an IP or hostname."),
+                &[host_row, port_row, username_row],
+            );
+            content.addArrangedSubview(&connection_section);
+            *self.ivars().label_field.borrow_mut() = Some(label_handle);
+            *self.ivars().host_field.borrow_mut() = Some(host_handle);
+            *self.ivars().port_field.borrow_mut() = Some(port_handle);
+            *self.ivars().username_field.borrow_mut() = Some(username_handle);
+
+            // ---- Authentication card -------------------------------------
+            // Mirrors SwiftUI `authenticationCard`: segmented control on
+            // top, then either the password row or the key-picker +
+            // passphrase rows depending on the segment selection.
+            let segmented = make_segmented_control(
+                mtm,
+                &["Password", "Key"],
+                0,
+                self.as_ref(),
+                sel!(authModeChanged:),
+            );
+            a11y::set_a11y_id(&*segmented as &AnyObject, "connection.authMode");
+            let seg_view: Retained<UIView> = unsafe {
+                Retained::cast_unchecked::<UIView>(segmented.clone())
+            };
+
+            let (password_row, password_handle) =
+                make_secure_text_field(mtm, "Password", "Password");
+            a11y::set_a11y_id(
+                &*password_handle.field as &AnyObject,
+                "connection.password",
+            );
+
+            // Key row: a UIButton showing "Import private key" / file name.
+            let key_button = primary_button(
+                mtm,
+                "doc.badge.plus",
+                "Import private key",
+                self.as_ref(),
+                sel!(pickKeyTapped),
+            );
+            a11y::set_a11y_id(&*key_button as &AnyObject, "connection.pickKey");
+            let key_row: Retained<UIView> =
+                unsafe { Retained::cast_unchecked::<UIView>(key_button.clone()) };
+            key_row.setHidden(true);
+
+            let (passphrase_row, passphrase_handle) =
+                make_secure_text_field(mtm, "Passphrase", "Optional");
+            a11y::set_a11y_id(
+                &*passphrase_handle.field as &AnyObject,
+                "connection.passphrase",
+            );
+            passphrase_row.setHidden(true);
+
+            let auth_section = form_card_external_header(
+                mtm,
+                "Authentication",
+                Some("Choose how to prove identity to the server."),
+                &[
+                    seg_view,
+                    password_row.clone(),
+                    key_row.clone(),
+                    passphrase_row.clone(),
+                ],
+            );
+            content.addArrangedSubview(&auth_section);
+
+            // Error label — hidden by default, shown by saveTapped on
+            // validation failure.
+            let error_view = make_error_label(mtm, "");
+            error_view.setHidden(true);
+            content.addArrangedSubview(&error_view);
+
+            *self.ivars().segmented.borrow_mut() = Some(segmented);
+            *self.ivars().password_row.borrow_mut() = Some(password_row);
+            *self.ivars().key_row.borrow_mut() = Some(key_row);
+            *self.ivars().passphrase_row.borrow_mut() = Some(passphrase_row);
+            *self.ivars().key_button.borrow_mut() = Some(key_button);
+            *self.ivars().password_field.borrow_mut() = Some(password_handle);
+            *self.ivars().passphrase_field.borrow_mut() = Some(passphrase_handle);
+            *self.ivars().error_label.borrow_mut() = Some(error_view);
+
+            // Mount.
+            let content_view: &UIView = unsafe { &*Retained::as_ptr(&content).cast() };
+            let _: () = unsafe { msg_send![&*scroll, addSubview: content_view] };
+            if let Some(view) = self.view() {
+                let _: () = unsafe { msg_send![&*view, addSubview: &*scroll] };
+            }
+            *self.ivars().scroll.borrow_mut() = Some(scroll);
+            *self.ivars().content.borrow_mut() = Some(content);
+
+            // Apply prefill (edit mode) AFTER all rows are created.
+            self.apply_prefill();
+        }
+
+        #[unsafe(method(viewDidLayoutSubviews))]
+        fn view_did_layout_subviews(&self) {
+            let _: () = unsafe { msg_send![super(self), viewDidLayoutSubviews] };
+            let Some(view) = self.view() else { return };
+            let bounds: CGRect = unsafe { msg_send![&*view, bounds] };
+            let insets: UIEdgeInsets = unsafe { msg_send![&*view, safeAreaInsets] };
+
+            let scroll_borrow = self.ivars().scroll.borrow();
+            let content_borrow = self.ivars().content.borrow();
+            let (Some(scroll), Some(content)) =
+                (scroll_borrow.as_ref(), content_borrow.as_ref())
+            else { return };
+
+            let scroll_frame = CGRect {
+                origin: CGPoint { x: 0.0, y: 0.0 },
+                size: CGSize {
+                    width: bounds.size.width,
+                    height: bounds.size.height,
+                },
+            };
+            let _: () = unsafe { msg_send![&**scroll, setFrame: scroll_frame] };
+
+            let available_w = bounds.size.width - insets.left - insets.right;
+            let fitting = CGSize {
+                width: available_w,
+                height: 0.0,
+            };
+            let natural: CGSize =
+                unsafe { msg_send![&**content, systemLayoutSizeFittingSize: fitting] };
+            let h: CGFloat = natural.height.max(0.0);
+            let content_frame = CGRect {
+                origin: CGPoint { x: insets.left, y: insets.top },
+                size: CGSize { width: available_w, height: h },
+            };
+            let _: () = unsafe { msg_send![&**content, setFrame: content_frame] };
+            let _: () = unsafe {
+                msg_send![&**scroll, setContentSize: CGSize {
+                    width: bounds.size.width,
+                    height: h + insets.top + insets.bottom,
+                }]
+            };
+        }
+
+        // ---- Selectors ---------------------------------------------------
+
+        #[unsafe(method(cancelTapped))]
+        fn cancel_tapped(&self) {
+            if let Some(cb) = self.ivars().on_cancel.get() {
+                unsafe { cb(self.ivars().ctx.get()) };
+            }
+        }
+
+        #[unsafe(method(saveTapped))]
+        fn save_tapped(&self) {
+            self.try_save();
+        }
+
+        #[unsafe(method(authModeChanged:))]
+        fn auth_mode_changed(&self, sender: &UISegmentedControl) {
+            let idx: i64 = unsafe { msg_send![sender, selectedSegmentIndex] };
+            self.update_auth_rows_visibility(idx);
+        }
+
+        #[unsafe(method(pickKeyTapped))]
+        fn pick_key_tapped(&self) {
+            extern "C" fn on_picked(ctx: *mut c_void, label: *const c_char) {
+                if ctx.is_null() {
+                    return;
+                }
+                let vc_ptr = ctx as *mut BtIosConnectFormViewController;
+                let vc = unsafe { &*vc_ptr };
+                let label_str = if label.is_null() {
+                    None
+                } else {
+                    Some(unsafe { CStr::from_ptr(label) }.to_string_lossy().into_owned())
+                };
+                if let Some(label_text) = label_str {
+                    vc.ivars().key_touched.set(true);
+                    if let Some(btn) = vc.ivars().key_button.borrow().as_ref() {
+                        let cstr = format!("Replace key · {label_text}");
+                        let ns = NSString::from_str(&cstr);
+                        unsafe {
+                            let _: () = msg_send![&**btn, setTitle: &*ns, forState: 0_i64];
+                        }
+                    }
+                }
+            }
+            let ctx = self as *const Self as *mut c_void;
+            unsafe { bt_swift_connect_form_pick_key(on_picked, ctx) };
+        }
+    }
+);
+
+impl BtIosConnectFormViewController {
+    pub(crate) fn set_callbacks(
+        &self,
+        on_done: Option<BtIosConnectFormDoneCallback>,
+        on_cancel: Option<BtIosConnectFormCancelCallback>,
+        ctx: *mut c_void,
+    ) {
+        self.ivars().on_done.set(on_done);
+        self.ivars().on_cancel.set(on_cancel);
+        self.ivars().ctx.set(ctx);
+    }
+
+    pub(crate) fn set_editing_id(&self, id: Option<String>) {
+        *self.ivars().editing_id.borrow_mut() = id;
+    }
+
+    fn apply_prefill(&self) {
+        let editing = self.ivars().editing_id.borrow().clone();
+        let Some(id) = editing else { return };
+        let cstr = match CString::new(id) {
+            Ok(s) => s,
+            Err(_) => return,
+        };
+        let json_ptr = unsafe { bt_swift_connect_form_prefill_json(cstr.as_ptr()) };
+        if json_ptr.is_null() {
+            return;
+        }
+        let json = unsafe { CStr::from_ptr(json_ptr) }
+            .to_string_lossy()
+            .into_owned();
+        unsafe { bt_swift_connect_form_free_snapshot(json_ptr) };
+
+        // Hand-rolled tiny JSON read — only the small subset we need.
+        let get = |key: &str| -> Option<String> { extract_json_string(&json, key) };
+        if let Some(label) = get("label") {
+            if let Some(h) = self.ivars().label_field.borrow().as_ref() {
+                h.set_text(&label);
+            }
+        }
+        if let Some(host) = get("host") {
+            if let Some(h) = self.ivars().host_field.borrow().as_ref() {
+                h.set_text(&host);
+            }
+        }
+        if let Some(port) = get("port") {
+            if let Some(h) = self.ivars().port_field.borrow().as_ref() {
+                h.set_text(&port);
+            }
+        }
+        if let Some(username) = get("username") {
+            if let Some(h) = self.ivars().username_field.borrow().as_ref() {
+                h.set_text(&username);
+            }
+        }
+        let auth_is_key = extract_json_bool(&json, "authIsKey").unwrap_or(false);
+        if auth_is_key {
+            if let Some(seg) = self.ivars().segmented.borrow().as_ref() {
+                let _: () = unsafe { msg_send![&**seg, setSelectedSegmentIndex: 1_i64] };
+            }
+            self.update_auth_rows_visibility(1);
+        }
+        self.ivars()
+            .password_set
+            .set(extract_json_bool(&json, "passwordSet").unwrap_or(false));
+        self.ivars()
+            .key_set
+            .set(extract_json_bool(&json, "keySet").unwrap_or(false));
+    }
+
+    fn update_auth_rows_visibility(&self, mode: i64) {
+        let password_hidden = mode != 0;
+        let key_hidden = mode != 1;
+        if let Some(v) = self.ivars().password_row.borrow().as_ref() {
+            v.setHidden(password_hidden);
+        }
+        if let Some(v) = self.ivars().key_row.borrow().as_ref() {
+            v.setHidden(key_hidden);
+        }
+        if let Some(v) = self.ivars().passphrase_row.borrow().as_ref() {
+            v.setHidden(key_hidden);
+        }
+        if let Some(view) = self.view() {
+            unsafe {
+                let _: () = msg_send![&*view, setNeedsLayout];
+            }
+        }
+    }
+
+    fn current_draft(&self) -> ConnectFormDraft {
+        let label = self
+            .ivars()
+            .label_field
+            .borrow()
+            .as_ref()
+            .map(|h| h.text())
+            .unwrap_or_default();
+        let host = self
+            .ivars()
+            .host_field
+            .borrow()
+            .as_ref()
+            .map(|h| h.text())
+            .unwrap_or_default();
+        let port = self
+            .ivars()
+            .port_field
+            .borrow()
+            .as_ref()
+            .map(|h| h.text())
+            .unwrap_or_default();
+        let username = self
+            .ivars()
+            .username_field
+            .borrow()
+            .as_ref()
+            .map(|h| h.text())
+            .unwrap_or_default();
+        let password = self
+            .ivars()
+            .password_field
+            .borrow()
+            .as_ref()
+            .map(|h| h.text())
+            .unwrap_or_default();
+        let mode_idx: i64 = self
+            .ivars()
+            .segmented
+            .borrow()
+            .as_ref()
+            .map(|s| unsafe { msg_send![&**s, selectedSegmentIndex] })
+            .unwrap_or(0);
+        let auth_mode = if mode_idx == 1 {
+            AuthMode::Key
+        } else {
+            AuthMode::Password
+        };
+        // Password touched = field non-empty.
+        let password_touched = !password.is_empty();
+        ConnectFormDraft {
+            id: self.ivars().editing_id.borrow().clone(),
+            label,
+            host,
+            port,
+            username,
+            auth_mode,
+            password_set: self.ivars().password_set.get(),
+            key_set: self.ivars().key_set.get(),
+            key_label: None,
+            password_touched,
+            key_touched: self.ivars().key_touched.get(),
+        }
+    }
+
+    fn try_save(&self) {
+        let draft = self.current_draft();
+        if let Err(err) = draft.validate() {
+            self.show_error(err.message());
+            return;
+        }
+        // Encode draft as JSON.
+        let json = encode_draft_json(&draft);
+        let json_c = match CString::new(json) {
+            Ok(s) => s,
+            Err(_) => {
+                self.show_error("Internal error encoding form data.");
+                return;
+            }
+        };
+        let password = self
+            .ivars()
+            .password_field
+            .borrow()
+            .as_ref()
+            .map(|h| h.text())
+            .unwrap_or_default();
+        let passphrase = self
+            .ivars()
+            .passphrase_field
+            .borrow()
+            .as_ref()
+            .map(|h| h.text())
+            .unwrap_or_default();
+        let password_ptr: *const c_char = if password.is_empty() {
+            std::ptr::null()
+        } else {
+            // Holding the CString to keep pointer alive through call.
+            password_c_alloc(&password)
+        };
+        let passphrase_ptr: *const c_char = if passphrase.is_empty() {
+            std::ptr::null()
+        } else {
+            password_c_alloc(&passphrase)
+        };
+        let mut out_id: *mut c_char = std::ptr::null_mut();
+        let ok = unsafe {
+            bt_swift_connect_form_save(
+                json_c.as_ptr(),
+                password_ptr,
+                passphrase_ptr,
+                &mut out_id as *mut _,
+            )
+        };
+        if !password_ptr.is_null() {
+            unsafe { drop(CString::from_raw(password_ptr as *mut c_char)) };
+        }
+        if !passphrase_ptr.is_null() {
+            unsafe { drop(CString::from_raw(passphrase_ptr as *mut c_char)) };
+        }
+        if !ok {
+            let err_ptr = unsafe { bt_swift_connect_form_last_error() };
+            if !err_ptr.is_null() {
+                let msg = unsafe { CStr::from_ptr(err_ptr) }
+                    .to_string_lossy()
+                    .into_owned();
+                unsafe { bt_swift_connect_form_free_snapshot(err_ptr) };
+                self.show_error(&msg);
+            } else {
+                self.show_error("Could not save host.");
+            }
+            return;
+        }
+        // Dispatch on_done with the saved id.
+        if let Some(cb) = self.ivars().on_done.get() {
+            let ctx = self.ivars().ctx.get();
+            unsafe { cb(ctx, out_id as *const c_char, false) };
+        }
+        if !out_id.is_null() {
+            unsafe { bt_swift_connect_form_free_snapshot(out_id) };
+        }
+    }
+
+    fn show_error(&self, message: &str) {
+        if let Some(view) = self.ivars().error_label.borrow().as_ref() {
+            set_error_message(view, message);
+            view.setHidden(false);
+        }
+    }
+}
+
+fn password_c_alloc(s: &str) -> *const c_char {
+    CString::new(s)
+        .map(CString::into_raw)
+        .unwrap_or(std::ptr::null_mut())
+}
+
+fn make_error_label(mtm: MainThreadMarker, text: &str) -> Retained<UIView> {
+    use objc2_ui_kit::UILabel;
+    let label = UILabel::new(mtm);
+    label.setText(Some(&NSString::from_str(text)));
+    label.setNumberOfLines(0);
+    unsafe {
+        label.setFont(Some(&typography::caption()));
+        label.setTextColor(Some(&colors::shadcn_destructive()));
+    }
+    a11y::set_a11y_id(&*label as &AnyObject, "connection.error");
+    let stack = UIStackView::new(mtm);
+    stack.setAxis(UILayoutConstraintAxis::Vertical);
+    stack.setAlignment(UIStackViewAlignment::Fill);
+    stack.setDistribution(UIStackViewDistribution::Fill);
+    stack.setLayoutMarginsRelativeArrangement(true);
+    stack.setDirectionalLayoutMargins(NSDirectionalEdgeInsets {
+        top: spacing::SM,
+        leading: spacing::LG,
+        bottom: spacing::SM,
+        trailing: spacing::LG,
+    });
+    stack.addArrangedSubview(&label);
+    unsafe { Retained::cast_unchecked::<UIView>(stack) }
+}
+
+fn set_error_message(view: &UIView, message: &str) {
+    use objc2::ClassType;
+    use objc2_ui_kit::UILabel;
+    // Recursive view-tree walk — the error label is wrapped inside a
+    // UIStackView with directional margins, and may pick up extra
+    // intermediate wrappers when swift-format / the swiftlint rules
+    // reshape this code path. Hand-rolled stack avoids allocator churn.
+    let mut stack: Vec<*const AnyObject> = vec![view as *const UIView as *const AnyObject];
+    while let Some(node_ptr) = stack.pop() {
+        if node_ptr.is_null() {
+            continue;
+        }
+        let subviews: Retained<AnyObject> = unsafe { msg_send![node_ptr, subviews] };
+        let count: usize = unsafe { msg_send![&*subviews, count] };
+        for i in 0..count {
+            let child: *mut AnyObject = unsafe { msg_send![&*subviews, objectAtIndex: i] };
+            if child.is_null() {
+                continue;
+            }
+            let is_label: bool = unsafe { msg_send![child, isKindOfClass: UILabel::class()] };
+            if is_label {
+                unsafe {
+                    let ns = NSString::from_str(message);
+                    let _: () = msg_send![child, setText: &*ns];
+                }
+                return;
+            }
+            stack.push(child as *const AnyObject);
+        }
+    }
+}
+
+fn encode_draft_json(d: &ConnectFormDraft) -> String {
+    let mut s = String::with_capacity(256);
+    s.push('{');
+    fn push_str(buf: &mut String, key: &str, value: &str) {
+        buf.push('"');
+        buf.push_str(key);
+        buf.push_str("\":\"");
+        for ch in value.chars() {
+            match ch {
+                '"' => buf.push_str("\\\""),
+                '\\' => buf.push_str("\\\\"),
+                '\n' => buf.push_str("\\n"),
+                '\r' => buf.push_str("\\r"),
+                '\t' => buf.push_str("\\t"),
+                c => buf.push(c),
+            }
+        }
+        buf.push('"');
+    }
+    push_str(&mut s, "id", d.id.as_deref().unwrap_or(""));
+    s.push(',');
+    push_str(&mut s, "label", &d.label);
+    s.push(',');
+    push_str(&mut s, "host", &d.host);
+    s.push(',');
+    push_str(&mut s, "port", &d.port);
+    s.push(',');
+    push_str(&mut s, "username", &d.username);
+    s.push(',');
+    let mode = match d.auth_mode {
+        AuthMode::Password => "password",
+        AuthMode::Key => "key",
+    };
+    push_str(&mut s, "authMode", mode);
+    s.push('}');
+    s
+}
+
+fn extract_json_string(json: &str, key: &str) -> Option<String> {
+    let needle = format!("\"{key}\":\"");
+    let idx = json.find(&needle)?;
+    let after = &json[idx + needle.len()..];
+    let mut out = String::new();
+    let mut chars = after.chars();
+    while let Some(c) = chars.next() {
+        if c == '\\' {
+            if let Some(nxt) = chars.next() {
+                match nxt {
+                    '"' => out.push('"'),
+                    '\\' => out.push('\\'),
+                    'n' => out.push('\n'),
+                    't' => out.push('\t'),
+                    'r' => out.push('\r'),
+                    other => out.push(other),
+                }
+            }
+            continue;
+        }
+        if c == '"' {
+            return Some(out);
+        }
+        out.push(c);
+    }
+    None
+}
+
+fn extract_json_bool(json: &str, key: &str) -> Option<bool> {
+    let needle = format!("\"{key}\":");
+    let idx = json.find(&needle)?;
+    let after = &json[idx + needle.len()..].trim_start();
+    if after.starts_with("true") {
+        Some(true)
+    } else if after.starts_with("false") {
+        Some(false)
+    } else {
+        None
+    }
+}
+
+pub(crate) unsafe fn create_connect_form_vc(
+    editing_id: Option<String>,
+    on_done: Option<BtIosConnectFormDoneCallback>,
+    on_cancel: Option<BtIosConnectFormCancelCallback>,
+    ctx: *mut c_void,
+) -> *mut c_void {
+    let mtm = unsafe { MainThreadMarker::new_unchecked() };
+    let vc: Retained<BtIosConnectFormViewController> =
+        unsafe { msg_send![mtm.alloc::<BtIosConnectFormViewController>(), init] };
+    vc.set_editing_id(editing_id);
+    vc.set_callbacks(on_done, on_cancel, ctx);
+    Retained::into_raw(vc) as *mut c_void
+}
+
+pub(crate) unsafe fn release_connect_form_vc(vc_ptr: *mut c_void) {
+    if vc_ptr.is_null() {
+        return;
+    }
+    let _ = unsafe { Retained::from_raw(vc_ptr as *mut BtIosConnectFormViewController) };
+}

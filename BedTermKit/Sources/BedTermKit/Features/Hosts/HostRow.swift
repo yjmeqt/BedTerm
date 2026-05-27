@@ -40,6 +40,10 @@ struct HostRow: View {
         )
         .clipShape(RoundedRectangle(cornerRadius: 10))
         .opacity(inFlight ? 0.7 : 1.0)
+        // Stable per-row a11y id so end-to-end UI tests can scope a
+        // Connect query to a specific injected stub host even when the
+        // keychain holds unrelated saved entries.
+        .accessibilityIdentifier("hosts.row.\(entry.id.uuidString)")
     }
 
     private var connectButton: some View {

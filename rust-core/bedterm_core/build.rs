@@ -7,7 +7,6 @@ fn main() {
         .join("include")
         .join("bedterm_core.h");
     std::fs::create_dir_all(out.parent().unwrap()).unwrap();
-    println!("cargo:rustc-link-lib=sqlite3");
     println!("cargo:rerun-if-changed=src/ffi.rs");
     println!("cargo:rerun-if-changed=src/lib.rs");
     println!("cargo:rerun-if-changed=src/blocks_ffi.rs");
@@ -15,7 +14,6 @@ fn main() {
     println!("cargo:rerun-if-changed=src/dcs.rs");
     println!("cargo:rerun-if-changed=src/renderer/ffi.rs");
     println!("cargo:rerun-if-changed=src/renderer/block_list_ffi.rs");
-    println!("cargo:rerun-if-changed=src/persistence/ffi.rs");
     println!("cargo:rerun-if-changed=src/snapshot.rs");
     println!("cargo:rerun-if-changed=src/term.rs");
     println!("cargo:rerun-if-changed=cbindgen.toml");

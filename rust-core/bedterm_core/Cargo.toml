@@ -16,14 +16,8 @@ path = "src/bin/bedterm-render/main.rs"
 [dependencies]
 alacritty_terminal = "0.26"
 metal = "0.32"
-objc2 = "0.5"
-objc2-foundation = "0.2"
-objc2-metal = "0.2"
-objc2-metal-kit = "0.2"
-objc2-quartz-core = "0.2"
 cosmic-text = "0.12"
 swash = "0.1.18"
-rusqlite = { version = "0.32", default-features = false, features = [] }
 # PNG decode for embedded agent badge assets. We only need PNG; disable
 # default features so the dep stays small (avoids JPEG/GIF/BMP/etc.).
 image = { version = "0.25", default-features = false, features = ["png"] }
