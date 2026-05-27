@@ -1,41 +1,73 @@
 import SwiftUI
 import UIKit
 
+/// Root saved-hosts list. Pushed onto the app's `UINavigationController`
+/// as the first SwiftUI hosting controller. Navigation pushes (host form,
+/// terminal) are dispatched through closures so the `RootCoordinator`
+/// owns the actual `UIViewController` push — there's no inner SwiftUI
+/// `NavigationStack`.
 public struct HostsScreen: View {
-    @Binding var path: NavigationPath
     @Environment(\.toaster) var toaster
     @Environment(BedTermSettings.self) var settings
-    @Environment(PersistedSessionSnapshotStore.self) var snapshotStore
-    @Environment(\.persistenceHandle) private var persistenceHandle
     @State var viewModel = HostsViewModel()
-    @State private var didFirstAppear = false
-    @State private var showingMismatchReview = false
-    @State private var showingSettings = false
-    @State private var deviceLockedToastID: UUID?
-    @State private var mismatchToastID: UUID?
+    @State var didFirstAppear = false
+    @State var showingMismatchReview = false
+    @State var deviceLockedToastID: UUID?
+    @State var mismatchToastID: UUID?
     /// Set true while the first-run shortcut form is on-screen, so the form's
     /// primary action becomes "Save & Connect" instead of "Save".
-    @State private var pendingConnectOnSave = false
+    @State var pendingConnectOnSave = false
+
+    /// Asks the coordinator to push the add/edit form. `nil` id means
+    /// "add a new host"; non-nil means "edit existing entry".
+    /// `connectOnSave` mirrors the first-run shortcut behaviour. The
+    /// coordinator wraps `ConnectionFormScreen` in a `UIHostingController`
+    /// and pushes it; when the form finishes it invokes `onFinish` and
+    /// pops itself.
+    public typealias ShowHostFormHandler = (
+        _ id: SavedHost.ID?,
+        _ connectOnSave: Bool,
+        _ onFinish: @escaping (ConnectionFormScreen.Outcome) -> Void
+    ) -> Void
+
+    /// Asks the coordinator to push a pre-built terminal `UIViewController`
+    /// onto the nav stack. The screen constructs the VC (it has internal
+    /// access to `TerminalSession`) so the app target never needs to see
+    /// internal BedTermKit types.
+    public typealias ShowTerminalHandler = (UIViewController) -> Void
+
+    /// Asks the coordinator to modally present the settings screen.
+    /// The coordinator builds the wrapping `UINavigationController` around
+    /// the Rust-backed `BtIosSettingsViewController`.
+    public typealias ShowSettingsHandler = () -> Void
+
+    let onShowHostForm: ShowHostFormHandler
+    let onShowTerminal: ShowTerminalHandler
+    /// Pops the topmost pushed VC (used after a kill).
+    let onPopToHosts: () -> Void
+    let onShowSettings: ShowSettingsHandler
 
     private static let firstRunShortcutKey = "hosts.firstRunShortcutDone"
 
-    public init(path: Binding<NavigationPath>) {
-        self._path = path
+    public init(
+        onShowHostForm: @escaping ShowHostFormHandler,
+        onShowTerminal: @escaping ShowTerminalHandler,
+        onPopToHosts: @escaping () -> Void,
+        onShowSettings: @escaping ShowSettingsHandler
+    ) {
+        self.onShowHostForm = onShowHostForm
+        self.onShowTerminal = onShowTerminal
+        self.onPopToHosts = onPopToHosts
+        self.onShowSettings = onShowSettings
     }
 
     public var body: some View {
         ZStack { rootContent }
-            .navigationDestination(for: AppRoute.self) { route in
-                destination(for: route)
-            }
             .background(Color("ShadcnBackground", bundle: .module).ignoresSafeArea())
             .navigationTitle(Text("Hosts"))
             .toolbar { toolbarContent }
             .modifier(SwapDialogModifier(viewModel: viewModel))
             .modifier(DeleteDialogModifier(viewModel: viewModel))
-            .sheet(isPresented: $showingSettings) {
-                SettingsScreen()
-            }
             .sheet(isPresented: $showingMismatchReview) {
                 if let mismatch = viewModel.pendingMismatch {
                     HostKeyMismatchReviewSheet(
@@ -58,19 +90,10 @@ public struct HostsScreen: View {
                 handleLoadFailed(locked)
             }
             .onChange(of: viewModel.currentSessionID) { _, new in
-                if new != nil { path.append(AppRoute.terminal) }
+                if new != nil { pushTerminal() }
             }
             .onChange(of: viewModel.pendingMismatch?.sourceID) { _, _ in
                 handlePendingMismatchChanged()
-            }
-            .onChange(of: persistenceHandle == nil) { _, _ in
-                // SQLite opens off-main in BedTermApp.task; rewire once the
-                // handle goes non-nil so connect flows actually persist.
-                viewModel.persistenceHandle = persistenceHandle
-                reloadAllSnapshots()
-            }
-            .task(id: viewModel.entries.map(\.id)) {
-                reloadAllSnapshots()
             }
     }
 
@@ -78,7 +101,7 @@ public struct HostsScreen: View {
     private var toolbarContent: some ToolbarContent {
         ToolbarItem(placement: .topBarLeading) {
             Button {
-                showingSettings = true
+                onShowSettings()
             } label: {
                 Image(systemName: "gearshape")
             }
@@ -87,7 +110,7 @@ public struct HostsScreen: View {
         }
         ToolbarItem(placement: .topBarTrailing) {
             Button {
-                path.append(AppRoute.hostForm(nil))
+                presentHostForm(id: nil)
             } label: {
                 Image(systemName: "plus")
             }
@@ -109,39 +132,26 @@ public struct HostsScreen: View {
         ScrollView {
             LazyVStack(spacing: 12) {
                 ForEach(viewModel.entries) { entry in
-                    VStack(alignment: .leading, spacing: 8) {
-                        HostRow(
-                            entry: entry,
-                            inFlight: viewModel.inFlightID == entry.id,
-                            isCurrentSession: viewModel.currentSessionID == entry.id,
-                            // Tapping the row body opens the full panel
-                            // unconditionally; the inline list below
-                            // covers the common low-count case so most
-                            // users won't reach for the body tap.
-                            onTapBody: { path.append(AppRoute.sessionsPanel(entry.id)) },
-                            onConnect: {
-                                viewModel.onConnectError = handleConnectError
-                                viewModel.requestConnect(id: entry.id)
+                    HostRow(
+                        entry: entry,
+                        inFlight: viewModel.inFlightID == entry.id,
+                        isCurrentSession: viewModel.currentSessionID == entry.id,
+                        // Tapping the row body when a session is live
+                        // re-enters the running terminal; otherwise it's
+                        // a no-op (Connect button handles fresh starts).
+                        onTapBody: {
+                            if viewModel.currentSessionID == entry.id {
+                                pushTerminal()
                             }
-                        )
-                        HostSessionsInlineList(
-                            host: entry,
-                            runningSessionID: viewModel.currentSessionID,
-                            snapshots: snapshotStore.snapshots(forHost: entry.id),
-                            onTapRunning: {
-                                path.append(AppRoute.terminal)
-                            },
-                            onTapKilled: { snapshot in
-                                path.append(AppRoute.killedSessionDetail(snapshot.id))
-                            },
-                            onViewAll: {
-                                path.append(AppRoute.sessionsPanel(entry.id))
-                            }
-                        )
-                    }
+                        },
+                        onConnect: {
+                            viewModel.onConnectError = handleConnectError
+                            viewModel.requestConnect(id: entry.id)
+                        }
+                    )
                     .contextMenu {
                         Button(String(localized: "Edit"), systemImage: "pencil") {
-                            path.append(AppRoute.hostForm(entry.id))
+                            presentHostForm(id: entry.id)
                         }
                         Button(String(localized: "Delete"), systemImage: "trash", role: .destructive) {
                             viewModel.requestDelete(id: entry.id)
@@ -176,7 +186,7 @@ public struct HostsScreen: View {
                     .foregroundStyle(Color("ShadcnMutedForeground", bundle: .module))
             }
             Button {
-                path.append(AppRoute.hostForm(nil))
+                presentHostForm(id: nil)
             } label: {
                 Text("Add Host")
                     .font(.footnote.weight(.medium))
@@ -193,57 +203,7 @@ public struct HostsScreen: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    // MARK: - Destination
-
-    @ViewBuilder
-    private func destination(for route: AppRoute) -> some View {
-        switch route {
-        case .hostForm(let id):
-            ConnectionFormScreen(
-                editingID: id,
-                connectOnSave: pendingConnectOnSave && id == nil,
-                onFinish: handleFormOutcome
-            )
-        case .terminal:
-            terminalDestination
-        case .sessionsPanel(let hostID):
-            sessionsPanelDestination(hostID: hostID)
-        case .killedSessionDetail(let snapshotID):
-            killedSessionDetailDestination(snapshotID: snapshotID)
-        }
-    }
-
-    // Destination helpers live in HostsScreen+Destinations.swift.
-
-    func currentSessionEntry() -> SavedHost? {
-        guard let id = viewModel.currentSessionID else { return nil }
-        return viewModel.entries.first { $0.id == id }
-    }
-
-    private func handleFormOutcome(_ outcome: ConnectionFormScreen.Outcome) {
-        viewModel.refresh()
-        if !path.isEmpty { path.removeLast() }
-        let formWasShortcut = pendingConnectOnSave
-        pendingConnectOnSave = false
-        switch outcome {
-        case .savedAndConnect(let id):
-            toaster.show(
-                .success,
-                title: String(localized: "Host saved"),
-                description: String(localized: "Connecting to \(viewModel.displayName(for: id))…")
-            )
-            viewModel.onConnectError = handleConnectError
-            viewModel.connect(id: id)
-        case .saved(let id):
-            toaster.show(
-                .success,
-                title: String(localized: "Host saved"),
-                description: viewModel.displayName(for: id)
-            )
-        case .cancelled:
-            _ = formWasShortcut
-        }
-    }
+    // Push + form-outcome helpers live in HostsScreen+Push.swift.
 
     // MARK: - Toast wiring
 
@@ -321,8 +281,6 @@ public struct HostsScreen: View {
 
     private func onAppear() {
         viewModel.load()
-        viewModel.snapshotStore = snapshotStore
-        viewModel.persistenceHandle = persistenceHandle
         // Settings env is unavailable at view-init time; wire the
         // bootstrap-payload resolver here so the saved-host Connect
         // path can push the shell-integration heredoc when the user
@@ -340,14 +298,7 @@ public struct HostsScreen: View {
         if !alreadyShortcut && viewModel.entries.isEmpty {
             defaults.set(true, forKey: Self.firstRunShortcutKey)
             pendingConnectOnSave = true
-            path.append(AppRoute.hostForm(nil))
-        }
-    }
-
-    private func reloadAllSnapshots() {
-        guard persistenceHandle != nil else { return }
-        for entry in viewModel.entries {
-            snapshotStore.reload(forHost: entry.id)
+            presentHostForm(id: nil)
         }
     }
 

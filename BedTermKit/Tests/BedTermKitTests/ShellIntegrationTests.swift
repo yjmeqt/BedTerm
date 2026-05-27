@@ -51,7 +51,7 @@ struct ShellIntegrationTests {
     @Test("connect propagates bootstrap payload to client")
     func connectPropagatesBootstrapPayloadToClient() async throws {
         let mock = MockSSHClient()
-        let session = TerminalSession(client: mock, hostID: UUID(), persistence: nil)
+        let session = TerminalSession(client: mock)
         let credential = HostCredential(host: "test.example.com", port: 22, username: "alice", auth: .password(""))
         let payload = try #require(ShellIntegrationScript.bootstrapPayload())
         await session.connect(
@@ -66,7 +66,7 @@ struct ShellIntegrationTests {
     @Test("connect omits bootstrap when not provided")
     func connectOmitsBootstrapWhenNotProvided() async {
         let mock = MockSSHClient()
-        let session = TerminalSession(client: mock, hostID: UUID(), persistence: nil)
+        let session = TerminalSession(client: mock)
         let credential = HostCredential(host: "test.example.com", port: 22, username: "alice", auth: .password(""))
         await session.connect(
             credential: credential,

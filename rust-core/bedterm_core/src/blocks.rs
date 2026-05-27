@@ -273,8 +273,6 @@ impl BlockStore {
     }
 
     /// Return a reference to the most-recently-sealed (non-running) block.
-    /// Used by the persistence sink in `Terminal::feed` to fetch the block
-    /// that just finalized at `CommandFinished`.
     pub fn last_finalized(&self) -> Option<&Block> {
         self.blocks.iter().rev().find(|b| !b.is_running)
     }

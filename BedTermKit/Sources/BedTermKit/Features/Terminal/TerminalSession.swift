@@ -11,21 +11,10 @@ final class TerminalSession {
         case closed(reason: String)
     }
 
-    /// Predicate driving the `ConnectingOverlay` visibility: cover both the
-    /// pre-`.task` `.idle` gap (Metal view mounted with no bytes yet) and the
-    /// in-flight `.connecting` window. Returns false once the session is open
-    /// or has closed.
-    static func shouldShowConnectingOverlay(_ state: State) -> Bool {
-        switch state {
-        case .idle, .connecting: return true
-        case .open, .closed: return false
-        }
-    }
-
     private(set) var state: State = .idle
     private(set) var lastError: SSHError?
     /// Current terminal mode flags, mirrored from the Rust core after each
-    /// feed by `TerminalMetalUIView`. Composer / overlays observe this to
+    /// feed by the terminal view. Composer / overlays observe this to
     /// hide themselves when full-screen TUIs (vim, claude, htop) take over.
     private(set) var mode: BedTermMode = []
     private(set) var feed: AsyncStream<Data>
@@ -37,7 +26,7 @@ final class TerminalSession {
     public let blockStore = BlockStore()
 
     /// Authoritative terminal grid + scrollback. Owned by the session
-    /// strongly so it outlives the Metal renderer view — re-entering a
+    /// strongly so it outlives the terminal view — re-entering a
     /// backgrounded session restores the previously drawn content
     /// (background-sessions P1: TerminalCore strong-ownership).
     /// The renderer view borrows this via the init and only displays it.
@@ -45,18 +34,6 @@ final class TerminalSession {
     public let terminalCore: TerminalCore
     private let client: any SSHClient
     private var pumpTask: Task<Void, Never>?
-    private var killRecorded = false
-
-    /// SQLite snapshot row identifier for this session. Stable for the
-    /// session lifetime; used to record blocks and kill metadata.
-    let snapshotID: UUID
-    /// The SavedHost UUID this session belongs to — written into the
-    /// `snapshots` row at attach time.
-    let hostID: UUID
-    /// Weak reference to the process-wide persistence layer. Nil when
-    /// running in debug/test contexts that opt out of persistence.
-    @ObservationIgnored
-    private weak var persistence: PersistenceHandle?
 
     /// Optional hook fired before each `send(_:)` writes to the PTY. Set by
     /// the terminal view to implement R5.scroll_snap_on_input (snap back to
@@ -65,23 +42,14 @@ final class TerminalSession {
     @ObservationIgnored
     var onBeforeSend: (() -> Void)?
 
-    init(
-        client: any SSHClient,
-        hostID: UUID,
-        persistence: PersistenceHandle?,
-        snapshotID: UUID = UUID()
-    ) {
+    init(client: any SSHClient) {
         self.client = client
-        self.hostID = hostID
-        self.persistence = persistence
-        self.snapshotID = snapshotID
         var feedCont: AsyncStream<Data>.Continuation!
         self.feed = AsyncStream<Data> { feedCont = $0 }
         self.feedContinuation = feedCont
-        // Default geometry; first layout pass in TerminalMetalUIView
+        // Default geometry; the terminal view's first layout pass
         // resizes to the actual viewport before any bytes arrive.
         self.terminalCore = TerminalCore(cols: 80, rows: 24)
-        persistence?.attach(terminal: terminalCore, snapshotID: snapshotID, hostID: hostID)
     }
 
     func connect(
@@ -90,6 +58,7 @@ final class TerminalSession {
         bootstrapPayload: String? = nil,
         timeout: TimeInterval = TerminalSession.connectTimeoutSeconds
     ) async {
+        NSLog("[bedterm-diag] TerminalSession.connect initialPTY=%dx%d", initialPTY.cols, initialPTY.rows)
         state = .connecting
         lastError = nil
         do {
@@ -116,22 +85,18 @@ final class TerminalSession {
                     self.feedContinuation.yield(chunk)
                 }
                 if case .open = self.state {
-                    self.recordKill(reason: .remoteLogout)
                     self.state = .closed(reason: String(localized: "Connection ended"))
                 }
                 self.feedContinuation.finish()
             }
         } catch is TimeoutError {
             lastError = .timeout
-            recordKill(reason: .networkDrop)
             state = .closed(reason: Self.describe(.timeout))
             await client.disconnect()
         } catch let err as SSHError {
             lastError = err
-            recordKill(reason: killReason(for: err))
             state = .closed(reason: Self.describe(err))
         } catch {
-            recordKill(reason: .userKilled)
             state = .closed(reason: String(describing: error))
         }
     }
@@ -159,42 +124,11 @@ final class TerminalSession {
     }
 
     func disconnect() {
-        recordKill(reason: .userKilled)
         pumpTask?.cancel()
         Task { await client.disconnect() }
         feedContinuation.finish()
         blockStore.reset()
         state = .closed(reason: String(localized: "Closed"))
-    }
-
-    // MARK: - Persistence helpers
-
-    /// Write kill metadata to SQLite. Guards against double-writes via a
-    /// one-shot boolean flag. This allows recordKill to be called from any
-    /// state (.idle, .connecting, .open) and ensures it runs exactly once,
-    /// blocking subsequent calls regardless of state.
-    private func recordKill(reason: SessionSnapshot.KillReason) {
-        guard !killRecorded else { return }
-        killRecorded = true
-        guard let persistence else { return }
-        // Pull last-finalized block metadata for the snapshot row.
-        let lastBlock = blockStore.blocks.last(where: { !$0.isRunning })
-        persistence.recordKill(
-            snapshotID: snapshotID,
-            reason: reason,
-            lastCwd: lastBlock?.workingDirectory,
-            lastCommand: lastBlock?.command,
-            lastExitCode: lastBlock?.exitCode
-        )
-    }
-
-    private func killReason(for error: SSHError) -> SessionSnapshot.KillReason {
-        switch error {
-        case .peerReset, .dnsResolution, .tcpRefused, .timeout:
-            return .networkDrop
-        default:
-            return .userKilled
-        }
     }
 
     nonisolated static func describe(_ error: SSHError) -> String {

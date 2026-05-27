@@ -50,7 +50,7 @@ public final class TerminalCore {
     }
 
     /// Wrap a Rust-allocated `BtTerm *` produced by a `bt_term_new*`-family
-    /// function (e.g. `bedterm_persistence_open_replay`). The new
+    /// function (e.g. a future replay constructor). The new
     /// `TerminalCore` takes ownership and will call `bt_term_free` on deinit.
     ///
     /// Internal-only: callers must guarantee the pointer was allocated by
@@ -82,36 +82,6 @@ public final class TerminalCore {
         bt_term_resize(handle, colsClamped, rowsClamped)
         self.screenCols = Int(colsClamped)
         self.screenRows = Int(rowsClamped)
-    }
-
-    /// Push a palette (16 ANSI entries + 2 defaults) to the Rust core. Subsequent snapshots resolve
-    /// named/indexed/default colours through these values.
-    public func setPalette(_ palette: TerminalPalette) {
-        precondition(palette.ansi.count == 16, "TerminalPalette.ansi must have exactly 16 entries")
-        let ansi = palette.ansi
-        // C interop: BtPaletteView.ansi is a Swift tuple (cbindgen surfaces fixed
-        // C arrays as tuples), not a Swift Array — list all 16 elements explicitly.
-        var view = BtPaletteView(
-            default_fg: Self.btRgb(palette.defaultFg),
-            default_bg: Self.btRgb(palette.defaultBg),
-            ansi: (
-                Self.btRgb(ansi[0]), Self.btRgb(ansi[1]),
-                Self.btRgb(ansi[2]), Self.btRgb(ansi[3]),
-                Self.btRgb(ansi[4]), Self.btRgb(ansi[5]),
-                Self.btRgb(ansi[6]), Self.btRgb(ansi[7]),
-                Self.btRgb(ansi[8]), Self.btRgb(ansi[9]),
-                Self.btRgb(ansi[10]), Self.btRgb(ansi[11]),
-                Self.btRgb(ansi[12]), Self.btRgb(ansi[13]),
-                Self.btRgb(ansi[14]), Self.btRgb(ansi[15])
-            )
-        )
-        withUnsafePointer(to: &view) { ptr in
-            bt_term_set_palette(handle, ptr)
-        }
-    }
-
-    private static func btRgb(_ component: TerminalPalette.Component) -> BtRgb24 {
-        BtRgb24(r: component.r, g: component.g, b: component.b)
     }
 
     public func snapshot() -> GridSnapshot {

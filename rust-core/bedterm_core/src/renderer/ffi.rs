@@ -14,8 +14,7 @@ pub struct BtRenderer {
 /// `mtl_device` and `mtl_queue` must be non-null `id<MTLDevice>` /
 /// `id<MTLCommandQueue>` pointers. They are borrowed for the renderer's
 /// lifetime; the caller (Swift) retains them.
-#[no_mangle]
-pub unsafe extern "C" fn bt_renderer_new(
+pub unsafe fn bt_renderer_new(
     mtl_device: *const std::ffi::c_void,
     mtl_queue: *const std::ffi::c_void,
 ) -> *mut BtRenderer {
@@ -27,8 +26,7 @@ pub unsafe extern "C" fn bt_renderer_new(
 
 /// # Safety
 /// `r` must be a pointer returned by `bt_renderer_new` not yet freed.
-#[no_mangle]
-pub unsafe extern "C" fn bt_renderer_free(r: *mut BtRenderer) {
+pub unsafe fn bt_renderer_free(r: *mut BtRenderer) {
     if !r.is_null() {
         drop(Box::from_raw(r));
     }
@@ -36,12 +34,7 @@ pub unsafe extern "C" fn bt_renderer_free(r: *mut BtRenderer) {
 
 /// # Safety
 /// `r` must be a live `BtRenderer` pointer.
-#[no_mangle]
-pub unsafe extern "C" fn bt_renderer_set_font(
-    r: *mut BtRenderer,
-    pixel_size: f32,
-    device_pixel_ratio: f32,
-) {
+pub unsafe fn bt_renderer_set_font(r: *mut BtRenderer, pixel_size: f32, device_pixel_ratio: f32) {
     if r.is_null() {
         return;
     }
@@ -57,12 +50,7 @@ pub unsafe extern "C" fn bt_renderer_set_font(
 /// # Safety
 /// `r` must be a live `BtRenderer`. `out_w` and `out_h` must be valid
 /// pointers to `u32` slots the caller owns.
-#[no_mangle]
-pub unsafe extern "C" fn bt_renderer_cell_pixel_size(
-    r: *const BtRenderer,
-    out_w: *mut u32,
-    out_h: *mut u32,
-) {
+pub unsafe fn bt_renderer_cell_pixel_size(r: *const BtRenderer, out_w: *mut u32, out_h: *mut u32) {
     if r.is_null() || out_w.is_null() || out_h.is_null() {
         return;
     }
@@ -75,8 +63,7 @@ pub unsafe extern "C" fn bt_renderer_cell_pixel_size(
 /// `r` must be a live `BtRenderer` pointer, or null (null is a no-op).
 /// Components are clamped to `[0, 1]` downstream by Metal; values outside
 /// that range are tolerated.
-#[no_mangle]
-pub unsafe extern "C" fn bt_renderer_set_clear_color(
+pub unsafe fn bt_renderer_set_clear_color(
     r: *mut BtRenderer,
     red: f32,
     green: f32,
@@ -93,8 +80,7 @@ pub unsafe extern "C" fn bt_renderer_set_clear_color(
 /// `r` must be a live `BtRenderer`. `term` must be a live `BtTerm` or null
 /// (null is treated as "no terminal yet"). `drawable_texture` must be a
 /// live `id<MTLTexture>`.
-#[no_mangle]
-pub unsafe extern "C" fn bt_renderer_draw(
+pub unsafe fn bt_renderer_draw(
     r: *mut BtRenderer,
     term: *const BtTerm,
     drawable_texture: *const std::ffi::c_void,
@@ -126,8 +112,8 @@ pub unsafe extern "C" fn bt_renderer_draw(
 /// `r` must be a live `BtRenderer`. `cells` (when non-null) must point to
 /// `cells_len` valid `CellSnapshot` values for the duration of the call.
 /// `drawable_texture` must be a live `id<MTLTexture>`.
-#[no_mangle]
-pub unsafe extern "C" fn bt_renderer_draw_cells(
+#[allow(clippy::too_many_arguments)]
+pub unsafe fn bt_renderer_draw_cells(
     r: *mut BtRenderer,
     cells: *const CellSnapshot,
     cells_len: usize,
@@ -178,8 +164,7 @@ pub unsafe extern "C" fn bt_renderer_draw_cells(
 /// `bytes_ptr` must point to `bytes_len` readable bytes for the
 /// duration of the call. `out_family_ptr`, if non-null, must point to
 /// `out_family_capacity` writable bytes.
-#[no_mangle]
-pub unsafe extern "C" fn bt_font_register_terminal_face(
+pub unsafe fn bt_font_register_terminal_face(
     bytes_ptr: *const u8,
     bytes_len: usize,
     out_family_ptr: *mut u8,
@@ -213,11 +198,7 @@ pub unsafe extern "C" fn bt_font_register_terminal_face(
 /// # Safety
 /// `bytes_ptr` must point to `bytes_len` readable bytes for the
 /// duration of the call.
-#[no_mangle]
-pub unsafe extern "C" fn bt_font_register_aux_face(
-    bytes_ptr: *const u8,
-    bytes_len: usize,
-) -> c_int {
+pub unsafe fn bt_font_register_aux_face(bytes_ptr: *const u8, bytes_len: usize) -> c_int {
     if bytes_ptr.is_null() || bytes_len == 0 {
         return -1;
     }

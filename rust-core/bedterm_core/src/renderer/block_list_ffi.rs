@@ -100,8 +100,8 @@ unsafe impl Sync for BtBlockHeaderEntry {}
 /// (or be null with `entry_count == 0`). Same for `headers` /
 /// `header_count`. UTF-8 pointers inside header entries must outlive
 /// the call.
-#[no_mangle]
-pub unsafe extern "C" fn bt_renderer_draw_block_list(
+#[allow(clippy::too_many_arguments)]
+pub unsafe fn bt_renderer_draw_block_list(
     r: *mut BtRenderer,
     term: *mut BtTerm,
     texture_ptr: *const std::ffi::c_void,
@@ -145,8 +145,7 @@ pub unsafe extern "C" fn bt_renderer_draw_block_list(
 ///
 /// # Safety
 /// `r` must be a valid live pointer.
-#[no_mangle]
-pub unsafe extern "C" fn bt_renderer_set_ui_font_sizes_px(
+pub unsafe fn bt_renderer_set_ui_font_sizes_px(
     r: *mut BtRenderer,
     subheadline_px: f32,
     caption2_px: f32,

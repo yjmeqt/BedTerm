@@ -11,11 +11,7 @@ struct TerminalSessionTimeoutTests {
         let client = MockSSHClient()
         client.scriptConnectHang()
 
-        let session = TerminalSession(
-            client: client,
-            hostID: UUID(),
-            persistence: nil
-        )
+        let session = TerminalSession(client: client)
 
         await session.connect(
             credential: HostCredential(
