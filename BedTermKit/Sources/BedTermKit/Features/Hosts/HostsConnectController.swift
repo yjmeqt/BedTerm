@@ -77,13 +77,10 @@ public final class HostsConnectController {
         self.rootViewController = container
         self.addBox.owner = self
 
-        // Wire the bridge + load entries before the Rust VC's
-        // viewDidLoad pulls a snapshot — otherwise first render
-        // flashes empty.
-        HostsBridge.store = HostsStore()
-        HostsBridge.entriesProvider = { [weak self] in
-            self?.viewModel.entries ?? []
-        }
+        // Wire the bridge connect handler + load entries before the
+        // Rust VC's viewDidLoad pulls a snapshot — otherwise first
+        // render flashes empty. The snapshot itself is now read
+        // directly from `crate::hosts_store` by the Rust VC.
         HostsBridge.connectHandler = { [weak self] id in
             self?.viewModel.requestConnect(id: id)
         }
@@ -159,7 +156,7 @@ public final class HostsConnectController {
             let rust = objc_getAssociatedObject(self.rootViewController, &Self.rustChildKey)
                 as? UIViewController
         else { return }
-        // The Rust VC re-pulls `HostsBridge` JSON in its
+        // The Rust VC re-pulls from `hosts_store` in its
         // viewWillAppear; flip the appearance transition to force it.
         rust.beginAppearanceTransition(true, animated: false)
         rust.endAppearanceTransition()
