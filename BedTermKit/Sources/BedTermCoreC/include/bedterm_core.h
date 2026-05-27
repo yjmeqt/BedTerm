@@ -722,6 +722,126 @@ void *bt_ios_create_connect_form_vc(const char *editing_id_or_null,
 void bt_ios_release_connect_form_vc(void *vc_ptr);
 
 /**
+ * Free a string returned by any `bt_ios_connect_form_vm_*` getter that
+ * returns a `*mut c_char`. NULL-safe.
+ *
+ * # Safety
+ * `ptr` must have been returned by one of the `bt_ios_connect_form_vm_*`
+ * FFI exports and not yet freed.
+ */
+void bt_ios_connect_form_vm_free_string(char *ptr);
+
+/**
+ * Reset the VM to an empty Add-mode draft (port "22").
+ */
+void bt_ios_connect_form_vm_reset_to_add(void);
+
+/**
+ * Prefill the VM for an Edit-mode session. Existing secrets are passed
+ * as `*const c_char` (NULL → unset). `existing_private_key` is a raw
+ * byte buffer with `private_key_len` bytes; pass `(NULL, 0)` for no
+ * key. All inputs are borrowed for the duration of the call.
+ *
+ * # Safety
+ * All `*const c_char` pointers must be NULL or valid UTF-8
+ * nul-terminated strings borrowed for the call. `existing_private_key`
+ * may be NULL iff `private_key_len == 0`.
+ */
+void bt_ios_connect_form_vm_prefill_edit(const char *id,
+                                         const char *label,
+                                         const char *host,
+                                         uint16_t port,
+                                         const char *username,
+                                         bool auth_is_key,
+                                         const char *existing_password,
+                                         const uint8_t *existing_private_key,
+                                         uintptr_t private_key_len,
+                                         const char *existing_passphrase);
+
+/**
+ * # Safety
+ * `value` is a UTF-8 nul-terminated C string borrowed for the call.
+ */
+void bt_ios_connect_form_vm_set_label(const char *value);
+
+/**
+ * # Safety
+ * `value` is a UTF-8 nul-terminated C string borrowed for the call.
+ */
+void bt_ios_connect_form_vm_set_host(const char *value);
+
+/**
+ * # Safety
+ * `value` is a UTF-8 nul-terminated C string borrowed for the call.
+ */
+void bt_ios_connect_form_vm_set_port_text(const char *value);
+
+/**
+ * # Safety
+ * `value` is a UTF-8 nul-terminated C string borrowed for the call.
+ */
+void bt_ios_connect_form_vm_set_username(const char *value);
+
+/**
+ * # Safety
+ * `value` is a UTF-8 nul-terminated C string borrowed for the call.
+ */
+void bt_ios_connect_form_vm_set_password(const char *value);
+
+/**
+ * # Safety
+ * `value` is a UTF-8 nul-terminated C string borrowed for the call.
+ */
+void bt_ios_connect_form_vm_set_passphrase(const char *value);
+
+/**
+ * # Safety
+ * `bytes` may be NULL iff `len == 0`.
+ */
+void bt_ios_connect_form_vm_set_private_key_bytes(const uint8_t *bytes, uintptr_t len);
+
+void bt_ios_connect_form_vm_set_using_key(bool value);
+
+char *bt_ios_connect_form_vm_label(void);
+
+char *bt_ios_connect_form_vm_host(void);
+
+char *bt_ios_connect_form_vm_port_text(void);
+
+char *bt_ios_connect_form_vm_username(void);
+
+bool bt_ios_connect_form_vm_is_using_key(void);
+
+bool bt_ios_connect_form_vm_has_password(void);
+
+bool bt_ios_connect_form_vm_has_private_key(void);
+
+bool bt_ios_connect_form_vm_has_passphrase(void);
+
+bool bt_ios_connect_form_vm_can_save(void);
+
+/**
+ * Returns the current error message (set by the most recent
+ * `try_save` failure), or NULL when none. Caller frees via
+ * `bt_ios_connect_form_vm_free_string`.
+ */
+char *bt_ios_connect_form_vm_error_message(void);
+
+/**
+ * Validate without mutating. Returns NULL when persistable, else a
+ * localized error message owned by the caller (free via
+ * `bt_ios_connect_form_vm_free_string`).
+ */
+char *bt_ios_connect_form_vm_validate(void);
+
+/**
+ * Attempt to save. Returns the JSON-encoded [`SaveOutcome`] (caller
+ * frees) on success, or NULL on validation failure (call
+ * `bt_ios_connect_form_vm_error_message` to retrieve the message).
+ */
+char *bt_ios_connect_form_vm_try_save(void);
+
+/**
  * Load the stored fingerprint for `host:port`. Returns NULL when none
  * is stored. Caller frees via [`bt_ios_host_keys_free_string`].
  *

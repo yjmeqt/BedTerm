@@ -1,10 +1,19 @@
+import BedTermCoreC
 import Foundation
 import Observation
 
-/// Form state for adding or editing a saved host.
+/// `@Observable` proxy over the Rust-owned connect-form state machine
+/// (`connect_form_vm` / `bt_ios_connect_form_vm_*`). Every property write
+/// forwards to Rust and mirrors the new state into the local
+/// `@Observable` properties so existing `withObservationTracking`
+/// observers keep firing on the same key paths.
 ///
-/// Owns nothing related to SSH or prewarming — those live in `ConnectAttempt` and
-/// run from `HostsViewModel.connect(id:)` after the form is dismissed.
+/// Persistence still lives in Swift because `HostCredential` is Codable
+/// on the Swift side. `save()` asks Rust to validate + resolve every
+/// field (including secret preservation in edit mode) via
+/// `bt_ios_connect_form_vm_try_save`, decodes the resolved JSON, and
+/// writes the materialised `SavedHost` through the supplied
+/// `HostsStore`.
 @MainActor
 @Observable
 public final class ConnectionFormViewModel {
@@ -19,24 +28,58 @@ public final class ConnectionFormViewModel {
 
     public let mode: Mode
 
-    public var label: String = ""
-    public var host: String = ""
-    public var port: String = "22"
-    public var username: String = ""
-    public var password: String = ""
-    public var privateKey: Data?
-    public var passphrase: String = ""
-    public var auth: AuthChoice = .password
+    public var label: String = "" {
+        didSet { self.pushString(self.label, bt_ios_connect_form_vm_set_label) }
+    }
+    public var host: String = "" {
+        didSet { self.pushString(self.host, bt_ios_connect_form_vm_set_host) }
+    }
+    public var port: String = "22" {
+        didSet { self.pushString(self.port, bt_ios_connect_form_vm_set_port_text) }
+    }
+    public var username: String = "" {
+        didSet { self.pushString(self.username, bt_ios_connect_form_vm_set_username) }
+    }
+    public var password: String = "" {
+        didSet {
+            self.pushString(self.password, bt_ios_connect_form_vm_set_password)
+            self.passwordTouched = true
+        }
+    }
+    public var privateKey: Data? {
+        didSet {
+            if let data = self.privateKey {
+                data.withUnsafeBytes { raw in
+                    let base = raw.baseAddress?.assumingMemoryBound(to: UInt8.self)
+                    bt_ios_connect_form_vm_set_private_key_bytes(base, UInt(raw.count))
+                }
+            } else {
+                bt_ios_connect_form_vm_set_private_key_bytes(nil, 0)
+            }
+            self.privateKeyTouched = true
+        }
+    }
+    public var passphrase: String = "" {
+        didSet {
+            self.pushString(self.passphrase, bt_ios_connect_form_vm_set_passphrase)
+            self.passphraseTouched = true
+        }
+    }
+    public var auth: AuthChoice = .password {
+        didSet { bt_ios_connect_form_vm_set_using_key(self.auth == .privateKey) }
+    }
 
-    /// True once the user types into the secret field; in edit mode an untouched
-    /// secret means "preserve what's in the Keychain", a touched one means "overwrite".
+    /// True once the user types into the secret field; in edit mode an
+    /// untouched secret means "preserve what's in the Keychain", a
+    /// touched one means "overwrite". Mirrored from Rust's dirty
+    /// tracking; setting these directly only affects the local mirror —
+    /// Rust observes its own dirty flag from each setter.
     public var passwordTouched: Bool = false
     public var privateKeyTouched: Bool = false
     public var passphraseTouched: Bool = false
 
     public var errorMessage: String?
 
-    private let originalAuth: AuthChoice
     private let store: HostsStore
 
     public init(mode: Mode, store: HostsStore = HostsStore()) {
@@ -44,8 +87,10 @@ public final class ConnectionFormViewModel {
         self.store = store
         switch mode {
         case .add:
-            self.originalAuth = .password
+            bt_ios_connect_form_vm_reset_to_add()
+            self.port = "22"
         case .edit(let entry):
+            self.pushEditPrefill(entry)
             self.label = entry.label
             self.host = entry.credential.host
             self.port = String(entry.credential.port)
@@ -53,46 +98,31 @@ public final class ConnectionFormViewModel {
             switch entry.credential.auth {
             case .password:
                 self.auth = .password
-                self.originalAuth = .password
             case .privateKey:
                 self.auth = .privateKey
-                self.originalAuth = .privateKey
             }
+            // Resetting the touched-flag mirror after the property
+            // sets above set them implicitly. Rust's prefill_edit
+            // already cleared its own dirty flags.
+            self.passwordTouched = false
+            self.privateKeyTouched = false
+            self.passphraseTouched = false
         }
     }
 
     // MARK: - Derived
 
-    /// True when the form has enough content for Save to be enabled. Mirrors validation
-    /// in `save()` so the Save button greys out before the user hits it.
+    /// True when the form has enough content for Save to be enabled.
     public var canSave: Bool {
-        guard !self.normalizedHost().isEmpty,
-            !self.username.trimmingCharacters(in: .whitespaces).isEmpty
-        else { return false }
-        guard let portValue = self.normalizedPort(), (1...65_535).contains(portValue)
-        else { return false }
-        switch self.auth {
-        case .password:
-            if self.requiresFreshSecret() {
-                return !self.password.isEmpty
-            }
-            return true
-        case .privateKey:
-            if self.requiresFreshSecret() {
-                return self.privateKey != nil
-            }
-            return true
-        }
+        bt_ios_connect_form_vm_can_save()
     }
 
-    /// Looks up an existing saved entry that matches `(host, port, username)` other
-    /// than the entry being edited. Returns its label (or empty string) when a dup
-    /// exists, nil otherwise. Drives the inline warning in R3.duplicate_host_warning.
+    /// Looks up an existing saved entry that matches `(host, port, username)`
+    /// other than the entry being edited. Drives the inline warning in
+    /// R3.duplicate_host_warning.
     public func duplicate() -> SavedHost? {
-        let normalizedHost = self.normalizedHost()
-        guard !normalizedHost.isEmpty,
-            let portValue = self.normalizedPort()
-        else { return nil }
+        let normalized = self.normalizedHost()
+        guard !normalized.isEmpty, let portValue = self.normalizedPort() else { return nil }
         let user = self.username.trimmingCharacters(in: .whitespaces)
         guard !user.isEmpty else { return nil }
         let excludeID: UUID? = {
@@ -101,7 +131,7 @@ public final class ConnectionFormViewModel {
         }()
         return self.store.list().first { entry in
             entry.id != excludeID
-                && entry.credential.host == normalizedHost
+                && entry.credential.host == normalized
                 && entry.credential.port == portValue
                 && entry.credential.username == user
         }
@@ -109,13 +139,31 @@ public final class ConnectionFormViewModel {
 
     // MARK: - Save
 
-    /// Validates, builds a `HostCredential`, and persists. Returns the entry's id
-    /// so the caller (form screen) can dismiss back to the list with the new row
-    /// visible / scrolled into view.
+    /// Validates via the Rust VM, materialises a `SavedHost` from the
+    /// resolved fields, and persists. Returns the entry's id so the
+    /// caller can dismiss back to the list with the new row visible.
     @discardableResult
     public func save() throws -> SavedHost.ID {
-        let credential = try self.buildCredential()
-        let entry = self.buildEntry(credential: credential)
+        guard let outcomeJSON = bt_ios_connect_form_vm_try_save() else {
+            // Validation failed — pull the error message from Rust.
+            let messagePtr = bt_ios_connect_form_vm_error_message()
+            let message: String
+            if let messagePtr {
+                message = String(cString: messagePtr)
+                bt_ios_connect_form_vm_free_string(messagePtr)
+            } else {
+                message = String(localized: "Could not save host.")
+            }
+            self.errorMessage = message
+            throw FormError.validation(message)
+        }
+        defer { bt_ios_connect_form_vm_free_string(outcomeJSON) }
+        let json = String(cString: outcomeJSON)
+        guard let entry = Self.decodeSaveOutcome(json, mode: self.mode) else {
+            let message = String(localized: "Internal error decoding form data.")
+            self.errorMessage = message
+            throw FormError.validation(message)
+        }
         do {
             try self.store.save(entry)
         } catch {
@@ -127,63 +175,16 @@ public final class ConnectionFormViewModel {
         return entry.id
     }
 
-    private func buildCredential() throws -> HostCredential {
-        let normalizedHost = self.normalizedHost()
-        let user = self.username.trimmingCharacters(in: .whitespaces)
-        guard !normalizedHost.isEmpty, !user.isEmpty else {
-            let msg = String(localized: "Host, port and username are required.")
-            self.errorMessage = msg
-            throw FormError.validation(msg)
-        }
-        guard let portValue = self.normalizedPort(), (1...65_535).contains(portValue) else {
-            let msg = String(localized: "Port must be between 1 and 65535.")
-            self.errorMessage = msg
-            throw FormError.validation(msg)
-        }
-        let authMethod = try self.buildAuthMethod()
-        return HostCredential(host: normalizedHost, port: portValue, username: user, auth: authMethod)
-    }
-
-    private func buildAuthMethod() throws -> HostCredential.AuthMethod {
-        switch self.auth {
-        case .password:
-            return self.preservedPasswordAuth() ?? .password(self.password)
-        case .privateKey:
-            if let preserved = self.preservedKeyAuth() { return preserved }
-            guard let key = self.privateKey else {
-                let msg = String(localized: "Please import a private key file.")
-                self.errorMessage = msg
-                throw FormError.validation(msg)
-            }
-            let pass = self.passphrase.isEmpty ? nil : self.passphrase
-            return .privateKey(key, passphrase: pass)
-        }
-    }
-
-    private func buildEntry(credential: HostCredential) -> SavedHost {
-        let trimmedLabel = self.label.trimmingCharacters(in: .whitespacesAndNewlines)
-        switch self.mode {
-        case .add:
-            return SavedHost(label: trimmedLabel, credential: credential)
-        case .edit(let existing):
-            var updated = existing
-            updated.label = trimmedLabel
-            updated.credential = credential
-            return updated
-        }
-    }
-
     // MARK: - Helpers
 
-    /// Splits a pasted `host:port` into the corresponding fields, then trims.
-    /// Only splits when exactly one ':' is present (so unbracketed IPv6 literals
-    /// are left alone) or when the input is `[ipv6]:port`.
+    /// Splits a pasted `host:port` into the corresponding fields, then
+    /// trims. Kept as a thin Swift-side mirror for `duplicate()`; the
+    /// Rust VM applies the same rule on save.
     func normalizedHost() -> String {
         let raw = self.host.trimmingCharacters(in: .whitespaces)
         guard !raw.isEmpty else { return "" }
 
         if raw.hasPrefix("["), let bracket = raw.firstIndex(of: "]") {
-            // `[ipv6]` or `[ipv6]:port`
             let after = raw.index(after: bracket)
             if after < raw.endIndex && raw[after] == ":" {
                 return String(raw[..<bracket]).replacingOccurrences(of: "[", with: "")
@@ -197,8 +198,6 @@ public final class ConnectionFormViewModel {
         return String(raw[..<colon])
     }
 
-    /// Port to persist — pulled out of either the Port field or the trailing
-    /// `:port` portion of a pasted Host value.
     func normalizedPort() -> Int? {
         let raw = self.host.trimmingCharacters(in: .whitespaces)
         if raw.hasPrefix("["), let bracket = raw.firstIndex(of: "]") {
@@ -215,47 +214,139 @@ public final class ConnectionFormViewModel {
         return Int(self.port.trimmingCharacters(in: .whitespaces))
     }
 
-    /// In edit mode, an untouched secret field of the same auth method means
-    /// "leave the existing Keychain secret alone". A method switch always
-    /// invalidates the prior secret.
-    private func requiresFreshSecret() -> Bool {
-        if case .add = self.mode { return true }
-        if self.auth != self.originalAuth { return true }
-        switch self.auth {
-        case .password: return self.passwordTouched
-        case .privateKey: return self.privateKeyTouched
+    // MARK: - Bridge plumbing
+
+    private func pushString(
+        _ value: String,
+        _ setter: (UnsafePointer<CChar>?) -> Void
+    ) {
+        value.withCString { setter($0) }
+    }
+
+    private func pushEditPrefill(_ entry: SavedHost) {
+        let existingPassword: String?
+        let existingKey: Data?
+        let existingPass: String?
+        let authIsKey: Bool
+        switch entry.credential.auth {
+        case .password(let pw):
+            existingPassword = pw
+            existingKey = nil
+            existingPass = nil
+            authIsKey = false
+        case .privateKey(let key, let pass):
+            existingPassword = nil
+            existingKey = key
+            existingPass = pass
+            authIsKey = true
+        }
+        let id = entry.id.uuidString
+        Self.callPrefill(
+            id: id,
+            label: entry.label,
+            host: entry.credential.host,
+            port: UInt16(entry.credential.port),
+            username: entry.credential.username,
+            authIsKey: authIsKey,
+            existingPassword: existingPassword,
+            existingKey: existingKey,
+            existingPassphrase: existingPass
+        )
+    }
+
+    // Nest the `withCString` / `withUnsafeBytes` borrows so all
+    // pointers remain valid for the duration of the FFI call.
+    // swiftlint:disable:next function_parameter_count
+    private static func callPrefill(
+        id: String,
+        label: String,
+        host: String,
+        port: UInt16,
+        username: String,
+        authIsKey: Bool,
+        existingPassword: String?,
+        existingKey: Data?,
+        existingPassphrase: String?
+    ) {
+        id.withCString { idPtr in
+            label.withCString { labelPtr in
+                host.withCString { hostPtr in
+                    username.withCString { userPtr in
+                        let withPassword: (UnsafePointer<CChar>?) -> Void = { pwPtr in
+                            let withPass: (UnsafePointer<CChar>?) -> Void = { ppPtr in
+                                let withKey: (UnsafePointer<UInt8>?, Int) -> Void = { keyPtr, keyLen in
+                                    bt_ios_connect_form_vm_prefill_edit(
+                                        idPtr, labelPtr, hostPtr, port, userPtr,
+                                        authIsKey, pwPtr, keyPtr, UInt(keyLen), ppPtr
+                                    )
+                                }
+                                if let key = existingKey {
+                                    key.withUnsafeBytes { raw in
+                                        let base = raw.baseAddress?.assumingMemoryBound(to: UInt8.self)
+                                        withKey(base, raw.count)
+                                    }
+                                } else {
+                                    withKey(nil, 0)
+                                }
+                            }
+                            if let pass = existingPassphrase {
+                                pass.withCString { withPass($0) }
+                            } else {
+                                withPass(nil)
+                            }
+                        }
+                        if let pwd = existingPassword {
+                            pwd.withCString { withPassword($0) }
+                        } else {
+                            withPassword(nil)
+                        }
+                    }
+                }
+            }
         }
     }
 
-    private func preservedPasswordAuth() -> HostCredential.AuthMethod? {
-        guard case .edit(let entry) = self.mode,
-            self.originalAuth == .password,
-            !self.passwordTouched,
-            case .password(let stored) = entry.credential.auth
+    /// Decode the JSON `SaveOutcome` returned by Rust into a fully
+    /// materialised `SavedHost`. Uses the original entry id when in
+    /// edit mode (the Rust VM hands back the same id we passed in).
+    private static func decodeSaveOutcome(_ json: String, mode: Mode) -> SavedHost? {
+        guard let data = json.data(using: .utf8),
+            let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
         else { return nil }
-        return .password(stored)
-    }
-
-    private func preservedKeyAuth() -> HostCredential.AuthMethod? {
-        guard case .edit(let entry) = self.mode,
-            self.originalAuth == .privateKey,
-            !self.privateKeyTouched,
-            case .privateKey(let storedKey, let storedPass) = entry.credential.auth
+        guard let idString = obj["id"] as? String,
+            let uuid = UUID(uuidString: idString),
+            let host = obj["host"] as? String,
+            let port = obj["port"] as? Int,
+            let username = obj["username"] as? String,
+            let authIsKey = obj["authIsKey"] as? Bool
         else { return nil }
-        let pass: String?
-        if self.passphraseTouched {
-            pass = self.passphrase.isEmpty ? nil : self.passphrase
+        let label = (obj["label"] as? String) ?? ""
+        let auth: HostCredential.AuthMethod
+        if authIsKey {
+            guard let keyB64 = obj["privateKeyBase64"] as? String,
+                let keyData = Data(base64Encoded: keyB64)
+            else { return nil }
+            let pass = obj["passphrase"] as? String
+            auth = .privateKey(keyData, passphrase: pass)
         } else {
-            pass = storedPass
+            let pw = (obj["password"] as? String) ?? ""
+            auth = .password(pw)
         }
-        return .privateKey(storedKey, passphrase: pass)
+        let credential = HostCredential(host: host, port: port, username: username, auth: auth)
+        // In edit mode preserve the existing UUID (Rust hands the same
+        // string back); in add mode use the freshly-minted one from
+        // Rust.
+        let finalID: UUID = {
+            if case .edit(let existing) = mode {
+                return existing.id
+            }
+            return uuid
+        }()
+        return SavedHost(id: finalID, label: label, credential: credential)
     }
 }
 
 /// Result reported by the connect-form flow back to the hosts screen.
-/// Previously nested on `ConnectionFormScreen`; lifted to a top-level
-/// enum so the Rust-backed connect-form path (the only path now) can
-/// surface the same shape without dragging in a SwiftUI view type.
 public enum ConnectionFormOutcome {
     /// User saved the entry. The host's id is provided so the caller
     /// can scroll it into view on the list.

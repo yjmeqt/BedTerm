@@ -113,6 +113,10 @@ mod host_key_store;
 // runs as host unit tests via `cargo test`. The iOS-gated FFI singleton
 // lives in `ffi::hosts`.
 mod hosts_vm;
+// Pure state machine that backs Swift's `ConnectionFormViewModel`. No
+// UIKit deps; host-testable. iOS-gated FFI singleton lives in
+// `ffi::connect_form_vm`.
+mod connect_form_vm;
 #[cfg(target_os = "ios")]
 mod settings_vc;
 // `ssh_bridge` exposes a vtable + result enum the Swift side fills in

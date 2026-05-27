@@ -16,6 +16,7 @@
 #![cfg(target_os = "ios")]
 
 pub mod connect_form;
+pub mod connect_form_vm;
 pub mod host_keys;
 pub mod hosts;
 pub mod onboarding;
