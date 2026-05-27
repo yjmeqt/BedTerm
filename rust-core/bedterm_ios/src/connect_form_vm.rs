@@ -527,6 +527,57 @@ fn base64_encode(bytes: &[u8]) -> String {
     out
 }
 
+/// Decode standard-base64 into raw bytes. Handles padding. Returns `None`
+/// on invalid input (wrong length, non-base64 chars).
+pub(crate) fn base64_decode(s: &str) -> Option<Vec<u8>> {
+    if s.is_empty() {
+        return Some(Vec::new());
+    }
+    // Strip any whitespace (JSON may insert none, but be defensive).
+    let clean: String = s.chars().filter(|c| !c.is_ascii_whitespace()).collect();
+    if clean.len() % 4 != 0 {
+        return None;
+    }
+    let padding = clean.chars().rev().take_while(|&c| c == '=').count();
+    let out_len = clean.len() / 4 * 3 - padding;
+    let mut out = Vec::with_capacity(out_len);
+    let table = |c: u8| -> Option<u8> {
+        match c {
+            b'A'..=b'Z' => Some(c - b'A'),
+            b'a'..=b'z' => Some(c - b'a' + 26),
+            b'0'..=b'9' => Some(c - b'0' + 52),
+            b'+' => Some(62),
+            b'/' => Some(63),
+            _ => None,
+        }
+    };
+    for chunk in clean.as_bytes().chunks(4) {
+        if chunk.len() != 4 {
+            return None;
+        }
+        let a = table(chunk[0])?;
+        let b = table(chunk[1])?;
+        let c = if chunk[2] == b'=' {
+            0
+        } else {
+            table(chunk[2])?
+        };
+        let d = if chunk[3] == b'=' {
+            0
+        } else {
+            table(chunk[3])?
+        };
+        out.push((a << 2) | (b >> 4));
+        if chunk[2] != b'=' {
+            out.push(((b & 0x0F) << 4) | (c >> 2));
+        }
+        if chunk[3] != b'=' {
+            out.push(((c & 0x03) << 6) | d);
+        }
+    }
+    Some(out)
+}
+
 /// Process-wide singleton. Main-thread-only in practice (`@MainActor`
 /// Swift callers); the `Mutex` is uncontended.
 pub static VM: Mutex<ConnectFormVM> = Mutex::new(ConnectFormVM::new());

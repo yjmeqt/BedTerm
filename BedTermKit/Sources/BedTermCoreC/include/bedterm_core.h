@@ -521,6 +521,15 @@ typedef void (*BtIosOnResizeCallback)(void *ctx, uint16_t cols, uint16_t rows);
 extern "C" {
 #endif // __cplusplus
 
+/**
+ * FFI entry point — `bt_ios_net_is_lan_host(host)` returns `true` when
+ * `host` is a LAN address, matching `is_lan_host`.
+ *
+ * # Safety
+ * `host` must be a valid nullable UTF-8 C string. NULL yields `false`.
+ */
+bool bt_ios_net_is_lan_host(const char *host);
+
 extern double CACurrentMediaTime(void);
 
 /**
@@ -549,71 +558,11 @@ void bt_ios_set_locale(const char *code);
 const uint8_t *bt_ios_shell_integration_payload(uintptr_t *out_len);
 
 /**
- * Return a +1 retained UTF-8, nul-terminated C string of the
- * current hosts snapshot as JSON. Caller (Rust) owns the buffer
- * and must free it via [`bt_swift_hosts_free_snapshot`]. Returns
- * NULL if the store is locked / empty (Rust treats NULL as
- * "empty array").
- */
-extern char *bt_swift_hosts_snapshot_json(void);
-
-/**
- * Free a snapshot pointer previously returned by
- * [`bt_swift_hosts_snapshot_json`]. NULL-safe.
- */
-extern void bt_swift_hosts_free_snapshot(char *ptr);
-
-/**
- * Delete the host with the given id-string (UUID string). Returns
- * `true` if Swift handled the request (the row may already have
- * been gone). `id` is a UTF-8 nul-terminated C string borrowed
- * for the duration of the call.
- */
-extern bool bt_swift_hosts_delete(const char *id);
-
-/**
  * Fire Swift's existing connect-flow orchestration for the given
  * host id. Swift owns the toaster / mismatch dialog / terminal
  * push behaviour from here on out.
  */
 extern void bt_swift_hosts_connect(const char *id);
-
-/**
- * Return a +1-retained C string JSON snapshot of the existing draft
- * (label / host / port / username / authMode / passwordSet /
- * keySet / keyLabel) for the given UUID-string. NULL when `id` is
- * missing or unparseable. Caller (Rust) frees via
- * [`bt_swift_connect_form_free_snapshot`].
- */
-extern char *bt_swift_connect_form_prefill_json(const char *id);
-
-/**
- * Free a snapshot pointer previously returned by
- * [`bt_swift_connect_form_prefill_json`]. NULL-safe.
- */
-extern void bt_swift_connect_form_free_snapshot(char *ptr);
-
-/**
- * Persist the draft. `draft_json` is the JSON-encoded
- * `ConnectFormDraft`. `new_password` is the new password value when
- * the user typed one (or NULL when preserving the stored secret).
- * `passphrase` is the new key passphrase or NULL. Returns `true` on
- * success. On `false`, Rust may call
- * [`bt_swift_connect_form_last_error`] to retrieve the validation
- * message. Returns the UUID-string of the saved entry via
- * `out_id` when non-NULL; caller frees with
- * [`bt_swift_connect_form_free_snapshot`].
- */
-extern bool bt_swift_connect_form_save(const char *draft_json,
-                                       const char *new_password,
-                                       const char *passphrase,
-                                       char **out_id);
-
-/**
- * Return the last validation error message (or NULL when none).
- * Caller (Rust) frees via [`bt_swift_connect_form_free_snapshot`].
- */
-extern char *bt_swift_connect_form_last_error(void);
 
 /**
  * Present the system document picker and pipe the picked file's
@@ -631,10 +580,6 @@ extern void bt_swift_connect_form_pick_key(void (*on_picked)(void *ctx, const ch
  * returns a +1 malloc'd buffer (caller frees with
  * [`bt_swift_connect_form_free_key_bytes`]). Returns NULL when no
  * pending key is parked. Clears the pending slot regardless.
- *
- * Currently unused by the Rust VC — `save(...)` consults the parked
- * bytes Swift-side. Kept for Swift-side test parity + a future
- * Rust-side pre-save validation path.
  */
 extern uint8_t *bt_swift_connect_form_take_pending_key_bytes(uintptr_t *out_len);
 
@@ -643,6 +588,14 @@ extern uint8_t *bt_swift_connect_form_take_pending_key_bytes(uintptr_t *out_len)
  * [`bt_swift_connect_form_take_pending_key_bytes`]. NULL-safe.
  */
 extern void bt_swift_connect_form_free_key_bytes(uint8_t *ptr);
+
+/**
+ * Persist a JSON-encoded [`crate::connect_form_vm::SaveOutcome`]
+ * through Swift's `HostsStore`. Swift deserialises the JSON, builds a
+ * `SavedHost`, and calls `HostsStore().save()`. The JSON pointer is
+ * borrowed for the duration of the call.
+ */
+extern void bt_swift_hosts_store_save_json(const char *json);
 
 extern void bt_swift_request_local_network(void *ctx, void (*completion)(void*));
 

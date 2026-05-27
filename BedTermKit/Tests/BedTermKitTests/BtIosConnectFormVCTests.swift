@@ -21,14 +21,6 @@ struct BtIosConnectFormVCTests {
         }
         defer { bt_ios_hosts_set_test_service(nil, nil) }
         let store = HostsStore()
-        let priorStore = ConnectFormBridge.store
-        let priorError = ConnectFormBridge.lastError
-        ConnectFormBridge.store = store
-        ConnectFormBridge.lastError = nil
-        defer {
-            ConnectFormBridge.store = priorStore
-            ConnectFormBridge.lastError = priorError
-        }
         return try body(store)
     }
 

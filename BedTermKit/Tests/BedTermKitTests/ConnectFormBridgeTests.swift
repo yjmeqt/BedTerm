@@ -11,126 +11,8 @@ import Testing
 @Suite("ConnectFormBridge")
 @MainActor
 struct ConnectFormBridgeTests {
-    private func makeStore() throws -> HostsStore {
-        let suffix = UUID().uuidString
-        let svc = "bt.connectformbridge.test.\(suffix)"
-        let ord = "bt.connectformbridge.test.order.\(suffix)"
-        svc.withCString { sPtr in
-            ord.withCString { oPtr in
-                bt_ios_hosts_set_test_service(sPtr, oPtr)
-            }
-        }
-        return HostsStore()
-    }
-
-    @Test("prefill returns nil for unknown UUIDs")
-    func prefillReturnsNilForUnknownUUID() throws {
-        let store = try makeStore()
-        let prior = ConnectFormBridge.store
-        ConnectFormBridge.store = store
-        defer { ConnectFormBridge.store = prior }
-
-        let ptr = UUID().uuidString.withCString { btSwiftConnectFormPrefillJSON($0) }
-        #expect(ptr == nil)
-    }
-
-    @Test("prefill round-trips a saved password host")
-    func prefillRoundTripsSavedPasswordHost() throws {
-        let store = try makeStore()
-        let prior = ConnectFormBridge.store
-        ConnectFormBridge.store = store
-        defer { ConnectFormBridge.store = prior }
-
-        let host = SavedHost(
-            label: "Mac",
-            credential: HostCredential(
-                host: "10.0.0.5", port: 22, username: "yi", auth: .password("pw")
-            )
-        )
-        try store.save(host)
-
-        let ptr = try #require(host.id.uuidString.withCString { btSwiftConnectFormPrefillJSON($0) })
-        defer { btSwiftConnectFormFreeSnapshot(ptr) }
-        let json = String(cString: ptr)
-        let dict = try #require(
-            try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any]
-        )
-        #expect(dict["host"] as? String == "10.0.0.5")
-        #expect(dict["username"] as? String == "yi")
-        #expect(dict["port"] as? String == "22")
-        #expect(dict["authIsKey"] as? Bool == false)
-        #expect(dict["passwordSet"] as? Bool == true)
-    }
-
-    @Test("save persists an add-mode draft and returns id via out_id")
-    func saveRoundTripsAddDraft() throws {
-        let store = try makeStore()
-        let prior = ConnectFormBridge.store
-        ConnectFormBridge.store = store
-        defer { ConnectFormBridge.store = prior }
-        let priorErr = ConnectFormBridge.lastError
-        ConnectFormBridge.lastError = nil
-        defer { ConnectFormBridge.lastError = priorErr }
-
-        let draft = """
-            {"id":"","label":"Mac","host":"10.0.0.5","port":"22","username":"yi","authMode":"password"}
-            """
-        var outID: UnsafeMutablePointer<CChar>?
-        let ok = draft.withCString { draftPtr in
-            "secret".withCString { pwPtr in
-                btSwiftConnectFormSave(draftPtr, pwPtr, nil, &outID)
-            }
-        }
-        #expect(ok)
-        let ptr = try #require(outID)
-        defer { btSwiftConnectFormFreeSnapshot(ptr) }
-        let idString = String(cString: ptr)
-        let uuid = try #require(UUID(uuidString: idString))
-        let loaded = try store.load(id: uuid)
-        #expect(loaded.credential.host == "10.0.0.5")
-        #expect(loaded.credential.port == 22)
-        #expect(loaded.credential.username == "yi")
-        if case .password(let storedPW) = loaded.credential.auth {
-            #expect(storedPW == "secret")
-        } else {
-            Issue.record("expected .password auth")
-        }
-    }
-
-    @Test("save returns false + populates lastError on validation failure")
-    func saveSurfacesLastError() throws {
-        let store = try makeStore()
-        let prior = ConnectFormBridge.store
-        ConnectFormBridge.store = store
-        defer { ConnectFormBridge.store = prior }
-        ConnectFormBridge.lastError = nil
-
-        // Empty host → validation failure.
-        let draft = """
-            {"id":"","label":"Mac","host":"","port":"22","username":"yi","authMode":"password"}
-            """
-        var outID: UnsafeMutablePointer<CChar>?
-        let ok = draft.withCString { draftPtr in
-            "secret".withCString { pwPtr in
-                btSwiftConnectFormSave(draftPtr, pwPtr, nil, &outID)
-            }
-        }
-        #expect(!ok)
-        let errPtr = btSwiftConnectFormLastError()
-        defer { btSwiftConnectFormFreeSnapshot(errPtr) }
-        #expect(errPtr != nil)
-    }
-
-    @Test("free_snapshot is null-safe")
-    func freeSnapshotNullSafe() {
-        btSwiftConnectFormFreeSnapshot(nil)
-    }
-
     @Test("pick_key callback fires synchronously with nil label when no UI")
     func pickKeyFiresCancel() {
-        // Default implementation defers the document picker; the shim
-        // should still fire the callback with NULL label so Rust doesn't
-        // hang.
         final class Flag {
             var fired = false
             var labelWasNil = false
@@ -152,13 +34,10 @@ struct ConnectFormBridgeTests {
     @Test("C symbols are reachable via dlsym")
     func cdeclSymbolsReachable() throws {
         let handle = UnsafeMutableRawPointer(bitPattern: -2)
-        #expect(dlsym(handle, "bt_swift_connect_form_prefill_json") != nil)
-        #expect(dlsym(handle, "bt_swift_connect_form_free_snapshot") != nil)
-        #expect(dlsym(handle, "bt_swift_connect_form_save") != nil)
-        #expect(dlsym(handle, "bt_swift_connect_form_last_error") != nil)
         #expect(dlsym(handle, "bt_swift_connect_form_pick_key") != nil)
         #expect(dlsym(handle, "bt_swift_connect_form_take_pending_key_bytes") != nil)
         #expect(dlsym(handle, "bt_swift_connect_form_free_key_bytes") != nil)
+        #expect(dlsym(handle, "bt_swift_hosts_store_save_json") != nil)
     }
 
     @Test("take_pending_key_bytes round-trips parked bytes and clears storage")
@@ -194,5 +73,39 @@ struct ConnectFormBridgeTests {
     @Test("free_key_bytes is null-safe")
     func freeKeyBytesNullSafe() {
         btSwiftConnectFormFreeKeyBytes(nil)
+    }
+
+    @Test("hosts_store_save_json persists a save-outcome through HostsStore")
+    func hostSavePersistsThroughHostsStore() throws {
+        let suffix = UUID().uuidString
+        let svc = "bt.hostssave.test.\(suffix)"
+        let ord = "bt.hostssave.test.order.\(suffix)"
+        svc.withCString { sPtr in
+            ord.withCString { oPtr in
+                bt_ios_hosts_set_test_service(sPtr, oPtr)
+            }
+        }
+        defer { bt_ios_hosts_set_test_service(nil, nil) }
+
+        // Build a SaveOutcome JSON as Rust would produce it.
+        let id = UUID().uuidString
+        let json =
+            "{\"id\":\"\(id)\",\"label\":\"Saved Host\",\"host\":\"10.0.0.5\","
+            + "\"port\":2222,\"username\":\"yi\",\"authIsKey\":false,\"password\":\"hunter2\"}"
+        json.withCString { btSwiftHostsStoreSaveJson($0) }
+
+        let store = HostsStore()
+        let list = store.list()
+        #expect(list.count == 1)
+        let entry = try #require(list.first)
+        #expect(entry.label == "Saved Host")
+        #expect(entry.credential.host == "10.0.0.5")
+        #expect(entry.credential.port == 2222)
+        #expect(entry.credential.username == "yi")
+    }
+
+    @Test("hosts_store_save_json is null-safe")
+    func hostSaveNullSafe() {
+        btSwiftHostsStoreSaveJson(nil)
     }
 }

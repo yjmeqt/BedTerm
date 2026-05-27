@@ -3,18 +3,20 @@
 //! Owns a `UIScrollView` + vertical `UIStackView` of three form
 //! sections: Identity (label), Connection (host / port / username), and
 //! Authentication (segmented control + password OR key picker + optional
-//! passphrase). Save validates locally then dispatches Swift's
-//! `bt_swift_connect_form_save`; Cancel fires the cancel callback.
+//! passphrase). All state flows through the Rust `connect_form_vm::VM`
+//! singleton — the Swift round-trip is eliminated. Cancel fires the
+//! cancel callback; Save validates via the VM, resolves secrets, and
+//! persists through a single thin FFI call.
 
 #![cfg(target_os = "ios")]
 
 use crate::a11y;
 use crate::connect_form::bridge::{
-    bt_swift_connect_form_free_snapshot, bt_swift_connect_form_last_error,
-    bt_swift_connect_form_pick_key, bt_swift_connect_form_prefill_json, bt_swift_connect_form_save,
+    bt_swift_connect_form_free_key_bytes, bt_swift_connect_form_pick_key,
+    bt_swift_connect_form_take_pending_key_bytes, bt_swift_hosts_store_save_json,
 };
-use crate::connect_form::model::{AuthMode, ConnectFormDraft};
 use crate::connect_form::{BtIosConnectFormCancelCallback, BtIosConnectFormDoneCallback};
+use crate::connect_form_vm;
 use crate::design_system::{
     colors,
     components::{
@@ -78,9 +80,12 @@ pub struct Ivars {
     #[allow(dead_code)]
     password_touched: Cell<bool>,
     /// Set once the user picks a key file.
+    #[allow(dead_code)]
     key_touched: Cell<bool>,
-    /// Backing flags pulled from the prefill snapshot.
+    /// Backing flags pulled from the prefill snapshot (kept for future UX).
+    #[allow(dead_code)]
     password_set: Cell<bool>,
+    #[allow(dead_code)]
     key_set: Cell<bool>,
 }
 
@@ -458,55 +463,124 @@ impl BtIosConnectFormViewController {
 
     fn apply_prefill(&self) {
         let editing = self.ivars().editing_id.borrow().clone();
-        let Some(id) = editing else { return };
-        let cstr = match CString::new(id) {
-            Ok(s) => s,
-            Err(_) => return,
-        };
-        let json_ptr = unsafe { bt_swift_connect_form_prefill_json(cstr.as_ptr()) };
-        if json_ptr.is_null() {
+        let Some(id) = editing else {
+            // Add mode — reset the VM to a clean slate.
+            connect_form_vm::VM.lock().unwrap().reset_to_add();
             return;
-        }
-        let json = unsafe { CStr::from_ptr(json_ptr) }
-            .to_string_lossy()
-            .into_owned();
-        unsafe { bt_swift_connect_form_free_snapshot(json_ptr) };
+        };
 
-        // Hand-rolled tiny JSON read — only the small subset we need.
-        let get = |key: &str| -> Option<String> { extract_json_string(&json, key) };
-        if let Some(label) = get("label") {
-            if let Some(h) = self.ivars().label_field.borrow().as_ref() {
-                h.set_text(&label);
+        // Load the Swift-encoded SavedHost JSON blob from the Keychain
+        // via the Rust hosts_store.
+        let Some(json_str) = crate::hosts_store::load_json(&id) else {
+            return;
+        };
+        let Ok(value) = serde_json::from_str::<serde_json::Value>(&json_str) else {
+            return;
+        };
+        let Some(obj) = value.as_object() else { return };
+        let Some(credential) = obj.get("credential").and_then(|v| v.as_object()) else {
+            return;
+        };
+
+        let label = obj
+            .get("label")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        let host = credential
+            .get("host")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        let port = credential
+            .get("port")
+            .and_then(|v| v.as_i64())
+            .unwrap_or(22) as u16;
+        let username = credential
+            .get("username")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+
+        let auth_obj = credential.get("auth").and_then(|v| v.as_object());
+        let auth_is_key = auth_obj
+            .map(|o| o.contains_key("privateKey"))
+            .unwrap_or(false);
+
+        let existing_password = auth_obj
+            .and_then(|o| o.get("password"))
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+
+        let (existing_private_key, existing_passphrase) = if let Some(auth) = auth_obj {
+            if let Some(pk_val) = auth.get("privateKey") {
+                let key_bytes: Option<Vec<u8>> = match pk_val {
+                    serde_json::Value::String(s) => connect_form_vm::base64_decode(s.as_str()),
+                    serde_json::Value::Object(inner) => inner
+                        .get("_0")
+                        .and_then(|v: &serde_json::Value| v.as_str())
+                        .and_then(connect_form_vm::base64_decode),
+                    _ => None,
+                };
+                let pass: Option<String> = auth
+                    .get("passphrase")
+                    .and_then(|v: &serde_json::Value| v.as_str())
+                    .map(|s: &str| s.to_string());
+                (key_bytes, pass)
+            } else {
+                (None, None)
             }
+        } else {
+            (None, None)
+        };
+
+        // Push all extracted fields to the VM.
+        let (vm_label, vm_host, vm_port_text, vm_username, vm_is_using_key, pw_set, k_set) = {
+            let mut vm = connect_form_vm::VM.lock().unwrap();
+            vm.prefill_edit(
+                id,
+                label,
+                host,
+                port,
+                username,
+                auth_is_key,
+                existing_password,
+                existing_private_key,
+                existing_passphrase,
+            );
+            (
+                vm.label.clone(),
+                vm.host.clone(),
+                vm.port.clone(),
+                vm.username.clone(),
+                vm.is_using_key,
+                vm.has_password(),
+                vm.has_private_key(),
+            )
+        };
+
+        // Populate UI fields from the VM (the authority).
+        if let Some(h) = self.ivars().label_field.borrow().as_ref() {
+            h.set_text(&vm_label);
         }
-        if let Some(host) = get("host") {
-            if let Some(h) = self.ivars().host_field.borrow().as_ref() {
-                h.set_text(&host);
-            }
+        if let Some(h) = self.ivars().host_field.borrow().as_ref() {
+            h.set_text(&vm_host);
         }
-        if let Some(port) = get("port") {
-            if let Some(h) = self.ivars().port_field.borrow().as_ref() {
-                h.set_text(&port);
-            }
+        if let Some(h) = self.ivars().port_field.borrow().as_ref() {
+            h.set_text(&vm_port_text);
         }
-        if let Some(username) = get("username") {
-            if let Some(h) = self.ivars().username_field.borrow().as_ref() {
-                h.set_text(&username);
-            }
+        if let Some(h) = self.ivars().username_field.borrow().as_ref() {
+            h.set_text(&vm_username);
         }
-        let auth_is_key = extract_json_bool(&json, "authIsKey").unwrap_or(false);
-        if auth_is_key {
-            if let Some(seg) = self.ivars().segmented.borrow().as_ref() {
-                let _: () = unsafe { msg_send![&**seg, setSelectedSegmentIndex: 1_i64] };
-            }
-            self.update_auth_rows_visibility(1);
+
+        let seg_idx: i64 = if vm_is_using_key { 1 } else { 0 };
+        if let Some(seg) = self.ivars().segmented.borrow().as_ref() {
+            let _: () = unsafe { msg_send![&**seg, setSelectedSegmentIndex: seg_idx] };
         }
-        self.ivars()
-            .password_set
-            .set(extract_json_bool(&json, "passwordSet").unwrap_or(false));
-        self.ivars()
-            .key_set
-            .set(extract_json_bool(&json, "keySet").unwrap_or(false));
+        self.update_auth_rows_visibility(seg_idx);
+
+        self.ivars().password_set.set(pw_set);
+        self.ivars().key_set.set(k_set);
     }
 
     fn update_auth_rows_visibility(&self, mode: i64) {
@@ -528,7 +602,8 @@ impl BtIosConnectFormViewController {
         }
     }
 
-    fn current_draft(&self) -> ConnectFormDraft {
+    fn try_save(&self) {
+        // Read all UI field values.
         let label = self
             .ivars()
             .label_field
@@ -543,7 +618,7 @@ impl BtIosConnectFormViewController {
             .as_ref()
             .map(|h| h.text())
             .unwrap_or_default();
-        let port = self
+        let port_text = self
             .ivars()
             .port_field
             .borrow()
@@ -564,57 +639,6 @@ impl BtIosConnectFormViewController {
             .as_ref()
             .map(|h| h.text())
             .unwrap_or_default();
-        let mode_idx: i64 = self
-            .ivars()
-            .segmented
-            .borrow()
-            .as_ref()
-            .map(|s| unsafe { msg_send![&**s, selectedSegmentIndex] })
-            .unwrap_or(0);
-        let auth_mode = if mode_idx == 1 {
-            AuthMode::Key
-        } else {
-            AuthMode::Password
-        };
-        // Password touched = field non-empty.
-        let password_touched = !password.is_empty();
-        ConnectFormDraft {
-            id: self.ivars().editing_id.borrow().clone(),
-            label,
-            host,
-            port,
-            username,
-            auth_mode,
-            password_set: self.ivars().password_set.get(),
-            key_set: self.ivars().key_set.get(),
-            key_label: None,
-            password_touched,
-            key_touched: self.ivars().key_touched.get(),
-        }
-    }
-
-    fn try_save(&self) {
-        let draft = self.current_draft();
-        if let Err(err) = draft.validate() {
-            self.show_error(err.message());
-            return;
-        }
-        // Encode draft as JSON.
-        let json = encode_draft_json(&draft);
-        let json_c = match CString::new(json) {
-            Ok(s) => s,
-            Err(_) => {
-                self.show_error(&t("Internal error encoding form data."));
-                return;
-            }
-        };
-        let password = self
-            .ivars()
-            .password_field
-            .borrow()
-            .as_ref()
-            .map(|h| h.text())
-            .unwrap_or_default();
         let passphrase = self
             .ivars()
             .passphrase_field
@@ -622,52 +646,77 @@ impl BtIosConnectFormViewController {
             .as_ref()
             .map(|h| h.text())
             .unwrap_or_default();
-        let password_ptr: *const c_char = if password.is_empty() {
-            std::ptr::null()
-        } else {
-            // Holding the CString to keep pointer alive through call.
-            password_c_alloc(&password)
-        };
-        let passphrase_ptr: *const c_char = if passphrase.is_empty() {
-            std::ptr::null()
-        } else {
-            password_c_alloc(&passphrase)
-        };
-        let mut out_id: *mut c_char = std::ptr::null_mut();
-        let ok = unsafe {
-            bt_swift_connect_form_save(
-                json_c.as_ptr(),
-                password_ptr,
-                passphrase_ptr,
-                &mut out_id as *mut _,
-            )
-        };
-        if !password_ptr.is_null() {
-            unsafe { drop(CString::from_raw(password_ptr as *mut c_char)) };
+        let mode_idx: i64 = self
+            .ivars()
+            .segmented
+            .borrow()
+            .as_ref()
+            .map(|s| unsafe { msg_send![&**s, selectedSegmentIndex] })
+            .unwrap_or(0);
+        let is_using_key = mode_idx == 1;
+
+        // Push values to the VM then validate + save.
+        let mut vm = connect_form_vm::VM.lock().unwrap();
+        vm.set_label(label);
+        vm.set_host(host);
+        vm.set_port_text(port_text);
+        vm.set_username(username);
+        vm.set_using_key(is_using_key);
+        if !password.is_empty() {
+            vm.set_password(password);
         }
-        if !passphrase_ptr.is_null() {
-            unsafe { drop(CString::from_raw(passphrase_ptr as *mut c_char)) };
+        if !passphrase.is_empty() {
+            vm.set_passphrase(passphrase);
         }
-        if !ok {
-            let err_ptr = unsafe { bt_swift_connect_form_last_error() };
-            if !err_ptr.is_null() {
-                let msg = unsafe { CStr::from_ptr(err_ptr) }
-                    .to_string_lossy()
-                    .into_owned();
-                unsafe { bt_swift_connect_form_free_snapshot(err_ptr) };
-                self.show_error(&msg);
-            } else {
-                self.show_error(&t("Could not save host."));
+
+        // Pull pending key bytes from the file-picker (set by Swift).
+        let mut key_len: usize = 0;
+        let key_ptr = unsafe { bt_swift_connect_form_take_pending_key_bytes(&mut key_len) };
+        if !key_ptr.is_null() && key_len > 0 {
+            let key_bytes = unsafe { std::slice::from_raw_parts(key_ptr, key_len) }.to_vec();
+            vm.set_private_key_bytes(key_bytes);
+            unsafe { bt_swift_connect_form_free_key_bytes(key_ptr) };
+        }
+
+        // Validate through the VM.
+        if let Some(err) = vm.validate() {
+            self.show_error(&err);
+            return; // vm MutexGuard drops here
+        }
+
+        // Save through the VM — resolves secrets, generates/retains UUID.
+        match vm.try_save() {
+            Ok(outcome) => {
+                let id = outcome.id.clone();
+                let json = match serde_json::to_string(&outcome) {
+                    Ok(s) => s,
+                    Err(_) => {
+                        self.show_error(&t("Internal error encoding form data."));
+                        return;
+                    }
+                };
+                drop(vm); // Release VM lock before FFI calls.
+
+                // Persist through the thin Swift callback.
+                let json_c = CString::new(json).unwrap_or_default();
+                unsafe { bt_swift_hosts_store_save_json(json_c.as_ptr()) };
+
+                // Dispatch on_done.
+                let id_c = CString::new(id).unwrap_or_default();
+                let connect_now = self.ivars().connect_on_save.get();
+                if let Some(cb) = self.ivars().on_done.get() {
+                    let ctx = self.ivars().ctx.get();
+                    unsafe { cb(ctx, id_c.as_ptr(), connect_now) };
+                }
             }
-            return;
-        }
-        // Dispatch on_done with the saved id.
-        if let Some(cb) = self.ivars().on_done.get() {
-            let ctx = self.ivars().ctx.get();
-            unsafe { cb(ctx, out_id as *const c_char, false) };
-        }
-        if !out_id.is_null() {
-            unsafe { bt_swift_connect_form_free_snapshot(out_id) };
+            Err(_) => {
+                let msg = vm
+                    .error_message
+                    .clone()
+                    .unwrap_or_else(|| t("Could not save host."));
+                self.show_error(&msg);
+                // vm MutexGuard drops here
+            }
         }
     }
 
@@ -677,12 +726,6 @@ impl BtIosConnectFormViewController {
             view.setHidden(false);
         }
     }
-}
-
-fn password_c_alloc(s: &str) -> *const c_char {
-    CString::new(s)
-        .map(CString::into_raw)
-        .unwrap_or(std::ptr::null_mut())
 }
 
 fn make_error_label(mtm: MainThreadMarker, text: &str) -> Retained<UIView> {
@@ -739,85 +782,6 @@ fn set_error_message(view: &UIView, message: &str) {
             }
             stack.push(child as *const AnyObject);
         }
-    }
-}
-
-fn encode_draft_json(d: &ConnectFormDraft) -> String {
-    let mut s = String::with_capacity(256);
-    s.push('{');
-    fn push_str(buf: &mut String, key: &str, value: &str) {
-        buf.push('"');
-        buf.push_str(key);
-        buf.push_str("\":\"");
-        for ch in value.chars() {
-            match ch {
-                '"' => buf.push_str("\\\""),
-                '\\' => buf.push_str("\\\\"),
-                '\n' => buf.push_str("\\n"),
-                '\r' => buf.push_str("\\r"),
-                '\t' => buf.push_str("\\t"),
-                c => buf.push(c),
-            }
-        }
-        buf.push('"');
-    }
-    push_str(&mut s, "id", d.id.as_deref().unwrap_or(""));
-    s.push(',');
-    push_str(&mut s, "label", &d.label);
-    s.push(',');
-    push_str(&mut s, "host", &d.host);
-    s.push(',');
-    push_str(&mut s, "port", &d.port);
-    s.push(',');
-    push_str(&mut s, "username", &d.username);
-    s.push(',');
-    let mode = match d.auth_mode {
-        AuthMode::Password => "password",
-        AuthMode::Key => "key",
-    };
-    push_str(&mut s, "authMode", mode);
-    s.push('}');
-    s
-}
-
-fn extract_json_string(json: &str, key: &str) -> Option<String> {
-    let needle = format!("\"{key}\":\"");
-    let idx = json.find(&needle)?;
-    let after = &json[idx + needle.len()..];
-    let mut out = String::new();
-    let mut chars = after.chars();
-    while let Some(c) = chars.next() {
-        if c == '\\' {
-            if let Some(nxt) = chars.next() {
-                match nxt {
-                    '"' => out.push('"'),
-                    '\\' => out.push('\\'),
-                    'n' => out.push('\n'),
-                    't' => out.push('\t'),
-                    'r' => out.push('\r'),
-                    other => out.push(other),
-                }
-            }
-            continue;
-        }
-        if c == '"' {
-            return Some(out);
-        }
-        out.push(c);
-    }
-    None
-}
-
-fn extract_json_bool(json: &str, key: &str) -> Option<bool> {
-    let needle = format!("\"{key}\":");
-    let idx = json.find(&needle)?;
-    let after = &json[idx + needle.len()..].trim_start();
-    if after.starts_with("true") {
-        Some(true)
-    } else if after.starts_with("false") {
-        Some(false)
-    } else {
-        None
     }
 }
 

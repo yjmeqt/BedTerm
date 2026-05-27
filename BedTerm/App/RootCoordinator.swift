@@ -175,9 +175,9 @@ final class RootCoordinator {
         let box = FormBox(nav: nav, connectOnSave: connectOnSave, onFinish: onFinish)
         let ctx = Unmanaged.passRetained(box).toOpaque()
 
-        // Install the bridge store so the Rust VC's prefill/save calls
-        // hit the same persistence path as the SwiftUI form.
-        ConnectFormBridge.store = HostsStore()
+        // The Rust VC reads/writes the hosts store directly through the
+        // Rust `hosts_store` and the `bt_swift_hosts_store_save_json`
+        // thin callback — no bridge store needed.
 
         let raw: UnsafeMutableRawPointer?
         if let id {

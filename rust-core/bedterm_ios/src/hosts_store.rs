@@ -409,6 +409,12 @@ pub fn load_blob(uuid: &str) -> Option<Vec<u8>> {
     load_blob_raw(uuid)
 }
 
+/// Load the raw JSON blob for a given UUID as a string.
+/// Returns `None` when no blob exists or the bytes aren't valid UTF-8.
+pub fn load_json(uuid: &str) -> Option<String> {
+    load_blob_raw(uuid).and_then(|bytes| String::from_utf8(bytes).ok())
+}
+
 pub fn save(uuid: &str, bytes: &[u8]) -> bool {
     if !save_blob(uuid, bytes) {
         return false;
