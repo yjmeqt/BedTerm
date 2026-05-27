@@ -81,10 +81,7 @@ pub fn parse_entries_json(blob: &str) -> Vec<HostListEntry> {
     if trimmed.is_empty() {
         return Vec::new();
     }
-    match parse_array(trimmed) {
-        Some(v) => v,
-        None => Vec::new(),
-    }
+    parse_array(trimmed).unwrap_or_default()
 }
 
 // Minimal JSON-array reader. Avoids pulling `serde_json` into the
