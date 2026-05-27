@@ -13,7 +13,12 @@
 # FFI fragment appended before the include-guard closer.
 #
 # Run from repo root or via Xcode pre-action / build phase:
-#     ./scripts/build-rust-xcframework.sh [debug|release|Debug|Release]
+#     ./scripts/build-rust-xcframework.sh [debug|release|Debug|Release] [PLATFORM_NAME]
+#
+# Second arg is Xcode's `$PLATFORM_NAME` (iphonesimulator | iphoneos | macosx).
+# When given, the script builds ONLY the matching slice — sim-only test runs
+# (e.g. CI) skip the device + macOS slices entirely. Empty / unrecognized
+# value falls back to building all three slices (release / archive path).
 #
 # Idempotent: if the staged .a in the xcframework is byte-identical to the
 # fresh cargo output for every slice, we skip the `xcodebuild
@@ -65,16 +70,27 @@ HEADER="$RUST_DIR/bedterm_core/include/bedterm_core.h"
 IOS_UI_HEADER="$RUST_DIR/bedterm_ios/include/bedterm_ios.h"
 
 # rust-target → xcframework slice id (matches the Info.plist committed alongside).
-TARGETS=(
+ALL_TARGETS=(
   "aarch64-apple-ios"
   "aarch64-apple-ios-sim"
   "aarch64-apple-darwin"
 )
-SLICE_IDS=(
+ALL_SLICE_IDS=(
   "ios-arm64"
   "ios-arm64-simulator"
   "macos-arm64"
 )
+
+# Narrow the build set to one slice when Xcode tells us which platform it's
+# building for. Empty / unrecognized value → keep all three (release path).
+PLATFORM_NAME_RAW="${2:-}"
+case "$PLATFORM_NAME_RAW" in
+  iphonesimulator) TARGETS=("aarch64-apple-ios-sim"); SLICE_IDS=("ios-arm64-simulator") ;;
+  iphoneos)        TARGETS=("aarch64-apple-ios");      SLICE_IDS=("ios-arm64") ;;
+  macosx)          TARGETS=("aarch64-apple-darwin");   SLICE_IDS=("macos-arm64") ;;
+  *)               TARGETS=("${ALL_TARGETS[@]}");      SLICE_IDS=("${ALL_SLICE_IDS[@]}") ;;
+esac
+echo "==> building slices: ${SLICE_IDS[*]} (PLATFORM_NAME='${PLATFORM_NAME_RAW}')"
 
 cd "$RUST_DIR"
 # Building `bedterm_ios` transitively builds `bedterm_core` (path dep)

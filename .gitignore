@@ -40,7 +40,6 @@ docs/superpowers/
 
 # Rust core build artifacts
 rust-core/target/
-BedTermKit/BinaryFrameworks/BedTermCore.xcframework/*/
-!BedTermKit/BinaryFrameworks/BedTermCore.xcframework/Info.plist
+BedTermKit/BinaryFrameworks/BedTermCore.xcframework/
 # added by worktree-ios-dev-tool proj init
 worktree-ios-dev/
