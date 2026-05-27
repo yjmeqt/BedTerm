@@ -19,11 +19,6 @@ final class TerminalSession {
     private(set) var mode: BedTermMode = []
     private(set) var feed: AsyncStream<Data>
     private let feedContinuation: AsyncStream<Data>.Continuation
-    /// Observable mirror of the Rust-owned block list. The session pump
-    /// calls `blockStore.refresh(from: terminalCore)` after each
-    /// `TerminalCore.feed(_:)`; canonical state (ids, boundaries, frozen
-    /// snapshots) lives in Rust.
-    public let blockStore = BlockStore()
 
     /// Authoritative terminal grid + scrollback. Owned by the session
     /// strongly so it outlives the terminal view — re-entering a
@@ -81,7 +76,6 @@ final class TerminalSession {
                     // core there.
                     self.terminalCore.feed(chunk)
                     self.updateMode(self.terminalCore.mode)
-                    self.blockStore.refresh(from: self.terminalCore)
                     self.feedContinuation.yield(chunk)
                 }
                 if case .open = self.state {
@@ -127,7 +121,6 @@ final class TerminalSession {
         pumpTask?.cancel()
         Task { await client.disconnect() }
         feedContinuation.finish()
-        blockStore.reset()
         state = .closed(reason: String(localized: "Closed"))
     }
 

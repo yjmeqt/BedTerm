@@ -8,7 +8,8 @@ import UIKit
 ///
 /// Architecture
 /// ------------
-/// Swift `TerminalSession` remains the SSH driver (Citadel + BlockStore).
+/// Swift `TerminalSession` remains the SSH driver (Citadel client +
+/// `TerminalCore` byte feed).
 /// The Rust VC is hosted by `TerminalScreenViewController` (a UIKit
 /// container pushed directly onto the app's `UINavigationController`) and
 /// rendering is forwarded:
