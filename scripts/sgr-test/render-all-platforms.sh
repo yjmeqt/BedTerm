@@ -112,9 +112,9 @@ if $mode_ios; then
     # Run iOS snapshot tests
     export RENDER_OUTPUT_DIR="$IOS_OUTDIR"
 
-    if command -v worktree-ios-dev-tool &>/dev/null; then
-        echo "Running via worktree-ios-dev-tool..."
-        worktree-ios-dev-tool test \
+    if command -v xc-dev &>/dev/null; then
+        echo "Running via xc-dev..."
+        xc-dev test \
             --only-testing "BedTermKitTests/TerminalRendererSnapshotTests" \
             2>&1 | tail -20
     else

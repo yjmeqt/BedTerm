@@ -11,7 +11,7 @@ Worktree-based branching model. Each feature gets its own git worktree.
 | Skill | What it does |
 |-------|--------------|
 | `/prd` | Load the product requirements document |
-| `/worktree-ios-dev` | iOS build, test, run, simulator management within a worktree |
+| `/xc-dev` | iOS build, test, run, simulator management within a worktree |
 
 ### Workflow
 
@@ -19,7 +19,7 @@ Worktrees live at `.worktrees/`.
 
 ```
 1. git worktree add .worktrees/<feature-name> -b feature/<feature-name>
-2. Build & iterate with /worktree-ios-dev
+2. Build & iterate with /xc-dev (tasks defined in .xc-dev/tasks.toml)
 3. Commit & merge back to main
 ```
 

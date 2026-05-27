@@ -251,3 +251,18 @@ public final class ConnectionFormViewModel {
         return .privateKey(storedKey, passphrase: pass)
     }
 }
+
+/// Result reported by the connect-form flow back to the hosts screen.
+/// Previously nested on `ConnectionFormScreen`; lifted to a top-level
+/// enum so the Rust-backed connect-form path (the only path now) can
+/// surface the same shape without dragging in a SwiftUI view type.
+public enum ConnectionFormOutcome {
+    /// User saved the entry. The host's id is provided so the caller
+    /// can scroll it into view on the list.
+    case saved(SavedHost.ID)
+    /// User saved the entry AND wants to start a connect to it
+    /// immediately (the first-run shortcut path).
+    case savedAndConnect(SavedHost.ID)
+    /// User cancelled the form.
+    case cancelled
+}

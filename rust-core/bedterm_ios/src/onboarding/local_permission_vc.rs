@@ -14,6 +14,7 @@ use crate::design_system::colors;
 use crate::design_system::components::primary_button;
 use crate::design_system::{spacing, typography};
 use crate::geometry::CGFloat;
+use crate::l10n::t;
 use crate::onboarding::host_kind_vc::pin_to_safe_area;
 use crate::onboarding::BtIosOnboardingContinueCallback;
 use objc2::rc::{Allocated, Retained};
@@ -68,20 +69,20 @@ define_class!(
             }
 
             let variant = self.ivars().variant.get();
-            let (title_text, detail_text, button_text, nav_text): (&str, &str, &str, &str) =
+            let (title_text, detail_text, button_text, nav_text): (String, String, String, String) =
                 if variant == 0 {
                     (
-                        "Local Network Access",
-                        "BedTerm needs Local Network access to reach your Mac on the same Wi-Fi. Tap Allow when iOS prompts you.",
-                        "Request Permission",
-                        "Permission",
+                        t("Local Network Access"),
+                        t("BedTerm needs Local Network access to reach your Mac on the same Wi-Fi. Tap Allow when iOS prompts you."),
+                        t("Request Permission"),
+                        t("Permission"),
                     )
                 } else {
                     (
-                        "All set",
-                        "You're ready to connect to a remote host. Tap Continue to enter the connection details.",
-                        "Continue",
-                        "Done",
+                        t("All set"),
+                        t("You're ready to connect to a remote host. Tap Continue to enter the connection details."),
+                        t("Continue"),
+                        t("Done"),
                     )
                 };
 
@@ -104,7 +105,7 @@ define_class!(
             let _: () = unsafe { msg_send![&*icon_view, setContentMode: 4_i64] }; // .center
 
             let title_label = UILabel::new(mtm);
-            title_label.setText(Some(&NSString::from_str(title_text)));
+            title_label.setText(Some(&NSString::from_str(&title_text)));
             unsafe {
                 title_label.setFont(Some(&typography::system(28.0, typography::WEIGHT_BOLD)));
                 title_label.setTextColor(Some(&colors::shadcn_primary()));
@@ -113,7 +114,7 @@ define_class!(
             let _: () = unsafe { msg_send![&*title_label, setTextAlignment: 1_i64] };
 
             let detail_label = UILabel::new(mtm);
-            detail_label.setText(Some(&NSString::from_str(detail_text)));
+            detail_label.setText(Some(&NSString::from_str(&detail_text)));
             unsafe {
                 detail_label.setFont(Some(&typography::body()));
                 detail_label.setTextColor(Some(&colors::shadcn_muted_foreground()));
@@ -124,7 +125,7 @@ define_class!(
             let action_btn = primary_button(
                 mtm,
                 "arrow.forward",
-                button_text,
+                &button_text,
                 self.as_ref(),
                 sel!(continueTapped),
             );
@@ -167,7 +168,7 @@ define_class!(
                 pin_to_safe_area(&stack, &view);
 
                 let nav_item: Retained<AnyObject> = unsafe { msg_send![self, navigationItem] };
-                let title_ns = NSString::from_str(nav_text);
+                let title_ns = NSString::from_str(&nav_text);
                 let _: () = unsafe { msg_send![&*nav_item, setTitle: &*title_ns] };
             }
         }

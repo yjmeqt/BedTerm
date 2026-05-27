@@ -1,4136 +1,4241 @@
 {
-  "sourceLanguage" : "en",
-  "strings" : {
-    "%@:%lld presented a different host key than we trusted last time. " : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@:%2$lld は前回信頼したホストキーとは異なるホストキーを提示しました。"
+  "sourceLanguage": "en",
+  "strings": {
+    "%@:%lld presented a different host key than we trusted last time. ": {
+      "extractionState": "manual",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@:%2$lld は前回信頼したホストキーとは異なるホストキーを提示しました。"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@:%2$lld 호스트가 이전에 신뢰한 호스트 키와 다른 키를 제시했습니다. "
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@:%2$lld 호스트가 이전에 신뢰한 호스트 키와 다른 키를 제시했습니다. "
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@:%2$lld предъявил ключ хоста, отличный от того, которому мы доверяли в прошлый раз. "
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@:%2$lld предъявил ключ хоста, отличный от того, которому мы доверяли в прошлый раз. "
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@:%2$lld 提供的主机密钥与上次信任的不一致。"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@:%2$lld 提供的主机密钥与上次信任的不一致。"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@:%2$lld 提供的主機金鑰與上次信任的不一致。"
-          }
-        }
-      }
-    },
-    "A Mac mini, MacBook, or iMac on your network" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ネットワーク上の Mac mini、MacBook、iMac など"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "네트워크에 연결된 Mac mini, MacBook, iMac 등"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mac mini, MacBook или iMac в вашей сети"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "局域网中的 Mac mini、MacBook 或 iMac"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "區域網路中的 Mac mini、MacBook 或 iMac"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@:%2$lld 提供的主機金鑰與上次信任的不一致。"
           }
         }
       }
     },
-    "A public IP or hostname reachable from anywhere" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "どこからでも到達できる公開 IP またはホスト名"
+    "(no command captured)": {
+      "extractionState": "manual",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "（コマンド未取得）"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "어디서나 접근 가능한 공인 IP 또는 호스트 이름"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "（명령 미수집）"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Публичный IP-адрес или имя хоста, доступные из любой сети"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "(команда не записана)"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "公网可达的 IP 地址或主机名"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "（未捕获命令）"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "公網可達的 IP 位址或主機名稱"
-          }
-        }
-      }
-    },
-    "Add a server to connect from your bed." : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "ベッドから接続するサーバーを追加しましょう。"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "침대에서 접속할 서버를 추가하세요."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Добавьте сервер, чтобы подключаться прямо из постели."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "添加一个服务器，从床上就能连。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "新增伺服器，從床上即可連線。"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "（未擷取命令）"
           }
         }
       }
     },
-    "Add Host" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "ホストを追加"
+    "(no output captured)": {
+      "extractionState": "manual",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "（出力未取得）"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "호스트 추가"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "（출력 미수집）"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Добавить хост"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "(вывод не записан)"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "添加主机"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "（未捕获输出）"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "新增主機"
-          }
-        }
-      }
-    },
-    "All set" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "準備完了"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "준비 완료"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Готово"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "全部就绪"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "全部就緒"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "（未擷取輸出）"
           }
         }
       }
     },
-    "Auth method" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "認証方法"
+    "(output streaming…)": {
+      "extractionState": "manual",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "（出力ストリーミング中…）"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "인증 방식"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "（출력 스트리밍 중…）"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Способ аутентификации"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "(идёт вывод…)"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "认证方式"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "（输出流式传输中…）"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "驗證方式"
-          }
-        }
-      }
-    },
-    "Authenticates with a password" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "パスワードで認証"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "암호로 인증"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Аутентификация по паролю"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "使用密码认证"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "以密碼驗證"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "（輸出串流中…）"
           }
         }
       }
     },
-    "Authenticates with a private key" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "秘密鍵で認証"
+    "A Mac mini, MacBook, or iMac on your network": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ネットワーク上の Mac mini、MacBook、iMac など"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "개인 키로 인증"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "네트워크에 연결된 Mac mini, MacBook, iMac 등"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Аутентификация по закрытому ключу"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mac mini, MacBook или iMac в вашей сети"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "使用私钥认证"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "局域网中的 Mac mini、MacBook 或 iMac"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "以私密金鑰驗證"
-          }
-        }
-      }
-    },
-    "Authentication" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "認証"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "인증"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Аутентификация"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "认证方式"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "認證方式"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "區域網路中的 Mac mini、MacBook 或 iMac"
           }
         }
       }
     },
-    "Authentication failed." : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "認証に失敗しました。"
+    "A public IP or hostname reachable from anywhere": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "どこからでも到達できる公開 IP またはホスト名"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "인증에 실패했습니다."
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "어디서나 접근 가능한 공인 IP 또는 호스트 이름"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ошибка аутентификации."
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Публичный IP-адрес или имя хоста, доступные из любой сети"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "认证失败。"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "公网可达的 IP 地址或主机名"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "認證失敗。"
-          }
-        }
-      }
-    },
-    "BedTerm needs Local Network access to reach your Mac on the same Wi-Fi. Tap Allow when iOS prompts you." : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "同じ Wi-Fi 上の Mac に接続するには、BedTerm にローカルネットワークへのアクセスが必要です。iOS の確認ダイアログで「許可」をタップしてください。"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "같은 Wi-Fi의 Mac에 접근하려면 BedTerm에 로컬 네트워크 권한이 필요합니다. iOS 알림이 나타나면 '허용'을 누르세요."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Чтобы подключиться к Mac в той же сети Wi-Fi, BedTerm нужен доступ к локальной сети. Нажмите «Разрешить», когда iOS запросит разрешение."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "BedTerm 需要本地网络权限才能访问同一 Wi-Fi 下的 Mac。系统弹窗出现时请点击「允许」。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "BedTerm 需要區域網路權限才能存取同一 Wi-Fi 下的 Mac。系統彈出視窗時請點擊「允許」。"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "公網可達的 IP 位址或主機名稱"
           }
         }
       }
     },
-    "Cancel" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "キャンセル"
+    "Add Host": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "ホストを追加"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "취소"
+        "ko": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "호스트 추가"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Отмена"
+        "ru": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Добавить хост"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "取消"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "添加主机"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "取消"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "新增主機"
           }
         }
       }
     },
-    "Cannot parse private key." : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "秘密鍵を解析できません。"
+    "Add a server to connect from your bed.": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "ベッドから接続するサーバーを追加しましょう。"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "개인 키를 해석할 수 없습니다."
+        "ko": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "침대에서 접속할 서버를 추가하세요."
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Не удалось разобрать закрытый ключ."
+        "ru": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Добавьте сервер, чтобы подключаться прямо из постели."
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "无法解析私钥。"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "添加一个服务器，从床上就能连。"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "無法解析私密金鑰。"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "新增伺服器，從床上即可連線。"
           }
         }
       }
     },
-    "Cannot resolve host." : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ホストを解決できません。"
+    "All set": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "準備完了"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "호스트를 확인할 수 없습니다."
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "준비 완료"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Не удалось разрешить имя хоста."
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Готово"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "无法解析主机地址。"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "全部就绪"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "無法解析主機位址。"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "全部就緒"
           }
         }
       }
     },
-    "Closed" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "切断しました"
+    "Auth method": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "認証方法"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "연결을 종료했습니다"
+        "ko": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "인증 방식"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Соединение закрыто"
+        "ru": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Способ аутентификации"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已关闭"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "认证方式"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已關閉"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "驗證方式"
           }
         }
       }
     },
-    "Connect" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "接続"
+    "Authenticates with a password": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "パスワードで認証"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "연결"
+        "ko": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "암호로 인증"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Подключиться"
+        "ru": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Аутентификация по паролю"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "连接"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "使用密码认证"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "連線"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "以密碼驗證"
           }
         }
       }
     },
-    "Connection ended" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "接続が終了しました"
+    "Authenticates with a private key": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "秘密鍵で認証"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "연결이 종료되었습니다"
+        "ko": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "개인 키로 인증"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Соединение завершено"
+        "ru": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Аутентификация по закрытому ключу"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "连接已结束"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "使用私钥认证"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "連線已結束"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "以私密金鑰驗證"
           }
         }
       }
     },
-    "Connection refused — check host and port." : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "接続が拒否されました。ホストとポートを確認してください。"
+    "Authentication": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "認証"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "연결이 거부되었습니다. 호스트와 포트를 확인하세요."
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "인증"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Соединение отклонено — проверьте хост и порт."
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Аутентификация"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "连接被拒绝——请检查主机和端口。"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "认证方式"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "連線遭拒——請檢查主機與連接埠。"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "認證方式"
           }
         }
       }
     },
-    "Connection timed out." : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "接続がタイムアウトしました。"
+    "Authentication failed.": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "認証に失敗しました。"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "연결 시간이 초과되었습니다."
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "인증에 실패했습니다."
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Истекло время ожидания соединения."
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ошибка аутентификации."
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "连接超时。"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "认证失败。"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "連線逾時。"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "認證失敗。"
           }
         }
       }
     },
-    "Continue" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "続ける"
+    "BedTerm needs Local Network access to reach your Mac on the same Wi-Fi. Tap Allow when iOS prompts you.": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "同じ Wi-Fi 上の Mac に接続するには、BedTerm にローカルネットワークへのアクセスが必要です。iOS の確認ダイアログで「許可」をタップしてください。"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "계속"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "같은 Wi-Fi의 Mac에 접근하려면 BedTerm에 로컬 네트워크 권한이 필요합니다. iOS 알림이 나타나면 '허용'을 누르세요."
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Продолжить"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Чтобы подключиться к Mac в той же сети Wi-Fi, BedTerm нужен доступ к локальной сети. Нажмите «Разрешить», когда iOS запросит разрешение."
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "继续"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "BedTerm 需要本地网络权限才能访问同一 Wi-Fi 下的 Mac。系统弹窗出现时请点击「允许」。"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "繼續"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "BedTerm 需要區域網路權限才能存取同一 Wi-Fi 下的 Mac。系統彈出視窗時請點擊「允許」。"
           }
         }
       }
     },
-    "Continue Anyway" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "そのまま続ける"
+    "Blocks": {
+      "extractionState": "manual",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ブロック"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "그래도 계속"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "블록"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Всё равно продолжить"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Блоки"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "仍然继续"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "区块"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "仍然繼續"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "區塊"
           }
         }
       }
     },
-    "Could not load saved host." : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "保存されたホストを読み込めませんでした。"
+    "Cancel": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "キャンセル"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "저장된 호스트를 불러올 수 없습니다."
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "취소"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Не удалось загрузить сохранённый хост."
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Отмена"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "无法加载已保存的主机。"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "無法載入已儲存的主機。"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消"
           }
         }
       }
     },
-    "Could not save host." : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "ホストを保存できませんでした。"
+    "Cannot parse private key.": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "秘密鍵を解析できません。"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "호스트를 저장할 수 없습니다."
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "개인 키를 해석할 수 없습니다."
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Не удалось сохранить хост."
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Не удалось разобрать закрытый ключ."
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "无法保存主机。"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法解析私钥。"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "無法儲存主機。"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "無法解析私密金鑰。"
           }
         }
       }
     },
-    "Couldn't load saved hosts — device locked." : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "保存済みホストを読み込めません — デバイスがロックされています。"
+    "Cannot resolve host.": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ホストを解決できません。"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "저장된 호스트를 불러올 수 없습니다 — 기기가 잠겨 있습니다."
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "호스트를 확인할 수 없습니다."
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Не удалось загрузить хосты — устройство заблокировано."
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Не удалось разрешить имя хоста."
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "无法加载已保存的主机 — 设备已锁定。"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法解析主机地址。"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "無法載入已儲存的主機 — 裝置已鎖定。"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "無法解析主機位址。"
           }
         }
       }
     },
-    "Delete" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "削除"
+    "Closed": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "切断しました"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "삭제"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "연결을 종료했습니다"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Удалить"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Соединение закрыто"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "删除"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已关闭"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "刪除"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已關閉"
+          }
+        }
+      }
+    },
+    "Coming soon": {
+      "extractionState": "manual",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "近日公開"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "곧 출시"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Скоро"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "即将推出"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "即將推出"
+          }
+        }
+      }
+    },
+    "Command blocks": {
+      "extractionState": "manual",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コマンドブロック"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "명령 블록"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Блоки команд"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "命令区块"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "命令區塊"
+          }
+        }
+      }
+    },
+    "Command blocks (Beta)": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "命令分块（测试版）"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "命令分塊（測試版）"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コマンドブロック（ベータ）"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "명령 블록 (베타)"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Блоки команд (бета)"
+          }
+        }
+      }
+    },
+    "Connect": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "接続"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "연결"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Подключиться"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "连接"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "連線"
+          }
+        }
+      }
+    },
+    "Connection ended": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "接続が終了しました"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "연결이 종료되었습니다"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Соединение завершено"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "连接已结束"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "連線已結束"
+          }
+        }
+      }
+    },
+    "Connection refused — check host and port.": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "接続が拒否されました。ホストとポートを確認してください。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "연결이 거부되었습니다. 호스트와 포트를 확인하세요."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Соединение отклонено — проверьте хост и порт."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "连接被拒绝——请检查主机和端口。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "連線遭拒——請檢查主機與連接埠。"
+          }
+        }
+      }
+    },
+    "Connection timed out.": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "接続がタイムアウトしました。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "연결 시간이 초과되었습니다."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Истекло время ожидания соединения."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "连接超时。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "連線逾時。"
+          }
+        }
+      }
+    },
+    "Continue": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "続ける"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "계속"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Продолжить"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "继续"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "繼續"
+          }
+        }
+      }
+    },
+    "Continue Anyway": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "そのまま続ける"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "그래도 계속"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Всё равно продолжить"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仍然继续"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仍然繼續"
+          }
+        }
+      }
+    },
+    "Could not load saved host.": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "保存されたホストを読み込めませんでした。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "저장된 호스트를 불러올 수 없습니다."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Не удалось загрузить сохранённый хост."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "无法加载已保存的主机。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "無法載入已儲存的主機。"
+          }
+        }
+      }
+    },
+    "Could not save host.": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "ホストを保存できませんでした。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "호스트를 저장할 수 없습니다."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Не удалось сохранить хост."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "无法保存主机。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "無法儲存主機。"
+          }
+        }
+      }
+    },
+    "Couldn't load saved hosts — device locked.": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "保存済みホストを読み込めません — デバイスがロックされています。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "저장된 호스트를 불러올 수 없습니다 — 기기가 잠겨 있습니다."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Не удалось загрузить хосты — устройство заблокировано."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "无法加载已保存的主机 — 设备已锁定。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "無法載入已儲存的主機 — 裝置已鎖定。"
+          }
+        }
+      }
+    },
+    "Delete": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "削除"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "삭제"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Удалить"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "删除"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "刪除"
           }
         }
       }
     },
     "Delete \"%@\"?": {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "\"%@\" を削除しますか？"
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "\"%@\" を削除しますか？"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "\"%@\"을(를) 삭제할까요?"
+        "ko": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "\"%@\"을(를) 삭제할까요?"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Удалить «%@»?"
+        "ru": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Удалить «%@»?"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "删除 \"%@\"？"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "删除 \"%@\"？"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "刪除「%@」？"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "刪除「%@」？"
           }
         }
       }
     },
-    "Disconnect" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "切断"
+    "Disconnect": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "切断"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "연결 끊기"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "연결 끊기"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Отключить"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Отключить"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "断开连接"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "断开连接"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "中斷連線"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "中斷連線"
           }
         }
       }
     },
     "Disconnect and delete \"%@\"?": {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "切断して \"%@\" を削除しますか？"
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "切断して \"%@\" を削除しますか？"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "연결을 끊고 \"%@\"을(를) 삭제할까요?"
+        "ko": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "연결을 끊고 \"%@\"을(를) 삭제할까요?"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Отключиться и удалить «%@»?"
+        "ru": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Отключиться и удалить «%@»?"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "断开连接并删除 \"%@\"？"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "断开连接并删除 \"%@\"？"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "中斷連線並刪除「%@」？"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "中斷連線並刪除「%@」？"
           }
         }
       }
     },
-    "Disconnected: %@" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "切断されました: %@"
+    "Disconnected: %@": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "切断されました: %@"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "연결이 끊겼습니다: %@"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "연결이 끊겼습니다: %@"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Соединение разорвано: %@"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Соединение разорвано: %@"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已断开连接：%@"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已断开连接：%@"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已中斷連線：%@"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已中斷連線：%@"
           }
         }
       }
     },
-    "Don't connect" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "接続しない"
+    "Display": {
+      "extractionState": "manual",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "表示"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "연결하지 않음"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "디스플레이"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Не подключаться"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Дисплей"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "不连接"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "不要連線"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "顯示"
           }
         }
       }
     },
-    "Done" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "完了"
+    "Don't connect": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "接続しない"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "완료"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "연결하지 않음"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Готово"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Не подключаться"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "完成"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不连接"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "完成"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不要連線"
           }
         }
       }
     },
-    "Edit" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "編集"
+    "Done": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "完了"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "편집"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "완료"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Изменить"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Готово"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "编辑"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "完成"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "編輯"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "完成"
           }
         }
       }
     },
-    "Edit Host" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "ホストを編集"
+    "Edit": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "編集"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "호스트 편집"
+        "ko": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "편집"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Изменить хост"
+        "ru": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Изменить"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "编辑主机"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "编辑"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "編輯主機"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "編輯"
           }
         }
       }
     },
-    "Enable Remote Login" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "リモートログインを有効にする"
+    "Edit Host": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "ホストを編集"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "원격 로그인 활성화"
+        "ko": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "호스트 편집"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Включить удалённый вход"
+        "ru": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Изменить хост"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "开启「远程登录」"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "编辑主机"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "開啟「遠端登入」"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "編輯主機"
+          }
+        }
+      }
+    },
+    "Enable Remote Login": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "リモートログインを有効にする"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "원격 로그인 활성화"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Включить удалённый вход"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "开启「远程登录」"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "開啟「遠端登入」"
           }
         }
       }
     },
     "End current session and connect to \"%@\"?": {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "現在のセッションを終了して \"%@\" に接続しますか？"
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "現在のセッションを終了して \"%@\" に接続しますか？"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "현재 세션을 종료하고 \"%@\"에 연결할까요?"
+        "ko": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "현재 세션을 종료하고 \"%@\"에 연결할까요?"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Завершить текущую сессию и подключиться к «%@»?"
+        "ru": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Завершить текущую сессию и подключиться к «%@»?"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "结束当前会话并连接到 \"%@\"？"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "结束当前会话并连接到 \"%@\"？"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "結束目前的工作階段並連線到「%@」？"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "結束目前的工作階段並連線到「%@」？"
           }
         }
       }
     },
-    "error" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "エラー"
+    "Find your Mac's IP address": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mac の IP アドレスを確認する"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "오류"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mac의 IP 주소 확인"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "ошибка"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Узнайте IP-адрес вашего Mac"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "错误"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查看 Mac 的 IP 地址"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "錯誤"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查看 Mac 的 IP 位址"
           }
         }
       }
     },
-    "Find your Mac's IP address" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mac の IP アドレスを確認する"
+    "Host": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ホスト"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mac의 IP 주소 확인"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "호스트"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Узнайте IP-адрес вашего Mac"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Хост"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "查看 Mac 的 IP 地址"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "主机"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "查看 Mac 的 IP 位址"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "主機"
           }
         }
       }
     },
-    "Host" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ホスト"
+    "Host key changed": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ホストキーが変更されました"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "호스트"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "호스트 키가 변경되었습니다"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Хост"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ключ хоста изменился"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "主机"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "主机密钥已变更"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "主機"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "主機金鑰已變更"
           }
         }
       }
     },
-    "Host key changed" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ホストキーが変更されました"
+    "Host key changed.\nStored: %1$@\nRemote: %2$@": {
+      "extractionState": "manual",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ホストキーが変更されました。\n保存済み: %1$@\nリモート: %2$@"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "호스트 키가 변경되었습니다"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "호스트 키가 변경되었습니다.\n저장된 키: %1$@\n원격 키: %2$@"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ключ хоста изменился"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ключ хоста изменился.\nСохранённый: %1$@\nУдалённый: %2$@"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "主机密钥已变更"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "主机密钥已变更。\n已存储：%1$@\n远端：%2$@"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "主機金鑰已變更"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "主機金鑰已變更。\n已儲存：%1$@\n遠端：%2$@"
           }
         }
       }
     },
-    "Host key changed.\nStored: %1$@\nRemote: %2$@" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ホストキーが変更されました。\n保存済み: %1$@\nリモート: %2$@"
+    "Host, port and username are required.": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ホスト、ポート、ユーザー名は必須です。"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "호스트 키가 변경되었습니다.\n저장된 키: %1$@\n원격 키: %2$@"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "호스트, 포트, 사용자 이름은 필수입니다."
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ключ хоста изменился.\nСохранённый: %1$@\nУдалённый: %2$@"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Укажите хост, порт и имя пользователя."
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "主机密钥已变更。\n已存储：%1$@\n远端：%2$@"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请填写主机、端口和用户名。"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "主機金鑰已變更。\n已儲存：%1$@\n遠端：%2$@"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "請填寫主機、連接埠與使用者名稱。"
           }
         }
       }
     },
-    "Host, port and username are required." : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ホスト、ポート、ユーザー名は必須です。"
+    "Hosts": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "ホスト"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "호스트, 포트, 사용자 이름은 필수입니다."
+        "ko": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "호스트"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Укажите хост, порт и имя пользователя."
+        "ru": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Хосты"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "请填写主机、端口和用户名。"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "主机"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "請填寫主機、連接埠與使用者名稱。"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "主機"
           }
         }
       }
     },
-    "Hosts" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "ホスト"
+    "Import private key": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "秘密鍵を読み込む"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "호스트"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "개인 키 가져오기"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Хосты"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Импортировать закрытый ключ"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "主机"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导入私钥"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "主機"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "匯入私密金鑰"
           }
         }
       }
     },
-    "Import private key" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "秘密鍵を読み込む"
+    "Keep first row visible in full-screen apps": {
+      "extractionState": "manual",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "フルスクリーンアプリで最上行を表示する"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "개인 키 가져오기"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "전체 화면 앱에서 첫 줄 표시 유지"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Импортировать закрытый ключ"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сохранять первую строку видимой в полноэкранных программах"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "导入私钥"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "全屏应用中保持首行可见"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "匯入私密金鑰"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "全螢幕應用程式中保持首列可見"
           }
         }
       }
     },
-    "iOS will ask for Local Network permission" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "iOS がローカルネットワークの許可を確認します"
+    "Key": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "鍵"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "iOS가 로컬 네트워크 권한을 요청합니다"
+        "ko": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "키"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "iOS запросит разрешение на локальную сеть"
+        "ru": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Ключ"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "iOS 会请求本地网络权限"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "密钥"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "iOS 會請求區域網路權限"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "金鑰"
           }
         }
       }
     },
-    "Key" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "鍵"
+    "Label": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "ラベル"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "키"
+        "ko": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "레이블"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Ключ"
+        "ru": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Метка"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "密钥"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "标签"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "金鑰"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "標籤"
           }
         }
       }
     },
-    "Label" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "ラベル"
+    "Last connection": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "前回の接続"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "레이블"
+        "ko": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "마지막 연결"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Метка"
+        "ru": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Последнее подключение"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "标签"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "上次连接"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "標籤"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "上次連線"
           }
         }
       }
     },
-    "Last connection" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "前回の接続"
+    "Linux / other": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Linux / その他"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "마지막 연결"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Linux / 기타"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Последнее подключение"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Linux или другое"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "上次连接"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Linux / 其他"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "上次連線"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Linux / 其他"
           }
         }
       }
     },
-    "Linux / other" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Linux / その他"
+    "Linux box, VM, Raspberry Pi, cloud server": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Linux マシン、VM、Raspberry Pi、クラウドサーバーなど"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Linux / 기타"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Linux 머신, VM, Raspberry Pi, 클라우드 서버 등"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Linux или другое"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Linux-сервер, виртуальная машина, Raspberry Pi, облако"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Linux / 其他"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Linux 主机、虚拟机、树莓派、云服务器"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Linux / 其他"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Linux 主機、虛擬機、樹莓派、雲端伺服器"
           }
         }
       }
     },
-    "Linux box, VM, Raspberry Pi, cloud server" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Linux マシン、VM、Raspberry Pi、クラウドサーバーなど"
+    "Local Network Access": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ローカルネットワークへのアクセス"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Linux 머신, VM, Raspberry Pi, 클라우드 서버 등"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "로컬 네트워크 권한"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Linux-сервер, виртуальная машина, Raspberry Pi, облако"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Доступ к локальной сети"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Linux 主机、虚拟机、树莓派、云服务器"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本地网络权限"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Linux 主機、虛擬機、樹莓派、雲端伺服器"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "區域網路權限"
           }
         }
       }
     },
-    "Local Network Access" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ローカルネットワークへのアクセス"
+    "Local network access is required to reach %@. Open Settings to enable it.": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ に接続するにはローカルネットワークへのアクセスが必要です。設定から有効にしてください。"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "로컬 네트워크 권한"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@에 연결하려면 로컬 네트워크 권한이 필요합니다. 설정에서 활성화해 주세요."
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Доступ к локальной сети"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Для подключения к %@ нужен доступ к локальной сети. Откройте настройки, чтобы включить его."
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "本地网络权限"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "需要本地网络权限才能访问 %@，请前往「设置」开启。"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "區域網路權限"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "需要區域網路權限才能存取 %@，請前往「設定」開啟。"
           }
         }
       }
     },
-    "Local network access is required to reach %@. Open Settings to enable it." : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ に接続するにはローカルネットワークへのアクセスが必要です。設定から有効にしてください。"
+    "Method": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "方式"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@에 연결하려면 로컬 네트워크 권한이 필요합니다. 설정에서 활성화해 주세요."
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "방식"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Для подключения к %@ нужен доступ к локальной сети. Откройте настройки, чтобы включить его."
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Способ"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "需要本地网络权限才能访问 %@，请前往「设置」开启。"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "方式"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "需要區域網路權限才能存取 %@，請前往「設定」開啟。"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "方式"
           }
         }
       }
     },
-    "macOS" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "macOS"
+    "New Connection": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新規接続"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "macOS"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "새 연결"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "macOS"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Новое подключение"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "macOS"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新建连接"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "macOS"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新增連線"
           }
         }
       }
     },
-    "macOS Setup" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "macOS の準備"
+    "New Host": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "新規ホスト"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "macOS 설정"
+        "ko": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "새 호스트"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Настройка macOS"
+        "ru": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Новый хост"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "macOS 设置"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "新建主机"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "macOS 設定"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "新增主機"
           }
         }
       }
     },
-    "Method" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "方式"
+    "No command blocks yet": {
+      "extractionState": "manual",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コマンドブロックがまだありません"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "방식"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "아직 명령 블록이 없습니다"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Способ"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Пока нет блоков команд"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "方式"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暂无命令区块"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "方式"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尚無命令區塊"
           }
         }
       }
     },
-    "New Connection" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "新規接続"
+    "No hosts yet": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "ホストがまだありません"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "새 연결"
+        "ko": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "아직 호스트가 없습니다"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Новое подключение"
+        "ru": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Пока нет хостов"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "新建连接"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "暂无主机"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "新增連線"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "尚無主機"
           }
         }
       }
     },
-    "New Host" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "新規ホスト"
+    "No session.": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "セッションがありません。"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "새 호스트"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "세션이 없습니다."
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Новый хост"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Нет активной сессии."
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "新建主机"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暂无会话。"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "新增主機"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暫無工作階段。"
           }
         }
       }
     },
-    "No hosts yet" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "ホストがまだありません"
+    "On your Mac, open System Settings → General → Sharing, then turn on Remote Login. (Detailed walkthrough coming soon.)": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mac で「システム設定 → 一般 → 共有」を開き、「リモートログイン」をオンにしてください。（詳しい手順は近日公開予定です。）"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "아직 호스트가 없습니다"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mac에서 시스템 설정 → 일반 → 공유로 이동해 원격 로그인을 켜 주세요. (자세한 안내는 곧 제공될 예정입니다.)"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Пока нет хостов"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "На Mac откройте «Системные настройки → Основные → Общий доступ» и включите удалённый вход. (Подробное руководство скоро появится.)"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "暂无主机"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在 Mac 上打开「系统设置 → 通用 → 共享」，开启「远程登录」。（详细教程即将推出。）"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "尚無主機"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在 Mac 上開啟「系統設定 → 一般 → 共享」，啟用「遠端登入」。（詳細教學即將推出。）"
           }
         }
       }
     },
-    "No session." : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "セッションがありません。"
+    "Open Settings": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "設定を開く"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "세션이 없습니다."
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "설정 열기"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Нет активной сессии."
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Открыть «Настройки»"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "暂无会话。"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开设置"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "暫無工作階段。"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "開啟設定"
           }
         }
       }
     },
-    "On your Mac, open System Settings → General → Sharing, then turn on Remote Login. (Detailed walkthrough coming soon.)" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mac で「システム設定 → 一般 → 共有」を開き、「リモートログイン」をオンにしてください。（詳しい手順は近日公開予定です。）"
+    "Open System Settings → Network → Wi-Fi → Details. Copy the IP address — you'll enter it on the next screen. (Detailed walkthrough coming soon.)": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「システム設定 → ネットワーク → Wi-Fi → 詳細」を開き、IP アドレスをコピーしてください。次の画面で入力します。（詳しい手順は近日公開予定です。）"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mac에서 시스템 설정 → 일반 → 공유로 이동해 원격 로그인을 켜 주세요. (자세한 안내는 곧 제공될 예정입니다.)"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "시스템 설정 → 네트워크 → Wi-Fi → 자세히로 이동해 IP 주소를 복사하세요. 다음 화면에서 입력합니다. (자세한 안내는 곧 제공될 예정입니다.)"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "На Mac откройте «Системные настройки → Основные → Общий доступ» и включите удалённый вход. (Подробное руководство скоро появится.)"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Откройте «Системные настройки → Сеть → Wi-Fi → Подробнее» и скопируйте IP-адрес — он понадобится на следующем экране. (Подробное руководство скоро появится.)"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在 Mac 上打开「系统设置 → 通用 → 共享」，开启「远程登录」。（详细教程即将推出。）"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开「系统设置 → 网络 → Wi-Fi → 详细信息」，复制 IP 地址——下一屏将用到。（详细教程即将推出。）"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在 Mac 上開啟「系統設定 → 一般 → 共享」，啟用「遠端登入」。（詳細教學即將推出。）"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "開啟「系統設定 → 網路 → Wi-Fi → 詳細資料」，複製 IP 位址——下一畫面會用到。（詳細教學即將推出。）"
           }
         }
       }
     },
-    "Open Settings" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "設定を開く"
+    "Overwrite stored host key for %@:%lld?": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@:%2$lld の保存済みホストキーを上書きしますか？"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "설정 열기"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$@:%2$lld에 저장된 호스트 키를 덮어쓸까요?"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Открыть «Настройки»"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Перезаписать сохранённый ключ хоста для %1$@:%2$lld?"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "打开设置"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "覆盖 %1$@:%2$lld 已存储的主机密钥？"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "開啟設定"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "覆寫 %1$@:%2$lld 已儲存的主機金鑰？"
           }
         }
       }
     },
-    "Open System Settings → Network → Wi-Fi → Details. Copy the IP address — you'll enter it on the next screen. (Detailed walkthrough coming soon.)" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "「システム設定 → ネットワーク → Wi-Fi → 詳細」を開き、IP アドレスをコピーしてください。次の画面で入力します。（詳しい手順は近日公開予定です。）"
+    "Passphrase (optional)": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "パスフレーズ（任意）"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "시스템 설정 → 네트워크 → Wi-Fi → 자세히로 이동해 IP 주소를 복사하세요. 다음 화면에서 입력합니다. (자세한 안내는 곧 제공될 예정입니다.)"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "패스프레이즈 (선택 사항)"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Откройте «Системные настройки → Сеть → Wi-Fi → Подробнее» и скопируйте IP-адрес — он понадобится на следующем экране. (Подробное руководство скоро появится.)"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Парольная фраза (необязательно)"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "打开「系统设置 → 网络 → Wi-Fi → 详细信息」，复制 IP 地址——下一屏将用到。（详细教程即将推出。）"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "口令（可选）"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "開啟「系統設定 → 網路 → Wi-Fi → 詳細資料」，複製 IP 位址——下一畫面會用到。（詳細教學即將推出。）"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "通關密語（選填）"
           }
         }
       }
     },
-    "Overwrite stored host key for %@:%lld?" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@:%2$lld の保存済みホストキーを上書きしますか？"
+    "Password": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "パスワード"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%1$@:%2$lld에 저장된 호스트 키를 덮어쓸까요?"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "비밀번호"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Перезаписать сохранённый ключ хоста для %1$@:%2$lld?"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Пароль"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "覆盖 %1$@:%2$lld 已存储的主机密钥？"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "密码"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "覆寫 %1$@:%2$lld 已儲存的主機金鑰？"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "密碼"
           }
         }
       }
     },
-    "Passphrase (optional)" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "パスフレーズ（任意）"
+    "Permission": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アクセス許可"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "패스프레이즈 (선택 사항)"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "권한"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Парольная фраза (необязательно)"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Разрешение"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "口令（可选）"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "权限"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "通關密語（選填）"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "權限"
           }
         }
       }
     },
-    "Password" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "パスワード"
+    "Permission denied. You can enable it later in Settings → BedTerm.": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アクセスが拒否されました。後から「設定 → BedTerm」で有効にできます。"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "비밀번호"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "권한이 거부되었습니다. 나중에 설정 → BedTerm에서 활성화할 수 있습니다."
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Пароль"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Доступ запрещён. Включить можно позже в «Настройки → BedTerm»."
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "密码"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "权限被拒绝。可稍后在「设置 → BedTerm」中开启。"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "密碼"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "權限遭拒。可稍後在「設定 → BedTerm」中開啟。"
           }
         }
       }
     },
-    "Permission" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "アクセス許可"
+    "Please import a private key file.": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "秘密鍵ファイルを読み込んでください。"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "권한"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "개인 키 파일을 가져와 주세요."
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Разрешение"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Импортируйте файл закрытого ключа."
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "权限"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请导入私钥文件。"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "權限"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "請匯入私密金鑰檔案。"
           }
         }
       }
     },
-    "Permission denied. You can enable it later in Settings → BedTerm." : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "アクセスが拒否されました。後から「設定 → BedTerm」で有効にできます。"
+    "Port": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ポート"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "권한이 거부되었습니다. 나중에 설정 → BedTerm에서 활성화할 수 있습니다."
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "포트"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Доступ запрещён. Включить можно позже в «Настройки → BedTerm»."
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Порт"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "权限被拒绝。可稍后在「设置 → BedTerm」中开启。"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "端口"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "權限遭拒。可稍後在「設定 → BedTerm」中開啟。"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "連接埠"
           }
         }
       }
     },
-    "Please import a private key file." : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "秘密鍵ファイルを読み込んでください。"
+    "Port must be between 1 and 65535.": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "ポートは 1 〜 65535 の範囲で指定してください。"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "개인 키 파일을 가져와 주세요."
+        "ko": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "포트는 1에서 65535 사이여야 합니다."
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Импортируйте файл закрытого ключа."
+        "ru": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Порт должен быть в диапазоне от 1 до 65535."
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "请导入私钥文件。"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "端口必须在 1 到 65535 之间。"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "請匯入私密金鑰檔案。"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "連接埠必須介於 1 至 65535 之間。"
           }
         }
       }
     },
-    "Port" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ポート"
+    "Private Key": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "秘密鍵"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "포트"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "개인 키"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Порт"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Закрытый ключ"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "端口"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "私钥"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "連接埠"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "私密金鑰"
           }
         }
       }
     },
-    "Port must be between 1 and 65535." : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "ポートは 1 〜 65535 の範囲で指定してください。"
+    "Private key requires a passphrase.": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "秘密鍵にはパスフレーズが必要です。"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "포트는 1에서 65535 사이여야 합니다."
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "개인 키에는 패스프레이즈가 필요합니다."
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Порт должен быть в диапазоне от 1 до 65535."
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Закрытый ключ требует парольную фразу."
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "端口必须在 1 到 65535 之间。"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "私钥需要口令。"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "連接埠必須介於 1 至 65535 之間。"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "私密金鑰需要通關密語。"
           }
         }
       }
     },
-    "Private Key" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "秘密鍵"
+    "Reconnect": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "再接続"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "개인 키"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "다시 연결"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Закрытый ключ"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Переподключиться"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "私钥"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重新连接"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "私密金鑰"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重新連線"
           }
         }
       }
     },
-    "Private key requires a passphrase." : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "秘密鍵にはパスフレーズが必要です。"
+    "Remote (over the internet)": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "リモート（インターネット経由）"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "개인 키에는 패스프레이즈가 필요합니다."
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "원격 (인터넷 경유)"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Закрытый ключ требует парольную фразу."
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Удалённо (через интернет)"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "私钥需要口令。"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "远程（通过互联网）"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "私密金鑰需要通關密語。"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "遠端（透過網際網路）"
           }
         }
       }
     },
-    "Reconnect" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "再接続"
+    "Remote fingerprint": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "リモートのフィンガープリント"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "다시 연결"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "원격 지문"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Переподключиться"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Удалённый отпечаток"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "重新连接"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "远端指纹"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "重新連線"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "遠端指紋"
           }
         }
       }
     },
-    "Remote (over the internet)" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "リモート（インターネット経由）"
+    "Replace private key": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "秘密鍵を置き換える"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "원격 (인터넷 경유)"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "개인 키 교체"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Удалённо (через интернет)"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Заменить закрытый ключ"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "远程（通过互联网）"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "替换私钥"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "遠端（透過網際網路）"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更換私密金鑰"
           }
         }
       }
     },
-    "Remote fingerprint" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "リモートのフィンガープリント"
+    "Request Permission": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アクセスをリクエスト"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "원격 지문"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "권한 요청"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Удалённый отпечаток"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Запросить разрешение"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "远端指纹"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请求权限"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "遠端指紋"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "請求權限"
           }
         }
       }
     },
-    "Replace private key" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "秘密鍵を置き換える"
+    "Retry": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "再試行"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "개인 키 교체"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "다시 시도"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Заменить закрытый ключ"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Повторить"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "替换私钥"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重试"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "更換私密金鑰"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重試"
           }
         }
       }
     },
-    "Request Permission" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "アクセスをリクエスト"
+    "Run a command at the remote shell prompt. Each prompt → command → output cycle becomes a block here.": {
+      "extractionState": "manual",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "リモートシェルのプロンプトでコマンドを実行してください。プロンプト → コマンド → 出力のサイクルが、ここで 1 つのブロックになります。"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "권한 요청"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "원격 셸 프롬프트에서 명령을 실행하세요. 프롬프트 → 명령 → 출력 주기가 여기에서 하나의 블록이 됩니다."
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Запросить разрешение"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Выполните команду в строке приглашения удалённой оболочки. Каждый цикл «приглашение → команда → вывод» становится блоком."
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "请求权限"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在远端 shell 提示符下运行命令。每个「提示符 → 命令 → 输出」周期会在这里形成一个区块。"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "請求權限"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在遠端 shell 提示字元下執行命令。每個「提示字元 → 命令 → 輸出」週期會在這裡形成一個區塊。"
           }
         }
       }
     },
-    "Retry" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "再試行"
+    "SSH handshake failed: %@": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SSH ハンドシェイクに失敗しました: %@"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "다시 시도"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SSH 핸드셰이크에 실패했습니다: %@"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Повторить"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Не удалось установить SSH-соединение: %@"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "重试"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SSH 握手失败：%@"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "重試"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SSH 交握失敗：%@"
           }
         }
       }
     },
-    "Same Wi-Fi as my phone" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "iPhone と同じ Wi-Fi"
+    "Same Wi-Fi as my phone": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iPhone と同じ Wi-Fi"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "iPhone과 같은 Wi-Fi"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iPhone과 같은 Wi-Fi"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Та же сеть Wi-Fi, что и у телефона"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Та же сеть Wi-Fi, что и у телефона"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "与手机同一 Wi-Fi"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "与手机同一 Wi-Fi"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "與手機同一 Wi-Fi"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "與手機同一 Wi-Fi"
           }
         }
       }
     },
-    "Save" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "保存"
+    "Save": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "保存"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "저장"
+        "ko": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "저장"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Сохранить"
+        "ru": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Сохранить"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "保存"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "保存"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "儲存"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "儲存"
           }
         }
       }
     },
-    "Save & Connect" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "保存して接続"
+    "Save & Connect": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "保存して接続"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "저장 후 연결"
+        "ko": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "저장 후 연결"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Сохранить и подключиться"
+        "ru": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Сохранить и подключиться"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "保存并连接"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "保存并连接"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "儲存並連線"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "儲存並連線"
           }
         }
       }
     },
-    "Security warning" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "セキュリティ警告"
+    "Security warning": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "セキュリティ警告"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "보안 경고"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "보안 경고"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Предупреждение безопасности"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Предупреждение безопасности"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "安全警告"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "安全警告"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "安全警告"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "安全警告"
           }
         }
       }
     },
-    "Server" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "サーバー"
+    "Server": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "サーバー"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "서버"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "서버"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Сервер"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сервер"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "服务器"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "服务器"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "伺服器"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "伺服器"
           }
         }
       }
     },
-    "Set up your Mac" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mac の準備をする"
+    "Set up your Mac": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mac の準備をする"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Mac 준비하기"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mac 준비하기"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Настройка вашего Mac"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Настройка вашего Mac"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "设置你的 Mac"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "设置你的 Mac"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "設定你的 Mac"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "設定你的 Mac"
           }
         }
       }
     },
-    "Setup" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "セットアップ"
+    "Settings": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "设置"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "설정"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "設定"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Настройка"
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "設定"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "设置"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "설정"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "設定"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Настройки"
           }
         }
       }
     },
-    "Shell exited (%lld)." : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "シェルが終了しました（%lld）。"
+    "Setup": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "セットアップ"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "셸이 종료되었습니다 (%lld)."
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "설정"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Оболочка завершила работу (%lld)."
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Настройка"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Shell 已退出（%lld）。"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "设置"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Shell 已結束（%lld）。"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "設定"
           }
         }
       }
     },
-    "SSH handshake failed: %@" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "SSH ハンドシェイクに失敗しました: %@"
+    "Shell exited (%lld).": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "シェルが終了しました（%lld）。"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "SSH 핸드셰이크에 실패했습니다: %@"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "셸이 종료되었습니다 (%lld)."
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Не удалось установить SSH-соединение: %@"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Оболочка завершила работу (%lld)."
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "SSH 握手失败：%@"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shell 已退出（%lld）。"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "SSH 交握失敗：%@"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shell 已結束（%lld）。"
           }
         }
       }
     },
-    "Stored — replace?" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "保存済み — 変更しますか？"
+    "Show each command and its output as a separate block (Warp-style). BedTerm writes a small shell-integration script into every new SSH session to track prompt and command boundaries. Uses Warp's DCS hook protocol, not OSC 133. Still in beta and off by default.": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将每条命令及其输出显示为独立的分块（Warp 风格）。BedTerm 会向每个新的 SSH 会话写入一个小的 shell 集成脚本，用以跟踪提示符与命令边界。使用 Warp 的 DCS 钩子协议，而非 OSC 133。仍处于测试阶段，默认关闭。"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "저장됨 — 변경할까요?"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "將每條命令及其輸出顯示為獨立的分塊（Warp 風格）。BedTerm 會向每個新的 SSH 工作階段寫入一個小型 shell 整合指令稿，用來追蹤提示字元與命令邊界。使用 Warp 的 DCS 鉤子協定，而非 OSC 133。仍處於測試階段，預設關閉。"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Сохранено — заменить?"
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "各コマンドとその出力を個別のブロックとして表示します（Warp 風）。BedTerm は新しい SSH セッションごとに小さなシェル統合スクリプトを書き込み、プロンプトとコマンドの境界を追跡します。OSC 133 ではなく Warp の DCS フックプロトコルを使用します。まだベータ版で、デフォルトではオフです。"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "已保存 — 替换？"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "각 명령과 출력을 별도의 블록(Warp 스타일)으로 표시합니다. BedTerm은 새 SSH 세션마다 작은 셸 통합 스크립트를 작성하여 프롬프트와 명령 경계를 추적합니다. OSC 133이 아닌 Warp의 DCS 후크 프로토콜을 사용합니다. 아직 베타이며 기본적으로 꺼져 있습니다."
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "已儲存 — 取代？"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Показывать каждую команду и её вывод как отдельный блок (стиль Warp). BedTerm записывает небольшой скрипт shell-интеграции в каждую новую SSH-сессию для отслеживания границ приглашения и команд. Используется протокол DCS-хуков Warp, а не OSC 133. Пока в бете и по умолчанию выключено."
           }
         }
       }
     },
-    "Stored fingerprint" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "保存済みフィンガープリント"
+    "Show each command and its output as a separate block (Warp-style). When on, BedTerm writes a small shell-integration script into every new SSH session to track prompt and command boundaries. Without shell integration, blocks won’t show command metadata. BedTerm uses Warp’s DCS hook protocol, not OSC 133, so third-party integrations won’t drive it.": {
+      "extractionState": "manual",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "各コマンドとその出力を独立したブロック (Warp 風) として表示します。シェル統合トグルを有効にするか、OSC 133 統合 (iTerm2 / kitty / VSCode) が稼働しているホストが必要です。"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "저장된 지문"
+        "ko": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "각 명령과 출력을 별도의 블록(Warp 스타일)으로 표시합니다. 셸 통합 토글이 켜져 있거나 OSC 133 통합(iTerm2 / kitty / VSCode)이 이미 실행 중인 호스트가 필요합니다."
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Сохранённый отпечаток"
+        "ru": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Показывать каждую команду и её вывод отдельным блоком (в стиле Warp). Требует включённой интеграции с shell или хоста с уже работающей интеграцией OSC 133 (iTerm2 / kitty / VSCode)."
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已存储指纹"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "将每条命令及其输出显示为单独的区块(Warp 风格)。需要打开 shell 集成开关,或主机已运行 OSC 133 集成(iTerm2 / kitty / VSCode)。"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已儲存指紋"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "將每條命令及其輸出顯示為獨立的區塊(Warp 風格)。需要打開 shell 整合開關,或主機已執行 OSC 133 整合(iTerm2 / kitty / VSCode)。"
           }
         }
       }
     },
-    "This could mean the server was reinstalled — or that someone is intercepting the connection." : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "サーバーが再インストールされた可能性、または通信が傍受されている可能性があります。"
+    "Stored fingerprint": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存済みフィンガープリント"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "서버가 재설치되었거나 누군가 연결을 가로채고 있을 수 있습니다."
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "저장된 지문"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Это может означать, что сервер был переустановлен — или что кто-то перехватывает соединение."
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Сохранённый отпечаток"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "可能是服务器被重装，也可能有人正在拦截连接。"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已存储指纹"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "可能是伺服器已重新安裝，也可能有人正在攔截連線。"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已儲存指紋"
           }
         }
       }
     },
-    "This determines whether we need Local Network access." : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ローカルネットワークへのアクセスが必要かどうか判断します。"
+    "Stored — replace?": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "保存済み — 変更しますか？"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "로컬 네트워크 권한이 필요한지 판단합니다."
+        "ko": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "저장됨 — 변경할까요?"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "От этого зависит, нужен ли доступ к локальной сети."
+        "ru": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Сохранено — заменить?"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "用于判断是否需要本地网络权限。"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "已保存 — 替换？"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "用於判斷是否需要區域網路權限。"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "已儲存 — 取代？"
           }
         }
       }
     },
-    "This will remove the saved password or key." : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "保存されたパスワードまたは鍵が削除されます。"
+    "This could mean the server was reinstalled — or that someone is intercepting the connection.": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "サーバーが再インストールされた可能性、または通信が傍受されている可能性があります。"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "저장된 암호 또는 키가 제거됩니다."
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "서버가 재설치되었거나 누군가 연결을 가로채고 있을 수 있습니다."
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Это удалит сохранённый пароль или ключ."
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Это может означать, что сервер был переустановлен — или что кто-то перехватывает соединение."
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "这将删除已保存的密码或密钥。"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可能是服务器被重装，也可能有人正在拦截连接。"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "這將會移除已儲存的密碼或金鑰。"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可能是伺服器已重新安裝，也可能有人正在攔截連線。"
           }
         }
       }
     },
-    "Trust new key" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "新しいキーを信頼する"
+    "This determines whether we need Local Network access.": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ローカルネットワークへのアクセスが必要かどうか判断します。"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "새 키 신뢰"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "로컬 네트워크 권한이 필요한지 판단합니다."
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Доверять новому ключу"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "От этого зависит, нужен ли доступ к локальной сети."
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "信任新密钥"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "用于判断是否需要本地网络权限。"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "信任新金鑰"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "用於判斷是否需要區域網路權限。"
           }
         }
       }
     },
-    "Unknown error." : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "不明なエラーです。"
+    "This will remove the saved password or key.": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "保存されたパスワードまたは鍵が削除されます。"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "알 수 없는 오류입니다."
+        "ko": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "저장된 암호 또는 키가 제거됩니다."
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Неизвестная ошибка."
+        "ru": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Это удалит сохранённый пароль или ключ."
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "未知错误。"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "这将删除已保存的密码或密钥。"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "未知錯誤。"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "這將會移除已儲存的密碼或金鑰。"
           }
         }
       }
     },
-    "Username" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ユーザー名"
+    "Trust new key": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新しいキーを信頼する"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "사용자 이름"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "새 키 신뢰"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Имя пользователя"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Доверять новому ключу"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "用户名"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "信任新密钥"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "使用者名稱"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "信任新金鑰"
           }
         }
       }
     },
-    "Waiting for permission…" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "アクセス許可を待っています…"
+    "Unknown error.": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不明なエラーです。"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "권한을 기다리는 중…"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "알 수 없는 오류입니다."
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ожидание разрешения…"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Неизвестная ошибка."
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "等待权限授予…"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未知错误。"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "等待權限授予…"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未知錯誤。"
           }
         }
       }
     },
-    "warn" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "注意"
+    "Username": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ユーザー名"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "주의"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "사용자 이름"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "внимание"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Имя пользователя"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "提示"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "用户名"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "提示"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "使用者名稱"
           }
         }
       }
     },
-    "Welcome to BedTerm" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "BedTerm へようこそ"
+    "Waiting for permission…": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アクセス許可を待っています…"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "BedTerm에 오신 것을 환영합니다"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "권한을 기다리는 중…"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Добро пожаловать в BedTerm"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ожидание разрешения…"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "欢迎使用 BedTerm"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "等待权限授予…"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "歡迎使用 BedTerm"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "等待權限授予…"
           }
         }
       }
     },
-    "What kind of host will you connect to?" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "どのようなホストに接続しますか？"
+    "Welcome to BedTerm": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "BedTerm へようこそ"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "어떤 종류의 호스트에 연결하시겠어요?"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "BedTerm에 오신 것을 환영합니다"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "К какому хосту вы будете подключаться?"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Добро пожаловать в BedTerm"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "你要连接哪种主机？"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "欢迎使用 BedTerm"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "你要連線到哪一種主機？"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "歡迎使用 BedTerm"
           }
         }
       }
     },
-    "Where" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "場所"
+    "What kind of host will you connect to?": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "どのようなホストに接続しますか？"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "위치"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "어떤 종류의 호스트에 연결하시겠어요?"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Где"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "К какому хосту вы будете подключаться?"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "位置"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "你要连接哪种主机？"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "位置"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "你要連線到哪一種主機？"
           }
         }
       }
     },
-    "Where is the host?" : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ホストはどこにありますか？"
+    "When vim, htop, claude or other full-screen tools run, reserve the top safe area so the Dynamic Island, notch, or status bar doesn't cover their first row.": {
+      "extractionState": "manual",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "vim・htop・claude などの全画面ツールが動作中、ダイナミックアイランド・ノッチ・ステータスバーが最上行を覆わないよう、画面上部のセーフエリアを確保します。"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "호스트는 어디에 있나요?"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "vim, htop, claude 등 전체 화면 도구가 실행 중일 때 다이내믹 아일랜드, 노치, 상태 표시줄이 첫 줄을 가리지 않도록 화면 상단 안전 영역을 확보합니다."
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Где находится хост?"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Когда работают vim, htop, claude или другие полноэкранные инструменты, резервируется верхняя безопасная область, чтобы Dynamic Island, вырез или строка состояния не закрывали первую строку."
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "主机在哪里？"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当 vim、htop、claude 等全屏工具运行时,预留顶部安全区域,使灵动岛、刘海或状态栏不会遮挡首行。"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "主機在哪裡？"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "當 vim、htop、claude 等全螢幕工具執行時,預留頂部安全區域,讓動態島、瀏海或狀態列不會遮擋首列。"
+          }
+        }
+      }
+    },
+    "Where": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "場所"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "위치"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Где"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "位置"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "位置"
+          }
+        }
+      }
+    },
+    "Where is the host?": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ホストはどこにありますか？"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "호스트는 어디에 있나요?"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Где находится хост?"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "主机在哪里？"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "主機在哪裡？"
           }
         }
       }
     },
     "You already have a saved host for this user@host:port (\"%@\"). Save anyway?": {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "この user@host:port には既にホスト（\"%@\"）が保存されています。それでも保存しますか？"
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "この user@host:port には既にホスト（\"%@\"）が保存されています。それでも保存しますか？"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "이 user@host:port에 이미 저장된 호스트(\"%@\")가 있습니다. 그래도 저장할까요?"
+        "ko": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "이 user@host:port에 이미 저장된 호스트(\"%@\")가 있습니다. 그래도 저장할까요?"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Для этого user@host:port уже есть сохранённый хост («%@»). Сохранить всё равно?"
+        "ru": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Для этого user@host:port уже есть сохранённый хост («%@»). Сохранить всё равно?"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "已有相同 user@host:port 的主机（\"%@\"）。仍要保存吗？"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "已有相同 user@host:port 的主机（\"%@\"）。仍要保存吗？"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "已有相同 user@host:port 的主機（「%@」）。仍要儲存嗎？"
-          }
-        }
-      }
-    },
-    "You are currently connected. The session will end and the saved password or key will be removed." : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "現在接続中です。セッションを終了し、保存されたパスワードまたは鍵を削除します。"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "현재 연결되어 있습니다. 세션이 종료되고 저장된 암호 또는 키가 제거됩니다."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Сейчас вы подключены. Сессия завершится, а сохранённый пароль или ключ будет удалён."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "当前已连接。会话将结束，并删除已保存的密码或密钥。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "您目前已連線。工作階段將結束，並移除已儲存的密碼或金鑰。"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "已有相同 user@host:port 的主機（「%@」）。仍要儲存嗎？"
           }
         }
       }
     },
-    "You're ready to connect to a remote host. Tap Continue to enter the connection details." : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "リモートホストへの接続準備が整いました。「続ける」をタップして接続情報を入力してください。"
+    "You are currently connected. The session will end and the saved password or key will be removed.": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "現在接続中です。セッションを終了し、保存されたパスワードまたは鍵を削除します。"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "원격 호스트에 연결할 준비가 되었습니다. '계속'을 눌러 연결 정보를 입력하세요."
+        "ko": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "현재 연결되어 있습니다. 세션이 종료되고 저장된 암호 또는 키가 제거됩니다."
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Вы готовы подключиться к удалённому хосту. Нажмите «Продолжить» и введите параметры подключения."
+        "ru": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Сейчас вы подключены. Сессия завершится, а сохранённый пароль или ключ будет удалён."
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已可以连接远程主机。点击「继续」填写连接信息。"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "当前已连接。会话将结束，并删除已保存的密码或密钥。"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已可連線到遠端主機。點擊「繼續」填寫連線資訊。"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "您目前已連線。工作階段將結束，並移除已儲存的密碼或金鑰。"
           }
         }
       }
     },
-    "Your current SSH session will be disconnected." : {
-      "extractionState" : "stale",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "現在の SSH セッションは切断されます。"
+    "You're ready to connect to a remote host. Tap Continue to enter the connection details.": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "リモートホストへの接続準備が整いました。「続ける」をタップして接続情報を入力してください。"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "현재 SSH 세션이 끊깁니다."
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "원격 호스트에 연결할 준비가 되었습니다. '계속'을 눌러 연결 정보를 입력하세요."
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Текущая SSH-сессия будет завершена."
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Вы готовы подключиться к удалённому хосту. Нажмите «Продолжить» и введите параметры подключения."
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "当前 SSH 会话将被断开。"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已可以连接远程主机。点击「继续」填写连接信息。"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "目前的 SSH 工作階段將被中斷。"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已可連線到遠端主機。點擊「繼續」填寫連線資訊。"
           }
         }
       }
     },
-    "Blocks" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ブロック"
+    "Your current SSH session will be disconnected.": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "現在の SSH セッションは切断されます。"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "블록"
+        "ko": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "현재 SSH 세션이 끊깁니다."
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Блоки"
+        "ru": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Текущая SSH-сессия будет завершена."
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "区块"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "当前 SSH 会话将被断开。"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "區塊"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "目前的 SSH 工作階段將被中斷。"
           }
         }
       }
     },
-    "Command blocks" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "コマンドブロック"
+    "error": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "エラー"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "명령 블록"
+        "ko": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "오류"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Блоки команд"
+        "ru": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "ошибка"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "命令区块"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "错误"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "命令區塊"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "錯誤"
           }
         }
       }
     },
-    "Coming soon" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "近日公開"
+    "iOS will ask for Local Network permission": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iOS がローカルネットワークの許可を確認します"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "곧 출시"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iOS가 로컬 네트워크 권한을 요청합니다"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Скоро"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iOS запросит разрешение на локальную сеть"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "即将推出"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iOS 会请求本地网络权限"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "即將推出"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iOS 會請求區域網路權限"
           }
         }
       }
     },
-    "Display" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "表示"
+    "macOS": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "macOS"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "디스플레이"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "macOS"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Дисплей"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "macOS"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "显示"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "macOS"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "顯示"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "macOS"
           }
         }
       }
     },
-    "Keep first row visible in full-screen apps" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "フルスクリーンアプリで最上行を表示する"
+    "macOS Setup": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "macOS の準備"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "전체 화면 앱에서 첫 줄 표시 유지"
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "macOS 설정"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Сохранять первую строку видимой в полноэкранных программах"
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Настройка macOS"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "全屏应用中保持首行可见"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "macOS 设置"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "全螢幕應用程式中保持首列可見"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "macOS 設定"
           }
         }
       }
     },
-    "When vim, htop, claude or other full-screen tools run, reserve the top safe area so the Dynamic Island, notch, or status bar doesn't cover their first row." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "vim・htop・claude などの全画面ツールが動作中、ダイナミックアイランド・ノッチ・ステータスバーが最上行を覆わないよう、画面上部のセーフエリアを確保します。"
+    "running…": {
+      "extractionState": "manual",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "実行中…"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "vim, htop, claude 등 전체 화면 도구가 실행 중일 때 다이내믹 아일랜드, 노치, 상태 표시줄이 첫 줄을 가리지 않도록 화면 상단 안전 영역을 확보합니다."
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "실행 중…"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Когда работают vim, htop, claude или другие полноэкранные инструменты, резервируется верхняя безопасная область, чтобы Dynamic Island, вырез или строка состояния не закрывали первую строку."
+        "ru": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "выполняется…"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "当 vim、htop、claude 等全屏工具运行时,预留顶部安全区域,使灵动岛、刘海或状态栏不会遮挡首行。"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "运行中…"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "當 vim、htop、claude 等全螢幕工具執行時,預留頂部安全區域,讓動態島、瀏海或狀態列不會遮擋首列。"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "執行中…"
           }
         }
       }
     },
-    "No command blocks yet" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "コマンドブロックがまだありません"
+    "warn": {
+      "extractionState": "stale",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "注意"
           }
         },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "아직 명령 블록이 없습니다"
+        "ko": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "주의"
           }
         },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Пока нет блоков команд"
+        "ru": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "внимание"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "暂无命令区块"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "提示"
           }
         },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "尚無命令區塊"
-          }
-        }
-      }
-    },
-    "Run a command at the remote shell prompt. Each prompt → command → output cycle becomes a block here." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "リモートシェルのプロンプトでコマンドを実行してください。プロンプト → コマンド → 出力のサイクルが、ここで 1 つのブロックになります。"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "원격 셸 프롬프트에서 명령을 실행하세요. 프롬프트 → 명령 → 출력 주기가 여기에서 하나의 블록이 됩니다."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Выполните команду в строке приглашения удалённой оболочки. Каждый цикл «приглашение → команда → вывод» становится блоком."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在远端 shell 提示符下运行命令。每个「提示符 → 命令 → 输出」周期会在这里形成一个区块。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "在遠端 shell 提示字元下執行命令。每個「提示字元 → 命令 → 輸出」週期會在這裡形成一個區塊。"
-          }
-        }
-      }
-    },
-    "(no command captured)" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "（コマンド未取得）"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "（명령 미수집）"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "(команда не записана)"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "（未捕获命令）"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "（未擷取命令）"
-          }
-        }
-      }
-    },
-    "running…" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "実行中…"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "실행 중…"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "выполняется…"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "运行中…"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "執行中…"
-          }
-        }
-      }
-    },
-    "(output streaming…)" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "（出力ストリーミング中…）"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "（출력 스트리밍 중…）"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "(идёт вывод…)"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "（输出流式传输中…）"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "（輸出串流中…）"
-          }
-        }
-      }
-    },
-    "(no output captured)" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "（出力未取得）"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "（출력 미수집）"
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "(вывод не записан)"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "（未捕获输出）"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "（未擷取輸出）"
-          }
-        }
-      }
-    },
-    "Show each command and its output as a separate block (Warp-style). When on, BedTerm writes a small shell-integration script into every new SSH session to track prompt and command boundaries. Without shell integration, blocks won’t show command metadata. BedTerm uses Warp’s DCS hook protocol, not OSC 133, so third-party integrations won’t drive it." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "ja" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "各コマンドとその出力を独立したブロック (Warp 風) として表示します。シェル統合トグルを有効にするか、OSC 133 統合 (iTerm2 / kitty / VSCode) が稼働しているホストが必要です。"
-          }
-        },
-        "ko" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "각 명령과 출력을 별도의 블록(Warp 스타일)으로 표시합니다. 셸 통합 토글이 켜져 있거나 OSC 133 통합(iTerm2 / kitty / VSCode)이 이미 실행 중인 호스트가 필요합니다."
-          }
-        },
-        "ru" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "Показывать каждую команду и её вывод отдельным блоком (в стиле Warp). Требует включённой интеграции с shell или хоста с уже работающей интеграцией OSC 133 (iTerm2 / kitty / VSCode)."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "将每条命令及其输出显示为单独的区块(Warp 风格)。需要打开 shell 集成开关,或主机已运行 OSC 133 集成(iTerm2 / kitty / VSCode)。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "needs_review",
-            "value" : "將每條命令及其輸出顯示為獨立的區塊(Warp 風格)。需要打開 shell 整合開關,或主機已執行 OSC 133 整合(iTerm2 / kitty / VSCode)。"
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "提示"
           }
         }
       }
     }
   },
-  "version" : "1.0"
+  "version": "1.0"
 }

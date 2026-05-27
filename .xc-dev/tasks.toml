@@ -19,7 +19,7 @@ depends = ["build"]
 desc = "Build, boot the default sim, install, launch"
 cmd  = """
 xcrun simctl boot {{sim_id}} 2>/dev/null || true
-xcrun simctl install {{sim_id}} {{app_path}}
+xcrun simctl install {{sim_id}} "{{app_path}}"
 xcrun simctl launch {{sim_id}} {{bundle_id}}
 """
 

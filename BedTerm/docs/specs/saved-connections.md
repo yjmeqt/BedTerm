@@ -17,11 +17,14 @@ A new top-level Feature module + a new Core storage type, plus a small split of 
 
 - **App / Routing.** `AppRoute` gains `.hosts` and `.hostForm(SavedHost?)`. `.terminal` and `.hostKeyMismatch` are unchanged. Onboarding's `onFinish` lands on `.hosts` rather than the Connection form.
 - **Features / Hosts** (`BedTermKit/Sources/BedTermKit/Features/Hosts/`).
-  - `HostsScreen.swift` — SwiftUI `List` + empty state + `+` toolbar button + swipe / context-menu actions. Pure display + storage surface; row bodies never start a connection.
-  - `HostRow.swift` — row layout: label + `user@host[:port]` subtitle, auth badge, always-visible Edit button (pencil), and primary Connect button (play.fill). Row body taps only toggle error expansion.
-  - `HostsViewModel.swift` — `@Observable`. Owns `entries: [SavedHost]`, `inFlightID: UUID?`, `errorByID: [UUID: RowError]`, `pendingMismatch: PendingMismatch?`. Exposes `requestConnect(id:)` (bound to the row's Connect button — performs the swap-confirm dance), `onRowBodyTap(id:)` (error-expansion only), plus `add`/`edit`/`delete` and a `connect(id:)` driver that delegates the SSH path to a shared `ConnectAttempt`.
-- **Features / Connection** (renamed). The existing screen becomes the add/edit form.
-  - `ConnectionFormScreen.swift` (renamed from `ConnectionScreen`) — takes `mode: .add | .edit(SavedHost)` and a `connectOnSave: Bool` flag. Primary toolbar action is "Save" by default; switches to "Save & Connect" when `connectOnSave == true` (set by `HostsScreen` when it opens the form via the first-run shortcut). Reports back via an `Outcome` callback: `.saved(id)`, `.savedAndConnect(id)`, or `.cancelled` — the host screen then refreshes the list and, on `.savedAndConnect`, calls `HostsViewModel.connect(id:)` once the navigation pops back.
+  - **UI is Rust.** `rust-core/bedterm_ios/src/hosts/hosts_vc.rs` (`BtIosHostsListViewController`) renders the list: rounded `make_list_row` cells, empty-state label, navbar `+` button, left-swipe delete. Reads entries via `bt_swift_hosts_snapshot_json` (see `HostsBridge.swift`) and drives connect / delete via the same bridge.
+  - `HostsConnectController.swift` — UIKit controller that owns the Rust list VC + `HostsViewModel`, drives the swap-confirm dance, delete confirmation, host-key-mismatch sheet, and toaster via `withObservationTracking`.
+  - `HostsBridge.swift` — `@_cdecl` shims (`bt_swift_hosts_snapshot_json`, `_delete`, `_connect`, …) that route the Rust VC's row taps back into `HostsViewModel`.
+  - `HostsViewModel.swift` — `@Observable`. Owns `entries: [SavedHost]`, `inFlightID: UUID?`, `errorByID: [UUID: RowError]`, `pendingMismatch: PendingMismatch?`. Exposes `requestConnect(id:)` (called from the bridge — performs the swap-confirm dance), plus `add`/`edit`/`delete` and a `connect(id:)` driver that delegates the SSH path to a shared `ConnectAttempt`.
+- **Features / Connection** — the add/edit form.
+  - **UI is Rust.** `rust-core/bedterm_ios/src/connect_form/connect_form_vc.rs` (`BtIosConnectFormViewController`) renders the two-card Shadcn form (Connection + Authentication). Takes `editing_id_or_null` for `.add | .edit(SavedHost)` mode and `connect_on_save: bool`; the latter flips the Save button title to "Save & Connect".
+  - `ConnectFormBridge.swift` — `@_cdecl` shims (`bt_swift_connect_form_prefill_json`, `_save`, `_pick_key`, …) that route the Rust VC's form submission into `ConnectionFormViewModel.save(...)`, including the `UIDocumentPickerViewController` private-key import.
+  - The Rust VC reports the outcome via a C callback that the Swift coordinator converts to `ConnectionFormOutcome.saved(id)` / `.savedAndConnect(id)` / `.cancelled`. `HostsConnectController` refreshes the list and, on `.savedAndConnect`, calls `HostsViewModel.connect(id:)` once the navigation pops back.
   - `ConnectionFormViewModel.swift` (extracted from `ConnectionViewModel`) — validation + save. No prewarm, no SSH.
   - `ConnectAttempt.swift` — pulled out of today's `ConnectionViewModel`. A small `@MainActor` driver that takes a `HostCredential`, runs the prewarm, opens `TerminalSession`, and reports `(session, pendingMismatch, errorMessage)`. Reused by `HostsViewModel`.
 - **Core / Keychain.**
@@ -116,7 +119,7 @@ Respect accessibility:
 
 ## Migration
 
-`HostsStore.migrateLegacyIfNeeded()` runs once on `HostsScreen.task`:
+`HostsStore.migrateLegacyIfNeeded()` runs once in `HostsViewModel.init`:
 
 1. If `UserDefaults.hosts.order` is non-empty, no-op.
 2. Else attempt `CredentialsStore().load()`. On success, create a `SavedHost(id: UUID(), label: "Last connection", credential: legacy)`, persist it, append to the index, and call `CredentialsStore().delete()`.

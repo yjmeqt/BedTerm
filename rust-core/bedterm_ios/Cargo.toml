@@ -115,3 +115,10 @@ objc2-quartz-core = { version = "0.3", features = [
     "CAAnimation",
     "CAMediaTiming",
 ] }
+
+# build.rs (`build.rs` at the crate root) parses
+# `BedTerm/Localizable.xcstrings` and emits a static lookup table the
+# runtime `l10n::t()` scans — no JSON parsing or FFI at runtime.
+[build-dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

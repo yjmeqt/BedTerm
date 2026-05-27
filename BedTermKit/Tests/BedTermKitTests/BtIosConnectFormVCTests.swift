@@ -34,7 +34,7 @@ struct BtIosConnectFormVCTests {
 
     @Test("connect-form VC constructs in add mode")
     func vcConstructsInAddMode() throws {
-        let ptr = try #require(bt_ios_create_connect_form_vc(nil, nil, nil, nil))
+        let ptr = try #require(bt_ios_create_connect_form_vc(nil, false, nil, nil, nil))
         let vc = Unmanaged<UIViewController>.fromOpaque(ptr).takeRetainedValue()
         vc.loadViewIfNeeded()
 
@@ -56,7 +56,7 @@ struct BtIosConnectFormVCTests {
 
             let ptr = try #require(
                 host.id.uuidString.withCString { idPtr in
-                    bt_ios_create_connect_form_vc(idPtr, nil, nil, nil)
+                    bt_ios_create_connect_form_vc(idPtr, false, nil, nil, nil)
                 })
             let vc = Unmanaged<UIViewController>.fromOpaque(ptr).takeRetainedValue()
             vc.loadViewIfNeeded()
@@ -74,7 +74,7 @@ struct BtIosConnectFormVCTests {
             guard let ctx else { return }
             Unmanaged<Flag>.fromOpaque(ctx).takeUnretainedValue().fired = true
         }
-        let ptr = try #require(bt_ios_create_connect_form_vc(nil, nil, onCancel, ctx))
+        let ptr = try #require(bt_ios_create_connect_form_vc(nil, false, nil, onCancel, ctx))
         let vc = Unmanaged<UIViewController>.fromOpaque(ptr).takeRetainedValue()
         vc.loadViewIfNeeded()
 
@@ -87,7 +87,7 @@ struct BtIosConnectFormVCTests {
 
     @Test("save button surfaces validation errors when fields blank")
     func saveValidationSurfacesError() throws {
-        let ptr = try #require(bt_ios_create_connect_form_vc(nil, nil, nil, nil))
+        let ptr = try #require(bt_ios_create_connect_form_vc(nil, false, nil, nil, nil))
         let vc = Unmanaged<UIViewController>.fromOpaque(ptr).takeRetainedValue()
         vc.loadViewIfNeeded()
 

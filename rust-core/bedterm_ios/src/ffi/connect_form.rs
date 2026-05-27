@@ -16,6 +16,9 @@ use std::ffi::{c_char, c_void, CStr};
 ///
 /// - `editing_id_or_null`: UTF-8, nul-terminated UUID string of an
 ///   existing host to edit, or NULL for "Add Host".
+/// - `connect_on_save`: when true, the Save bar button reads
+///   "Save & Connect" — mirrors the SwiftUI
+///   `ConnectionFormScreen.primaryActionTitle` branch.
 /// - `on_done`: fires on the main thread with the saved entry's UUID
 ///   string once the user successfully saves. The string is borrowed
 ///   for the duration of the call.
@@ -29,6 +32,7 @@ use std::ffi::{c_char, c_void, CStr};
 #[no_mangle]
 pub unsafe extern "C" fn bt_ios_create_connect_form_vc(
     editing_id_or_null: *const c_char,
+    connect_on_save: bool,
     on_done: Option<BtIosConnectFormDoneCallback>,
     on_cancel: Option<BtIosConnectFormCancelCallback>,
     ctx: *mut c_void,
@@ -42,7 +46,7 @@ pub unsafe extern "C" fn bt_ios_create_connect_form_vc(
                 .into_owned(),
         )
     };
-    create_connect_form_vc(id_string, on_done, on_cancel, ctx)
+    create_connect_form_vc(id_string, connect_on_save, on_done, on_cancel, ctx)
 }
 
 /// Release a connect-form `UIViewController *` previously returned by

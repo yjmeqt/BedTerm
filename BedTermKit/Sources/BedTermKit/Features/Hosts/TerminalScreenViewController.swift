@@ -4,7 +4,8 @@ import UIKit
 /// UIKit shell that hosts the Rust-backed terminal VC as a direct child
 /// of a `UINavigationController`. The Rust VC owns its own connection-state
 /// UI (HUD + glyph renderer), so no SwiftUI overlays are layered here —
-/// only the navigation bar items (back, kill) live in Swift.
+/// only the back navigation bar item lives in Swift. Tapping back ends the
+/// live SSH session (no separate kill button — Back == End session).
 ///
 /// This replaces the `IosTerminalView` SwiftUI representable that used to
 /// wrap the Rust VC inside a SwiftUI `NavigationStack` destination —
@@ -17,7 +18,6 @@ final class TerminalScreenViewController: UIViewController {
     private let credential: HostCredential
     private let hostName: String
     private let onBack: () -> Void
-    private let onKill: () -> Void
     private let bootstrapPayloadProvider: @MainActor () -> String?
 
     init(
@@ -25,15 +25,13 @@ final class TerminalScreenViewController: UIViewController {
         credential: HostCredential,
         hostName: String,
         bootstrapPayloadProvider: @escaping @MainActor () -> String?,
-        onBack: @escaping () -> Void,
-        onKill: @escaping () -> Void
+        onBack: @escaping () -> Void
     ) {
         self.host = IosTerminalHost(session: session)
         self.credential = credential
         self.hostName = hostName
         self.bootstrapPayloadProvider = bootstrapPayloadProvider
         self.onBack = onBack
-        self.onKill = onKill
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -98,42 +96,12 @@ final class TerminalScreenViewController: UIViewController {
         back.accessibilityLabel = String(localized: "Back")
         back.accessibilityIdentifier = "terminal.back"
 
-        let kill = UIBarButtonItem(
-            image: UIImage(systemName: "xmark"),
-            style: .plain,
-            target: self,
-            action: #selector(killTapped)
-        )
-        kill.tintColor = UIColor(named: "ShadcnDestructive", in: .module, compatibleWith: nil)
-        kill.accessibilityLabel = String(localized: "Kill session")
-        kill.accessibilityIdentifier = "terminal.kill"
-
-        navigationItem.leftBarButtonItems = [back, kill]
+        navigationItem.leftBarButtonItem = back
         navigationItem.hidesBackButton = true
     }
 
     @objc private func backTapped() {
         onBack()
-    }
-
-    @objc private func killTapped() {
-        let alert = UIAlertController(
-            title: String(localized: "End this session?"),
-            message: nil,
-            preferredStyle: .actionSheet
-        )
-        alert.addAction(
-            UIAlertAction(
-                title: String(localized: "End session"),
-                style: .destructive,
-                handler: { [weak self] _ in self?.onKill() }
-            )
-        )
-        alert.addAction(UIAlertAction(title: String(localized: "Cancel"), style: .cancel))
-        if let pop = alert.popoverPresentationController {
-            pop.barButtonItem = navigationItem.leftBarButtonItems?.last
-        }
-        present(alert, animated: true)
     }
 
     // MARK: - Connect

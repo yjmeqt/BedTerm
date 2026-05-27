@@ -18,18 +18,16 @@ struct BedTermSettingsTests {
         let settings = BedTermSettings(defaults: try makeDefaults())
         #expect(settings.reserveTopSafeAreaInAltScreen)
         #expect(!settings.showCommandBlocks)
-        #expect(!settings.useRustHostsList)
-        #expect(!settings.useRustConnectForm)
     }
 
-    @Test("useRustConnectForm persists across reloads")
-    func useRustConnectFormPersists() throws {
+    @Test("retired Rust-UI experiment keys are swept on init")
+    func sweepsRetiredExperimentKeys() throws {
         let defaults = try makeDefaults()
-        let first = BedTermSettings(defaults: defaults)
-        first.useRustConnectForm = true
-
-        let second = BedTermSettings(defaults: defaults)
-        #expect(second.useRustConnectForm)
+        defaults.set(true, forKey: "settings.useRustHostsList")
+        defaults.set(true, forKey: "settings.useRustConnectForm")
+        _ = BedTermSettings(defaults: defaults)
+        #expect(defaults.object(forKey: "settings.useRustHostsList") == nil)
+        #expect(defaults.object(forKey: "settings.useRustConnectForm") == nil)
     }
 
     @Test("toggle persists across reloads")

@@ -12,8 +12,6 @@ public final class BedTermSettings {
     private enum Key {
         static let reserveTopSafeAreaInAltScreen = "settings.reserveTopSafeAreaInAltScreen"
         static let showCommandBlocks = "settings.showCommandBlocks"
-        static let useRustHostsList = "settings.useRustHostsList"
-        static let useRustConnectForm = "settings.useRustConnectForm"
     }
 
     private let defaults: UserDefaults
@@ -47,35 +45,6 @@ public final class BedTermSettings {
         }
     }
 
-    /// W24b experimental: route the saved-hosts root through the
-    /// Rust-built `BtIosHostsListViewController` instead of the SwiftUI
-    /// `HostsScreen`. Connect orchestration (toaster, mismatch dialog,
-    /// terminal push) still runs through Swift's `HostsViewModel`; the
-    /// Rust VC only renders the list and signals row taps / swipes back
-    /// through the `bt_swift_hosts_*` bridge. Default: off until the
-    /// W24c connect-form port lands.
-    public var useRustHostsList: Bool {
-        didSet {
-            if useRustHostsList != oldValue {
-                defaults.set(useRustHostsList, forKey: Key.useRustHostsList)
-            }
-        }
-    }
-
-    /// W24c experimental: route the saved-hosts connect form through
-    /// the Rust-built `BtIosConnectFormViewController` instead of the
-    /// SwiftUI `ConnectionFormScreen`. Validation + persistence still
-    /// runs through Swift's `ConnectionFormViewModel.save` via the
-    /// `bt_swift_connect_form_*` bridge. Default: off until the W24d
-    /// flag-flip retirement lands.
-    public var useRustConnectForm: Bool {
-        didSet {
-            if useRustConnectForm != oldValue {
-                defaults.set(useRustConnectForm, forKey: Key.useRustConnectForm)
-            }
-        }
-    }
-
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         // `object(forKey:)` is `nil` for never-written keys; `bool(forKey:)`
@@ -85,10 +54,6 @@ public final class BedTermSettings {
             defaults.object(forKey: Key.reserveTopSafeAreaInAltScreen) as? Bool ?? true
         self.showCommandBlocks =
             defaults.object(forKey: Key.showCommandBlocks) as? Bool ?? false
-        self.useRustHostsList =
-            defaults.object(forKey: Key.useRustHostsList) as? Bool ?? false
-        self.useRustConnectForm =
-            defaults.object(forKey: Key.useRustConnectForm) as? Bool ?? false
         // Migrate the old shell-integration key (pre-2026-05-24, when it was
         // a separate toggle) into showCommandBlocks, then delete it.
         if let oldShell = defaults.object(forKey: "settings.installShellIntegrationOnConnect") as? Bool {
@@ -106,7 +71,12 @@ public final class BedTermSettings {
             "debug.useMetalRenderer",
             "experiments.useRustTerminal",
             "experiments.useRustSettings",
-            "experiments.useRustOnboarding"
+            "experiments.useRustOnboarding",
+            // W24d: SwiftUI hosts list + connect form retired; the two
+            // experimental toggles (W24b/W24c) are gone, so purge any
+            // value historical installs may have written.
+            "settings.useRustHostsList",
+            "settings.useRustConnectForm"
         ] {
             defaults.removeObject(forKey: key)
         }

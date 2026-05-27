@@ -10,6 +10,7 @@
 
 use crate::a11y;
 use crate::design_system::{colors, spacing, typography};
+use crate::l10n::t;
 use crate::onboarding::choice_button::make_choice_button;
 use crate::onboarding::BtIosOnboardingChoiceCallback;
 use objc2::rc::{Allocated, Retained};
@@ -61,7 +62,7 @@ define_class!(
 
             // Title — "Welcome to BedTerm".
             let title = UILabel::new(mtm);
-            title.setText(Some(&NSString::from_str("Welcome to BedTerm")));
+            title.setText(Some(&NSString::from_str(&t("Welcome to BedTerm"))));
             unsafe {
                 title.setFont(Some(&typography::system(34.0, typography::WEIGHT_BOLD)));
                 title.setTextColor(Some(&colors::shadcn_primary()));
@@ -71,9 +72,9 @@ define_class!(
 
             // Body — "What kind of host will you connect to?".
             let body = UILabel::new(mtm);
-            body.setText(Some(&NSString::from_str(
+            body.setText(Some(&NSString::from_str(&t(
                 "What kind of host will you connect to?",
-            )));
+            ))));
             unsafe {
                 body.setFont(Some(&typography::body()));
                 body.setTextColor(Some(&colors::shadcn_muted_foreground()));
@@ -85,7 +86,7 @@ define_class!(
             let macos_btn = make_choice_button(
                 mtm,
                 "macOS",
-                "A Mac mini, MacBook, or iMac on your network",
+                &t("A Mac mini, MacBook, or iMac on your network"),
                 self.as_ref(),
                 sel!(choiceMacOSTapped),
             );
@@ -93,8 +94,8 @@ define_class!(
 
             let other_btn = make_choice_button(
                 mtm,
-                "Linux / other",
-                "Linux box, VM, Raspberry Pi, cloud server",
+                &t("Linux / other"),
+                &t("Linux box, VM, Raspberry Pi, cloud server"),
                 self.as_ref(),
                 sel!(choiceOtherTapped),
             );
@@ -140,7 +141,7 @@ define_class!(
 
                 // Nav title.
                 let nav_item: Retained<AnyObject> = unsafe { msg_send![self, navigationItem] };
-                let title_ns = NSString::from_str("Setup");
+                let title_ns = NSString::from_str(&t("Setup"));
                 let _: () = unsafe { msg_send![&*nav_item, setTitle: &*title_ns] };
             }
         }

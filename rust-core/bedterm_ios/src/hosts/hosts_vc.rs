@@ -1,15 +1,15 @@
-//! `BtIosHostsListViewController` — Rust port of the saved-hosts list
-//! (W24b phase 1).
+//! `BtIosHostsListViewController` — Rust saved-hosts list.
 //!
 //! Owns a `UIScrollView` + vertical `UIStackView` of `make_list_row`
 //! cells, one per `HostListEntry`. Rows dispatch tap → connect through
-//! Swift's existing `HostsViewModel`; left-swipe fires Swift-side delete
-//! then refreshes the snapshot. The navbar `+` button calls back into
-//! Swift to present the (still-SwiftUI) connect-form sheet.
+//! Swift's `HostsViewModel` via `HostsBridge` `@_cdecl` shims;
+//! left-swipe fires Swift-side delete then refreshes the snapshot.
+//! The navbar `+` button calls back into Swift, which pushes the
+//! Rust connect-form VC for the new-host flow.
 //!
-//! TODO(localization): English copy is hardcoded; Swift owns the
-//! localized variants of the title / empty-state copy. Routed through a
-//! Swift-side strings provider when this VC graduates from experimental.
+//! All user-facing strings are routed through `crate::l10n::t(...)`;
+//! translations live in `BedTerm/Localizable.xcstrings` and are baked
+//! into the binary via `build.rs`.
 
 #![cfg(target_os = "ios")]
 
@@ -26,6 +26,7 @@ use crate::hosts::bridge::{
 };
 use crate::hosts::model::{parse_entries_json, HostListEntry};
 use crate::hosts::BtIosHostsAddCallback;
+use crate::l10n::t;
 use objc2::rc::{Allocated, Retained};
 use objc2::runtime::{AnyObject, Sel};
 use objc2::{define_class, msg_send, sel, DefinedClass, MainThreadMarker, MainThreadOnly};
@@ -46,7 +47,7 @@ struct RowState {
 
 #[derive(Default)]
 pub struct Ivars {
-    /// Fires on `+` tap. Swift presents the existing SwiftUI connect form.
+    /// Fires on `+` tap. Swift pushes the Rust connect-form VC.
     on_add: Cell<Option<BtIosHostsAddCallback>>,
     /// Opaque host context. SAFETY: never dereffed on Rust side.
     ctx: Cell<*mut c_void>,
@@ -86,13 +87,13 @@ define_class!(
             // Background — design-system surface token so dark mode works.
             if let Some(view) = self.view() {
                 view.setBackgroundColor(Some(&colors::shadcn_background()));
-                a11y::set_a11y_id(&*view as &AnyObject, "hosts.rust.root");
+                a11y::set_a11y_id(&*view as &AnyObject, "hosts.root");
             }
 
             // Nav title + `+` button.
             let nav_item: Retained<UINavigationItem> =
                 unsafe { msg_send![self, navigationItem] };
-            nav_item.setTitle(Some(&NSString::from_str("Hosts")));
+            nav_item.setTitle(Some(&NSString::from_str(&t("Hosts"))));
             let add_title = NSString::from_str("+");
             let add_btn: Retained<UIBarButtonItem> = unsafe {
                 UIBarButtonItem::initWithTitle_style_target_action(
@@ -119,9 +120,9 @@ define_class!(
 
             // Empty-state label — hidden until the snapshot lands.
             let empty_label = UILabel::new(mtm);
-            empty_label.setText(Some(&NSString::from_str(
+            empty_label.setText(Some(&NSString::from_str(&t(
                 "No hosts yet. Tap + to add one.",
-            )));
+            ))));
             unsafe {
                 empty_label.setFont(Some(&typography::body()));
                 empty_label.setTextColor(Some(&colors::shadcn_muted_foreground()));
@@ -171,7 +172,11 @@ define_class!(
                 return;
             };
 
-            // Scroll view fills the whole bounds.
+            // Scroll view fills the whole bounds. Its
+            // `contentInsetAdjustmentBehavior` defaults to `.automatic`, so
+            // UIKit subtracts the safe area from the content area for us — we
+            // must NOT offset the content stack by `safeAreaInsets.top` again
+            // or the content lands twice-pushed below the nav bar.
             let scroll_frame = CGRect {
                 origin: CGPoint { x: 0.0, y: 0.0 },
                 size: CGSize {
@@ -181,9 +186,9 @@ define_class!(
             };
             let _: () = unsafe { msg_send![&**scroll, setFrame: scroll_frame] };
 
-            // Content stack sizes to width minus safe-area insets.
+            // Content stack sized + positioned in scroll-content space.
             let pad: CGFloat = spacing::LG;
-            let available_w = bounds.size.width - insets.left - insets.right - pad * 2.0;
+            let available_w = bounds.size.width - pad * 2.0;
             let fitting = CGSize {
                 width: available_w,
                 height: 0.0,
@@ -192,17 +197,14 @@ define_class!(
                 unsafe { msg_send![&**content, systemLayoutSizeFittingSize: fitting] };
             let content_height: CGFloat = natural.height.max(0.0);
             let content_frame = CGRect {
-                origin: CGPoint {
-                    x: insets.left + pad,
-                    y: insets.top + pad,
-                },
+                origin: CGPoint { x: pad, y: pad },
                 size: CGSize {
                     width: available_w,
                     height: content_height,
                 },
             };
             let _: () = unsafe { msg_send![&**content, setFrame: content_frame] };
-            let total_h = content_height + insets.top + insets.bottom + pad * 2.0;
+            let total_h = content_height + pad * 2.0;
             let content_size = CGSize {
                 width: bounds.size.width,
                 height: total_h,
@@ -337,10 +339,8 @@ impl BtIosHostsListViewController {
         for (idx, entry) in entries.into_iter().enumerate() {
             let title = entry.primary_label();
             let subtitle = entry.subtitle();
-            // Mirror SwiftUI HostRow trailing accessory: key.fill when
-            // the entry authenticates with a private key, lock.fill
-            // for password-based hosts. The chevron the W24b agent
-            // wired up wasn't in the SwiftUI version.
+            // Trailing accessory: key.fill when the entry authenticates
+            // with a private key, lock.fill for password-based hosts.
             let accessory = ListRowAccessory::Badge {
                 system_name: if entry.auth_is_key {
                     "key.fill"
@@ -359,10 +359,11 @@ impl BtIosHostsListViewController {
             handle.set_on_tap(self.as_ref(), sel!(rowTapped:));
             handle.set_on_delete(mtm, self.as_ref(), sel!(rowSwiped:));
 
-            a11y::set_a11y_id(
-                &*row_view as &AnyObject,
-                &format!("hosts.rust.row.{}", entry.id),
-            );
+            // W24d: tag the inner UIButton (not the card UIView) so
+            // XCUITest's `app.buttons["hosts.row.<id>"]` query resolves
+            // to exactly one element.
+            let row_id = format!("hosts.row.{}", entry.id);
+            a11y::set_a11y_id(&*handle.button as &AnyObject, &row_id);
 
             content.addArrangedSubview(&row_view);
 
