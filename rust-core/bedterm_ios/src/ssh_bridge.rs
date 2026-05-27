@@ -16,22 +16,40 @@ use std::ffi::c_void;
 /// (see spec § "Error mapping"). Variants that carry detail strings
 /// receive them via the `msg` slot (a retained `NSString *`, copied and
 /// released by the Rust side).
-#[repr(u32)]
+// Variants are spelled with the `BtSSHResult*` prefix so the C header
+// cbindgen generates matches what `SSHClientBridge.swift` already
+// references (e.g. `BtSSHResultDnsResolution`). The type name keeps the
+// `Code` suffix to match the Swift call sites' parameter type.
+//
+// `repr(C)` (rather than `repr(u32)`) so cbindgen emits the typedef-enum
+// form `typedef enum BtSSHResultCode { … } BtSSHResultCode;` — which
+// Swift imports as a named enum with each variant typed as `BtSSHResultCode`.
+// The `repr(u32)` form emits a `typedef uint32_t BtSSHResultCode;` plus
+// a separate `enum BtSSHResultCode { … }`, which Swift imports as two
+// unrelated symbols (overload-resolution then fails on the call sites).
+// ABI-wise the C `int`-sized enum matches the Swift `BtSSHResultCode`
+// parameter that `SSHClientBridge` already passes.
+#[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[allow(
+    non_camel_case_types,
+    clippy::upper_case_acronyms,
+    clippy::enum_variant_names
+)]
 pub enum BtSSHResultCode {
-    Ok = 0,
-    DnsResolution = 1,
-    TcpRefused = 2,
-    Timeout = 3,
-    HandshakeFailed = 4,
-    AuthenticationFailed = 5,
-    PrivateKeyParse = 6,
-    PrivateKeyPassphraseRequired = 7,
-    HostKeyMismatch = 8,
-    Disconnected = 9,
-    PeerReset = 10,
-    ShellExited = 11,
-    Other = 99,
+    BtSSHResultOk = 0,
+    BtSSHResultDnsResolution = 1,
+    BtSSHResultTcpRefused = 2,
+    BtSSHResultTimeout = 3,
+    BtSSHResultHandshakeFailed = 4,
+    BtSSHResultAuthenticationFailed = 5,
+    BtSSHResultPrivateKeyParse = 6,
+    BtSSHResultPrivateKeyPassphraseRequired = 7,
+    BtSSHResultHostKeyMismatch = 8,
+    BtSSHResultDisconnected = 9,
+    BtSSHResultPeerReset = 10,
+    BtSSHResultShellExited = 11,
+    BtSSHResultOther = 99,
 }
 
 /// C-compatible mirror of `SSHConnectionRequest`. Lifetimes: pointers

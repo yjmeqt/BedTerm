@@ -34,7 +34,9 @@ use objc2_ui_kit::{
 use std::cell::Cell;
 
 /// Done-button callback installed by the FFI constructor. Fires on the
-/// main thread when the user taps the navigation-bar Done item.
+/// main thread when the user taps the navigation-bar Done item. Kept
+/// for internal storage; FFI entry inlines the bare-fn type for
+/// cbindgen-friendly emission (see `ffi/vc.rs`).
 pub type BtIosSettingsDoneCallback = unsafe extern "C" fn(ctx: *mut std::ffi::c_void);
 
 use crate::settings_store;

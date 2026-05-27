@@ -37,11 +37,13 @@ use std::ffi::c_void;
 /// is a UTF-8 nul-terminated C string of the saved entry's UUID; valid
 /// only for the duration of the call. `connect_now` is true when the
 /// caller wants to start a connect immediately (matches the
-/// `connectOnSave` shortcut in the SwiftUI flow).
+/// `connectOnSave` shortcut in the SwiftUI flow). Kept for internal
+/// storage; FFI entry inlines the bare-fn type (see `ffi/vc.rs`).
 #[cfg(target_os = "ios")]
 pub type BtIosConnectFormDoneCallback =
     unsafe extern "C" fn(ctx: *mut c_void, id_string: *const c_char, connect_now: bool);
 
-/// Callback fired when the user taps Cancel.
+/// Callback fired when the user taps Cancel. Same rationale as
+/// `BtIosConnectFormDoneCallback`.
 #[cfg(target_os = "ios")]
 pub type BtIosConnectFormCancelCallback = unsafe extern "C" fn(ctx: *mut c_void);

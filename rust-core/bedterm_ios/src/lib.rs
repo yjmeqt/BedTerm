@@ -138,5 +138,23 @@ mod vc;
 mod ffi;
 
 /// Opaque callback type fired when the in-VC back button is tapped.
-#[cfg(target_os = "ios")]
+///
+/// Defined unconditionally (no `#[cfg(target_os = "ios")]`) so cbindgen
+/// emits the typedef in the generated C header — Swift tests reference
+/// it by name (e.g. `IosTerminalFFITests.onSendCallback: BtIosOnSendCallback`).
+/// The FFI entry points themselves inline the bare-fn signature so
+/// cbindgen also gets a plain nullable C function-pointer parameter
+/// (it doesn't unwrap `Option<TypeAlias>`).
 pub type BtIosBackCallback = unsafe extern "C" fn(ctx: *mut std::ffi::c_void);
+
+/// PTY-byte sink callback installed on `BtIosMetalInputView`. Swift
+/// tests reference this typedef by name; see `BtIosBackCallback` for
+/// the cbindgen-visibility rationale.
+pub type BtIosOnSendCallback =
+    unsafe extern "C" fn(ctx: *mut std::ffi::c_void, bytes: *const u8, len: usize);
+
+/// Grid-resize callback fired from `BtIosMetalInputView::layoutSubviews`.
+/// Swift tests reference this typedef by name; see `BtIosBackCallback`
+/// for the cbindgen-visibility rationale.
+pub type BtIosOnResizeCallback =
+    unsafe extern "C" fn(ctx: *mut std::ffi::c_void, cols: u16, rows: u16);

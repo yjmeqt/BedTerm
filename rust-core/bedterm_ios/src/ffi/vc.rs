@@ -5,7 +5,6 @@
 #![cfg(target_os = "ios")]
 
 use crate::vc;
-use crate::BtIosBackCallback;
 
 /// Create the iOS terminal `UIViewController *` (returned as `*mut c_void` so
 /// the C header can stay type-agnostic).
@@ -20,7 +19,11 @@ use crate::BtIosBackCallback;
 /// `on_back` and `ctx` are stored and invoked on the main thread only.
 #[no_mangle]
 pub unsafe extern "C" fn bt_ios_create_vc(
-    on_back: Option<BtIosBackCallback>,
+    // Inline the bare-fn type rather than `Option<BtIosBackCallback>`
+    // so cbindgen emits a plain nullable function pointer (it only
+    // unwraps `Option<extern fn>` when the inner type is a bare fn,
+    // not a `Type::Path` typedef).
+    on_back: Option<unsafe extern "C" fn(ctx: *mut std::ffi::c_void)>,
     ctx: *mut std::ffi::c_void,
 ) -> *mut std::ffi::c_void {
     vc::create_vc(on_back, ctx)

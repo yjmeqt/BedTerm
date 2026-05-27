@@ -13,10 +13,6 @@ use crate::onboarding::host_kind_vc::create_host_kind_vc;
 use crate::onboarding::local_permission_vc::create_local_permission_vc;
 use crate::onboarding::location_vc::create_location_vc;
 use crate::onboarding::mac_tutorial_vc::create_mac_tutorial_vc;
-use crate::onboarding::{
-    BtIosOnboardingChoiceCallback, BtIosOnboardingContinueCallback,
-    BtIosOnboardingFlowCompletedCallback,
-};
 use std::ffi::c_void;
 
 /// Create the host-kind step VC (`onboarding/host_kind_vc.rs`).
@@ -26,7 +22,9 @@ use std::ffi::c_void;
 /// `on_choice` and `ctx` are stored and invoked on the main thread only.
 #[no_mangle]
 pub unsafe extern "C" fn bt_ios_create_onboarding_host_kind_vc(
-    on_choice: Option<BtIosOnboardingChoiceCallback>,
+    // Inline the bare-fn type so cbindgen emits a nullable C function
+    // pointer (it doesn't unwrap `Option<TypeAlias>` — see ffi/vc.rs).
+    on_choice: Option<unsafe extern "C" fn(ctx: *mut c_void, choice: i32)>,
     ctx: *mut c_void,
 ) -> *mut c_void {
     create_host_kind_vc(on_choice, ctx)
@@ -39,7 +37,9 @@ pub unsafe extern "C" fn bt_ios_create_onboarding_host_kind_vc(
 /// Same as `bt_ios_create_onboarding_host_kind_vc`.
 #[no_mangle]
 pub unsafe extern "C" fn bt_ios_create_onboarding_location_vc(
-    on_choice: Option<BtIosOnboardingChoiceCallback>,
+    // Inline the bare-fn type so cbindgen emits a nullable C function
+    // pointer (it doesn't unwrap `Option<TypeAlias>` — see ffi/vc.rs).
+    on_choice: Option<unsafe extern "C" fn(ctx: *mut c_void, choice: i32)>,
     ctx: *mut c_void,
 ) -> *mut c_void {
     create_location_vc(on_choice, ctx)
@@ -52,7 +52,7 @@ pub unsafe extern "C" fn bt_ios_create_onboarding_location_vc(
 /// Same as the other onboarding-VC entry points.
 #[no_mangle]
 pub unsafe extern "C" fn bt_ios_create_onboarding_mac_tutorial_vc(
-    on_continue: Option<BtIosOnboardingContinueCallback>,
+    on_continue: Option<unsafe extern "C" fn(ctx: *mut c_void)>,
     ctx: *mut c_void,
 ) -> *mut c_void {
     create_mac_tutorial_vc(on_continue, ctx)
@@ -68,7 +68,7 @@ pub unsafe extern "C" fn bt_ios_create_onboarding_mac_tutorial_vc(
 /// Same as the other onboarding-VC entry points.
 #[no_mangle]
 pub unsafe extern "C" fn bt_ios_create_onboarding_local_permission_vc(
-    on_continue: Option<BtIosOnboardingContinueCallback>,
+    on_continue: Option<unsafe extern "C" fn(ctx: *mut c_void)>,
     ctx: *mut c_void,
     is_remote: bool,
 ) -> *mut c_void {
@@ -87,7 +87,7 @@ pub unsafe extern "C" fn bt_ios_create_onboarding_local_permission_vc(
 /// `on_completed` and `ctx` are stored and invoked on the main thread only.
 #[no_mangle]
 pub unsafe extern "C" fn bt_ios_create_onboarding_flow_vc(
-    on_completed: Option<BtIosOnboardingFlowCompletedCallback>,
+    on_completed: Option<unsafe extern "C" fn(ctx: *mut c_void)>,
     ctx: *mut c_void,
 ) -> *mut c_void {
     create_flow_vc(on_completed, ctx)

@@ -15,7 +15,6 @@
 #![cfg(target_os = "ios")]
 
 use crate::hosts::hosts_vc::{create_hosts_list_vc, release_hosts_list_vc};
-use crate::hosts::BtIosHostsAddCallback;
 use crate::hosts_store;
 use crate::hosts_vm::{self, Action};
 use std::ffi::{c_char, c_void, CStr, CString};
@@ -34,7 +33,9 @@ use std::ffi::{c_char, c_void, CStr, CString};
 /// Rust; the Swift host owns its lifetime until the VC is released.
 #[no_mangle]
 pub unsafe extern "C" fn bt_ios_create_hosts_list_vc(
-    on_add: Option<BtIosHostsAddCallback>,
+    // Inline the bare-fn type so cbindgen emits a nullable C function
+    // pointer (it doesn't unwrap `Option<TypeAlias>` — see ffi/vc.rs).
+    on_add: Option<unsafe extern "C" fn(ctx: *mut c_void)>,
     ctx: *mut c_void,
 ) -> *mut c_void {
     create_hosts_list_vc(on_add, ctx)

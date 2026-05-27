@@ -9,7 +9,6 @@
 #![cfg(target_os = "ios")]
 
 use crate::connect_form::connect_form_vc::{create_connect_form_vc, release_connect_form_vc};
-use crate::connect_form::{BtIosConnectFormCancelCallback, BtIosConnectFormDoneCallback};
 use std::ffi::{c_char, c_void, CStr};
 
 /// Create a connect-form VC.
@@ -33,8 +32,12 @@ use std::ffi::{c_char, c_void, CStr};
 pub unsafe extern "C" fn bt_ios_create_connect_form_vc(
     editing_id_or_null: *const c_char,
     connect_on_save: bool,
-    on_done: Option<BtIosConnectFormDoneCallback>,
-    on_cancel: Option<BtIosConnectFormCancelCallback>,
+    // Inline the bare-fn types so cbindgen emits nullable C function
+    // pointers (it doesn't unwrap `Option<TypeAlias>` — see ffi/vc.rs).
+    on_done: Option<
+        unsafe extern "C" fn(ctx: *mut c_void, id_string: *const c_char, connect_now: bool),
+    >,
+    on_cancel: Option<unsafe extern "C" fn(ctx: *mut c_void)>,
     ctx: *mut c_void,
 ) -> *mut c_void {
     let id_string = if editing_id_or_null.is_null() {

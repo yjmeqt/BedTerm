@@ -9,8 +9,10 @@
 # contents, however, are now produced from `bedterm_ios`: the static
 # library is `libbedterm_ios.a` (which transitively contains all of
 # `bedterm_core`'s symbols by Rust staticlib linkage), and the staged
-# header is `cbindgen(bedterm_core)` + the hand-written `bedterm_ios.h`
-# FFI fragment appended before the include-guard closer.
+# header is a straight copy of cbindgen's `bedterm_ios.h` output —
+# cbindgen on `bedterm_ios` now generates declarations for both crates
+# (its `parse.parse_deps` + `parse.extra_bindings` whitelist walks into
+# `bedterm_core`), so there is exactly one C header on disk.
 #
 # Run from repo root or via Xcode pre-action / build phase:
 #     ./scripts/build-rust-xcframework.sh [debug|release|Debug|Release] [PLATFORM_NAME]
@@ -61,13 +63,13 @@ FW_DIR="$OUT_DIR/BedTermCore.xcframework"
 # of `libbedterm_ios.a`.
 LIB_NAME="libbedterm_core.a"
 IOS_LIB_NAME="libbedterm_ios.a"
-HEADER="$RUST_DIR/bedterm_core/include/bedterm_core.h"
-# Supplemental header with declarations for symbols `bedterm_ios` itself
-# exports (the hand-written `bt_ios_*` C ABI fragment). cbindgen
-# regenerates HEADER on every bedterm_core build, so we keep extra
-# declarations in a separate file and cat them together into every
-# staged copy.
-IOS_UI_HEADER="$RUST_DIR/bedterm_ios/include/bedterm_ios.h"
+# Single source of truth: cbindgen, configured on `bedterm_ios`, walks
+# into the `bedterm_core` path-dep and emits both `bt_term_*` (core) and
+# `bt_ios_*` (ui) declarations into one file. The xcframework keeps the
+# legacy `bedterm_core.h` filename inside its slice `Headers/` and the
+# `BedTermCoreC` SwiftPM target's include directory — only the
+# *generator source* moved.
+HEADER="$RUST_DIR/bedterm_ios/include/bedterm_ios.h"
 
 # rust-target → xcframework slice id (matches the Info.plist committed alongside).
 ALL_TARGETS=(
@@ -93,9 +95,9 @@ esac
 echo "==> building slices: ${SLICE_IDS[*]} (PLATFORM_NAME='${PLATFORM_NAME_RAW}')"
 
 cd "$RUST_DIR"
-# Building `bedterm_ios` transitively builds `bedterm_core` (path dep)
-# and triggers its `build.rs` cbindgen step, which keeps
-# `bedterm_core/include/bedterm_core.h` up to date.
+# Building `bedterm_ios` triggers its `build.rs` cbindgen step, which
+# walks both this crate and the `bedterm_core` path-dep and regenerates
+# `bedterm_ios/include/bedterm_ios.h` (consumed below as $HEADER).
 for t in "${TARGETS[@]}"; do
   echo "==> cargo build -p bedterm_ios --target $t ($PROFILE)"
   cargo build -p bedterm_ios \
@@ -140,21 +142,10 @@ for t in "${TARGETS[@]}"; do
   # files (Rust staticlib linkage), so we copy it straight in under the
   # legacy `libbedterm_core.a` slice filename — no libtool merge needed.
   cp "$RUST_DIR/target/$t/$PROFILE_DIR/$IOS_LIB_NAME" "$slice_dir/$LIB_NAME"
-  # Compose the staged header: cbindgen-generated bedterm_core.h plus the
-  # hand-written bedterm_ios supplement (appended before the final #endif).
-  python3 - "$HEADER" "$IOS_UI_HEADER" "$slice_dir/Headers/bedterm_core.h" <<'PYEOF'
-import sys, re
-core_h = open(sys.argv[1]).read()
-ios_h   = open(sys.argv[2]).read()
-out_path = sys.argv[3]
-# Strip the header guard closer from core_h, append ios_h body, re-close.
-core_h = re.sub(r'\s*#endif\s*/\*\s*BEDTERM_CORE_H\s*\*/\s*$', '\n', core_h)
-with open(out_path, 'w') as f:
-    f.write(core_h)
-    f.write('\n')
-    f.write(ios_h)
-    f.write('\n#endif  /* BEDTERM_CORE_H */\n')
-PYEOF
+  # cbindgen emitted a complete header covering both `bedterm_core` and
+  # `bedterm_ios` symbols — just copy it into the slice under the
+  # legacy `bedterm_core.h` filename the Swift module expects.
+  cp "$HEADER" "$slice_dir/Headers/bedterm_core.h"
   # No module.modulemap in the xcframework: the BedTermCoreC SwiftPM C target
   # in Sources/BedTermCoreC/include/ provides the module for Swift importers.
 done
@@ -180,7 +171,8 @@ for i in "${!TARGETS[@]}"; do
 done
 
 # Keep the tracked header copy in sync so `import BedTermCoreC` stays correct.
-# Use the composed (core + ios-ui) header, same as the xcframework slices.
+# Same single-source header (`bedterm_ios.h`), re-filed as `bedterm_core.h`
+# under the legacy SwiftPM include path.
 SWIFT_INCLUDE="$REPO_ROOT/BedTermKit/Sources/BedTermCoreC/include"
 mkdir -p "$SWIFT_INCLUDE"
 cp "$FW_DIR/ios-arm64-simulator/Headers/bedterm_core.h" "$SWIFT_INCLUDE/bedterm_core.h"

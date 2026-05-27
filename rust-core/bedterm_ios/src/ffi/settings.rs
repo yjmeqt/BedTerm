@@ -10,7 +10,7 @@
 #![cfg(target_os = "ios")]
 
 use crate::settings_store;
-use crate::settings_vc::{self, BtIosSettingsDoneCallback};
+use crate::settings_vc;
 
 /// Create the Rust-built Settings `UIViewController *` (returned as
 /// `*mut c_void`). +1 retained — release via `bt_ios_release_settings_vc`.
@@ -25,7 +25,9 @@ use crate::settings_vc::{self, BtIosSettingsDoneCallback};
 /// pair or the VC is released.
 #[no_mangle]
 pub unsafe extern "C" fn bt_ios_create_settings_vc(
-    on_done: Option<BtIosSettingsDoneCallback>,
+    // Inline the bare-fn type so cbindgen emits a nullable C function
+    // pointer (it doesn't unwrap `Option<TypeAlias>` — see ffi/vc.rs).
+    on_done: Option<unsafe extern "C" fn(ctx: *mut std::ffi::c_void)>,
     ctx: *mut std::ffi::c_void,
 ) -> *mut std::ffi::c_void {
     settings_vc::create_settings_vc(on_done, ctx)
