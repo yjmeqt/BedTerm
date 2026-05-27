@@ -103,6 +103,12 @@ mod settings_store;
 // from the host unit-test runner.
 #[cfg(target_os = "ios")]
 mod hosts_store;
+// Per-host SSH host-key fingerprint persistence — Swift's `HostKeyStore`
+// is now a thin shim over `bt_ios_host_keys_*`. iOS-gated for the same
+// reason as `hosts_store`: the Keychain isn't reachable from the macOS
+// host unit-test runner.
+#[cfg(target_os = "ios")]
+mod host_key_store;
 // Pure state machine that backs Swift's `HostsViewModel`. No UIKit deps,
 // runs as host unit tests via `cargo test`. The iOS-gated FFI singleton
 // lives in `ffi::hosts`.

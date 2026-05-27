@@ -692,6 +692,45 @@ void bt_ios_hosts_set_test_service(const char *service, const char *order_key);
 /// Used by the reconciliation test.
 void bt_ios_hosts_test_clear_order(void);
 
+// ── Host-key store ──────────────────────────────────────────────────────────
+//
+// Per-host SSH host-key fingerprint persistence. Account key is
+// `"{host}:{port}"`; value is the UTF-8 fingerprint string
+// (`SHA256:<base64-no-padding>` in production). Backs the Swift
+// `HostKeyStore` shim, which feeds the TOFU validator in
+// `CitadelSSHClient`.
+
+/// Load the stored fingerprint for `host:port`, or NULL when none is
+/// stored. Caller frees via `bt_ios_host_keys_free_string`.
+char *bt_ios_host_keys_load(const char *host, uint16_t port);
+
+/// Free a string returned by any `bt_ios_host_keys_*` accessor. NULL-safe.
+void bt_ios_host_keys_free_string(char *ptr);
+
+/// Persist `fingerprint` for `host:port`. Returns false on Keychain
+/// error or invalid input.
+bool bt_ios_host_keys_save(const char *host, uint16_t port, const char *fingerprint);
+
+/// Drop the stored fingerprint for `host:port`. No-op when none stored.
+void bt_ios_host_keys_delete(const char *host, uint16_t port);
+
+/// Compare `remote` against the stored fingerprint for `host:port`.
+/// Returns the verdict discriminant: 0 = Match, 1 = Mismatch,
+/// 2 = Unknown. When the result is `Mismatch` and `out_stored` is
+/// non-NULL, `*out_stored` is set to a newly-allocated UTF-8 C string
+/// carrying the stored fingerprint; caller frees via
+/// `bt_ios_host_keys_free_string`. For other verdicts `*out_stored`
+/// is set to NULL.
+int32_t bt_ios_host_keys_verify(const char *host,
+                                uint16_t port,
+                                const char *remote,
+                                char **out_stored);
+
+/// Test-only seam — route subsequent reads/writes to a per-test
+/// in-process backend so simulator-backed unit tests don't pollute the
+/// production Keychain. Pass NULL to restore the production backend.
+void bt_ios_host_keys_set_test_service(const char *service);
+
 // ── Connect form VC (W24c R-port) ───────────────────────────────────────────
 
 /// Callback fired on the main thread when the user successfully saves the
