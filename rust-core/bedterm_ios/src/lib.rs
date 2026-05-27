@@ -103,6 +103,10 @@ mod settings_store;
 // from the host unit-test runner.
 #[cfg(target_os = "ios")]
 mod hosts_store;
+// Pure state machine that backs Swift's `HostsViewModel`. No UIKit deps,
+// runs as host unit tests via `cargo test`. The iOS-gated FFI singleton
+// lives in `ffi::hosts`.
+mod hosts_vm;
 #[cfg(target_os = "ios")]
 mod settings_vc;
 // `ssh_bridge` exposes a vtable + result enum the Swift side fills in

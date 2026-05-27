@@ -599,6 +599,81 @@ bool bt_ios_hosts_save_blob(const char *uuid, const uint8_t *bytes, uintptr_t le
 /// when `uuid` is missing.
 void bt_ios_hosts_delete(const char *uuid);
 
+// ── Hosts ViewModel ─────────────────────────────────────────────────────────
+//
+// Singleton state machine sunk from Swift's HostsViewModel. Each mutator
+// locks the Rust-side Mutex, applies the transition, and (for entry-
+// point mutators) returns an action discriminant telling Swift what
+// async side effect to start next:
+//   0 = None, 1 = Connect (payload in `*out_uuid`), 2 = Disconnect.
+//
+// Compound state — pending mismatch, swap / delete confirmations — is
+// JSON-encoded; Swift decodes into the matching @Observable struct.
+// All `char *` returns must be freed via `bt_ios_hosts_free_string`.
+
+/// Replace the entries array with the latest persisted snapshot.
+void bt_ios_hosts_vm_load_from_store(void);
+
+/// UI-test seam — append stub entries (HostsStoreInjection.current)
+/// that aren't backed by Keychain.
+void bt_ios_hosts_vm_merge_injected(const char *json);
+
+/// Mark the VM as having failed its most recent load (UIApplication
+/// protected-data check).
+void bt_ios_hosts_vm_set_load_failed(bool value);
+bool bt_ios_hosts_vm_load_failed(void);
+
+/// `[{id,label,host,port,username,authIsKey}, …]`. Never NULL.
+char *bt_ios_hosts_vm_entries_json(void);
+
+/// UUID string or NULL.
+char *bt_ios_hosts_vm_in_flight_id(void);
+char *bt_ios_hosts_vm_current_session_id(void);
+
+/// JSON object or NULL when no confirmation/mismatch pending.
+char *bt_ios_hosts_vm_pending_mismatch_json(void);
+char *bt_ios_hosts_vm_swap_confirmation_json(void);
+char *bt_ios_hosts_vm_delete_confirmation_json(void);
+
+/// Display name for `uuid`: label, or "user@host" fallback, or "".
+char *bt_ios_hosts_vm_display_name_for(const char *uuid);
+
+/// Row's Connect tap. See action encoding at the top of this section.
+int32_t bt_ios_hosts_vm_request_connect(const char *uuid, char **out_uuid);
+
+/// User tapped Continue in the swap-confirm dialog. `*out_uuid` is the
+/// target UUID Swift should connect to (after disconnecting its
+/// `lastSession`), or NULL when no swap was pending.
+void bt_ios_hosts_vm_confirm_swap(char **out_uuid);
+void bt_ios_hosts_vm_cancel_swap(void);
+
+/// SSH attempt outcomes from Swift's `runConnect(id:)`.
+void bt_ios_hosts_vm_connect_completed_session(const char *uuid);
+void bt_ios_hosts_vm_connect_completed_mismatch(const char *uuid,
+                                                const char *stored,
+                                                const char *remote,
+                                                const char *host,
+                                                uint16_t port);
+void bt_ios_hosts_vm_connect_completed_error(const char *uuid);
+
+/// User trusted a new host key. Action encoding.
+int32_t bt_ios_hosts_vm_retry_after_mismatch(char **out_uuid);
+void bt_ios_hosts_vm_clear_mismatch(void);
+
+/// Terminal screen tore down — drop the live-session bookkeeping.
+void bt_ios_hosts_vm_session_ended(void);
+
+/// End-session button. Action encoding (Disconnect / None).
+int32_t bt_ios_hosts_vm_end_live_session(void);
+
+/// Surface the delete-confirmation alert state for `uuid`.
+void bt_ios_hosts_vm_request_delete(const char *uuid);
+
+/// Commit the pending delete. Returns the target UUID (caller frees)
+/// or NULL. Swift must follow up with `bt_ios_hosts_delete`.
+char *bt_ios_hosts_vm_confirm_delete(void);
+void bt_ios_hosts_vm_cancel_delete(void);
+
 /// Test-only seam — route subsequent reads/writes to a per-test
 /// `(service, order_key)` pair so simulator-backed unit tests don't
 /// pollute the production Keychain / UserDefaults entries. Pass

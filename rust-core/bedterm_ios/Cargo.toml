@@ -45,6 +45,11 @@ objc2-foundation = { version = "0.3", features = [
     "NSBundle",
     "NSUserDefaults",
 ] }
+# Used host-side by `hosts_vm` (pure state machine — runs as `cargo test`
+# without an iOS simulator) and on iOS by `hosts_store` / `ffi::hosts`
+# for snapshot JSON. Unconditional so the host unit tests link.
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 
 # UIKit / Metal frameworks only exist on iOS — gate the bindings on the
 # target so host builds don't try to link `-framework UIKit`.
@@ -56,9 +61,6 @@ security-framework = "3"
 security-framework-sys = "2"
 core-foundation = "0.10"
 core-foundation-sys = "0.8"
-# Used by `hosts_store` to crack open the Swift-Codable SavedHost blob
-# (opaque to Rust except for the display-snapshot fields).
-serde_json = "1"
 objc2-ui-kit = { version = "0.3", features = [
     "block2",
     "UITraitCollection",
