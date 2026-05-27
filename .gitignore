@@ -27,10 +27,6 @@ Packages/
 # CocoaPods
 Pods/
 
-# worktree-ios-dev — track project.toml (shared config); ignore derivedData and per-machine simulator.toml.
-worktree-ios-dev/*
-!worktree-ios-dev/project.toml
-
 # Worktrees
 .worktrees/
 
@@ -41,5 +37,7 @@ docs/superpowers/
 # Rust core build artifacts
 rust-core/target/
 BedTermKit/BinaryFrameworks/BedTermCore.xcframework/
-# added by worktree-ios-dev-tool proj init
-worktree-ios-dev/
+
+# xc-dev — track shared project.toml + simulator.toml; ignore DerivedData and per-machine overrides.
+.xc-dev/DerivedData/
+.xc-dev/simulator.local.toml

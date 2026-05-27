@@ -73,6 +73,11 @@ mod dpad;
 mod ime_preedit_overlay;
 #[cfg(target_os = "ios")]
 mod keybar;
+// Compile-time-embedded i18n. Tables come from
+// `BedTerm/Localizable.xcstrings` via `build.rs`; runtime FFI is one
+// `bt_ios_set_locale` call from Swift. Pure data — compiles and unit-
+// tests on macOS host too.
+mod l10n;
 #[cfg(target_os = "ios")]
 mod metal_cursor_layer;
 #[cfg(target_os = "ios")]

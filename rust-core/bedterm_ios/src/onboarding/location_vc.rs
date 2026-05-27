@@ -6,6 +6,7 @@
 
 use crate::a11y;
 use crate::design_system::{colors, spacing, typography};
+use crate::l10n::t;
 use crate::onboarding::choice_button::make_choice_button;
 use crate::onboarding::host_kind_vc::pin_to_safe_area;
 use crate::onboarding::BtIosOnboardingChoiceCallback;
@@ -56,7 +57,7 @@ define_class!(
             }
 
             let title = UILabel::new(mtm);
-            title.setText(Some(&NSString::from_str("Where is the host?")));
+            title.setText(Some(&NSString::from_str(&t("Where is the host?"))));
             unsafe {
                 title.setFont(Some(&typography::system(28.0, typography::WEIGHT_BOLD)));
                 title.setTextColor(Some(&colors::shadcn_primary()));
@@ -65,9 +66,9 @@ define_class!(
             let _: () = unsafe { msg_send![&*title, setTextAlignment: 1_i64] };
 
             let body = UILabel::new(mtm);
-            body.setText(Some(&NSString::from_str(
+            body.setText(Some(&NSString::from_str(&t(
                 "This determines whether we need Local Network access.",
-            )));
+            ))));
             unsafe {
                 body.setFont(Some(&typography::callout()));
                 body.setTextColor(Some(&colors::shadcn_muted_foreground()));
@@ -77,8 +78,8 @@ define_class!(
 
             let same_btn = make_choice_button(
                 mtm,
-                "Same Wi-Fi as my phone",
-                "iOS will ask for Local Network permission",
+                &t("Same Wi-Fi as my phone"),
+                &t("iOS will ask for Local Network permission"),
                 self.as_ref(),
                 sel!(choiceSameWifiTapped),
             );
@@ -86,8 +87,8 @@ define_class!(
 
             let remote_btn = make_choice_button(
                 mtm,
-                "Remote (over the internet)",
-                "A public IP or hostname reachable from anywhere",
+                &t("Remote (over the internet)"),
+                &t("A public IP or hostname reachable from anywhere"),
                 self.as_ref(),
                 sel!(choiceRemoteTapped),
             );
@@ -126,7 +127,7 @@ define_class!(
                 pin_to_safe_area(&stack, &view);
 
                 let nav_item: Retained<AnyObject> = unsafe { msg_send![self, navigationItem] };
-                let title_ns = NSString::from_str("Where");
+                let title_ns = NSString::from_str(&t("Where"));
                 let _: () = unsafe { msg_send![&*nav_item, setTitle: &*title_ns] };
             }
         }

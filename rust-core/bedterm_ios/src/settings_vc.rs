@@ -23,10 +23,11 @@
 
 use crate::design_system::{
     colors,
-    components::{footer_label, form_section, toggle_row},
+    components::{form_card, toggle_row},
     spacing,
 };
-use crate::geometry::{CGFloat, CGPoint, CGRect, CGSize, UIEdgeInsets};
+use crate::geometry::{CGFloat, CGPoint, CGRect, CGSize};
+use crate::l10n::t;
 use objc2::rc::{Allocated, Retained};
 use objc2::runtime::AnyObject;
 use objc2::{define_class, msg_send, sel, DefinedClass, MainThreadMarker, MainThreadOnly};
@@ -49,10 +50,6 @@ extern "C" {
     fn bt_swift_settings_set_reserve_top_safe_area(value: bool);
     fn bt_swift_settings_get_show_command_blocks() -> bool;
     fn bt_swift_settings_set_show_command_blocks(value: bool);
-    fn bt_swift_settings_get_use_rust_hosts_list() -> bool;
-    fn bt_swift_settings_set_use_rust_hosts_list(value: bool);
-    fn bt_swift_settings_get_use_rust_connect_form() -> bool;
-    fn bt_swift_settings_set_use_rust_connect_form(value: bool);
 }
 
 #[derive(Default)]
@@ -108,8 +105,8 @@ define_class!(
             // UINavigationController is built on the Swift side).
             let nav_item: Retained<UINavigationItem> =
                 unsafe { msg_send![self, navigationItem] };
-            nav_item.setTitle(Some(&NSString::from_str("Settings")));
-            let done_title = NSString::from_str("Done");
+            nav_item.setTitle(Some(&NSString::from_str(&t("Settings"))));
+            let done_title = NSString::from_str(&t("Done"));
             let done_btn: Retained<UIBarButtonItem> = unsafe {
                 UIBarButtonItem::initWithTitle_style_target_action(
                     mtm.alloc::<UIBarButtonItem>(),
@@ -131,7 +128,9 @@ define_class!(
             content.setAxis(UILayoutConstraintAxis::Vertical);
             content.setAlignment(UIStackViewAlignment::Fill);
             content.setDistribution(UIStackViewDistribution::Fill);
-            content.setSpacing(spacing::LG);
+            // Card-to-card spacing 12 pt + outer screen padding 16 pt,
+            // mirroring the connect form's Shadcn-aligned layout.
+            content.setSpacing(spacing::MD);
             content.setLayoutMarginsRelativeArrangement(true);
             content.setDirectionalLayoutMargins(NSDirectionalEdgeInsets {
                 top: spacing::LG,
@@ -144,7 +143,7 @@ define_class!(
             let reserve_initial = unsafe { bt_swift_settings_get_reserve_top_safe_area() };
             let (reserve_row, reserve_switch) = toggle_row(
                 mtm,
-                "Keep first row visible in full-screen apps",
+                &t("Keep first row visible in full-screen apps"),
                 reserve_initial,
                 self.as_ref(),
                 sel!(toggleReserveTopSafeArea:),
@@ -153,16 +152,13 @@ define_class!(
                 &*reserve_switch as &AnyObject,
                 "settings.reserveTopSafeArea",
             );
-            let reserve_footer = footer_label(
+            let display_section = form_card(
                 mtm,
-                "When vim, htop, claude or other full-screen tools run, \
-                 reserve the top safe area so the Dynamic Island, notch, or \
-                 status bar doesn't cover their first row.",
-            );
-            let display_section = form_section(
-                mtm,
-                Some("Display"),
-                &[reserve_row, reserve_footer],
+                &t("Display"),
+                Some(&t(
+                    "When vim, htop, claude or other full-screen tools run, reserve the top safe area so the Dynamic Island, notch, or status bar doesn't cover their first row.",
+                )),
+                &[reserve_row],
             );
             content.addArrangedSubview(&display_section);
 
@@ -170,7 +166,7 @@ define_class!(
             let blocks_initial = unsafe { bt_swift_settings_get_show_command_blocks() };
             let (blocks_row, blocks_switch) = toggle_row(
                 mtm,
-                "Command blocks (Beta)",
+                &t("Command blocks (Beta)"),
                 blocks_initial,
                 self.as_ref(),
                 sel!(toggleShowCommandBlocks:),
@@ -179,71 +175,15 @@ define_class!(
                 &*blocks_switch as &AnyObject,
                 "settings.commandBlocks",
             );
-            let blocks_footer = footer_label(
+            let blocks_section = form_card(
                 mtm,
-                "Show each command and its output as a separate block \
-                 (Warp-style). When on, BedTerm writes a small \
-                 shell-integration script into every new SSH session to \
-                 track prompt and command boundaries. Without shell \
-                 integration, blocks won't show command metadata. BedTerm \
-                 uses Warp's DCS hook protocol, not OSC 133, so third-party \
-                 integrations won't drive it. This feature is still in beta \
-                 and off by default.",
-            );
-            let blocks_section = form_section(
-                mtm,
-                Some("Blocks"),
-                &[blocks_row, blocks_footer],
+                &t("Blocks"),
+                Some(&t(
+                    "Show each command and its output as a separate block (Warp-style). BedTerm writes a small shell-integration script into every new SSH session to track prompt and command boundaries. Uses Warp's DCS hook protocol, not OSC 133. Still in beta and off by default.",
+                )),
+                &[blocks_row],
             );
             content.addArrangedSubview(&blocks_section);
-
-            // ---- Section 3 — Experimental ----------------------------------
-            // TODO(localization): English copy lives here while the
-            // Rust hosts list is gated behind the W24b flag.
-            let hosts_initial = unsafe { bt_swift_settings_get_use_rust_hosts_list() };
-            let (hosts_row, hosts_switch) = toggle_row(
-                mtm,
-                "Rust hosts list (Experimental)",
-                hosts_initial,
-                self.as_ref(),
-                sel!(toggleUseRustHostsList:),
-            );
-            crate::a11y::set_a11y_id(
-                &*hosts_switch as &AnyObject,
-                "settings.useRustHostsList",
-            );
-            let hosts_footer = footer_label(
-                mtm,
-                "Render the saved-hosts screen with the in-progress Rust \
-                 UIKit view controller. Adding hosts still uses the SwiftUI \
-                 form; connect / delete flows route back through the \
-                 existing Swift orchestration.",
-            );
-            let form_initial = unsafe { bt_swift_settings_get_use_rust_connect_form() };
-            let (form_row, form_switch) = toggle_row(
-                mtm,
-                "Rust connect form (Experimental)",
-                form_initial,
-                self.as_ref(),
-                sel!(toggleUseRustConnectForm:),
-            );
-            crate::a11y::set_a11y_id(
-                &*form_switch as &AnyObject,
-                "settings.useRustConnectForm",
-            );
-            let form_footer = footer_label(
-                mtm,
-                "Use the in-progress Rust UIKit connect-form VC when adding \
-                 or editing hosts. Validation + Keychain writes still route \
-                 through the existing Swift code; the Rust VC only collects \
-                 input.",
-            );
-            let hosts_section = form_section(
-                mtm,
-                Some("Experimental"),
-                &[hosts_row, hosts_footer, form_row, form_footer],
-            );
-            content.addArrangedSubview(&hosts_section);
 
             // Mount.
             let content_view: &UIView = unsafe { &*Retained::as_ptr(&content).cast() };
@@ -272,7 +212,6 @@ define_class!(
             let _: () = unsafe { msg_send![super(self), viewDidLayoutSubviews] };
             let Some(view) = self.view() else { return };
             let bounds: CGRect = unsafe { msg_send![&*view, bounds] };
-            let insets: UIEdgeInsets = unsafe { msg_send![&*view, safeAreaInsets] };
 
             let scroll_borrow = self.ivars().scroll.borrow();
             let content_borrow = self.ivars().content.borrow();
@@ -281,7 +220,9 @@ define_class!(
                 return;
             };
 
-            // Scroll view fills the safe area.
+            // Scroll view fills the bounds. `contentInsetAdjustmentBehavior
+            // = .automatic` (default) handles the nav bar / safe area —
+            // don't offset the content stack by `safeAreaInsets` again.
             let scroll_frame = CGRect {
                 origin: CGPoint { x: 0.0, y: 0.0 },
                 size: CGSize {
@@ -291,22 +232,18 @@ define_class!(
             };
             let _: () = unsafe { msg_send![&**scroll, setFrame: scroll_frame] };
 
-            // Content sizes its width to the scroll view and stretches
-            // vertically to fit its arranged subviews.
-            let available_w = bounds.size.width - insets.left - insets.right;
+            let available_w = bounds.size.width;
             let fitting_size = CGSize {
                 width: available_w,
                 height: 0.0,
             };
-            // systemLayoutSizeFittingSize: → returns the natural height
-            // for the given width. Pass 0 height with horizontal-fitting
-            // priority high + vertical-fitting low (UIKit defaults treat
-            // 0/0 height as "compute it").
+            // systemLayoutSizeFittingSize: → natural height for the given
+            // width. 0 height + UIKit's default 0/0 means "compute it".
             let natural: CGSize =
                 unsafe { msg_send![&**content, systemLayoutSizeFittingSize: fitting_size] };
             let content_height: CGFloat = natural.height.max(0.0);
             let content_frame = CGRect {
-                origin: CGPoint { x: insets.left, y: insets.top },
+                origin: CGPoint { x: 0.0, y: 0.0 },
                 size: CGSize {
                     width: available_w,
                     height: content_height,
@@ -314,11 +251,9 @@ define_class!(
             };
             let _: () = unsafe { msg_send![&**content, setFrame: content_frame] };
 
-            // Update scroll view's contentSize so the form scrolls when
-            // the content exceeds the viewport.
             let content_size = CGSize {
                 width: bounds.size.width,
-                height: content_height + insets.top + insets.bottom,
+                height: content_height,
             };
             let _: () = unsafe { msg_send![&**scroll, setContentSize: content_size] };
         }
@@ -346,17 +281,6 @@ define_class!(
             unsafe { bt_swift_settings_set_show_command_blocks(on) };
         }
 
-        #[unsafe(method(toggleUseRustHostsList:))]
-        fn toggle_use_rust_hosts_list(&self, sender: &UISwitch) {
-            let on: bool = unsafe { msg_send![sender, isOn] };
-            unsafe { bt_swift_settings_set_use_rust_hosts_list(on) };
-        }
-
-        #[unsafe(method(toggleUseRustConnectForm:))]
-        fn toggle_use_rust_connect_form(&self, sender: &UISwitch) {
-            let on: bool = unsafe { msg_send![sender, isOn] };
-            unsafe { bt_swift_settings_set_use_rust_connect_form(on) };
-        }
     }
 );
 

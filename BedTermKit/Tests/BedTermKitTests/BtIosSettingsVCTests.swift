@@ -46,23 +46,6 @@ struct BtIosSettingsVCTests {
         #expect(!btSwiftSettingsGetShowCommandBlocks())
     }
 
-    @Test("settings bridge round-trips useRustConnectForm")
-    func settingsBridgeRoundTripsUseRustConnectForm() throws {
-        let defaults = try #require(UserDefaults(suiteName: UUID().uuidString))
-        let store = BedTermSettings(defaults: defaults)
-        let previous = SettingsBridge.observableHandle
-        SettingsBridge.observableHandle = store
-        defer { SettingsBridge.observableHandle = previous }
-
-        btSwiftSettingsSetUseRustConnectForm(true)
-        #expect(store.useRustConnectForm)
-        #expect(btSwiftSettingsGetUseRustConnectForm())
-
-        btSwiftSettingsSetUseRustConnectForm(false)
-        #expect(!store.useRustConnectForm)
-        #expect(!btSwiftSettingsGetUseRustConnectForm())
-    }
-
     @Test("settings bridge returns defaults when handle is unset")
     func settingsBridgeReturnsDefaultsWhenHandleUnset() {
         let previous = SettingsBridge.observableHandle

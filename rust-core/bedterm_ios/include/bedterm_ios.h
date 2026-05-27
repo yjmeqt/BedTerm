@@ -5,6 +5,16 @@
 
 // ── bedterm_ios ──────────────────────────────────────────────────────────
 
+/// Push the active locale identifier into Rust. Called by Swift once at
+/// app launch and again on `NSLocale.currentLocaleDidChange` notifications.
+/// `code` is a UTF-8 nul-terminated identifier (e.g. "en", "zh-Hans",
+/// "ja") or NULL to reset to the built-in English fallback.
+///
+/// The translation tables themselves are compiled into the binary at
+/// build time from `BedTerm/Localizable.xcstrings`, so no further FFI
+/// round-trips are needed after this call.
+void bt_ios_set_locale(const char *code);
+
 /// Callback invoked on the main thread when the iOS terminal's back button
 /// is tapped.
 typedef void (*BtIosBackCallback)(void *ctx);
@@ -193,10 +203,15 @@ typedef void (*BtIosConnectFormCancelCallback)(void *ctx);
 ///
 /// @param editing_id_or_null  UTF-8, nul-terminated UUID-string of an
 ///                            existing host to edit, or NULL for "Add Host".
+/// @param connect_on_save     When true, the Save bar button reads
+///                            "Save & Connect" (matches SwiftUI's
+///                            primaryActionTitle when opened from
+///                            "Add Host" + connect entry).
 /// @param on_done             Save-success callback (may be NULL).
 /// @param on_cancel           Cancel-tap callback (may be NULL).
 /// @param ctx                 Context pointer threaded into both callbacks.
 void *bt_ios_create_connect_form_vc(const char *editing_id_or_null,
+                                    bool connect_on_save,
                                     BtIosConnectFormDoneCallback on_done,
                                     BtIosConnectFormCancelCallback on_cancel,
                                     void *ctx);

@@ -13,9 +13,9 @@ rustup show   # materialises the toolchain pinned by rust-core/rust-toolchain.to
 rustup target add aarch64-apple-ios aarch64-apple-ios-sim aarch64-apple-darwin
 ```
 
-The Rust core (`rust-core/bedterm_core`) is packaged into `BedTermKit/BinaryFrameworks/BedTermCore.xcframework` (consumed as a SwiftPM `.binaryTarget`). The `BedTerm.xcscheme` build pre-action runs `scripts/build-rust-xcframework.sh ${CONFIGURATION}` automatically, so any `xcodebuild build|test` rebuilds the xcframework if Rust changed. The script is idempotent — a no-op build skips the `-create-xcframework` step entirely. Slice `.a` files are gitignored; only `Info.plist` is tracked.
+The Rust core (`rust-core/bedterm_core`) is packaged into `BedTermKit/BinaryFrameworks/BedTermCore.xcframework` (consumed as a SwiftPM `.binaryTarget`). The `BedTerm.xcscheme` build pre-action runs `scripts/build-rust-xcframework.sh ${CONFIGURATION} ${PLATFORM_NAME}` automatically — `PLATFORM_NAME` narrows the build to the one slice Xcode actually needs (`iphonesimulator` → sim only; empty/release → all three). The script is idempotent: a no-op build skips the `-create-xcframework` step entirely. The whole xcframework directory is gitignored — every build regenerates `Info.plist` plus the slice `.a` files from scratch.
 
-Build & test go through the `worktree-ios-dev` skill (`worktree-ios-dev-tool build|test|run`); the skill picks the right simulator, wires the Rust xcframework pre-action, and pipes through `xcbeautify`. Tests live inside the `BedTermKit` Swift package (`BedTermKit/Tests/BedTermKitTests/`) and use the Swift Testing framework (`import Testing`, `@Suite`, `@Test`, `#expect`, `#require`). New test files don't need any Xcode project bookkeeping — SwiftPM picks them up automatically.
+Build & test go through the `xc-dev` skill (`xc-dev build|test|run` — tasks defined in `.xc-dev/tasks.toml`); the skill picks the right simulator (via `.xc-dev/simulator.toml`, with the per-machine UDID cached in `simulator.local.toml`) and the Rust xcframework pre-action runs from the `BedTerm.xcscheme`. Tests live inside the `BedTermKit` Swift package (`BedTermKit/Tests/BedTermKitTests/`) and use the Swift Testing framework (`import Testing`, `@Suite`, `@Test`, `#expect`, `#require`). New test files don't need any Xcode project bookkeeping — SwiftPM picks them up automatically.
 
 Lint (both must pass):
 
@@ -26,7 +26,7 @@ xcrun swift-format lint -r --strict BedTerm BedTermKit/Sources BedTermKit/Tests
 
 `swift-format` ships with Xcode 26 — no install needed. SwiftLint also runs as a SwiftPM build-tool plugin on `BedTermKit` (configured in `BedTermKit/Package.swift`); `xcodebuild` is invoked with package-plugin validation skipped (see commit `58642e8`).
 
-For iOS workflows (simulator boot, run, log streaming), prefer the `worktree-ios-dev` skill; reserve `xcodebuildmcp-cli` for UI automation and debugging.
+For iOS workflows (simulator boot, run, log streaming), prefer the `xc-dev` skill; reserve `xcodebuildmcp-cli` for UI automation and debugging.
 
 ## Branching model
 
@@ -206,8 +206,8 @@ ssh localhost -p 2222 "cmd1; cmd2; cmd3" 2>&1 | \
 Must run on iOS simulator or device:
 
 ```sh
-worktree-ios-dev-tool test
-worktree-ios-dev-tool run  # manual verification
+xc-dev test
+xc-dev run  # manual verification
 ```
 
 ### Fixture conventions

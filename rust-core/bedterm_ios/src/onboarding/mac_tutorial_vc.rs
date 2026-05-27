@@ -12,6 +12,7 @@ use crate::a11y;
 use crate::design_system::colors;
 use crate::design_system::components::primary_button;
 use crate::design_system::{spacing, typography};
+use crate::l10n::t;
 use crate::onboarding::BtIosOnboardingContinueCallback;
 use objc2::rc::{Allocated, Retained};
 use objc2::runtime::AnyObject;
@@ -73,29 +74,29 @@ define_class!(
                 trailing: spacing::LG,
             });
 
+            let section1_title = t("Enable Remote Login");
+            let section1_body = t(
+                "On your Mac, open System Settings \u{2192} General \u{2192} Sharing, then turn on Remote Login.",
+            );
             content.addArrangedSubview(unsafe {
-                &*(&*tutorial_section(
-                    mtm,
-                    "1",
-                    "Enable Remote Login",
-                    "On your Mac, open System Settings \u{2192} General \u{2192} Sharing, then turn on Remote Login.",
-                ) as *const UIStackView as *const UIView)
+                &*(&*tutorial_section(mtm, "1", &section1_title, &section1_body)
+                    as *const UIStackView as *const UIView)
             });
+            let section2_title = t("Find your Mac's IP address");
+            let section2_body = t(
+                "Open System Settings \u{2192} Network \u{2192} Wi-Fi \u{2192} Details. Copy the IP address \u{2014} you'll enter it on the next screen.",
+            );
             content.addArrangedSubview(unsafe {
-                &*(&*tutorial_section(
-                    mtm,
-                    "2",
-                    "Find your Mac's IP address",
-                    "Open System Settings \u{2192} Network \u{2192} Wi-Fi \u{2192} Details. Copy the IP address \u{2014} you'll enter it on the next screen.",
-                ) as *const UIStackView as *const UIView)
+                &*(&*tutorial_section(mtm, "2", &section2_title, &section2_body)
+                    as *const UIStackView as *const UIView)
             });
+            let section3_title = t("Prevent your Mac from sleeping");
+            let section3_body = t(
+                "A sleeping Mac silently drops SSH connections. Your display can sleep \u{2014} the system must stay awake.\n\nSystem Settings \u{2192} Battery \u{2192} Options \u{2192} turn on \"Prevent automatic sleeping on power adapter when the display is off\".\n\nOr run this in Terminal: sudo pmset -a sleep 0\n\nTo undo, return to the same Battery setting, or run: sudo pmset -a sleep 1",
+            );
             content.addArrangedSubview(unsafe {
-                &*(&*tutorial_section(
-                    mtm,
-                    "3",
-                    "Prevent your Mac from sleeping",
-                    "A sleeping Mac silently drops SSH connections. Your display can sleep \u{2014} the system must stay awake.\n\nSystem Settings \u{2192} Battery \u{2192} Options \u{2192} turn on \"Prevent automatic sleeping on power adapter when the display is off\".\n\nOr run this in Terminal: sudo pmset -a sleep 0\n\nTo undo, return to the same Battery setting, or run: sudo pmset -a sleep 1",
-                ) as *const UIStackView as *const UIView)
+                &*(&*tutorial_section(mtm, "3", &section3_title, &section3_body)
+                    as *const UIStackView as *const UIView)
             });
 
             // Scroll view.
@@ -108,7 +109,7 @@ define_class!(
             let continue_btn = primary_button(
                 mtm,
                 "arrow.forward",
-                "Continue",
+                &t("Continue"),
                 self.as_ref(),
                 sel!(continueTapped),
             );
@@ -142,7 +143,7 @@ define_class!(
                 pin_scroll_layout(&scroll, &content, &bottom_bar, &continue_btn, &view);
 
                 let nav_item: Retained<AnyObject> = unsafe { msg_send![self, navigationItem] };
-                let title_ns = NSString::from_str("macOS Setup");
+                let title_ns = NSString::from_str(&t("macOS Setup"));
                 let _: () = unsafe { msg_send![&*nav_item, setTitle: &*title_ns] };
             }
         }

@@ -14,6 +14,11 @@ final class RootCoordinator {
     private var toasterHost: UIHostingController<AnyView>?
     private var onboardingDone: Bool = OnboardingPersistenceBridge.hasCompleted
 
+    /// Strong reference to the active hosts controller (W24d). Owns
+    /// the Rust hosts list VC, the `HostsViewModel`, and the
+    /// connect/swap/delete/mismatch chrome.
+    private var hostsController: HostsConnectController?
+
     init(window: UIWindow) {
         self.window = window
         // Install the shared settings store handle so the Rust Settings
@@ -76,19 +81,14 @@ final class RootCoordinator {
         installHostsRoot()
     }
 
+    /// Install the Rust-built hosts list as the nav root. Connect /
+    /// swap / delete / mismatch orchestration lives in
+    /// `HostsConnectController`, which owns the same `HostsViewModel`
+    /// the old SwiftUI screens used.
     private func installHostsRoot() {
-        if settings.useRustHostsList {
-            installRustHostsRoot()
-            return
-        }
-        installSwiftUIHostsRoot()
-    }
-
-    /// SwiftUI path (default) — install the legacy `HostsScreen`. Kept
-    /// behind a tiny fork so the W24d flag-flip retirement diff stays
-    /// trivial.
-    private func installSwiftUIHostsRoot() {
-        let hosts = HostsScreen(
+        let controller = HostsConnectController(
+            toaster: toaster,
+            settings: settings,
             onShowHostForm: { [weak self] id, connectOnSave, onFinish in
                 self?.pushHostForm(id: id, connectOnSave: connectOnSave, onFinish: onFinish)
             },
@@ -102,54 +102,8 @@ final class RootCoordinator {
                 self?.presentSettings()
             }
         )
-        .environment(\.toaster, toaster)
-        .environment(settings)
-        let hostsVC = UIHostingController(rootView: AnyView(hosts))
-        let nav = UINavigationController(rootViewController: hostsVC)
-        self.navigationController = nav
-        // Animated swap if we're switching from onboarding; otherwise
-        // first install.
-        if window.rootViewController != nil {
-            UIView.transition(
-                with: window,
-                duration: 0.25,
-                options: .transitionCrossDissolve,
-                animations: { self.window.rootViewController = nav },
-                completion: nil
-            )
-        } else {
-            window.rootViewController = nav
-        }
-    }
-
-    // MARK: - Rust hosts root (W24b)
-
-    /// W24b phase 1: install the Rust-built hosts list as the nav root.
-    /// The Rust VC renders rows + the `+` button; connect / delete /
-    /// mismatch orchestration stays on the SwiftUI side, driven by
-    /// `RustHostsScreen` which wraps the Rust VC in a
-    /// `UIViewControllerRepresentable` and reuses `HostsViewModel`
-    /// end-to-end. Once W24d flips the default and removes
-    /// `HostsScreen`, the SwiftUI fork collapses to this path.
-    private func installRustHostsRoot() {
-        let screen = RustHostsScreen(
-            onShowHostForm: { [weak self] id, connectOnSave, onFinish in
-                self?.pushHostForm(id: id, connectOnSave: connectOnSave, onFinish: onFinish)
-            },
-            onShowTerminal: { [weak self] vc in
-                self?.pushTerminal(vc)
-            },
-            onPopToHosts: { [weak self] in
-                self?.popToHosts()
-            },
-            onShowSettings: { [weak self] in
-                self?.presentSettings()
-            }
-        )
-        .environment(\.toaster, toaster)
-        .environment(settings)
-        let hostsVC = UIHostingController(rootView: AnyView(screen))
-        let nav = UINavigationController(rootViewController: hostsVC)
+        self.hostsController = controller
+        let nav = UINavigationController(rootViewController: controller.rootViewController)
         self.navigationController = nav
         if window.rootViewController != nil {
             UIView.transition(
@@ -162,52 +116,21 @@ final class RootCoordinator {
         } else {
             window.rootViewController = nav
         }
+        controller.start()
     }
 
     // MARK: - Nav pushes
-
-    private func pushHostForm(
-        id: SavedHost.ID?,
-        connectOnSave: Bool,
-        onFinish: @escaping (ConnectionFormScreen.Outcome) -> Void
-    ) {
-        if settings.useRustConnectForm {
-            pushRustHostForm(id: id, connectOnSave: connectOnSave, onFinish: onFinish)
-            return
-        }
-        guard let nav = navigationController else { return }
-        // Hold onto a closure that the form view captures; we want to
-        // pop after the form signals completion regardless of outcome.
-        var formVC: UIHostingController<AnyView>?
-        let form = ConnectionFormScreen(
-            editingID: id,
-            connectOnSave: connectOnSave,
-            onFinish: { [weak self] outcome in
-                onFinish(outcome)
-                if let vc = formVC, self?.navigationController?.topViewController === vc {
-                    self?.navigationController?.popViewController(animated: true)
-                } else {
-                    self?.navigationController?.popToRootViewController(animated: true)
-                }
-            }
-        )
-        .environment(\.toaster, toaster)
-        .environment(settings)
-        let host = UIHostingController(rootView: AnyView(form))
-        formVC = host
-        nav.pushViewController(host, animated: true)
-    }
 
     /// Heap-boxed coordinator captured by the Rust connect-form VC's C
     /// callbacks so they can hop back into Swift on completion.
     private final class FormBox {
         weak var nav: UINavigationController?
         let connectOnSave: Bool
-        let onFinish: (ConnectionFormScreen.Outcome) -> Void
+        let onFinish: (ConnectionFormOutcome) -> Void
         init(
             nav: UINavigationController?,
             connectOnSave: Bool,
-            onFinish: @escaping (ConnectionFormScreen.Outcome) -> Void
+            onFinish: @escaping (ConnectionFormOutcome) -> Void
         ) {
             self.nav = nav
             self.connectOnSave = connectOnSave
@@ -226,7 +149,7 @@ final class RootCoordinator {
         DispatchQueue.main.async {
             guard let restored = UnsafeMutableRawPointer(bitPattern: ctxRaw) else { return }
             let box = Unmanaged<FormBox>.fromOpaque(restored).takeUnretainedValue()
-            let outcome: ConnectionFormScreen.Outcome
+            let outcome: ConnectionFormOutcome
             if connectNow || box.connectOnSave {
                 outcome = .savedAndConnect(uuid)
             } else {
@@ -248,13 +171,13 @@ final class RootCoordinator {
         }
     }
 
-    /// W24c experimental: push the Rust-built connect form. Persistence
-    /// still routes through the Swift `ConnectionFormViewModel` via the
+    /// Push the Rust-built connect form. Persistence still routes
+    /// through the Swift `ConnectionFormViewModel` via the
     /// `bt_swift_connect_form_*` bridge.
-    private func pushRustHostForm(
+    private func pushHostForm(
         id: SavedHost.ID?,
         connectOnSave: Bool,
-        onFinish: @escaping (ConnectionFormScreen.Outcome) -> Void
+        onFinish: @escaping (ConnectionFormOutcome) -> Void
     ) {
         guard let nav = navigationController else { return }
         let box = FormBox(nav: nav, connectOnSave: connectOnSave, onFinish: onFinish)
@@ -267,10 +190,12 @@ final class RootCoordinator {
         let raw: UnsafeMutableRawPointer?
         if let id {
             raw = id.uuidString.withCString { idPtr in
-                bt_ios_create_connect_form_vc(idPtr, Self.formBoxOnDone, Self.formBoxOnCancel, ctx)
+                bt_ios_create_connect_form_vc(
+                    idPtr, connectOnSave, Self.formBoxOnDone, Self.formBoxOnCancel, ctx)
             }
         } else {
-            raw = bt_ios_create_connect_form_vc(nil, Self.formBoxOnDone, Self.formBoxOnCancel, ctx)
+            raw = bt_ios_create_connect_form_vc(
+                nil, connectOnSave, Self.formBoxOnDone, Self.formBoxOnCancel, ctx)
         }
         guard let raw else {
             Unmanaged<FormBox>.fromOpaque(ctx).release()

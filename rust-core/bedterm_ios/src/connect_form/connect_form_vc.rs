@@ -18,12 +18,13 @@ use crate::connect_form::{BtIosConnectFormCancelCallback, BtIosConnectFormDoneCa
 use crate::design_system::{
     colors,
     components::{
-        form_card_external_header, make_secure_text_field, make_segmented_control, make_text_field,
-        primary_button, TextFieldConfig, TextFieldHandle,
+        form_card, make_secure_text_field, make_segmented_control, make_text_field, primary_button,
+        TextFieldConfig, TextFieldHandle,
     },
     spacing, typography,
 };
 use crate::geometry::{CGFloat, CGPoint, CGRect, CGSize, UIEdgeInsets};
+use crate::l10n::t;
 use objc2::rc::{Allocated, Retained};
 use objc2::runtime::AnyObject;
 use objc2::{define_class, msg_send, sel, DefinedClass, MainThreadMarker, MainThreadOnly};
@@ -65,6 +66,11 @@ pub struct Ivars {
 
     /// Editing UUID (if any) — pinned at construction time.
     editing_id: RefCell<Option<String>>,
+    /// When true, the Save button reads "Save & Connect" to mirror the
+    /// SwiftUI `ConnectionFormScreen.primaryActionTitle` branch — the
+    /// "Add Host" entry point in the hosts list uses this so the save
+    /// also dials in to the host on success.
+    connect_on_save: Cell<bool>,
     /// Set once the user touches the password field. Reserved for a
     /// future "the field has been edited even if empty" signal that the
     /// SwiftUI form tracks via `onChange`; today the in-buffer text
@@ -110,8 +116,8 @@ define_class!(
             let nav_item: Retained<UINavigationItem> =
                 unsafe { msg_send![self, navigationItem] };
             let is_edit = self.ivars().editing_id.borrow().is_some();
-            let title = if is_edit { "Edit Host" } else { "New Host" };
-            nav_item.setTitle(Some(&NSString::from_str(title)));
+            let title = if is_edit { t("Edit Host") } else { t("New Host") };
+            nav_item.setTitle(Some(&NSString::from_str(&title)));
             // Cancel replaces the inherited back chevron — the parent
             // navigation controller would otherwise push us with the
             // default back button visible alongside our Cancel bar item.
@@ -119,7 +125,7 @@ define_class!(
                 let _: () = msg_send![&*nav_item, setHidesBackButton: true];
             }
 
-            let cancel_title = NSString::from_str("Cancel");
+            let cancel_title = NSString::from_str(&t("Cancel"));
             let cancel_btn: Retained<UIBarButtonItem> = unsafe {
                 UIBarButtonItem::initWithTitle_style_target_action(
                     mtm.alloc::<UIBarButtonItem>(),
@@ -132,7 +138,12 @@ define_class!(
             a11y::set_a11y_id(&*cancel_btn as &AnyObject, "connection.cancel");
             nav_item.setLeftBarButtonItem(Some(&cancel_btn));
 
-            let save_title = NSString::from_str("Save");
+            let save_title_str = if self.ivars().connect_on_save.get() {
+                t("Save & Connect")
+            } else {
+                t("Save")
+            };
+            let save_title = NSString::from_str(&save_title_str);
             let save_btn: Retained<UIBarButtonItem> = unsafe {
                 UIBarButtonItem::initWithTitle_style_target_action(
                     mtm.alloc::<UIBarButtonItem>(),
@@ -154,10 +165,11 @@ define_class!(
             content.setAxis(UILayoutConstraintAxis::Vertical);
             content.setAlignment(UIStackViewAlignment::Fill);
             content.setDistribution(UIStackViewDistribution::Fill);
-            // Classic iOS grouped-form spacing between sections: 24 pt
-            // between the description-or-card-bottom of one section and
-            // the uppercase header of the next.
-            content.setSpacing(spacing::XL);
+            // Cards separated by 12 pt vertically, matching the SwiftUI
+            // `ConnectionFormScreen` outer `VStack(spacing: 12)`. The
+            // surrounding 16 pt screen padding is applied via this
+            // stack's directional layout margins below.
+            content.setSpacing(spacing::MD);
             content.setLayoutMarginsRelativeArrangement(true);
             content.setDirectionalLayoutMargins(NSDirectionalEdgeInsets {
                 top: spacing::LG,
@@ -166,19 +178,18 @@ define_class!(
                 trailing: spacing::LG,
             });
 
-            // ---- Identity section ----------------------------------------
-            // Classic iOS grouped-form: external uppercase "IDENTITY"
-            // header above a card holding just the Label field. The
-            // SwiftUI baseline lumps Label into the Connection card but
-            // user screenshots confirm a three-section split with an
-            // external header per section.
+            // ---- Connection card -----------------------------------------
+            // Two-card layout matching the SwiftUI `ConnectionFormScreen`:
+            // Card 1 ("Connection") groups Label + Host + Port + Username;
+            // Card 2 ("Authentication") groups the segmented control plus
+            // either the password row or the key-picker + passphrase rows.
             // TODO(localization): the SwiftUI source uses `String(localized:)`
-            // for these section titles + descriptions; mirror once the
-            // Rust layer has a string-catalogue bridge.
+            // for these card titles + descriptions; mirror once the Rust
+            // layer has a string-catalogue bridge.
             let (label_row, label_handle) = make_text_field(
                 mtm,
-                "Label",
-                "Personal Mac",
+                &t("Label"),
+                &t("Personal Mac"),
                 TextFieldConfig {
                     secure: false,
                     keyboard_type: 0,
@@ -190,7 +201,7 @@ define_class!(
 
             let (host_row, host_handle) = make_text_field(
                 mtm,
-                "Host",
+                &t("Host"),
                 "10.0.0.5",
                 TextFieldConfig {
                     secure: false,
@@ -202,7 +213,7 @@ define_class!(
             a11y::set_a11y_id(&*host_handle.field as &AnyObject, "connection.host");
             let (port_row, port_handle) = make_text_field(
                 mtm,
-                "Port",
+                &t("Port"),
                 "22",
                 TextFieldConfig {
                     secure: false,
@@ -215,7 +226,7 @@ define_class!(
             port_handle.set_text("22");
             let (username_row, username_handle) = make_text_field(
                 mtm,
-                "Username",
+                &t("Username"),
                 "root",
                 TextFieldConfig {
                     secure: false,
@@ -226,15 +237,11 @@ define_class!(
             );
             a11y::set_a11y_id(&*username_handle.field as &AnyObject, "connection.username");
 
-            let identity_section =
-                form_card_external_header(mtm, "Identity", None, &[label_row]);
-            content.addArrangedSubview(&identity_section);
-
-            let connection_section = form_card_external_header(
+            let connection_section = form_card(
                 mtm,
-                "Connection",
-                Some("Where to reach the server. Host can be an IP or hostname."),
-                &[host_row, port_row, username_row],
+                &t("Connection"),
+                Some(&t("Where to reach the server. Host can be an IP or hostname.")),
+                &[label_row, host_row, port_row, username_row],
             );
             content.addArrangedSubview(&connection_section);
             *self.ivars().label_field.borrow_mut() = Some(label_handle);
@@ -246,9 +253,11 @@ define_class!(
             // Mirrors SwiftUI `authenticationCard`: segmented control on
             // top, then either the password row or the key-picker +
             // passphrase rows depending on the segment selection.
+            let seg_password = t("Password");
+            let seg_key = t("Key");
             let segmented = make_segmented_control(
                 mtm,
-                &["Password", "Key"],
+                &[seg_password.as_str(), seg_key.as_str()],
                 0,
                 self.as_ref(),
                 sel!(authModeChanged:),
@@ -259,7 +268,7 @@ define_class!(
             };
 
             let (password_row, password_handle) =
-                make_secure_text_field(mtm, "Password", "Password");
+                make_secure_text_field(mtm, &t("Password"), &t("Password"));
             a11y::set_a11y_id(
                 &*password_handle.field as &AnyObject,
                 "connection.password",
@@ -269,7 +278,7 @@ define_class!(
             let key_button = primary_button(
                 mtm,
                 "doc.badge.plus",
-                "Import private key",
+                &t("Import private key"),
                 self.as_ref(),
                 sel!(pickKeyTapped),
             );
@@ -279,17 +288,17 @@ define_class!(
             key_row.setHidden(true);
 
             let (passphrase_row, passphrase_handle) =
-                make_secure_text_field(mtm, "Passphrase", "Optional");
+                make_secure_text_field(mtm, &t("Passphrase"), &t("Optional"));
             a11y::set_a11y_id(
                 &*passphrase_handle.field as &AnyObject,
                 "connection.passphrase",
             );
             passphrase_row.setHidden(true);
 
-            let auth_section = form_card_external_header(
+            let auth_section = form_card(
                 mtm,
-                "Authentication",
-                Some("Choose how to prove identity to the server."),
+                &t("Authentication"),
+                Some(&t("Choose how to prove identity to the server.")),
                 &[
                     seg_view,
                     password_row.clone(),
@@ -340,6 +349,12 @@ define_class!(
                 (scroll_borrow.as_ref(), content_borrow.as_ref())
             else { return };
 
+            // Scroll fills the bounds; UIScrollView's
+            // `contentInsetAdjustmentBehavior = .automatic` handles the safe
+            // area (nav bar + status bar + home indicator) for us. Don't
+            // offset the content stack by `safeAreaInsets` again — that
+            // produced the visible 2× safe-area gap (scroll bounds.origin.y
+            // = -116 plus content frame.y = +116, visual y = 232).
             let scroll_frame = CGRect {
                 origin: CGPoint { x: 0.0, y: 0.0 },
                 size: CGSize {
@@ -348,8 +363,9 @@ define_class!(
                 },
             };
             let _: () = unsafe { msg_send![&**scroll, setFrame: scroll_frame] };
+            let _ = insets;
 
-            let available_w = bounds.size.width - insets.left - insets.right;
+            let available_w = bounds.size.width;
             let fitting = CGSize {
                 width: available_w,
                 height: 0.0,
@@ -358,14 +374,14 @@ define_class!(
                 unsafe { msg_send![&**content, systemLayoutSizeFittingSize: fitting] };
             let h: CGFloat = natural.height.max(0.0);
             let content_frame = CGRect {
-                origin: CGPoint { x: insets.left, y: insets.top },
+                origin: CGPoint { x: 0.0, y: 0.0 },
                 size: CGSize { width: available_w, height: h },
             };
             let _: () = unsafe { msg_send![&**content, setFrame: content_frame] };
             let _: () = unsafe {
                 msg_send![&**scroll, setContentSize: CGSize {
                     width: bounds.size.width,
-                    height: h + insets.top + insets.bottom,
+                    height: h,
                 }]
             };
         }
@@ -406,7 +422,7 @@ define_class!(
                 if let Some(label_text) = label_str {
                     vc.ivars().key_touched.set(true);
                     if let Some(btn) = vc.ivars().key_button.borrow().as_ref() {
-                        let cstr = format!("Replace key · {label_text}");
+                        let cstr = format!("{} · {label_text}", t("Replace key"));
                         let ns = NSString::from_str(&cstr);
                         unsafe {
                             let _: () = msg_send![&**btn, setTitle: &*ns, forState: 0_i64];
@@ -434,6 +450,10 @@ impl BtIosConnectFormViewController {
 
     pub(crate) fn set_editing_id(&self, id: Option<String>) {
         *self.ivars().editing_id.borrow_mut() = id;
+    }
+
+    pub(crate) fn set_connect_on_save(&self, value: bool) {
+        self.ivars().connect_on_save.set(value);
     }
 
     fn apply_prefill(&self) {
@@ -584,7 +604,7 @@ impl BtIosConnectFormViewController {
         let json_c = match CString::new(json) {
             Ok(s) => s,
             Err(_) => {
-                self.show_error("Internal error encoding form data.");
+                self.show_error(&t("Internal error encoding form data."));
                 return;
             }
         };
@@ -637,7 +657,7 @@ impl BtIosConnectFormViewController {
                 unsafe { bt_swift_connect_form_free_snapshot(err_ptr) };
                 self.show_error(&msg);
             } else {
-                self.show_error("Could not save host.");
+                self.show_error(&t("Could not save host."));
             }
             return;
         }
@@ -803,6 +823,7 @@ fn extract_json_bool(json: &str, key: &str) -> Option<bool> {
 
 pub(crate) unsafe fn create_connect_form_vc(
     editing_id: Option<String>,
+    connect_on_save: bool,
     on_done: Option<BtIosConnectFormDoneCallback>,
     on_cancel: Option<BtIosConnectFormCancelCallback>,
     ctx: *mut c_void,
@@ -811,6 +832,7 @@ pub(crate) unsafe fn create_connect_form_vc(
     let vc: Retained<BtIosConnectFormViewController> =
         unsafe { msg_send![mtm.alloc::<BtIosConnectFormViewController>(), init] };
     vc.set_editing_id(editing_id);
+    vc.set_connect_on_save(connect_on_save);
     vc.set_callbacks(on_done, on_cancel, ctx);
     Retained::into_raw(vc) as *mut c_void
 }

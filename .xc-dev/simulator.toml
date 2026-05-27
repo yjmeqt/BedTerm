@@ -1,0 +1,10 @@
+# .xc-dev/simulator.toml
+schema_version = 1
+
+# Self-resolving simulator. xc-dev finds or creates the UDID using xcrun simctl
+# based on name + device + runtime, then caches it in simulator.local.toml
+# (gitignored, per-machine).
+[sim.default]
+name    = "{{product_name}}-{{git_worktree_name}}"
+device  = "iPhone 17"
+runtime = "iOS 26.2"

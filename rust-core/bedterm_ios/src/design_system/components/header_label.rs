@@ -3,10 +3,10 @@
 //! `header_label` — uppercased 12 pt medium muted label (legacy inset-
 //! grouped header style; retained for callers that haven't migrated).
 //!
-//! `field_label` — uppercased 13 pt medium muted-foreground label used
-//! inside cards above each text-field. Matches the classic iOS grouped-
-//! form aesthetic (small-caps grey) confirmed by the SwiftUI baseline +
-//! user screenshots, not the previous title-case Shadcn variant.
+//! `field_label` — sentence-case 13 pt medium `ShadcnPrimary` label used
+//! inside cards above each text-field. Mirrors SwiftUI `ShadcnField`'s
+//! `.font(.footnote.weight(.medium))` with `ShadcnPrimary` foreground
+//! (see `BedTermKit/Sources/BedTermKit/Core/UI/ShadcnPrimitives.swift`).
 //!
 //! `card_title_label` — 16 pt semibold ShadcnPrimary label; mirrors the
 //! `ShadcnCard` header (`.callout.weight(.semibold)`).
@@ -33,18 +33,17 @@ pub fn header_label(mtm: MainThreadMarker, text: &str) -> Retained<UILabel> {
     label
 }
 
-/// Build an uppercased 13 pt medium muted-foreground label for use
-/// inside card rows above each text-field. The label is shouted into
-/// upper-case to match the classic iOS grouped-form / small-caps
-/// aesthetic (FIELD_NAME) that the SwiftUI baseline + user screenshots
-/// confirm — not the previous title-case primary-tinted variant.
+/// Build a sentence-case 13 pt medium `ShadcnPrimary` label for use
+/// inside card rows above each text-field. Mirrors SwiftUI
+/// `ShadcnField`'s label: `.font(.footnote.weight(.medium))` with
+/// `Color("ShadcnPrimary")` foreground — see
+/// `BedTermKit/Sources/BedTermKit/Core/UI/ShadcnPrimitives.swift`.
 pub fn field_label(mtm: MainThreadMarker, text: &str) -> Retained<UILabel> {
     let label = UILabel::new(mtm);
-    let ns = NSString::from_str(&text.to_uppercase());
-    label.setText(Some(&ns));
+    label.setText(Some(&NSString::from_str(text)));
     unsafe {
         label.setFont(Some(&typography::system(13.0, typography::WEIGHT_MEDIUM)));
-        label.setTextColor(Some(&colors::shadcn_muted_foreground()));
+        label.setTextColor(Some(&colors::shadcn_primary()));
     }
     label
 }

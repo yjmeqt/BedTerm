@@ -60,18 +60,18 @@ final class RustTerminalEndToEndSSHUITests: XCTestCase {
         // simulator keychain can hold unrelated rows from prior runs
         // and `hosts.row.connect.firstMatch` would otherwise dispatch
         // to whichever of those happened to render first.
-        let stubRow = app.buttons["hosts.row.\(Self.stubHostID)"]
+        // W24d: the Rust hosts list renders each row as a single
+        // tap-to-connect UIButton (no nested Connect chip like the
+        // retired SwiftUI HostRow had). Use `firstMatch` because the
+        // accessibility graph can momentarily expose both the
+        // arranged-view and its inner button under the same id during
+        // appearance transitions.
+        let stubRow = app.buttons.matching(identifier: "hosts.row.\(Self.stubHostID)").firstMatch
         XCTAssertTrue(
             stubRow.waitForExistence(timeout: 8),
             "Injected stub host row must appear in the saved-hosts list"
         )
-        let connect = stubRow.descendants(matching: .button)
-            .matching(identifier: "hosts.row.connect").firstMatch
-        XCTAssertTrue(
-            connect.waitForExistence(timeout: 4),
-            "Stub host row must expose its Connect chip"
-        )
-        connect.tap()
+        stubRow.tap()
 
         let metal = element(app, "terminal.rust.metalView")
         if !metal.waitForExistence(timeout: 10) {

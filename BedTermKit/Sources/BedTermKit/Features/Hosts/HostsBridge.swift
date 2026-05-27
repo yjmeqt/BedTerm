@@ -21,6 +21,13 @@ public enum HostsBridge {
     /// `@_cdecl` symbols.
     public static var store = HostsStore()
 
+    /// Optional entry provider — when set, `snapshotJSON()` reads from
+    /// here instead of `store.list()`. Installed by
+    /// `HostsConnectController` so the Rust VC sees the same entry set
+    /// the Swift `HostsViewModel` does (including UI-test stub-host
+    /// injection via `HostsStoreInjection`).
+    public static var entriesProvider: (() -> [SavedHost])?
+
     /// Closure the `bt_swift_hosts_connect` shim invokes with the parsed
     /// UUID. Installed by `RootCoordinator` to forward into the active
     /// `HostsViewModel.requestConnect`. Left nil for unit tests.
@@ -35,7 +42,7 @@ public enum HostsBridge {
     /// `parse_entries_json` helper understands. Returns "[]" when the
     /// store is empty or the device is locked.
     public static func snapshotJSON() -> String {
-        let entries = self.store.list()
+        let entries = self.entriesProvider?() ?? self.store.list()
         var items: [[String: Any]] = []
         items.reserveCapacity(entries.count)
         for entry in entries {

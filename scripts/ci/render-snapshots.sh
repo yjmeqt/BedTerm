@@ -109,14 +109,14 @@ if $mode_ios; then
     # Check if simulator runtime is available
     if ! xcrun simctl list runtimes 2>/dev/null | grep -q "iOS"; then
         echo "SKIPPED: no iOS simulator runtime available"
-    elif command -v worktree-ios-dev-tool &>/dev/null; then
+    elif command -v xc-dev &>/dev/null; then
         export RENDER_OUTPUT_DIR="$IOS_OUTDIR"
-        worktree-ios-dev-tool test \
+        xc-dev test \
             --only-testing "BedTermKitTests/TerminalRendererSnapshotTests" \
             2>&1 | tail -5
         echo "iOS: $(ls "$IOS_OUTDIR"/*.png 2>/dev/null | wc -l | tr -d ' ') PNGs"
     else
-        echo "SKIPPED: worktree-ios-dev-tool not available"
+        echo "SKIPPED: xc-dev not available"
     fi
     echo ""
 fi

@@ -22,5 +22,5 @@ excluded:
   - .build
   - BedTermKit/.build
   - .worktrees
-  - worktree-ios-dev
+  - .xc-dev
   - BedTermTests/Mocks

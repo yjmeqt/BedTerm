@@ -56,31 +56,3 @@ public func btSwiftSettingsSetShowCommandBlocks(_ value: Bool) {
         SettingsBridge.observableHandle?.showCommandBlocks = value
     }
 }
-
-@_cdecl("bt_swift_settings_get_use_rust_hosts_list")
-public func btSwiftSettingsGetUseRustHostsList() -> Bool {
-    MainActor.assumeIsolated {
-        SettingsBridge.observableHandle?.useRustHostsList ?? false
-    }
-}
-
-@_cdecl("bt_swift_settings_set_use_rust_hosts_list")
-public func btSwiftSettingsSetUseRustHostsList(_ value: Bool) {
-    MainActor.assumeIsolated {
-        SettingsBridge.observableHandle?.useRustHostsList = value
-    }
-}
-
-@_cdecl("bt_swift_settings_get_use_rust_connect_form")
-public func btSwiftSettingsGetUseRustConnectForm() -> Bool {
-    MainActor.assumeIsolated {
-        SettingsBridge.observableHandle?.useRustConnectForm ?? false
-    }
-}
-
-@_cdecl("bt_swift_settings_set_use_rust_connect_form")
-public func btSwiftSettingsSetUseRustConnectForm(_ value: Bool) {
-    MainActor.assumeIsolated {
-        SettingsBridge.observableHandle?.useRustConnectForm = value
-    }
-}

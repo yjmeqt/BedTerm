@@ -73,8 +73,9 @@ pub fn make_text_field(
     placeholder: &str,
     config: TextFieldConfig,
 ) -> (Retained<UIView>, TextFieldHandle) {
-    // Field label — sentence-case 13 pt medium ShadcnPrimary, mirroring
-    // SwiftUI `ShadcnField`'s `.footnote.weight(.medium)` text style.
+    // Field label — sentence-case 13 pt medium `ShadcnPrimary`, mirroring
+    // SwiftUI `ShadcnField`'s `.footnote.weight(.medium)` text style with
+    // `Color("ShadcnPrimary")` foreground.
     let label_view = field_label(mtm, label);
 
     // The field itself.
@@ -82,7 +83,9 @@ pub fn make_text_field(
     unsafe {
         let ns_placeholder = NSString::from_str(placeholder);
         let _: () = msg_send![&*field, setPlaceholder: &*ns_placeholder];
-        let _: () = msg_send![&*field, setFont: &*typography::body()];
+        // SwiftUI `ShadcnTextField` uses `.font(.callout)` (16 pt regular).
+        let _: () =
+            msg_send![&*field, setFont: &*typography::system(16.0, typography::WEIGHT_REGULAR)];
         let _: () = msg_send![&*field, setTextColor: &*colors::shadcn_primary()];
         // borderStyle: UITextBorderStyleNone = 0 (we draw our own).
         let _: () = msg_send![&*field, setBorderStyle: 0_i64];
