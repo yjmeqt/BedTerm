@@ -7,12 +7,8 @@
 //!   valid only until the next call to ANY `bt_term_*` that mutates the
 //!   terminal OR the next `bt_term_block_at` call (the scratch is
 //!   reused). Swift must copy out strings inside the same call.
-//! - `bt_term_block_snapshot` exposes the frozen body of a sealed block.
-//!   The cell pointer follows the same invalidation rules as
-//!   `bt_term_snapshot`.
-
 use crate::blocks::BLOCK_END_LINE_RUNNING;
-use crate::ffi::{BtSnapshotView, BtTerm};
+use crate::ffi::BtTerm;
 use std::os::raw::c_int;
 
 #[repr(C)]
@@ -217,57 +213,4 @@ pub unsafe extern "C" fn bt_term_block_at(
         body_rows,
     };
     0
-}
-
-/// Fetch the frozen body of a sealed block. Returns -1 if the block is
-/// still running, missing, or the index is out of bounds. The cell
-/// pointer in `*out` follows the same invalidation rules as
-/// `bt_term_snapshot`.
-///
-/// # Safety
-/// `h` valid; `out` writable.
-#[no_mangle]
-pub unsafe extern "C" fn bt_term_block_snapshot(
-    h: *mut BtTerm,
-    idx: usize,
-    out: *mut BtSnapshotView,
-) -> c_int {
-    if h.is_null() || out.is_null() {
-        return -1;
-    }
-    let term = &mut *h;
-    // Resolve the palette-agnostic frozen snapshot to RGBA against the
-    // terminal's current palette before handing it to Swift — Swift's
-    // cell type still consumes 32-bit-RGBA fg/bg. Light↔dark flips
-    // re-resolve naturally because the host pushes a new palette via
-    // `bt_term_set_palette` before re-reading.
-    let inner = term.inner_ref();
-    let Some(snap) = inner
-        .block_at(idx)
-        .and_then(|b| b.frozen_snapshot.as_ref())
-        .map(|raw| raw.resolve(inner.palette()))
-    else {
-        return -1;
-    };
-    *out = BtSnapshotView {
-        cols: snap.cols,
-        rows: snap.rows,
-        cursor_col: snap.cursor_col,
-        cursor_row: snap.cursor_row,
-        display_offset: snap.display_offset,
-        cells: snap.cells.as_ptr(),
-        cell_count: snap.cells.len(),
-    };
-    term.set_block_snapshot_cached(snap);
-    0
-}
-
-/// # Safety
-/// `h` valid.
-#[no_mangle]
-pub unsafe extern "C" fn bt_term_block_snapshot_release(h: *mut BtTerm) {
-    if h.is_null() {
-        return;
-    }
-    (*h).clear_block_snapshot_cached();
 }

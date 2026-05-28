@@ -4,21 +4,16 @@
 //! [`model::ConnectFormDraft`], [`model::AuthMode`] and the validation
 //! rules that mirror Swift's `ConnectionFormViewModel.canSave` / `save`.
 //!
-//! [`bridge`] declares the `extern "C"` Swift-side accessors
-//! ([`bridge::bt_swift_connect_form_prefill_json`],
-//! [`bridge::bt_swift_connect_form_save`], …). Swift owns persistence —
-//! Rust ships a validated draft over the FFI and Swift's
-//! `ConnectionFormViewModel.save` does the keychain + ordering writes.
+//! [`connect_form_vm`] is the pure state machine that replaces the Swift
+//! `ConnectionFormViewModel` — all field state, dirty tracking, validation
+//! and secret-preservation logic runs here. The [`connect_form_vc`] calls
+//! into it directly through the singleton [`crate::connect_form_vm::VM`].
 //!
-//! [`connect_form_vc`] (iOS-only) is `BtIosConnectFormViewController`,
-//! a `UIViewController` subclass containing a scroll view + vertical
-//! stack of form sections (Identity / Connection / Authentication).
-//! Cancel + Save bar buttons fire the FFI callbacks; the Save path
-//! validates locally before hitting the Swift bridge.
-//!
-//! TODO(localization): English copy is hardcoded here; Swift owns the
-//! localized variants. Once the flag flips, the strings will be routed
-//! through a Swift-side provider.
+//! [`bridge`] declares the remaining `extern "C"` symbols: the file-picker
+//! trio (`bt_swift_connect_form_pick_key`, `_take_pending_key_bytes`,
+//! `_free_key_bytes`) and the thin persistence callback
+//! (`bt_swift_hosts_store_save_json`). No state crosses the FFI for
+//! validation or prefill anymore.
 
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod model;
@@ -37,11 +32,13 @@ use std::ffi::c_void;
 /// is a UTF-8 nul-terminated C string of the saved entry's UUID; valid
 /// only for the duration of the call. `connect_now` is true when the
 /// caller wants to start a connect immediately (matches the
-/// `connectOnSave` shortcut in the SwiftUI flow).
+/// `connectOnSave` shortcut in the SwiftUI flow). Kept for internal
+/// storage; FFI entry inlines the bare-fn type (see `ffi/vc.rs`).
 #[cfg(target_os = "ios")]
 pub type BtIosConnectFormDoneCallback =
     unsafe extern "C" fn(ctx: *mut c_void, id_string: *const c_char, connect_now: bool);
 
-/// Callback fired when the user taps Cancel.
+/// Callback fired when the user taps Cancel. Same rationale as
+/// `BtIosConnectFormDoneCallback`.
 #[cfg(target_os = "ios")]
 pub type BtIosConnectFormCancelCallback = unsafe extern "C" fn(ctx: *mut c_void);

@@ -3,7 +3,11 @@
 //! Owns a `UIScrollView` + vertical `UIStackView` of `make_list_row`
 //! cells, one per `HostListEntry`. Rows dispatch tap → connect through
 //! Swift's `HostsViewModel` via `HostsBridge` `@_cdecl` shims;
-//! left-swipe fires Swift-side delete then refreshes the snapshot.
+//! left-swipe reads the id from the row's card view and calls
+//! `crate::hosts_store::delete(&id)` directly (formerly crossed the FFI
+//! barrier through `bt_swift_hosts_delete`). The snapshot is also read
+//! from `crate::hosts_store::list_snapshot_json()` directly, eliminating
+//! the Rust->Swift->Rust round trip.
 //! The navbar `+` button calls back into Swift, which pushes the
 //! Rust connect-form VC for the new-host flow.
 //!
@@ -20,10 +24,7 @@ use crate::design_system::{
     spacing, typography,
 };
 use crate::geometry::{CGFloat, CGPoint, CGRect, CGSize, UIEdgeInsets};
-use crate::hosts::bridge::{
-    bt_swift_hosts_connect, bt_swift_hosts_delete, bt_swift_hosts_free_snapshot,
-    bt_swift_hosts_snapshot_json,
-};
+use crate::hosts::bridge::bt_swift_hosts_connect;
 use crate::hosts::model::{parse_entries_json, HostListEntry};
 use crate::hosts::BtIosHostsAddCallback;
 use crate::l10n::t;
@@ -37,7 +38,7 @@ use objc2_ui_kit::{
     UISwipeGestureRecognizer, UIView, UIViewController,
 };
 use std::cell::{Cell, RefCell};
-use std::ffi::{c_void, CStr, CString};
+use std::ffi::{c_void, CString};
 
 /// Per-row state pinned for the duration of the rendered snapshot.
 struct RowState {
@@ -278,12 +279,8 @@ define_class!(
                 })
             };
             if let Some(id) = id_string {
-                if let Ok(cstr) = CString::new(id) {
-                    let ok = unsafe { bt_swift_hosts_delete(cstr.as_ptr()) };
-                    if ok {
-                        self.reload_from_swift();
-                    }
-                }
+                crate::hosts_store::delete(&id);
+                self.reload_from_swift();
             }
         }
     }
@@ -295,18 +292,11 @@ impl BtIosHostsListViewController {
         self.ivars().ctx.set(ctx);
     }
 
-    /// Pull a fresh snapshot from Swift and re-render the rows. Idempotent.
+    /// Pull a fresh snapshot from the Rust-owned hosts store and re-render
+    /// the rows. Idempotent.
     pub(crate) fn reload_from_swift(&self) {
-        let entries = unsafe {
-            let ptr = bt_swift_hosts_snapshot_json();
-            if ptr.is_null() {
-                Vec::new()
-            } else {
-                let blob = CStr::from_ptr(ptr).to_string_lossy().into_owned();
-                bt_swift_hosts_free_snapshot(ptr);
-                parse_entries_json(&blob)
-            }
-        };
+        let json = crate::hosts_store::list_snapshot_json();
+        let entries = parse_entries_json(&json);
         self.render_entries(entries);
     }
 

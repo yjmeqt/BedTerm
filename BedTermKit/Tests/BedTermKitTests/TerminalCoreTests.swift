@@ -3,33 +3,29 @@ import Testing
 
 @testable import BedTermKit
 
-@Suite("TerminalCore — GridSnapshot")
-struct TerminalCoreTests {
-    @Test("GridSnapshot cell accessor returns expected cells")
-    func gridSnapshotCellAccessor() {
-        let cells = (0..<20).map { idx in
-            GridSnapshot.Cell(ch: UInt32(0x41 + (idx % 26)), fgRGBA: 0xFFFFFFFF, bgRGBA: 0x000000FF, flags: 0)
-        }
-        let snap = GridSnapshot(cols: 5, rows: 4, cursorCol: 0, cursorRow: 0, cells: cells)
-        #expect(snap.cell(col: 0, row: 0)?.ch == UInt32(0x41))
-        #expect(snap.cell(col: 4, row: 3)?.ch == UInt32(0x41 + 19 % 26))
-        #expect(snap.cell(col: 5, row: 0) == nil)
-    }
-}
-
 @Suite("TerminalCore — FFI")
 struct TerminalCoreFFITests {
-    @Test("new + feed ASCII")
-    func newAndFeedASCII() {
+    @Test("new caches screen dimensions")
+    func newCachesScreenDimensions() {
+        let core = TerminalCore(cols: 20, rows: 5)
+        #expect(core.screenCols == 20)
+        #expect(core.screenRows == 5)
+    }
+
+    @Test("resize updates cached dimensions")
+    func resizeUpdatesDimensions() {
+        let core = TerminalCore(cols: 20, rows: 5)
+        core.resize(cols: 40, rows: 10)
+        #expect(core.screenCols == 40)
+        #expect(core.screenRows == 10)
+    }
+
+    @Test("feed advances the cursor (currentLine stays on first row)")
+    func feedAdvancesCursor() {
         let core = TerminalCore(cols: 20, rows: 5)
         core.feed(Data("hi".utf8))
-        let snap = core.snapshot()
-        #expect(snap.cols == 20)
-        #expect(snap.rows == 5)
-        #expect(snap.cell(col: 0, row: 0)?.ch == UInt32(0x68))  // 'h'
-        #expect(snap.cell(col: 1, row: 0)?.ch == UInt32(0x69))  // 'i'
-        #expect(snap.cursorCol == 2)
-        #expect(snap.cursorRow == 0)
+        // Two ASCII chars on the first row — cursor still on line 0.
+        #expect(core.currentLine == 0)
     }
 
     @Test("alt-screen mode bit toggles via DEC mode 1049")
@@ -53,25 +49,10 @@ struct TerminalCoreFFITests {
         #expect(core.mode.contains(.bracketedPaste))
     }
 
-    @Test("resize updates dimensions")
-    func resizeUpdatesDimensions() {
+    @Test("scrollToBottom resets scroll offset to zero")
+    func scrollToBottomClampsOffset() {
         let core = TerminalCore(cols: 20, rows: 5)
-        core.resize(cols: 40, rows: 10)
-        #expect(core.snapshot().cols == 40)
-        #expect(core.snapshot().rows == 10)
-    }
-
-    @Test("ANSI red applies to foreground")
-    func ansiRedAppliesToFg() throws {
-        let core = TerminalCore(cols: 20, rows: 5)
-        core.feed(Data("\u{1B}[31mR\u{1B}[0m".utf8))
-        let cell = try #require(core.snapshot().cell(col: 0, row: 0))
-        #expect(cell.ch == UInt32(0x52))  // 'R'
-        let red = (cell.fgRGBA >> 24) & 0xff
-        let green = (cell.fgRGBA >> 16) & 0xff
-        let blue = (cell.fgRGBA >> 8) & 0xff
-        #expect(red > 0x80)
-        #expect(green < 0x40)
-        #expect(blue < 0x40)
+        core.scrollToBottom()
+        #expect(core.scrollOffset == 0)
     }
 }

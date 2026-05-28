@@ -6,18 +6,12 @@
 //! - `footer_label(text)`             — multi-line muted footnote
 //!
 //! Each toggle row's selector reads the new value off its `UISwitch` and
-//! hands it to the Swift-side bridge via the `bt_swift_settings_*`
-//! `@_cdecl` exports declared at the top of this file. The initial state
-//! is pulled on `viewWillAppear` so values written elsewhere in the app
-//! (e.g. via the SwiftUI screen while debug-flag flipping) reflect when
-//! the user opens this sheet.
+//! hands it to [`crate::settings_store`], which owns the `NSUserDefaults`
+//! reads/writes. The initial state is pulled on `viewWillAppear` so
+//! values written elsewhere reflect when the user opens this sheet.
 //!
-//! Section order, headers, row labels and footer copy mirror
-//! `SettingsScreen.swift` row-for-row.
-//!
-//! TODO(localization): English strings are inline here. The SwiftUI
-//! screen owns the localized variants; once this VC graduates from
-//! experimental we'll route copy through a Swift-side strings provider.
+//! Section order, headers, row labels and footer copy mirror the original
+//! SwiftUI screen row-for-row.
 
 #![cfg(target_os = "ios")]
 
@@ -40,17 +34,12 @@ use objc2_ui_kit::{
 use std::cell::Cell;
 
 /// Done-button callback installed by the FFI constructor. Fires on the
-/// main thread when the user taps the navigation-bar Done item.
+/// main thread when the user taps the navigation-bar Done item. Kept
+/// for internal storage; FFI entry inlines the bare-fn type for
+/// cbindgen-friendly emission (see `ffi/vc.rs`).
 pub type BtIosSettingsDoneCallback = unsafe extern "C" fn(ctx: *mut std::ffi::c_void);
 
-// Reads from Swift via `@_cdecl`. Returns the documented default when
-// Swift hasn't installed an `observableHandle` yet (unit tests).
-extern "C" {
-    fn bt_swift_settings_get_reserve_top_safe_area() -> bool;
-    fn bt_swift_settings_set_reserve_top_safe_area(value: bool);
-    fn bt_swift_settings_get_show_command_blocks() -> bool;
-    fn bt_swift_settings_set_show_command_blocks(value: bool);
-}
+use crate::settings_store;
 
 #[derive(Default)]
 pub struct Ivars {
@@ -139,31 +128,8 @@ define_class!(
                 trailing: spacing::LG,
             });
 
-            // ---- Section 1 — Display ---------------------------------------
-            let reserve_initial = unsafe { bt_swift_settings_get_reserve_top_safe_area() };
-            let (reserve_row, reserve_switch) = toggle_row(
-                mtm,
-                &t("Keep first row visible in full-screen apps"),
-                reserve_initial,
-                self.as_ref(),
-                sel!(toggleReserveTopSafeArea:),
-            );
-            crate::a11y::set_a11y_id(
-                &*reserve_switch as &AnyObject,
-                "settings.reserveTopSafeArea",
-            );
-            let display_section = form_card(
-                mtm,
-                &t("Display"),
-                Some(&t(
-                    "When vim, htop, claude or other full-screen tools run, reserve the top safe area so the Dynamic Island, notch, or status bar doesn't cover their first row.",
-                )),
-                &[reserve_row],
-            );
-            content.addArrangedSubview(&display_section);
-
-            // ---- Section 2 — Blocks ----------------------------------------
-            let blocks_initial = unsafe { bt_swift_settings_get_show_command_blocks() };
+            // ---- Section — Blocks ------------------------------------------
+            let blocks_initial = settings_store::show_command_blocks();
             let (blocks_row, blocks_switch) = toggle_row(
                 mtm,
                 &t("Command blocks (Beta)"),
@@ -199,12 +165,9 @@ define_class!(
         #[unsafe(method(viewWillAppear:))]
         fn view_will_appear(&self, animated: bool) {
             let _: () = unsafe { msg_send![super(self), viewWillAppear: animated] };
-            // Re-sync UISwitch state with the backing store in case it
-            // changed since viewDidLoad (e.g. the user flipped a value
-            // somewhere else in the app while the sheet was queued).
-            // Currently a no-op pass — we don't keep direct refs to the
-            // switches, and observableHandle round-trips are cheap to
-            // re-derive on next open. Documented as a deferred follow-up.
+            // Re-sync hook — currently a no-op pass. The switches aren't
+            // retained, and the backing `NSUserDefaults` is cheap to re-
+            // read on next open. Documented as a deferred follow-up.
         }
 
         #[unsafe(method(viewDidLayoutSubviews))]
@@ -269,16 +232,10 @@ define_class!(
             }
         }
 
-        #[unsafe(method(toggleReserveTopSafeArea:))]
-        fn toggle_reserve_top_safe_area(&self, sender: &UISwitch) {
-            let on: bool = unsafe { msg_send![sender, isOn] };
-            unsafe { bt_swift_settings_set_reserve_top_safe_area(on) };
-        }
-
         #[unsafe(method(toggleShowCommandBlocks:))]
         fn toggle_show_command_blocks(&self, sender: &UISwitch) {
             let on: bool = unsafe { msg_send![sender, isOn] };
-            unsafe { bt_swift_settings_set_show_command_blocks(on) };
+            settings_store::set_show_command_blocks(on);
         }
 
     }

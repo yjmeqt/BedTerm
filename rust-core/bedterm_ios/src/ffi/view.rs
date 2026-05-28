@@ -76,11 +76,6 @@ pub unsafe extern "C" fn bt_ios_view_cell_size_px(
     }
 }
 
-/// C-style PTY sink callback: invoked when the metal view emits PTY bytes
-/// (hardware keyboard, IME commit). `bytes` valid only for the call.
-pub type BtIosOnSendCallback =
-    unsafe extern "C" fn(ctx: *mut std::ffi::c_void, bytes: *const u8, len: usize);
-
 /// Install a C-callback PTY sink on the metal view. Replaces any prior
 /// sink. Pass `cb = None` (NULL) to clear.
 ///
@@ -90,7 +85,9 @@ pub type BtIosOnSendCallback =
 #[no_mangle]
 pub unsafe extern "C" fn bt_ios_view_set_on_send(
     view_ptr: *mut std::ffi::c_void,
-    cb: Option<BtIosOnSendCallback>,
+    // Inline the bare-fn type so cbindgen emits a nullable C function
+    // pointer (it doesn't unwrap `Option<TypeAlias>` — see ffi/vc.rs).
+    cb: Option<unsafe extern "C" fn(ctx: *mut std::ffi::c_void, bytes: *const u8, len: usize)>,
     ctx: *mut std::ffi::c_void,
 ) {
     if view_ptr.is_null() {
@@ -114,13 +111,6 @@ pub unsafe extern "C" fn bt_ios_view_set_on_send(
     }
 }
 
-/// C-style resize callback: invoked when the metal view's
-/// `layoutSubviews` recomputes a new (cols, rows) from its bounds and
-/// the renderer's cell pixel size. Fires only on actual changes, on
-/// the main thread.
-pub type BtIosOnResizeCallback =
-    unsafe extern "C" fn(ctx: *mut std::ffi::c_void, cols: u16, rows: u16);
-
 /// Install a resize-notification callback on the metal view. The
 /// callback fires from `layoutSubviews` whenever the renderer-derived
 /// `(cols, rows)` differs from the previously-reported value. Pass
@@ -133,7 +123,7 @@ pub type BtIosOnResizeCallback =
 #[no_mangle]
 pub unsafe extern "C" fn bt_ios_view_set_on_resize(
     view_ptr: *mut std::ffi::c_void,
-    cb: Option<BtIosOnResizeCallback>,
+    cb: Option<unsafe extern "C" fn(ctx: *mut std::ffi::c_void, cols: u16, rows: u16)>,
     ctx: *mut std::ffi::c_void,
 ) {
     if view_ptr.is_null() {

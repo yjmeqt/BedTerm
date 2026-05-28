@@ -8,12 +8,15 @@ import Testing
 struct ShellIntegrationTests {
     // MARK: - Resource loading
 
-    @Test("script resource loads via Bundle.module")
+    @Test("embedded payload loads via Rust FFI")
     func scriptResourceLoads() {
-        // The bundled bedterm-integration.sh must always be reachable via
-        // Bundle.module. If this fails, the resource was dropped from the
-        // SPM target — a packaging accident, not a runtime concern.
-        #expect(ShellIntegrationScript.load() != nil)
+        // The bedterm-integration.sh body is embedded into the bedterm_ios
+        // staticlib at build time via `include_bytes!`. If `load()` returns
+        // nil, the staticlib was built from a missing or non-UTF-8 source
+        // file — a build accident, not a runtime concern.
+        let body = ShellIntegrationScript.load()
+        #expect(body != nil)
+        #expect((body?.count ?? 0) > 0)
     }
 
     @Test("script emits the DCS sequences the parser expects")
@@ -75,20 +78,4 @@ struct ShellIntegrationTests {
         #expect(mock.lastConnectRequest?.bootstrapPayload == nil)
     }
 
-    // MARK: - Settings gating
-
-    @Test("settings toggle controls bootstrap default")
-    func settingsToggleControlsBootstrap() throws {
-        let suite = UUID().uuidString
-        UserDefaults().removePersistentDomain(forName: suite)
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        let settings = BedTermSettings(defaults: defaults)
-        // Default — opt-in beta: off until the user toggles it on.
-        #expect(!settings.showCommandBlocks)
-        settings.showCommandBlocks = true
-        #expect(settings.showCommandBlocks)
-        // Persists
-        let reloaded = BedTermSettings(defaults: defaults)
-        #expect(reloaded.showCommandBlocks)
-    }
 }

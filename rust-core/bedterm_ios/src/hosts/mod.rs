@@ -33,6 +33,8 @@ use std::ffi::c_void;
 
 /// C callback fired when the user taps the navigation-bar `+` button on
 /// the Rust hosts list VC. Swift owns the response (presenting the
-/// SwiftUI connect-form sheet).
+/// SwiftUI connect-form sheet). Kept for internal storage; the FFI
+/// entry inlines the bare-fn type for cbindgen-friendly emission (see
+/// `ffi/vc.rs`).
 #[cfg(target_os = "ios")]
 pub type BtIosHostsAddCallback = unsafe extern "C" fn(ctx: *mut c_void);

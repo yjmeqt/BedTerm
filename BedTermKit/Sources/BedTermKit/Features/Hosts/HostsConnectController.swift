@@ -1,4 +1,4 @@
-import BedTermCoreC
+import BedTermIOS
 import Observation
 import SwiftUI
 import UIKit
@@ -24,7 +24,6 @@ public final class HostsConnectController {
     // Internal: dialog extension reads swap/delete state.
     let viewModel = HostsViewModel()
     private let toaster: Toaster
-    private let settings: BedTermSettings
     private let onShowHostForm: ShowHostForm
     private let onShowTerminal: ShowTerminal
     private let onShowSettings: ShowSettings
@@ -57,14 +56,12 @@ public final class HostsConnectController {
 
     public init(
         toaster: Toaster,
-        settings: BedTermSettings,
         onShowHostForm: @escaping ShowHostForm,
         onShowTerminal: @escaping ShowTerminal,
         onPopToHosts: @escaping () -> Void,
         onShowSettings: @escaping ShowSettings
     ) {
         self.toaster = toaster
-        self.settings = settings
         self.onShowHostForm = onShowHostForm
         self.onShowTerminal = onShowTerminal
         self.onPopToHosts = onPopToHosts
@@ -80,13 +77,10 @@ public final class HostsConnectController {
         self.rootViewController = container
         self.addBox.owner = self
 
-        // Wire the bridge + load entries before the Rust VC's
-        // viewDidLoad pulls a snapshot — otherwise first render
-        // flashes empty.
-        HostsBridge.store = HostsStore()
-        HostsBridge.entriesProvider = { [weak self] in
-            self?.viewModel.entries ?? []
-        }
+        // Wire the bridge connect handler + load entries before the
+        // Rust VC's viewDidLoad pulls a snapshot — otherwise first
+        // render flashes empty. The snapshot itself is now read
+        // directly from `crate::hosts_store` by the Rust VC.
         HostsBridge.connectHandler = { [weak self] id in
             self?.viewModel.requestConnect(id: id)
         }
@@ -162,15 +156,15 @@ public final class HostsConnectController {
             let rust = objc_getAssociatedObject(self.rootViewController, &Self.rustChildKey)
                 as? UIViewController
         else { return }
-        // The Rust VC re-pulls `HostsBridge` JSON in its
+        // The Rust VC re-pulls from `hosts_store` in its
         // viewWillAppear; flip the appearance transition to force it.
         rust.beginAppearanceTransition(true, animated: false)
         rust.endAppearanceTransition()
     }
 
     private func wireBridge() {
-        self.viewModel.bootstrapPayloadProvider = { [settings] in
-            guard settings.showCommandBlocks else { return nil }
+        self.viewModel.bootstrapPayloadProvider = {
+            guard bt_ios_settings_show_command_blocks() else { return nil }
             return ShellIntegrationScript.bootstrapPayload()
         }
         self.viewModel.onConnectError = { [weak self] id, message, perm in
@@ -270,8 +264,8 @@ public final class HostsConnectController {
         else { return }
         let hostName = self.viewModel.displayName(for: id)
         let entryID = entry.id
-        let payloadProvider: @MainActor () -> String? = { [settings] in
-            guard settings.showCommandBlocks else { return nil }
+        let payloadProvider: @MainActor () -> String? = {
+            guard bt_ios_settings_show_command_blocks() else { return nil }
             return ShellIntegrationScript.bootstrapPayload()
         }
         let onBack: () -> Void = { [weak self] in
@@ -349,13 +343,15 @@ public final class HostsConnectController {
             self.toaster.dismiss(id: id)
             self.mismatchToastID = nil
         }
-        guard let mismatch = self.viewModel.pendingMismatch else { return }
+        // Title / body / action label all come from Rust — see
+        // `hosts_vm::mismatch_alert`. Swift owns toast presentation only.
+        guard let text = Self.readAlertText(bt_ios_hosts_vm_mismatch_alert()) else { return }
         self.mismatchToastID = self.toaster.show(
             .warning,
-            title: String(localized: "Host key changed · \(mismatch.host)"),
-            description: String(localized: "Tap to review and accept or reject."),
+            title: text.title,
+            description: text.message,
             actions: [
-                Toaster.Action(String(localized: "Review")) { [weak self] in
+                Toaster.Action(text.confirmLabel) { [weak self] in
                     self?.presentMismatchReview()
                 }
             ],

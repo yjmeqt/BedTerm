@@ -1,9 +1,15 @@
+import BedTermIOS
 import UIKit
 
 // Swap + delete confirmation alerts for `HostsConnectController`.
 // Lifted to a sibling file so the controller stays under the
-// SwiftLint file-length cap (mirrors the old
-// `HostsScreenDialogs.swift` pattern).
+// SwiftLint file-length cap.
+//
+// All alert text — title / message / button labels — comes from Rust
+// (`bt_ios_hosts_vm_*_alert`). Swift owns presentation lifecycle only;
+// it neither localizes nor interpolates the host display name. Add new
+// copy in `BedTerm/Localizable.xcstrings` + `hosts_vm::*_alert`, never
+// here.
 
 extension HostsConnectController {
     func handleSwapConfirmationChanged() {
@@ -14,20 +20,16 @@ extension HostsConnectController {
             self.presentedSwapAlert = nil
             return
         }
-        guard self.presentedSwapAlert == nil, let target = self.viewModel.swapConfirmation
-        else { return }
+        guard self.presentedSwapAlert == nil else { return }
+        guard let text = Self.readAlertText(bt_ios_hosts_vm_swap_alert()) else { return }
         let alert = UIAlertController(
-            title: String(
-                localized: "End current session and connect to \"\(target.displayName)\"?"),
-            message: String(localized: "Your current SSH session will be disconnected."),
-            preferredStyle: .alert
-        )
+            title: text.title, message: text.message, preferredStyle: .alert)
         alert.addAction(
-            UIAlertAction(title: String(localized: "Connect"), style: .default) { [weak self] _ in
+            UIAlertAction(title: text.confirmLabel, style: .default) { [weak self] _ in
                 self?.viewModel.confirmSwap()
             })
         alert.addAction(
-            UIAlertAction(title: String(localized: "Cancel"), style: .cancel) { [weak self] _ in
+            UIAlertAction(title: text.cancelLabel, style: .cancel) { [weak self] _ in
                 self?.viewModel.cancelSwap()
             })
         self.presentedSwapAlert = alert
@@ -40,33 +42,42 @@ extension HostsConnectController {
             self.presentedDeleteAlert = nil
             return
         }
-        guard self.presentedDeleteAlert == nil, let target = self.viewModel.deleteConfirmation
-        else { return }
-        let title: String
-        if target.isLive {
-            title = String(localized: "Disconnect and delete \"\(target.displayName)\"?")
-        } else {
-            title = String(localized: "Delete \"\(target.displayName)\"?")
-        }
-        let message: String
-        if target.isLive {
-            message = String(
-                localized:
-                    "You are currently connected. The session will end and the saved password or key will be removed."
-            )
-        } else {
-            message = String(localized: "This will remove the saved password or key.")
-        }
-        let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
+        guard self.presentedDeleteAlert == nil else { return }
+        guard let text = Self.readAlertText(bt_ios_hosts_vm_delete_alert()) else { return }
+        let alert = UIAlertController(
+            title: text.title, message: text.message, preferredStyle: .alert)
         alert.addAction(
-            UIAlertAction(title: String(localized: "Delete"), style: .destructive) { [weak self] _ in
+            UIAlertAction(title: text.confirmLabel, style: .destructive) { [weak self] _ in
                 self?.viewModel.confirmDelete()
             })
         alert.addAction(
-            UIAlertAction(title: String(localized: "Cancel"), style: .cancel) { [weak self] _ in
+            UIAlertAction(title: text.cancelLabel, style: .cancel) { [weak self] _ in
                 self?.viewModel.cancelDelete()
             })
         self.presentedDeleteAlert = alert
         self.rootViewController.present(alert, animated: true)
+    }
+
+    /// Plain-Swift mirror of `BtIosHostsAlertText`. The Rust side owns the
+    /// underlying C string buffers; we copy each field into a Swift
+    /// `String` and immediately free the struct, so callers never have to
+    /// juggle lifetimes.
+    struct AlertText {
+        let title: String
+        let message: String
+        let confirmLabel: String
+        let cancelLabel: String
+    }
+
+    static func readAlertText(_ ptr: UnsafeMutablePointer<BtIosHostsAlertText>?) -> AlertText? {
+        guard let ptr else { return nil }
+        defer { bt_ios_hosts_free_alert_text(ptr) }
+        let raw = ptr.pointee
+        return AlertText(
+            title: String(cString: raw.title),
+            message: String(cString: raw.message),
+            confirmLabel: String(cString: raw.confirm_label),
+            cancelLabel: String(cString: raw.cancel_label)
+        )
     }
 }

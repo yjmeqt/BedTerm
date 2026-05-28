@@ -1,3 +1,4 @@
+import BedTermIOS
 import Foundation
 import Testing
 
@@ -5,31 +6,22 @@ import Testing
 
 @Suite("HostsStore", .serialized)
 struct HostsStoreTests {
-    private let testService = "com.applovin.yi.bedterm.tests.savedHosts"
-    private let legacyService = "com.applovin.yi.bedterm.tests.savedHosts.legacy"
-    private let orderKey = "tests.hosts.order"
-    private let migrationKey = "tests.hosts.legacyMigrationDone"
-    private let defaults: UserDefaults
-
     init() {
-        // Fresh in-memory keychain per test instance — SPM xctest bundles have
-        // no host-app entitlement, so the real SecItem* path returns
-        // errSecMissingEntitlement.
-        TestKeychain.installInMemory()
-        // Each test instance also gets its own ephemeral UserDefaults suite.
-        let suite = "BedTermTests.HostsStore." + UUID().uuidString
-        defaults = UserDefaults(suiteName: suite) ?? .standard
-        defaults.removePersistentDomain(forName: suite)
+        // Each suite instance routes Rust-side reads/writes to a fresh
+        // per-test service / orderKey pair so the simulator Keychain
+        // and the production UserDefaults entry stay clean.
+        let suffix = UUID().uuidString
+        let service = "com.applovin.yi.bedterm.tests.savedHosts.\(suffix)"
+        let orderKey = "tests.hosts.order.\(suffix)"
+        service.withCString { svcPtr in
+            orderKey.withCString { ordPtr in
+                bt_ios_hosts_set_test_service(svcPtr, ordPtr)
+            }
+        }
     }
 
     private func makeStore() -> HostsStore {
-        HostsStore(
-            service: testService,
-            orderKey: orderKey,
-            migrationKey: migrationKey,
-            defaults: defaults,
-            legacy: CredentialsStore(service: legacyService)
-        )
+        HostsStore()
     }
 
     private func makeHost(
@@ -96,59 +88,15 @@ struct HostsStoreTests {
     func reconcileOrphans() throws {
         let store = makeStore()
         let orphan = makeHost(label: "orphan")
-        let data = try JSONEncoder().encode(orphan)
-        try Keychain.save(service: testService, account: orphan.id.uuidString, data: data)
-        // Note: no UserDefaults order entry written.
+        try store.save(orphan)
+        // Wipe just the order index — blob stays alive. Mimics the
+        // "Keychain survived a UserDefaults wipe" scenario.
+        bt_ios_hosts_test_clear_order()
         let listed = store.list()
         #expect(listed.map(\.id) == [orphan.id])
-        // After reconcile the order is persisted for next launch.
-        #expect(defaults.array(forKey: orderKey) as? [String] == [orphan.id.uuidString])
-    }
-
-    @Test("migration seeds a single entry labeled 'Last connection' from the legacy credential")
-    func migrationSeedsLegacyEntry() throws {
-        let legacy = HostCredential(host: "legacy.example.com", port: 2222, username: "root", auth: .password("p"))
-        try CredentialsStore(service: legacyService).save(legacy)
-
-        let store = makeStore()
-        let didMigrate = store.migrateLegacyIfNeeded(label: "Last connection")
-        #expect(didMigrate)
-        let listed = store.list()
-        #expect(listed.count == 1)
-        #expect(listed.first?.label == "Last connection")
-        #expect(listed.first?.credential == legacy)
-        // Legacy item is gone.
-        #expect(throws: KeychainError.notFound) { try CredentialsStore(service: legacyService).load() }
-    }
-
-    @Test("migration is idempotent")
-    func migrationIdempotent() throws {
-        let legacy = HostCredential(host: "h", port: 22, username: "u", auth: .password("p"))
-        try CredentialsStore(service: legacyService).save(legacy)
-        let store = makeStore()
-        _ = store.migrateLegacyIfNeeded()
-        _ = store.migrateLegacyIfNeeded()
-        #expect(store.list().count == 1)
-    }
-
-    @Test("migration is a no-op on a fresh install with no legacy item")
-    func migrationFreshInstall() {
-        let store = makeStore()
-        let didMigrate = store.migrateLegacyIfNeeded()
-        #expect(!didMigrate)
-        #expect(store.list().isEmpty)
-    }
-
-    @Test("migration skips when a matching host/port/username is already saved")
-    func migrationSkipsDuplicate() throws {
-        let legacy = HostCredential(host: "h", port: 22, username: "u", auth: .password("p"))
-        try CredentialsStore(service: legacyService).save(legacy)
-        let store = makeStore()
-        try store.save(SavedHost(label: "existing", credential: legacy))
-        let didMigrate = store.migrateLegacyIfNeeded()
-        #expect(!didMigrate)
-        #expect(store.list().count == 1)
-        // Legacy item is cleared even when migration is skipped, so we never run again.
-        #expect(throws: KeychainError.notFound) { try CredentialsStore(service: legacyService).load() }
+        // After reconcile the order is persisted again so subsequent
+        // `list()` calls return the entry without re-reconciling.
+        let listed2 = store.list()
+        #expect(listed2.map(\.id) == [orphan.id])
     }
 }

@@ -1296,41 +1296,6 @@
         }
       }
     },
-    "Display": {
-      "extractionState": "manual",
-      "localizations": {
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "表示"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "디스플레이"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Дисплей"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "显示"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "顯示"
-          }
-        }
-      }
-    },
     "Don't connect": {
       "extractionState": "stale",
       "localizations": {
@@ -1646,6 +1611,41 @@
         }
       }
     },
+    "Host key changed · %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "ホストキーが変更されました · %@"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "호스트 키가 변경되었습니다 · %@"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Ключ хоста изменился · %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "主机密钥已变更 · %@"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "主機金鑰已變更 · %@"
+          }
+        }
+      }
+    },
     "Host key changed.\nStored: %1$@\nRemote: %2$@": {
       "extractionState": "manual",
       "localizations": {
@@ -1782,41 +1782,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "匯入私密金鑰"
-          }
-        }
-      }
-    },
-    "Keep first row visible in full-screen apps": {
-      "extractionState": "manual",
-      "localizations": {
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "フルスクリーンアプリで最上行を表示する"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "전체 화면 앱에서 첫 줄 표시 유지"
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Сохранять первую строку видимой в полноэкранных программах"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "全屏应用中保持首行可见"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "全螢幕應用程式中保持首列可見"
           }
         }
       }
@@ -2941,6 +2906,41 @@
         }
       }
     },
+    "Review": {
+      "extractionState": "manual",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "確認"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "검토"
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Просмотреть"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "查看"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "查看"
+          }
+        }
+      }
+    },
     "Run a command at the remote shell prompt. Each prompt → command → output cycle becomes a block here.": {
       "extractionState": "manual",
       "localizations": {
@@ -3466,6 +3466,41 @@
         }
       }
     },
+    "Tap to review and accept or reject.": {
+      "extractionState": "manual",
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "タップして確認し、承認または拒否してください。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "탭하여 검토하고 수락 또는 거부하세요."
+          }
+        },
+        "ru": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "Нажмите, чтобы просмотреть и принять или отклонить."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "点击查看以接受或拒绝。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "needs_review",
+            "value": "輕點查看以接受或拒絕。"
+          }
+        }
+      }
+    },
     "This could mean the server was reinstalled — or that someone is intercepting the connection.": {
       "extractionState": "stale",
       "localizations": {
@@ -3777,41 +3812,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "你要連線到哪一種主機？"
-          }
-        }
-      }
-    },
-    "When vim, htop, claude or other full-screen tools run, reserve the top safe area so the Dynamic Island, notch, or status bar doesn't cover their first row.": {
-      "extractionState": "manual",
-      "localizations": {
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "vim・htop・claude などの全画面ツールが動作中、ダイナミックアイランド・ノッチ・ステータスバーが最上行を覆わないよう、画面上部のセーフエリアを確保します。"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "vim, htop, claude 등 전체 화면 도구가 실행 중일 때 다이내믹 아일랜드, 노치, 상태 표시줄이 첫 줄을 가리지 않도록 화면 상단 안전 영역을 확보합니다."
-          }
-        },
-        "ru": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Когда работают vim, htop, claude или другие полноэкранные инструменты, резервируется верхняя безопасная область, чтобы Dynamic Island, вырез или строка состояния не закрывали первую строку."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "当 vim、htop、claude 等全屏工具运行时,预留顶部安全区域,使灵动岛、刘海或状态栏不会遮挡首行。"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "當 vim、htop、claude 等全螢幕工具執行時,預留頂部安全區域,讓動態島、瀏海或狀態列不會遮擋首列。"
           }
         }
       }

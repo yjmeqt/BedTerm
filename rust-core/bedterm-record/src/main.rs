@@ -165,8 +165,9 @@ fn parse_args() -> Args {
 
 fn find_integration_script() -> PathBuf {
     for c in [
-        "../BedTermKit/Sources/BedTermKit/ShellIntegrationResources/bedterm-integration.sh",
-        "../../BedTermKit/Sources/BedTermKit/ShellIntegrationResources/bedterm-integration.sh",
+        "../bedterm_ios/assets/bedterm-integration.sh",
+        "../../rust-core/bedterm_ios/assets/bedterm-integration.sh",
+        "rust-core/bedterm_ios/assets/bedterm-integration.sh",
     ] {
         let p = PathBuf::from(c);
         if p.exists() {

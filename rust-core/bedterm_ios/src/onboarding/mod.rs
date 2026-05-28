@@ -41,11 +41,13 @@ use std::ffi::c_void;
 
 /// C callback fired when the user picks one of the picker-step choices.
 /// `choice` is the discriminant (see module-level doc for the mapping).
+/// Kept for internal storage; FFI entry inlines the bare-fn type (see
+/// `ffi/vc.rs`).
 #[cfg(target_os = "ios")]
 pub type BtIosOnboardingChoiceCallback = unsafe extern "C" fn(ctx: *mut c_void, choice: i32);
 
-/// C callback fired when the user taps the primary "Continue" button on the
-/// MacTutorial or LocalPermission step.
+/// C callback fired when the user taps the primary "Continue" button on
+/// the MacTutorial or LocalPermission step.
 #[cfg(target_os = "ios")]
 pub type BtIosOnboardingContinueCallback = unsafe extern "C" fn(ctx: *mut c_void);
 

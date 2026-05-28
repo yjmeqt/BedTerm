@@ -1,36 +1,20 @@
+import BedTermIOS
 import Foundation
 import Observation
 import UIKit
 
-/// Drives the saved-hosts list: holds the entry array, per-row in-flight state,
-/// and the connect flow that fans out to `ConnectAttempt`. Errors,
-/// session-end, device-locked, and host-key-mismatch events surface through the
-/// injected `Toaster` rather than per-row banners.
+/// @Observable proxy over the Rust-owned hosts state machine
+/// (`hosts_vm` / `bt_ios_hosts_vm_*`). Each mutator forwards to Rust,
+/// mirrors the new state into the local @Observable properties so
+/// `withObservationTracking` in `HostsConnectController` keeps firing
+/// on the same key paths, and dispatches any `Action::Connect` / `Disconnect`
+/// that came back.
+///
+/// Swift still owns the async SSH connect path (`ConnectAttempt`) and
+/// the live `TerminalSession` reference — neither has a Rust analogue.
 @MainActor
 @Observable
 public final class HostsViewModel {
-    public struct PendingMismatch: Equatable {
-        public let stored: String
-        public let remote: String
-        public let host: String
-        public let port: Int
-        public let sourceID: UUID
-    }
-
-    public struct SwapConfirmation: Equatable, Identifiable {
-        public let targetID: UUID
-        public let displayName: String
-        public var id: UUID { self.targetID }
-    }
-
-    public struct DeleteConfirmation: Equatable, Identifiable {
-        public let targetID: UUID
-        public let displayName: String
-        public let isLive: Bool
-        public let isInFlight: Bool
-        public var id: UUID { self.targetID }
-    }
-
     public private(set) var entries: [SavedHost] = []
     public private(set) var inFlightID: UUID?
     private(set) var lastSession: TerminalSession?
@@ -39,7 +23,6 @@ public final class HostsViewModel {
     public var swapConfirmation: SwapConfirmation?
     public var deleteConfirmation: DeleteConfirmation?
     public private(set) var loadFailed: Bool = false
-    public private(set) var didMigrate: Bool = false
 
     /// Surfaced to the view layer so it can fire toasts. The closure is invoked
     /// on the main actor for every connect outcome (success cases just hint
@@ -48,9 +31,9 @@ public final class HostsViewModel {
     /// connect dispatch; tests can leave it nil.
     public var onConnectError: ((UUID, String, Bool) -> Void)?
     /// Resolves the shell-integration heredoc to push at connect time.
-    /// Set by `HostsScreen` after the SwiftUI environment is wired so we
-    /// can read `BedTermSettings.showCommandBlocks`. Nil
-    /// keeps the channel pristine.
+    /// Installed by `HostsConnectController` against the persisted
+    /// "show command blocks" setting (via `bt_ios_settings_*`). Nil keeps
+    /// the channel pristine.
     public var bootstrapPayloadProvider: (@MainActor () -> String?)?
 
     private let store: HostsStore
@@ -72,94 +55,122 @@ public final class HostsViewModel {
                 return CitadelSSHClient()
             })
         }
+        self.syncFromRust()
     }
 
     init(store: HostsStore, connectFactory: @MainActor @escaping () -> ConnectAttempt) {
         self.store = store
         self.connectFactory = connectFactory
+        self.syncFromRust()
     }
 
     // MARK: - Loading
 
     public func load() {
         if !UIApplication.shared.isProtectedDataAvailable {
-            self.loadFailed = true
+            bt_ios_hosts_vm_set_load_failed(true)
+            self.syncFromRust()
             return
         }
-        self.didMigrate = self.store.migrateLegacyIfNeeded()
-        var loaded = self.store.list()
-        // UI-test override: append injected stub hosts so the test can
-        // tap a known row without driving the add-host form. Production
-        // launches leave `HostsStoreInjection.current` empty.
-        let injected = HostsStoreInjection.current.filter { entry in
-            !loaded.contains { $0.id == entry.id }
+        bt_ios_hosts_vm_load_from_store()
+
+        // UI-test override: inject stub hosts that don't live in the
+        // Keychain. The merge has to happen Swift-side because Rust
+        // doesn't see HostsStoreInjection's array.
+        let injected = HostsStoreInjection.current
+        if !injected.isEmpty {
+            if let json = Self.encodeInjectedEntries(injected) {
+                json.withCString { bt_ios_hosts_vm_merge_injected($0) }
+            }
         }
-        loaded.append(contentsOf: injected)
-        self.entries = loaded
-        self.loadFailed = false
+        bt_ios_hosts_vm_set_load_failed(false)
+        self.syncFromRust()
     }
 
-    public func retryLoad() {
-        self.load()
-    }
+    public func retryLoad() { self.load() }
 
-    /// Entry point bound to the row's Connect button. Performs the swap-confirm
-    /// dance if another session is live; otherwise hands straight to `connect`.
+    /// Entry point bound to the row's Connect button.
     public func requestConnect(id: UUID) {
-        if self.inFlightID == id { return }
-        if let sessionID = self.currentSessionID, sessionID != id {
-            self.swapConfirmation = SwapConfirmation(
-                targetID: id, displayName: self.displayName(for: id)
-            )
-            return
+        var out: UnsafeMutablePointer<CChar>?
+        let kind = id.uuidString.withCString { idPtr in
+            bt_ios_hosts_vm_request_connect(idPtr, &out)
         }
-        self.connect(id: id)
+        self.syncFromRust()
+        self.dispatch(actionKind: kind, payload: out)
     }
 
     public func confirmSwap() {
-        guard let target = self.swapConfirmation?.targetID else { return }
-        self.swapConfirmation = nil
+        var out: UnsafeMutablePointer<CChar>?
+        bt_ios_hosts_vm_confirm_swap(&out)
+        // Swift owns lastSession — disconnect *before* kicking off the
+        // new attempt. The Rust VM has already cleared current_session_id.
         self.lastSession?.disconnect()
         self.lastSession = nil
-        self.currentSessionID = nil
-        self.connect(id: target)
+        self.syncFromRust()
+        if let out {
+            let target = String(cString: out)
+            bt_ios_hosts_free_string(out)
+            if let uuid = UUID(uuidString: target) {
+                self.startConnect(id: uuid)
+            }
+        }
     }
 
-    public func cancelSwap() { self.swapConfirmation = nil }
+    public func cancelSwap() {
+        bt_ios_hosts_vm_cancel_swap()
+        self.syncFromRust()
+    }
 
     // MARK: - Connect
 
-    public func connect(id: UUID) {
-        // R2.rapid_switch_cancels: cancel any prior attempt silently.
-        if let prior = self.inFlightID, prior != id {
-            self.inFlightTask?.cancel()
-            if self.inFlightID == prior { self.inFlightID = nil }
-        }
-        self.inFlightID = id
-
+    /// Async dispatch path called from the entry points above (and from
+    /// `confirmSwap` / `retryAfterMismatch`). Rust already marked the
+    /// in-flight id; Swift just runs the SSH attempt.
+    private func startConnect(id: UUID) {
+        self.inFlightTask?.cancel()
         let task = Task { @MainActor in
             await self.runConnect(id: id)
         }
         self.inFlightTask = task
     }
 
+    /// Direct connect entry point (no swap dance). Used by tests that
+    /// drive the connect path independently of `requestConnect`.
+    public func connect(id: UUID) {
+        var out: UnsafeMutablePointer<CChar>?
+        let kind = id.uuidString.withCString { idPtr in
+            bt_ios_hosts_vm_request_connect(idPtr, &out)
+        }
+        self.syncFromRust()
+        // request_connect raises swap when a *different* session is
+        // live; production callers want a direct dispatch. Force the
+        // dispatch by bypassing the swap if it surfaced.
+        if let out {
+            bt_ios_hosts_free_string(out)
+        }
+        if kind == 0 && self.swapConfirmation == nil {
+            // Same id as the live one (no-op) — nothing to do.
+            return
+        }
+        if kind == 1 {
+            // Direct dispatch — Rust already marked in_flight = id.
+            self.startConnect(id: id)
+        }
+    }
+
     private func runConnect(id: UUID) async {
         let entry: SavedHost
-        // UI-test override: injected stub hosts live only in memory,
-        // not in the Keychain — short-circuit the store lookup so the
-        // mock SSH client can answer the connect.
+        // UI-test override: injected stub hosts live only in memory.
         if let injected = HostsStoreInjection.current.first(where: { $0.id == id }) {
             entry = injected
         } else {
             do {
                 entry = try self.store.load(id: id)
             } catch {
+                id.uuidString.withCString { bt_ios_hosts_vm_connect_completed_error($0) }
+                self.syncFromRust()
                 self.onConnectError?(
-                    id,
-                    String(localized: "Could not load saved host."),
-                    false
-                )
-                if self.inFlightID == id { self.inFlightID = nil }
+                    id, String(localized: "Could not load saved host."), false)
                 return
             }
         }
@@ -172,89 +183,210 @@ public final class HostsViewModel {
         switch outcome {
         case .session(let session):
             self.lastSession = session
-            self.currentSessionID = id
+            id.uuidString.withCString { bt_ios_hosts_vm_connect_completed_session($0) }
         case .mismatch(let stored, let remote, let host, let port):
-            self.pendingMismatch = PendingMismatch(
-                stored: stored, remote: remote, host: host, port: port, sourceID: id
-            )
+            id.uuidString.withCString { idPtr in
+                stored.withCString { storedPtr in
+                    remote.withCString { remotePtr in
+                        host.withCString { hostPtr in
+                            bt_ios_hosts_vm_connect_completed_mismatch(
+                                idPtr, storedPtr, remotePtr, hostPtr, UInt16(port))
+                        }
+                    }
+                }
+            }
         case .error(let message, let permissionDenied):
+            id.uuidString.withCString { bt_ios_hosts_vm_connect_completed_error($0) }
             self.onConnectError?(id, message, permissionDenied)
         }
-        if self.inFlightID == id { self.inFlightID = nil }
+        self.syncFromRust()
     }
 
     /// Called after the user trusts a new host key on the mismatch sheet.
     public func retryAfterMismatch() {
-        guard let mismatch = self.pendingMismatch else { return }
-        let id = mismatch.sourceID
-        self.pendingMismatch = nil
-        self.connect(id: id)
+        var out: UnsafeMutablePointer<CChar>?
+        let kind = bt_ios_hosts_vm_retry_after_mismatch(&out)
+        self.syncFromRust()
+        self.dispatch(actionKind: kind, payload: out)
     }
 
     public func clearMismatch() {
-        self.pendingMismatch = nil
+        bt_ios_hosts_vm_clear_mismatch()
+        self.syncFromRust()
     }
 
     /// Called when the terminal screen tears down so the next row tap starts fresh.
     public func sessionEnded() {
         self.lastSession = nil
-        self.currentSessionID = nil
+        bt_ios_hosts_vm_session_ended()
+        self.syncFromRust()
     }
 
-    /// Disconnect the current live session (× tap on the terminal toolbar).
-    /// Safe to call when there is no live session — falls through to
-    /// `sessionEnded()`.
+    /// Disconnect the current live session.
     public func endLiveSession() {
-        guard let session = self.lastSession else {
-            self.sessionEnded()
-            return
+        let kind = bt_ios_hosts_vm_end_live_session()
+        if kind == 2 {
+            self.lastSession?.disconnect()
         }
-        session.disconnect()
         self.lastSession = nil
-        self.currentSessionID = nil
+        self.syncFromRust()
     }
 
     // MARK: - Delete
 
     public func requestDelete(id: UUID) {
-        let isLive = self.currentSessionID == id
-        let isInFlight = self.inFlightID == id
-        self.deleteConfirmation = DeleteConfirmation(
-            targetID: id,
-            displayName: self.displayName(for: id),
-            isLive: isLive,
-            isInFlight: isInFlight
-        )
+        id.uuidString.withCString { bt_ios_hosts_vm_request_delete($0) }
+        self.syncFromRust()
     }
 
     public func confirmDelete() {
-        guard let conf = self.deleteConfirmation else { return }
-        self.deleteConfirmation = nil
-        if conf.isInFlight {
-            self.inFlightTask?.cancel()
-            if self.inFlightID == conf.targetID { self.inFlightID = nil }
+        guard let targetPtr = bt_ios_hosts_vm_confirm_delete() else {
+            self.syncFromRust()
+            return
         }
-        if conf.isLive {
+        let target = String(cString: targetPtr)
+        bt_ios_hosts_free_string(targetPtr)
+        guard let uuid = UUID(uuidString: target) else {
+            self.syncFromRust()
+            return
+        }
+        // Rust already cleared in-flight / live mirrors when they
+        // matched. Mirror that on the Swift side too.
+        if self.inFlightID == uuid {
+            self.inFlightTask?.cancel()
+        }
+        if self.currentSessionID == uuid {
             self.lastSession?.disconnect()
             self.lastSession = nil
-            self.currentSessionID = nil
         }
-        self.store.delete(id: conf.targetID)
-        self.entries.removeAll { $0.id == conf.targetID }
+        self.store.delete(id: uuid)
+        self.syncFromRust()
     }
 
-    public func cancelDelete() { self.deleteConfirmation = nil }
+    public func cancelDelete() {
+        bt_ios_hosts_vm_cancel_delete()
+        self.syncFromRust()
+    }
 
     // MARK: - Display helpers
 
     public func displayName(for id: UUID) -> String {
-        guard let entry = self.entries.first(where: { $0.id == id }) else { return "" }
-        if !entry.label.isEmpty { return entry.label }
-        return "\(entry.credential.username)@\(entry.credential.host)"
+        guard let ptr = id.uuidString.withCString({ bt_ios_hosts_vm_display_name_for($0) }) else {
+            return ""
+        }
+        defer { bt_ios_hosts_free_string(ptr) }
+        return String(cString: ptr)
     }
 
     /// Reload after a form save so a freshly-added entry appears.
     public func refresh() {
-        self.entries = self.store.list()
+        bt_ios_hosts_vm_load_from_store()
+        self.syncFromRust()
+    }
+
+    // MARK: - Internal
+
+    /// Pull state from Rust and mirror into the @Observable properties.
+    /// Each property write fires `withObservationTracking` observers in
+    /// the controller layer, just like the pre-port direct mutations did.
+    private func syncFromRust() {
+        // entries — display snapshot doesn't carry HostCredential, so
+        // we still need the Swift HostsStore to materialise SavedHost
+        // values. The Rust mirror is the source of truth for *which*
+        // ids are present; we resolve each via `store.load` (or
+        // `HostsStoreInjection` for UI-test stubs).
+        let entriesJSONPtr = bt_ios_hosts_vm_entries_json()
+        defer { bt_ios_hosts_free_string(entriesJSONPtr) }
+        let entriesJSON = entriesJSONPtr.map { String(cString: $0) } ?? "[]"
+        let mirror = Self.decodeEntryMirror(entriesJSON)
+
+        var resolved: [SavedHost] = []
+        resolved.reserveCapacity(mirror.count)
+        for ref in mirror {
+            if let injected = HostsStoreInjection.current.first(where: { $0.id == ref.id }) {
+                resolved.append(injected)
+                continue
+            }
+            if let entry = try? self.store.load(id: ref.id) {
+                resolved.append(entry)
+            }
+        }
+        self.entries = resolved
+
+        self.inFlightID = Self.readOptionalUUID(bt_ios_hosts_vm_in_flight_id())
+        self.currentSessionID = Self.readOptionalUUID(bt_ios_hosts_vm_current_session_id())
+        self.pendingMismatch = Self.readOptionalJSON(bt_ios_hosts_vm_pending_mismatch_json())
+        self.swapConfirmation = Self.readOptionalJSON(bt_ios_hosts_vm_swap_confirmation_json())
+        self.deleteConfirmation = Self.readOptionalJSON(bt_ios_hosts_vm_delete_confirmation_json())
+        self.loadFailed = bt_ios_hosts_vm_load_failed()
+    }
+
+    private func dispatch(actionKind: Int32, payload: UnsafeMutablePointer<CChar>?) {
+        defer {
+            if let payload { bt_ios_hosts_free_string(payload) }
+        }
+        switch actionKind {
+        case 1:
+            guard let payload else { return }
+            let idString = String(cString: payload)
+            guard let uuid = UUID(uuidString: idString) else { return }
+            self.startConnect(id: uuid)
+        case 2:
+            self.lastSession?.disconnect()
+            self.lastSession = nil
+        default:
+            break
+        }
+    }
+
+    // MARK: - JSON helpers
+
+    private static func decodeEntryMirror(_ json: String) -> [HostsEntryRef] {
+        guard let data = json.data(using: .utf8) else { return [] }
+        return (try? JSONDecoder().decode([HostsEntryRef].self, from: data)) ?? []
+    }
+
+    private static func readOptionalUUID(_ ptr: UnsafeMutablePointer<CChar>?) -> UUID? {
+        guard let ptr else { return nil }
+        defer { bt_ios_hosts_free_string(ptr) }
+        return UUID(uuidString: String(cString: ptr))
+    }
+
+    private static func readOptionalJSON<T: Decodable>(
+        _ ptr: UnsafeMutablePointer<CChar>?
+    ) -> T? {
+        guard let ptr else { return nil }
+        defer { bt_ios_hosts_free_string(ptr) }
+        let json = String(cString: ptr)
+        guard let data = json.data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode(T.self, from: data)
+    }
+
+    /// Build a JSON array matching the display snapshot shape for the
+    /// UI-test stub merge. Each entry maps to `{id, label, host, port,
+    /// username, authIsKey}` — same fields Rust's `EntryMeta` parses.
+    private static func encodeInjectedEntries(_ entries: [SavedHost]) -> String? {
+        var items: [[String: Any]] = []
+        items.reserveCapacity(entries.count)
+        for entry in entries {
+            let authIsKey: Bool
+            switch entry.credential.auth {
+            case .privateKey: authIsKey = true
+            case .password: authIsKey = false
+            }
+            items.append([
+                "id": entry.id.uuidString,
+                "label": entry.label,
+                "host": entry.credential.host,
+                "port": entry.credential.port,
+                "username": entry.credential.username,
+                "authIsKey": authIsKey
+            ])
+        }
+        guard
+            let data = try? JSONSerialization.data(withJSONObject: items, options: []),
+            let json = String(data: data, encoding: .utf8)
+        else { return nil }
+        return json
     }
 }

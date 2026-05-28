@@ -1,4 +1,4 @@
-import BedTermCoreC
+import BedTermIOS
 import Foundation
 import Testing
 import UIKit
@@ -18,29 +18,23 @@ struct BtIosHostsListVCTests {
         box.fired = true
     }
 
-    /// Install a bridge `store` backed by a per-test UUID suite +
-    /// service key so the suite leaves no residue in the Keychain /
-    /// UserDefaults. Uses the in-memory Keychain backend because
-    /// SPM xctest bundles have no host-app entitlement for the real
-    /// `SecItem*` path.
-    private func withIsolatedBridge<R>(_ body: (HostsStore) throws -> R) throws -> R {
-        TestKeychain.installInMemory()
-        let suite = UUID().uuidString
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defer { defaults.removePersistentDomain(forName: suite) }
-        let store = HostsStore(
-            service: "bt.hostsvc.test.\(suite)",
-            orderKey: "bt.hostsvc.test.order.\(suite)",
-            migrationKey: "bt.hostsvc.test.migration.\(suite)",
-            defaults: defaults
-        )
-        let priorStore = HostsBridge.store
-        let priorConnect = HostsBridge.connectHandler
-        HostsBridge.store = store
-        defer {
-            HostsBridge.store = priorStore
-            HostsBridge.connectHandler = priorConnect
+    /// Install a per-test UUID suite + service key so the suite leaves
+    /// no residue in the Keychain / UserDefaults. Uses the in-memory
+    /// Keychain backend because SPM xctest bundles have no host-app
+    /// entitlement for the real `SecItem*` path.
+    private func withIsolatedService<R>(_ body: (HostsStore) throws -> R) throws -> R {
+        let suffix = UUID().uuidString
+        let svc = "bt.hostsvc.test.\(suffix)"
+        let ord = "bt.hostsvc.test.order.\(suffix)"
+        svc.withCString { sPtr in
+            ord.withCString { oPtr in
+                bt_ios_hosts_set_test_service(sPtr, oPtr)
+            }
         }
+        defer { bt_ios_hosts_set_test_service(nil, nil) }
+        let store = HostsStore()
+        let priorConnect = HostsBridge.connectHandler
+        defer { HostsBridge.connectHandler = priorConnect }
         return try body(store)
     }
 
@@ -78,7 +72,7 @@ struct BtIosHostsListVCTests {
 
     @Test("VC row count matches bridge snapshot")
     func rowCountMatchesBridge() throws {
-        try withIsolatedBridge { store in
+        try withIsolatedService { store in
             // Seed two hosts via the store directly.
             let host1 = SavedHost(
                 label: "Mac",
@@ -115,7 +109,7 @@ struct BtIosHostsListVCTests {
 
     @Test("row tap dispatches connect to bridge handler")
     func rowTapDispatchesConnect() throws {
-        try withIsolatedBridge { store in
+        try withIsolatedService { store in
             let host = SavedHost(
                 label: "Mac",
                 credential: HostCredential(
@@ -158,7 +152,7 @@ struct BtIosHostsListVCTests {
 
     @Test("swipe-delete invokes bridge delete and removes the row")
     func swipeDeleteInvokesBridge() throws {
-        try withIsolatedBridge { store in
+        try withIsolatedService { store in
             let host = SavedHost(
                 label: "Mac",
                 credential: HostCredential(
@@ -168,12 +162,9 @@ struct BtIosHostsListVCTests {
             try store.save(host)
             #expect(store.list().count == 1)
 
-            // Invoke the C ABI delete directly — that's the symbol the
-            // Rust VC's swipe selector calls. (Driving an actual swipe
-            // gesture from a unit test is awkward; the bridge round-
-            // trip is what we care about here.)
-            let ok = host.id.uuidString.withCString { btSwiftHostsDelete($0) }
-            #expect(ok)
+            // Delete via HostsStore — the Rust VC now calls
+            // `hosts_store::delete()` directly, which is the same path.
+            store.delete(id: host.id)
             #expect(store.list().isEmpty)
         }
     }

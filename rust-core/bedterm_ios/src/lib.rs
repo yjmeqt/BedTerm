@@ -41,6 +41,7 @@ mod display_mode;
 mod geometry;
 mod input_mode;
 mod metal_selection_layer;
+mod net_util;
 mod prompt_context;
 mod scroll_physics;
 
@@ -82,6 +83,11 @@ mod l10n;
 mod metal_cursor_layer;
 #[cfg(target_os = "ios")]
 mod metal_view;
+// Compile-time-embedded shell-integration script. Bytes come from
+// `assets/bedterm-integration.sh` via `include_bytes!`; runtime FFI is
+// one `bt_ios_shell_integration_payload` call from Swift. Pure data —
+// compiles and unit-tests on macOS host too.
+mod shell_integration;
 // `hosts::model` is pure (no UIKit); the iOS-only VC + bridge live
 // behind a `target_os = "ios"` gate inside the module.
 mod hosts;
@@ -91,6 +97,32 @@ mod connect_form;
 mod onboarding;
 #[cfg(target_os = "ios")]
 mod prompt_context_chips;
+// App settings persistence — owns the `NSUserDefaults` reads/writes
+// that used to live in Swift's `BedTermSettings`. iOS-gated because
+// `NSUserDefaults::standardUserDefaults` isn't useful from the macOS
+// host unit-test runner.
+#[cfg(target_os = "ios")]
+mod settings_store;
+// Saved-hosts persistence — owns the per-UUID Keychain blobs +
+// `NSUserDefaults` order index that used to live in Swift's `HostsStore`.
+// iOS-gated because the Keychain and `NSUserDefaults` aren't useful
+// from the host unit-test runner.
+#[cfg(target_os = "ios")]
+mod hosts_store;
+// Per-host SSH host-key fingerprint persistence — Swift's `HostKeyStore`
+// is now a thin shim over `bt_ios_host_keys_*`. iOS-gated for the same
+// reason as `hosts_store`: the Keychain isn't reachable from the macOS
+// host unit-test runner.
+#[cfg(target_os = "ios")]
+mod host_key_store;
+// Pure state machine that backs Swift's `HostsViewModel`. No UIKit deps,
+// runs as host unit tests via `cargo test`. The iOS-gated FFI singleton
+// lives in `ffi::hosts`.
+mod hosts_vm;
+// Pure state machine that backs Swift's `ConnectionFormViewModel`. No
+// UIKit deps; host-testable. iOS-gated FFI singleton lives in
+// `ffi::connect_form_vm`.
+mod connect_form_vm;
 #[cfg(target_os = "ios")]
 mod settings_vc;
 // `ssh_bridge` exposes a vtable + result enum the Swift side fills in
@@ -116,5 +148,23 @@ mod vc;
 mod ffi;
 
 /// Opaque callback type fired when the in-VC back button is tapped.
-#[cfg(target_os = "ios")]
+///
+/// Defined unconditionally (no `#[cfg(target_os = "ios")]`) so cbindgen
+/// emits the typedef in the generated C header — Swift tests reference
+/// it by name (e.g. `IosTerminalFFITests.onSendCallback: BtIosOnSendCallback`).
+/// The FFI entry points themselves inline the bare-fn signature so
+/// cbindgen also gets a plain nullable C function-pointer parameter
+/// (it doesn't unwrap `Option<TypeAlias>`).
 pub type BtIosBackCallback = unsafe extern "C" fn(ctx: *mut std::ffi::c_void);
+
+/// PTY-byte sink callback installed on `BtIosMetalInputView`. Swift
+/// tests reference this typedef by name; see `BtIosBackCallback` for
+/// the cbindgen-visibility rationale.
+pub type BtIosOnSendCallback =
+    unsafe extern "C" fn(ctx: *mut std::ffi::c_void, bytes: *const u8, len: usize);
+
+/// Grid-resize callback fired from `BtIosMetalInputView::layoutSubviews`.
+/// Swift tests reference this typedef by name; see `BtIosBackCallback`
+/// for the cbindgen-visibility rationale.
+pub type BtIosOnResizeCallback =
+    unsafe extern "C" fn(ctx: *mut std::ffi::c_void, cols: u16, rows: u16);

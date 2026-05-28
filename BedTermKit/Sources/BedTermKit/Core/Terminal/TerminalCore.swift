@@ -1,4 +1,4 @@
-import BedTermCoreC
+import BedTermIOS
 import Foundation
 
 /// Read-only mirror of a Rust-owned `Block`. Copied out per call —
@@ -84,26 +84,6 @@ public final class TerminalCore {
         self.screenRows = Int(rowsClamped)
     }
 
-    public func snapshot() -> GridSnapshot {
-        var view = BtSnapshotView(
-            cols: 0, rows: 0, cursor_col: 0, cursor_row: 0,
-            display_offset: 0, cells: nil, cell_count: 0)
-        guard bt_term_snapshot(handle, &view) == 0, let cellsPtr = view.cells else {
-            return GridSnapshot(cols: 0, rows: 0, cursorCol: 0, cursorRow: 0, cells: [])
-        }
-        let buffer = UnsafeBufferPointer(start: cellsPtr, count: Int(view.cell_count))
-        var cells: [GridSnapshot.Cell] = []
-        cells.reserveCapacity(Int(view.cell_count))
-        for raw in buffer {
-            cells.append(GridSnapshot.Cell(ch: raw.ch, fgRGBA: raw.fg_rgba, bgRGBA: raw.bg_rgba, flags: raw.flags))
-        }
-        bt_term_snapshot_release(handle)
-        return GridSnapshot(
-            cols: view.cols, rows: view.rows,
-            cursorCol: view.cursor_col, cursorRow: view.cursor_row,
-            displayOffset: view.display_offset, cells: cells)
-    }
-
     /// Scroll the display by `delta` rows. Positive = into history (up),
     /// negative = toward live bottom (down). Clamped internally to
     /// `[0, scrollbackLines]`.
@@ -142,37 +122,6 @@ public final class TerminalCore {
     /// stay visible.
     public var screenBottomLine: Int32 {
         bt_term_screen_bottom_line(handle)
-    }
-
-    /// Snapshot a row range from the active screen + scrollback. `start`
-    /// inclusive, `end` exclusive; coordinates are grid lines (0 = top of
-    /// active screen, negative = into scrollback). Returns `nil` if the
-    /// range is empty after clamping. Used by Block view to capture a
-    /// sealed block's body at command-end and to re-render a running
-    /// block's body every frame.
-    public func snapshotRange(startLine: Int32, endLine: Int32) -> GridSnapshot? {
-        var view = BtSnapshotView(
-            cols: 0, rows: 0, cursor_col: 0, cursor_row: 0,
-            display_offset: 0, cells: nil, cell_count: 0)
-        guard bt_term_snapshot_range(handle, startLine, endLine, &view) == 0,
-            view.rows > 0,
-            let cellsPtr = view.cells
-        else {
-            return nil
-        }
-        let buffer = UnsafeBufferPointer(start: cellsPtr, count: Int(view.cell_count))
-        var cells: [GridSnapshot.Cell] = []
-        cells.reserveCapacity(Int(view.cell_count))
-        for raw in buffer {
-            cells.append(
-                GridSnapshot.Cell(
-                    ch: raw.ch, fgRGBA: raw.fg_rgba, bgRGBA: raw.bg_rgba, flags: raw.flags))
-        }
-        bt_term_snapshot_release(handle)
-        return GridSnapshot(
-            cols: view.cols, rows: view.rows,
-            cursorCol: view.cursor_col, cursorRow: view.cursor_row,
-            displayOffset: view.display_offset, cells: cells)
     }
 
     public var blockCount: Int {
@@ -224,31 +173,6 @@ public final class TerminalCore {
             }
         }
         return out
-    }
-
-    public func frozenSnapshot(forBlockAt index: Int) -> GridSnapshot? {
-        var view = BtSnapshotView(
-            cols: 0, rows: 0, cursor_col: 0, cursor_row: 0,
-            display_offset: 0, cells: nil, cell_count: 0)
-        guard bt_term_block_snapshot(handle, UInt(index), &view) == 0,
-            view.rows > 0,
-            let cellsPtr = view.cells
-        else {
-            return nil
-        }
-        let buffer = UnsafeBufferPointer(start: cellsPtr, count: Int(view.cell_count))
-        var cells: [GridSnapshot.Cell] = []
-        cells.reserveCapacity(Int(view.cell_count))
-        for raw in buffer {
-            cells.append(
-                GridSnapshot.Cell(
-                    ch: raw.ch, fgRGBA: raw.fg_rgba, bgRGBA: raw.bg_rgba, flags: raw.flags))
-        }
-        bt_term_block_snapshot_release(handle)
-        return GridSnapshot(
-            cols: view.cols, rows: view.rows,
-            cursorCol: view.cursor_col, cursorRow: view.cursor_row,
-            displayOffset: view.display_offset, cells: cells)
     }
 
     /// Zero-filled `BtBlockView` for in/out FFI calls. cbindgen surfaces

@@ -11,7 +11,7 @@
 // checker doesn't trip on the `Sendable`-less pointer types.
 //
 
-import BedTermCoreC
+import BedTermIOS
 import Foundation
 
 func bridgeFromCtx(_ ctx: UnsafeMutableRawPointer?) -> SSHClientBridge? {

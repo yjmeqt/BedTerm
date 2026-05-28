@@ -34,20 +34,18 @@ use objc2_ui_kit::{UINavigationController, UIViewController};
 use std::cell::{Cell, RefCell};
 use std::ffi::c_void;
 
-// Swift-side bridges the coordinator reaches out to.
+// Swift-side bridge — `bt_swift_request_local_network(ctx, completion)`
+// triggers the Bonjour-based Local Network permission probe and, when
+// iOS resolves it, invokes `completion(ctx)` on the main queue.
 //
-// `bt_swift_request_local_network(ctx, completion)` triggers the
-// Bonjour-based Local Network permission probe and, when iOS resolves it,
-// invokes `completion(ctx)` on the main queue.
-//
-// `bt_swift_onboarding_set_completed(true)` flips the persistent flag the
-// `RootCoordinator` reads on launch.
+// The persistent "onboarding completed" flag lives in Rust now (see
+// `crate::settings_store`); reach for it directly instead of through
+// a Swift bridge.
 extern "C" {
     fn bt_swift_request_local_network(
         ctx: *mut c_void,
         completion: unsafe extern "C" fn(*mut c_void),
     );
-    fn bt_swift_onboarding_set_completed(value: bool);
 }
 
 /// Heap-allocated coordinator pinned to the flow VC. Holds the entire
@@ -165,9 +163,7 @@ impl BtIosOnboardingFlowVC {
 
     fn finish(&self) {
         let c = self.coordinator();
-        // Persist completion via Swift bridge (no-op in unit tests since
-        // the symbol resolves to a stub that updates UserDefaults).
-        unsafe { bt_swift_onboarding_set_completed(true) };
+        crate::settings_store::set_onboarding_completed(true);
         let cb = c.on_completed.get();
         let ctx = c.host_ctx.get();
         if let Some(cb) = cb {
@@ -190,7 +186,7 @@ unsafe extern "C" fn host_kind_choice_cb(ctx: *mut c_void, choice: i32) {
         return;
     };
     flow.coordinator().state.borrow_mut().select_host_kind(kind);
-    let location_vc = unsafe { create_location_vc(Some(location_choice_cb), ctx as *mut c_void) };
+    let location_vc = unsafe { create_location_vc(Some(location_choice_cb), ctx) };
     flow.push_next(location_vc);
 }
 

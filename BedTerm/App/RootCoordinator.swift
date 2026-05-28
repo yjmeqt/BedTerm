@@ -1,4 +1,4 @@
-import BedTermCoreC
+import BedTermIOS
 import BedTermKit
 import SwiftUI
 import UIKit
@@ -9,10 +9,9 @@ import UIKit
 final class RootCoordinator {
     private let window: UIWindow
     private let toaster = Toaster()
-    private let settings = BedTermSettings()
     private var navigationController: UINavigationController?
     private var toasterHost: UIHostingController<AnyView>?
-    private var onboardingDone: Bool = OnboardingPersistenceBridge.hasCompleted
+    private var onboardingDone: Bool = bt_ios_settings_onboarding_completed()
 
     /// Strong reference to the active hosts controller (W24d). Owns
     /// the Rust hosts list VC, the `HostsViewModel`, and the
@@ -21,11 +20,6 @@ final class RootCoordinator {
 
     init(window: UIWindow) {
         self.window = window
-        // Install the shared settings store handle so the Rust Settings
-        // VC (W23b) can round-trip values through the `bt_swift_settings_*`
-        // C ABI. Done at coordinator-init time, before any Rust VC can be
-        // constructed downstream.
-        SettingsBridge.observableHandle = settings
     }
 
     func start() {
@@ -49,7 +43,6 @@ final class RootCoordinator {
         // its representable. We don't need a UINavigationController here.
         let view = RustTerminalUITestHarness(fixture: fixture)
             .environment(\.toaster, toaster)
-            .environment(settings)
         let host = UIHostingController(rootView: AnyView(view))
         window.rootViewController = host
     }
@@ -88,7 +81,6 @@ final class RootCoordinator {
     private func installHostsRoot() {
         let controller = HostsConnectController(
             toaster: toaster,
-            settings: settings,
             onShowHostForm: { [weak self] id, connectOnSave, onFinish in
                 self?.pushHostForm(id: id, connectOnSave: connectOnSave, onFinish: onFinish)
             },
@@ -183,9 +175,9 @@ final class RootCoordinator {
         let box = FormBox(nav: nav, connectOnSave: connectOnSave, onFinish: onFinish)
         let ctx = Unmanaged.passRetained(box).toOpaque()
 
-        // Install the bridge store so the Rust VC's prefill/save calls
-        // hit the same persistence path as the SwiftUI form.
-        ConnectFormBridge.store = HostsStore()
+        // The Rust VC reads/writes the hosts store directly through the
+        // Rust `hosts_store` and the `bt_swift_hosts_store_save_json`
+        // thin callback — no bridge store needed.
 
         let raw: UnsafeMutableRawPointer?
         if let id {
