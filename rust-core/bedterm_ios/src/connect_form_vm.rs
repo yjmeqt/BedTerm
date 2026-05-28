@@ -3,7 +3,8 @@
 //! validation rules, and the secret-preservation logic for edit mode.
 //!
 //! No UIKit imports — this module is host-testable. The FFI singleton
-//! lives in [`crate::ffi::connect_form_vm`] (iOS-gated).
+//! lives in [`crate::ffi::connect_form_vm`] (iOS-gated). When building for
+//! macOS the FFI consumer is not compiled, so the public API appears dead.
 //!
 //! Mirrors the pattern used by [`crate::hosts_vm`]: the Swift layer is a
 //! thin `@Observable` proxy that mirrors state on every mutation so
@@ -12,6 +13,10 @@
 //! `HostCredential` is Codable on the Swift side; Rust resolves all the
 //! fields + secrets and hands back a JSON blob with everything Swift
 //! needs to materialise a `SavedHost` and call `HostsStore.save`.
+
+// The pub API is consumed by iOS-gated FFI modules. On macOS (clippy host
+// target) those consumers don't exist — suppress spurious dead_code.
+#![cfg_attr(not(target_os = "ios"), allow(dead_code))]
 
 use crate::connect_form::model::{normalized_host, normalized_port};
 use crate::l10n::t;
@@ -535,7 +540,7 @@ pub(crate) fn base64_decode(s: &str) -> Option<Vec<u8>> {
     }
     // Strip any whitespace (JSON may insert none, but be defensive).
     let clean: String = s.chars().filter(|c| !c.is_ascii_whitespace()).collect();
-    if clean.len() % 4 != 0 {
+    if !clean.len().is_multiple_of(4) {
         return None;
     }
     let padding = clean.chars().rev().take_while(|&c| c == '=').count();
