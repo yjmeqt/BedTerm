@@ -144,7 +144,8 @@ public final class ConnectionFormViewModel {
             }
             defer { bt_ios_hosts_free_string(entryPtr) }
             if let entryData = String(cString: entryPtr).data(using: .utf8),
-                let entry = try? JSONDecoder().decode(SavedHost.self, from: entryData) {
+                let entry = try? JSONDecoder().decode(SavedHost.self, from: entryData)
+            {
                 return entry
             }
         }

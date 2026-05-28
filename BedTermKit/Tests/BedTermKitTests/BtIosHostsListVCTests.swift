@@ -59,7 +59,8 @@ struct BtIosHostsListVCTests {
             if let ptr = uuid.uuidString.withCString({ bt_ios_hosts_load_json($0) }) {
                 defer { bt_ios_hosts_free_string(ptr) }
                 if let entryData = String(cString: ptr).data(using: .utf8),
-                    let entry = try? JSONDecoder().decode(SavedHost.self, from: entryData) {
+                    let entry = try? JSONDecoder().decode(SavedHost.self, from: entryData)
+                {
                     out.append(entry)
                 }
             }

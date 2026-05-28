@@ -50,7 +50,7 @@ struct HostKeyStoreTests {
             return .match
         case 1:
             let storedStr = outStored.map { String(cString: $0) } ?? ""
-            if let p = outStored { bt_ios_host_keys_free_string(p) }
+            if let ptr = outStored { bt_ios_host_keys_free_string(ptr) }
             return .mismatch(stored: storedStr, remote: remote)
         default:
             return .unknown
