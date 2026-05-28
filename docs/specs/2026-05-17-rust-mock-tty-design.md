@@ -7,7 +7,7 @@
 ## Goal
 
 Give the iOS app a no-SSH debug path that exercises the full terminal +
-keyboard stack, and give `bedterm_core` an end-to-end Rust-side regression
+keyboard stack, and give `bedterm-core` an end-to-end Rust-side regression
 suite over `alacritty_terminal` integration. The mock lives in Rust so a
 single implementation serves both: Swift wraps it as an `SSHClient`; cargo
 tests pipe it directly into `Term` and assert grid state.
@@ -27,7 +27,7 @@ The Rust crate gains a `mock_tty` module, gated by a new Cargo feature
 configuration and disables it for Release.
 
 ```
-rust-core/bedterm_core/
+rust-core/bedterm-core/
   Cargo.toml            # [features] mock-tty = []
   src/mock_tty/
     mod.rs              # MockTty handle, output buffer, FFI-facing state
@@ -194,7 +194,7 @@ Loads an asciinema v2 `.cast` file (JSONL: header line + N rows of
 whose `time` ≤ wall-clock-elapsed-since-start. Hand-rolled parser; no
 `serde` dependency. Out-of-band rows (`"i"`, marker, …) are skipped.
 
-Fixtures live in `rust-core/bedterm_core/fixtures/` (used by cargo tests
+Fixtures live in `rust-core/bedterm-core/fixtures/` (used by cargo tests
 via `include_bytes!`) and are mirrored into the iOS app bundle at
 `BedTerm/Resources/DebugFixtures/` for runtime loading. A short
 `scripts/copy-debug-fixtures.sh` keeps the two in sync; the Xcode build
@@ -242,7 +242,7 @@ are developer-only and intentionally not localised.
 
 ## Build & gating
 
-- `bedterm_core/Cargo.toml`: `[features] mock-tty = []`. The `mock_tty`
+- `bedterm-core/Cargo.toml`: `[features] mock-tty = []`. The `mock_tty`
   module and the six FFI symbols are behind `#[cfg(feature = "mock-tty")]`.
 - `scripts/build-rust-xcframework.sh` detects `${CONFIGURATION}` and
   appends `--features mock-tty` for `Debug` (and any `Debug*` variant);
@@ -269,7 +269,7 @@ are developer-only and intentionally not localised.
 - `tests/replay.rs` — load a tiny in-repo `.cast`, drive `tick` with a
   fake clock, assert the released byte sequence.
 
-`alacritty_terminal` is already a runtime dependency of `bedterm_core`
+`alacritty_terminal` is already a runtime dependency of `bedterm-core`
 (used by `term.rs`). The mock module itself does **not** depend on it —
 the mock is the byte producer; the parser is unrelated. The loopback
 tests `use alacritty_terminal::Term` directly through the existing
@@ -302,5 +302,5 @@ dependency.
   it can sit on top later as a pure Swift sniffer over `client.output`.
 - Asciinema recording (only playback). The replay program reads `.cast`
   files; it does not produce them.
-- Cargo workspace split. The mock lives inside `bedterm_core` to keep
+- Cargo workspace split. The mock lives inside `bedterm-core` to keep
   the xcframework single-target.

@@ -2,7 +2,7 @@
 # Edge cases: nested styles, rapid toggling, zero-width, long lines,
 # incomplete escapes, boundary conditions.
 #
-#   bash sgr-edgecases.sh | cargo run -p bedterm_core --bin bedterm-render grid > /tmp/sgr-edge.png
+#   bash sgr-edgecases.sh | cargo run -p bedterm-core --bin bedterm-render grid > /tmp/sgr-edge.png
 
 esc=$'\033'
 

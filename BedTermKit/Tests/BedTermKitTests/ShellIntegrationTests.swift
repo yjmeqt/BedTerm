@@ -10,7 +10,7 @@ struct ShellIntegrationTests {
 
     @Test("embedded payload loads via Rust FFI")
     func scriptResourceLoads() {
-        // The bedterm-integration.sh body is embedded into the bedterm_ios
+        // The bedterm-integration.sh body is embedded into the bedterm-ios
         // staticlib at build time via `include_bytes!`. If `load()` returns
         // nil, the staticlib was built from a missing or non-UTF-8 source
         // file — a build accident, not a runtime concern.

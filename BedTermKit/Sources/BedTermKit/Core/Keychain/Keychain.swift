@@ -3,7 +3,7 @@ import Foundation
 /// Errors thrown by Keychain-backed stores (`HostsStore`, `HostKeyStore`).
 ///
 /// The underlying Keychain access lives in Rust
-/// (`rust-core/bedterm_ios/src/{hosts_store,host_key_store}.rs`). The
+/// (`rust-core/bedterm-ios/src/{hosts_store,host_key_store}.rs`). The
 /// Swift wrappers raise these cases to keep the throwing API stable
 /// for call sites that pre-date the Rust sink (notably the TOFU host-key
 /// validator's `catch KeychainError.notFound`).

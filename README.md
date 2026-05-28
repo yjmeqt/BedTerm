@@ -38,17 +38,19 @@ mint bootstrap
 # rust-core/rust-toolchain.toml automatically.
 rustup show
 rustup target add aarch64-apple-ios aarch64-apple-ios-sim aarch64-apple-darwin
+```
 
-xcodebuild test \
-  -project BedTerm.xcodeproj \
-  -scheme BedTerm \
-  -destination 'platform=iOS Simulator,name=iPhone 17' \
-  | mint run xcbeautify
+Build and test go through `xc-dev` (tasks defined in `.xc-dev/tasks.toml`):
+
+```sh
+xc-dev build   # build for the configured simulator
+xc-dev test    # run BedTermKitTests
+xc-dev run     # launch the app in the simulator
 ```
 
 The `BedTerm` scheme has a build pre-action that runs
-`scripts/build-rust-xcframework.sh` automatically, so `xcodebuild build|test`
-keeps `BedTermKit/BinaryFrameworks/BedTermCore.xcframework` in sync with
+`scripts/build-rust-xcframework.sh` automatically, so every build keeps
+`BedTermKit/BinaryFrameworks/BedTermIOS.xcframework` in sync with
 `rust-core/`. The script is idempotent — a no-op build skips the rebuild.
 
 ## Mock SSH for sim testing
@@ -73,7 +75,7 @@ exercise the real `CitadelSSHClient` against this server. See
 
 ```sh
 mint run swiftlint lint --strict
-xcrun swift-format lint -r --strict BedTerm BedTermTests
+xcrun swift-format lint -r --strict BedTerm BedTermKit/Sources BedTermKit/Tests
 ```
 
 `swift-format` ships with Xcode 26 — no install needed.

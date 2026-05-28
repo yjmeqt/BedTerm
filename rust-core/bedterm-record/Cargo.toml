@@ -10,7 +10,7 @@ name = "bedterm-record"
 path = "src/main.rs"
 
 [dependencies]
-bedterm_core = { path = "../bedterm_core" }
+bedterm-core = { path = "../bedterm-core" }
 portable-pty = "0.8"
 anyhow = "1"
 tempfile = "3"

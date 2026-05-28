@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Emoji + styles + mixed-width rendering test.
 #
-#   bash sgr-emoji.sh | cargo run -p bedterm_core --bin bedterm-render grid > /tmp/sgr-emoji.png
+#   bash sgr-emoji.sh | cargo run -p bedterm-core --bin bedterm-render grid > /tmp/sgr-emoji.png
 
 esc=$'\033'
 

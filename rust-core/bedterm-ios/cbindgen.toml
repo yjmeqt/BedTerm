@@ -21,17 +21,17 @@ include = [
 
 
 [parse]
-# bedterm_ios depends on bedterm_core (path dep); we want symbols from
+# bedterm-ios depends on bedterm-core (path dep); we want symbols from
 # both crates in the same generated header so Swift sees the full ABI
 # surface from a single cbindgen run.
 parse_deps = true
 # Whitelist: only walk into bedterm_core (skip third-party deps like
 # alacritty_terminal, metal, cosmic-text, etc. that cbindgen would
 # otherwise try to inspect).
-include = ["bedterm_core"]
+include = ["bedterm-core"]
 # `parse.include` alone limits which deps are parsed for *types*; to
 # also emit consts / statics / fns *defined inside that dep* we have to
 # list it under `extra_bindings`. Without this, bedterm_core's
 # top-level `#[no_mangle] pub extern "C" fn …` items would be silently
 # dropped from the header.
-extra_bindings = ["bedterm_core"]
+extra_bindings = ["bedterm-core"]

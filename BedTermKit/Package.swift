@@ -28,7 +28,7 @@ let package = Package(
             ],
             linkerSettings: [
                 .linkedLibrary("sqlite3"),
-                // The Rust core (bedterm_ios) subclasses MTKView via the
+                // The Rust core (bedterm-ios) subclasses MTKView via the
                 // ObjC runtime. Staticlibs don't propagate framework link
                 // requirements, so MetalKit (and its dependency Metal)
                 // must be linked explicitly here — otherwise dyld never

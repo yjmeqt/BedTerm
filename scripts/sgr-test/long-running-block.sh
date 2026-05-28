@@ -4,7 +4,7 @@
 # Block 2: running (cargo build, no CommandFinished)
 # Block 3: sealed (cargo test, exit 0)
 #
-#   bash long-running-block.sh | cargo run -p bedterm_core --bin bedterm-render blocks > /tmp/long.png
+#   bash long-running-block.sh | cargo run -p bedterm-core --bin bedterm-render blocks > /tmp/long.png
 
 esc=$'\033'
 

@@ -4,7 +4,7 @@ import os
 
 /// Persists the user's saved-hosts list.
 ///
-/// Storage lives in Rust (`rust-core/bedterm_ios/src/hosts_store.rs`) —
+/// Storage lives in Rust (`rust-core/bedterm-ios/src/hosts_store.rs`) —
 /// per-UUID Keychain blobs keyed under service
 /// `com.applovin.yi.bedterm.savedHosts` plus a `UserDefaults`-backed
 /// `hosts.order` index. This Swift wrapper round-trips the Codable

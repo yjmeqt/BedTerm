@@ -150,9 +150,9 @@ Mirroring Warp's `block_list_element` paint pass:
 
 New Rust modules:
 
-- `rust-core/bedterm_core/src/renderer/header_band.rs` — layout math (which glyphs fit, truncation), draw entry point.
-- `rust-core/bedterm_core/src/renderer/ui_text.rs` — a second cosmic-text `Buffer` configured for proportional UI font; reuses existing glyph atlas allocator from `glyph_raster.rs` patterns.
-- `rust-core/bedterm_core/src/renderer/icon_atlas.rs` — decode embedded PNGs at startup, allocate texture slots.
+- `rust-core/bedterm-core/src/renderer/header_band.rs` — layout math (which glyphs fit, truncation), draw entry point.
+- `rust-core/bedterm-core/src/renderer/ui_text.rs` — a second cosmic-text `Buffer` configured for proportional UI font; reuses existing glyph atlas allocator from `glyph_raster.rs` patterns.
+- `rust-core/bedterm-core/src/renderer/icon_atlas.rs` — decode embedded PNGs at startup, allocate texture slots.
 
 #### 3.3.3 UI text — cosmic-text + swash
 
@@ -168,7 +168,7 @@ Re-rasterization triggers: trait collection change (`viewWillTransition`, Dynami
 
 #### 3.3.4 Icon atlas — embedded PNGs
 
-Move agent logos out of `BedTermKit/Sources/BedTermKit/Resources/CLIAgents.xcassets/` and into `rust-core/bedterm_core/assets/agent_badges/`. Current assets:
+Move agent logos out of `BedTermKit/Sources/BedTermKit/Resources/CLIAgents.xcassets/` and into `rust-core/bedterm-core/assets/agent_badges/`. Current assets:
 
 - `claude.png` (was `ClaudeLogo.imageset`)
 - `codex.png` (was `OpenAILogo.imageset`)
@@ -239,10 +239,10 @@ Localizable copy that moves into header descriptors:
 
 **New (Rust):**
 
-- `rust-core/bedterm_core/src/renderer/header_band.rs`
-- `rust-core/bedterm_core/src/renderer/ui_text.rs`
-- `rust-core/bedterm_core/src/renderer/icon_atlas.rs`
-- `rust-core/bedterm_core/assets/agent_badges/{claude,codex,generic}.png`
+- `rust-core/bedterm-core/src/renderer/header_band.rs`
+- `rust-core/bedterm-core/src/renderer/ui_text.rs`
+- `rust-core/bedterm-core/src/renderer/icon_atlas.rs`
+- `rust-core/bedterm-core/assets/agent_badges/{claude,codex,generic}.png`
 
 **New (Swift):**
 
@@ -256,8 +256,8 @@ Localizable copy that moves into header descriptors:
 - `BlockListContainerView+Sticky.swift` — keep sticky-index math; emit `BtBlockHeaderEntry` instead of mutating hosts.
 - `BlockListContainerView+Layout.swift` — produces `[BtBlockHeaderEntry]` alongside bodies.
 - `BlockListContainerView+Selection.swift` (or `BlockListSelectionController.swift`) — `contentView` → `offsetProvider`.
-- `rust-core/bedterm_core/src/ffi/blocks.rs` — extend FFI.
-- `rust-core/bedterm_core/Cargo.toml` — add `image` dep for PNG decode.
+- `rust-core/bedterm-core/src/ffi/blocks.rs` — extend FFI.
+- `rust-core/bedterm-core/Cargo.toml` — add `image` dep for PNG decode.
 
 **Deleted:**
 

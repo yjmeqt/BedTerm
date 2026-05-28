@@ -1,5 +1,5 @@
 [package]
-name = "bedterm_ios"
+name = "bedterm-ios"
 version = "0.1.0"
 edition.workspace = true
 rust-version.workspace = true
@@ -19,7 +19,7 @@ crate-type = ["staticlib", "rlib"]
 # off-iOS). That's fine — host tests never actually instantiate UIKit
 # objects; they exercise the pure-Rust code paths only.
 [dependencies]
-bedterm_core = { path = "../bedterm_core" }
+bedterm-core = { path = "../bedterm-core" }
 # `disable-encoding-assertions` is the upstream-blessed escape hatch for
 # `UITextInputTraits` protocol-property setters that the runtime sees as
 # missing during debug-time `class_getInstanceMethod` verification (see
@@ -136,6 +136,6 @@ objc2-quartz-core = { version = "0.3", features = [
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 # Generates `include/bedterm_ios.h` from this crate plus the
-# whitelisted `bedterm_core` path-dep. See `cbindgen.toml` and
+# whitelisted `bedterm-core` path-dep. See `cbindgen.toml` and
 # `build.rs` for the configuration.
 cbindgen = "0.27"

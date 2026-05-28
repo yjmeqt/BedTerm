@@ -3,7 +3,7 @@ import Foundation
 
 /// Per-host SSH host-key fingerprint store.
 ///
-/// Storage lives in Rust (`rust-core/bedterm_ios/src/host_key_store.rs`)
+/// Storage lives in Rust (`rust-core/bedterm-ios/src/host_key_store.rs`)
 /// — per-host Keychain blobs keyed under service
 /// `com.applovin.yi.bedterm.hostkeys`, account `"{host}:{port}"`,
 /// value = UTF-8 fingerprint string. This Swift wrapper round-trips
