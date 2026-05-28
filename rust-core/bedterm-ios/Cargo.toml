@@ -61,6 +61,10 @@ security-framework = "3"
 security-framework-sys = "2"
 core-foundation = "0.10"
 core-foundation-sys = "0.8"
+async-trait = "0.1"
+russh = "0.45"
+russh-keys = "0.45"
+tokio = { version = "1", features = ["rt-multi-thread", "net", "sync", "time", "io-util"] }
 objc2-ui-kit = { version = "0.3", features = [
     "block2",
     "UITraitCollection",

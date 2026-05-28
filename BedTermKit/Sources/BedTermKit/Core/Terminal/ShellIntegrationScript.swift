@@ -41,10 +41,8 @@ enum ShellIntegrationScript {
         return String(bytes: buffer, encoding: .utf8)
     }
 
-    /// Return the raw script body. The SFTP path in
-    /// `CitadelSSHClient+Bootstrap` writes this verbatim to
-    /// `~/.cache/bedterm/integration.sh` on the remote, then triggers
-    /// a single `source` line on the PTY — no inline wrapper needed.
+    /// Return the raw script body. `RusshSSHClient` injects this payload
+    /// after the remote shell produces its first byte.
     static func bootstrapPayload() -> String? {
         load()
     }

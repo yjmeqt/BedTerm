@@ -1,5 +1,4 @@
 import Foundation
-import NIOCore
 import Testing
 
 @testable import BedTermKit
@@ -8,13 +7,13 @@ import Testing
 struct SSHErrorMappingTests {
     @Test("POSIX ECONNREFUSED maps to .tcpRefused")
     func tcpRefused() {
-        let err = IOError(errnoCode: ECONNREFUSED, reason: "refused")
+        let err = POSIXError(.ECONNREFUSED)
         #expect(SSHErrorMapping.map(err) == .tcpRefused)
     }
 
     @Test("POSIX ETIMEDOUT maps to .timeout")
     func timedOut() {
-        let err = IOError(errnoCode: ETIMEDOUT, reason: "timed out")
+        let err = POSIXError(.ETIMEDOUT)
         #expect(SSHErrorMapping.map(err) == .timeout)
     }
 

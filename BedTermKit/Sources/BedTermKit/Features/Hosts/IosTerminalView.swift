@@ -8,7 +8,7 @@ import UIKit
 ///
 /// Architecture
 /// ------------
-/// Swift `TerminalSession` remains the SSH driver (Citadel client +
+/// Swift `TerminalSession` remains the SSH driver (`RusshSSHClient` +
 /// `TerminalCore` byte feed).
 /// The Rust VC is hosted by `TerminalScreenViewController` (a UIKit
 /// container pushed directly onto the app's `UINavigationController`) and
@@ -25,7 +25,7 @@ import UIKit
 /// ---------
 /// The Rust VC's composer / keybar / dpad chips call `session.send(...)`
 /// on an attached **Rust** `BtIosTerminalSession`; we don't attach one
-/// here (it would require bridging the live Citadel client into Rust and
+/// here (it would require bridging the live SSH client into Rust and
 /// duplicating block-store ownership). Hardware-keyboard text entry
 /// works end-to-end via `on_send`; the on-screen composer / keybar taps
 /// are visual-only until the Rust session is wired into the Swift flow.

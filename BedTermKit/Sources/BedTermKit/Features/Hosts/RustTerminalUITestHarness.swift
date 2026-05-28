@@ -12,7 +12,7 @@ import UIKit
 ///
 /// The fixture name selects a byte stream that is pumped into the metal
 /// view via `bt_ios_view_feed_bytes` once on appear. We deliberately do
-/// **not** spin up a `TerminalSession` or Citadel client — the goal is to
+/// **not** spin up a `TerminalSession` or SSH client — the goal is to
 /// exercise the Rust glyph renderer + chip / composer wiring deterministically.
 public struct RustTerminalUITestHarness: View {
     /// Fixture identifier — currently the only baked-in fixture is

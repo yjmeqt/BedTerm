@@ -134,6 +134,8 @@ mod settings_vc;
 #[cfg(target_os = "ios")]
 mod ssh_bridge;
 #[cfg(target_os = "ios")]
+mod russh_client;
+#[cfg(target_os = "ios")]
 mod terminal_palette;
 #[cfg(target_os = "ios")]
 mod text_input;

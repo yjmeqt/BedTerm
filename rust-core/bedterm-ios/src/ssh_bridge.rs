@@ -5,10 +5,10 @@
 //! is ported to Rust, the port will hold an `SSHBridgeHandle` and call
 //! through the vtable installed by Swift via `bt_ios_ssh_register`.
 //!
-//! W1.B defines the C ABI types and the Rust-facing `SSHBridge` trait,
-//! but does not export a register entry point yet — that lands with the
-//! first Rust call site (post-W5). The existing Swift `TerminalSession`
-//! keeps owning Citadel directly until then.
+//! W1.B defined the C ABI types and the Rust-facing `SSHBridge` trait.
+//! The russh migration keeps this legacy bridge available for tests and
+//! future session-port experiments, but production SSH now lives in
+//! [`crate::russh_client`].
 
 use std::ffi::c_void;
 

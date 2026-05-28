@@ -4,7 +4,7 @@ import Foundation
 /// implementation with a deterministic stub.
 ///
 /// **DEBUG / UI-test use only.** Production launches never set
-/// `current`, so `ConnectAttempt` falls through to `CitadelSSHClient()`
+/// `current`, so `ConnectAttempt` falls through to `RusshSSHClient()`
 /// exactly as before. The override exists so end-to-end UI tests can
 /// route every saved-host Connect tap through a scripted `MockSSHClient`
 /// without touching the network — the full
@@ -19,7 +19,7 @@ public typealias SSHClientFactory = @MainActor () -> any SSHClient
 @MainActor
 public enum SSHClientFactoryOverride {
     /// When non-nil, `ConnectAttempt`'s default client factory delegates
-    /// to this closure instead of constructing `CitadelSSHClient()`.
+    /// to this closure instead of constructing `RusshSSHClient()`.
     public static var current: SSHClientFactory?
 }
 

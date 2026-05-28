@@ -28,7 +28,7 @@ The server prints the listen port and the bridged shell on startup.
 The sim shares the Mac's loopback, so `127.0.0.1:2222` works as-is. In
 BedTerm, add a regular host entry pointing at `127.0.0.1:2222` with any
 username + password (e.g. `user=test`, `password=x`); it routes through
-the real `CitadelSSHClient` for end-to-end testing of the SSH client
+the real `RusshSSHClient` for end-to-end testing of the SSH client
 path.
 
 ## Blocks during the session

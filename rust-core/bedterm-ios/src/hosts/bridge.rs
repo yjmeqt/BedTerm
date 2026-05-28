@@ -6,8 +6,8 @@
 //! `bt_swift_hosts_snapshot_json` / `bt_swift_hosts_free_snapshot` /
 //! `bt_swift_hosts_delete` — these are now called directly from
 //! `crate::hosts_store` to cut the Rust->Swift->Rust round trip.
-//! Only `bt_swift_hosts_connect` stays (Swift owns `TerminalSession`
-//! creation and the `CitadelSSHClient` dependency).
+//! Only `bt_swift_hosts_connect` stays because Swift still owns
+//! `TerminalSession` creation.
 
 #![cfg(target_os = "ios")]
 

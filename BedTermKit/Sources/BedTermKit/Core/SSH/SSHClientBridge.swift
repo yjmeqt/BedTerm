@@ -4,8 +4,8 @@
 // Design: bedterm/docs/specs/swift-rust-ssh-bridge.md
 //
 // Wraps a Swift `SSHClient` instance behind a `BtSSHClientVTable` so the
-// Rust-side `BtIosTerminalSession` can drive it without dragging Citadel
-// into Rust. Each vtable entry hops onto the `@MainActor`, awaits the
+// Rust-side `BtIosTerminalSession` can drive any Swift `SSHClient`.
+// Each vtable entry hops onto the `@MainActor`, awaits the
 // underlying `async throws` API, then fires the C-style completion back
 // on the main queue.
 //

@@ -1,13 +1,15 @@
 import Foundation
-import NIOCore
 
 enum SSHErrorMapping {
     static func map(_ error: Error) -> SSHError {
-        if let io = error as? IOError {
-            switch io.errnoCode {
-            case ECONNREFUSED: return .tcpRefused
-            case ETIMEDOUT: return .timeout
-            case ECONNRESET, EPIPE: return .peerReset
+        if let posix = error as? POSIXError {
+            switch posix.code {
+            case .ECONNREFUSED:
+                return .tcpRefused
+            case .ETIMEDOUT:
+                return .timeout
+            case .ECONNRESET, .EPIPE:
+                return .peerReset
             default: break
             }
         }

@@ -40,10 +40,9 @@ struct ShellIntegrationTests {
 
     @Test("bootstrap payload matches raw script body")
     func bootstrapPayloadMatchesRawScriptBody() throws {
-        // The SFTP path in CitadelSSHClient+Bootstrap writes the bootstrap
-        // payload verbatim to ~/.cache/bedterm/integration.sh — no heredoc
-        // wrapping, no HISTCONTROL prefix. So bootstrapPayload must equal
-        // the raw script body returned by load().
+        // RusshSSHClient injects the bootstrap payload after the first
+        // remote shell byte, so bootstrapPayload must equal the raw script
+        // body returned by load().
         let body = try #require(ShellIntegrationScript.load())
         let payload = try #require(ShellIntegrationScript.bootstrapPayload())
         #expect(payload == body)

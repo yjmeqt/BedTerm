@@ -146,6 +146,11 @@
 
 #define BT_MODE_FOCUS_IN_OUT (1 << 5)
 
+typedef enum BtRusshAuthKind {
+  BtRusshAuthPassword = 0,
+  BtRusshAuthPrivateKey = 1,
+} BtRusshAuthKind;
+
 /**
  * Result code packed into completion callbacks. Mirrors `SSHError`
  * (see spec § "Error mapping"). Variants that carry detail strings
@@ -167,6 +172,8 @@ typedef enum BtSSHResultCode {
   BtSSHResultShellExited = 11,
   BtSSHResultOther = 99,
 } BtSSHResultCode;
+
+typedef struct BtRusshClient BtRusshClient;
 
 typedef struct BtTerm BtTerm;
 
@@ -237,6 +244,30 @@ typedef struct BtSSHClientVTable {
    */
   void (*release)(void *ctx);
 } BtSSHClientVTable;
+
+typedef struct BtRusshResult {
+  enum BtSSHResultCode code;
+  /**
+   * NUL-terminated UTF-8 allocated by Rust. Free with
+   * `bt_russh_result_message_free`.
+   */
+  char *message;
+  int32_t extra;
+} BtRusshResult;
+
+typedef struct BtRusshConnectRequest {
+  const char *host;
+  uint16_t port;
+  const char *username;
+  enum BtRusshAuthKind auth_kind;
+  const char *password;
+  const uint8_t *private_key;
+  uintptr_t private_key_len;
+  const char *passphrase;
+  uint16_t cols;
+  uint16_t rows;
+  const char *bootstrap_payload;
+} BtRusshConnectRequest;
 
 /**
  * Localized alert-text bundle handed across the FFI. All fields are
@@ -631,6 +662,29 @@ struct SSHBridgeHandle *bt_ios_register_ssh_bridge(const struct BtSSHClientVTabl
  * and not yet released.
  */
 void bt_ios_ssh_bridge_release(struct SSHBridgeHandle *handle);
+
+struct BtRusshClient *bt_russh_client_create(void (*output_sink)(void *ctx,
+                                                                 const uint8_t *bytes,
+                                                                 uintptr_t len),
+                                             void (*close_sink)(void *ctx),
+                                             void *callback_ctx);
+
+struct BtRusshResult bt_russh_client_connect(struct BtRusshClient *client,
+                                             const struct BtRusshConnectRequest *request);
+
+struct BtRusshResult bt_russh_client_write(struct BtRusshClient *client,
+                                           const uint8_t *bytes,
+                                           uintptr_t len);
+
+struct BtRusshResult bt_russh_client_resize(struct BtRusshClient *client,
+                                            uint16_t cols,
+                                            uint16_t rows);
+
+struct BtRusshResult bt_russh_client_disconnect(struct BtRusshClient *client);
+
+void bt_russh_client_release(struct BtRusshClient *client);
+
+void bt_russh_result_message_free(char *message);
 
 /**
  * Create a connect-form VC.

@@ -45,12 +45,12 @@ public final class HostsViewModel {
                 // UI-test override: when a launch-arg-driven stub is
                 // registered, every production Connect tap routes
                 // through the scripted `MockSSHClient` instead of
-                // `CitadelSSHClient`. Production launches never set
+                // `RusshSSHClient`. Production launches never set
                 // this — see `SSHClientFactoryOverride`.
                 if let factory = SSHClientFactoryOverride.current {
                     return factory()
                 }
-                return CitadelSSHClient()
+                return RusshSSHClient()
             })
         }
         self.syncFromRust()

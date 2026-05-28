@@ -8,7 +8,6 @@ let package = Package(
         .library(name: "BedTermKit", targets: ["BedTermKit"])
     ],
     dependencies: [
-        .package(url: "https://github.com/orlandos-nl/Citadel", from: "0.7.0"),
         .package(url: "https://github.com/realm/SwiftLint", from: "0.57.0")
     ],
     targets: [
@@ -19,8 +18,7 @@ let package = Package(
         .target(
             name: "BedTermKit",
             dependencies: [
-                "BedTermIOS",
-                .product(name: "Citadel", package: "Citadel")
+                "BedTermIOS"
             ],
             path: "Sources/BedTermKit",
             resources: [

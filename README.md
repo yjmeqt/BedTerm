@@ -68,7 +68,7 @@ cargo run -p bedterm-mock-ssh --release --manifest-path rust-core/Cargo.toml -- 
 ```
 
 Add a host pointing at `127.0.0.1:2222` (any username + password) to
-exercise the real `CitadelSSHClient` against this server. See
+exercise the real `RusshSSHClient` against this server. See
 `rust-core/bedterm-mock-ssh/README.md` for the full breakdown.
 
 ## Lint
@@ -79,4 +79,3 @@ xcrun swift-format lint -r --strict BedTerm BedTermKit/Sources BedTermKit/Tests
 ```
 
 `swift-format` ships with Xcode 26 — no install needed.
-
