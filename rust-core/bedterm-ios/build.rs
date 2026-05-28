@@ -5,7 +5,7 @@
 //!    xcstrings file is the single source of truth — `t(key)` at runtime
 //!    does no parsing, no FFI, just a slice scan.
 //!
-//! 2. Run cbindgen across this crate *and* its `bedterm_core` path-dep
+//! 2. Run cbindgen across this crate *and* its `bedterm-core` path-dep
 //!    (whitelisted in `cbindgen.toml`), producing the single C header
 //!    `include/bedterm_ios.h` consumed by `scripts/build-rust-xcframework.sh`.
 //!    Swift sees both `bt_term_*` (core) and `bt_ios_*` (ui) symbols from
@@ -35,7 +35,7 @@ struct StringUnit {
 
 fn main() {
     // The xcstrings file lives at the repo root under BedTerm/. The crate
-    // sits at rust-core/bedterm_ios/ — walk up two parents.
+    // sits at rust-core/bedterm-ios/ — walk up two parents.
     let crate_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
     let xcstrings = Path::new(&crate_dir)
         .join("..")
@@ -88,7 +88,7 @@ fn main() {
     fs::write(&dest, out).unwrap_or_else(|e| panic!("write {}: {e}", dest.display()));
 
     // ── cbindgen: emit `include/bedterm_ios.h` covering this crate + the
-    //    whitelisted `bedterm_core` path-dep (see `cbindgen.toml`). The
+    //    whitelisted `bedterm-core` path-dep (see `cbindgen.toml`). The
     //    staging script copies it into the xcframework slice and the
     //    xcframework Headers/ directory via its module.modulemap.
     let header_out = PathBuf::from(&crate_dir)
@@ -113,18 +113,18 @@ fn main() {
     println!("cargo:rerun-if-changed=src/ffi/settings.rs");
     println!("cargo:rerun-if-changed=src/ffi/vc.rs");
     println!("cargo:rerun-if-changed=src/ffi/view.rs");
-    println!("cargo:rerun-if-changed=../bedterm_core/src/ffi.rs");
-    println!("cargo:rerun-if-changed=../bedterm_core/src/lib.rs");
-    println!("cargo:rerun-if-changed=../bedterm_core/src/blocks_ffi.rs");
-    println!("cargo:rerun-if-changed=../bedterm_core/src/blocks.rs");
-    println!("cargo:rerun-if-changed=../bedterm_core/src/dcs.rs");
-    println!("cargo:rerun-if-changed=../bedterm_core/src/renderer/ffi.rs");
-    println!("cargo:rerun-if-changed=../bedterm_core/src/renderer/block_list_ffi.rs");
-    println!("cargo:rerun-if-changed=../bedterm_core/src/snapshot.rs");
-    println!("cargo:rerun-if-changed=../bedterm_core/src/term.rs");
+    println!("cargo:rerun-if-changed=../bedterm-core/src/ffi.rs");
+    println!("cargo:rerun-if-changed=../bedterm-core/src/lib.rs");
+    println!("cargo:rerun-if-changed=../bedterm-core/src/blocks_ffi.rs");
+    println!("cargo:rerun-if-changed=../bedterm-core/src/blocks.rs");
+    println!("cargo:rerun-if-changed=../bedterm-core/src/dcs.rs");
+    println!("cargo:rerun-if-changed=../bedterm-core/src/renderer/ffi.rs");
+    println!("cargo:rerun-if-changed=../bedterm-core/src/renderer/block_list_ffi.rs");
+    println!("cargo:rerun-if-changed=../bedterm-core/src/snapshot.rs");
+    println!("cargo:rerun-if-changed=../bedterm-core/src/term.rs");
 
     let cfg = cbindgen::Config::from_file(format!("{crate_dir}/cbindgen.toml"))
-        .expect("read bedterm_ios/cbindgen.toml");
+        .expect("read bedterm-ios/cbindgen.toml");
     cbindgen::Builder::new()
         .with_crate(&crate_dir)
         .with_config(cfg)

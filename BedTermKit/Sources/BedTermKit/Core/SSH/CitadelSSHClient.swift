@@ -46,6 +46,7 @@
 //   - Host-key TOFU is synchronous inside the validation callback (cheap
 //     Keychain calls, matches `SSHHostKeyValidator.trustedKeys`).
 
+import BedTermIOS
 @preconcurrency import Citadel
 import Crypto
 import Foundation
@@ -61,16 +62,13 @@ public final class CitadelSSHClient: BedTermKit.SSHClient, @unchecked Sendable {
     private let outputStream: AsyncStream<Data>
     private let outputContinuation: AsyncStream<Data>.Continuation
 
-    private let hostKeyStore: HostKeyStore
-
     private var client: CitadelClient?
     private var writer: TTYStdinWriter?
     private var sessionTask: Task<Void, Never>?
     private var disconnectGate: CheckedContinuation<Void, Never>?
     private var isDisconnected = false
 
-    public init(hostKeyStore: HostKeyStore = HostKeyStore()) {
-        self.hostKeyStore = hostKeyStore
+    public init() {
         var continuation: AsyncStream<Data>.Continuation!
         self.outputStream = AsyncStream<Data> { continuation = $0 }
         self.outputContinuation = continuation
@@ -92,7 +90,6 @@ public final class CitadelSSHClient: BedTermKit.SSHClient, @unchecked Sendable {
         }
 
         let validator = TOFUHostKeyDelegate(
-            store: self.hostKeyStore,
             host: credential.host,
             port: credential.port
         )
@@ -284,12 +281,14 @@ public final class CitadelSSHClient: BedTermKit.SSHClient, @unchecked Sendable {
 
 // MARK: - TOFU host-key delegate
 
-/// Trust-on-first-use host-key validator backed by `HostKeyStore`.
+/// Trust-on-first-use host-key validator backed by Rust's host-key Keychain
+/// store. FFI calls are cheap (synchronous Keychain reads) so they're safe
+/// inside the NIO validation callback.
 ///
-/// - On `.match`: accept.
-/// - On `.unknown`: store and accept (the "trust on first use" leg).
-/// - On `.mismatch`: fail the validation promise with a `Mismatch` carrying the
-///   stored/remote fingerprints so `connect(_:)` can surface
+/// - On match (discriminant 0): accept.
+/// - On unknown (discriminant 2): store and accept (the "trust on first use" leg).
+/// - On mismatch (discriminant 1): fail the validation promise with a `Mismatch`
+///   carrying the stored/remote fingerprints so `connect(_:)` can surface
 ///   `SSHError.hostKeyMismatch`.
 private final class TOFUHostKeyDelegate: NIOSSHClientServerAuthenticationDelegate, @unchecked Sendable {
     struct Mismatch: Error {
@@ -297,12 +296,10 @@ private final class TOFUHostKeyDelegate: NIOSSHClientServerAuthenticationDelegat
         let remote: String
     }
 
-    private let store: HostKeyStore
     private let host: String
     private let port: Int
 
-    init(store: HostKeyStore, host: String, port: Int) {
-        self.store = store
+    init(host: String, port: Int) {
         self.host = host
         self.port = port
     }
@@ -312,18 +309,32 @@ private final class TOFUHostKeyDelegate: NIOSSHClientServerAuthenticationDelegat
         validationCompletePromise: EventLoopPromise<Void>
     ) {
         let fingerprint = Self.sha256Fingerprint(of: hostKey)
-        do {
-            switch try self.store.verify(remote: fingerprint, host: self.host, port: self.port) {
-            case .match:
-                validationCompletePromise.succeed(())
-            case .unknown:
-                try self.store.store(fingerprint: fingerprint, host: self.host, port: self.port)
-                validationCompletePromise.succeed(())
-            case let .mismatch(stored, remote):
-                validationCompletePromise.fail(Mismatch(stored: stored, remote: remote))
+        var outStored: UnsafeMutablePointer<CChar>?
+        let verdict = self.host.withCString { hostPtr in
+            fingerprint.withCString { fpPtr in
+                bt_ios_host_keys_verify(hostPtr, UInt16(self.port), fpPtr, &outStored)
             }
-        } catch {
-            validationCompletePromise.fail(error)
+        }
+        switch verdict {
+        case 0:  // Match
+            validationCompletePromise.succeed(())
+        case 2:  // Unknown — trust on first use
+            let ok = self.host.withCString { hostPtr in
+                fingerprint.withCString { fpPtr in
+                    bt_ios_host_keys_save(hostPtr, UInt16(self.port), fpPtr)
+                }
+            }
+            if ok {
+                validationCompletePromise.succeed(())
+            } else {
+                validationCompletePromise.fail(Mismatch(stored: "", remote: fingerprint))
+            }
+        case 1:  // Mismatch
+            let storedStr = outStored.map { String(cString: $0) } ?? ""
+            if let ptr = outStored { bt_ios_host_keys_free_string(ptr) }
+            validationCompletePromise.fail(Mismatch(stored: storedStr, remote: fingerprint))
+        default:
+            validationCompletePromise.fail(Mismatch(stored: "", remote: fingerprint))
         }
     }
 

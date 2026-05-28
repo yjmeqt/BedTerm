@@ -13,7 +13,7 @@ rustup show   # materialises the toolchain pinned by rust-core/rust-toolchain.to
 rustup target add aarch64-apple-ios aarch64-apple-ios-sim aarch64-apple-darwin
 ```
 
-The Rust core (`rust-core/bedterm_core`) is packaged into `BedTermKit/BinaryFrameworks/BedTermCore.xcframework` (consumed as a SwiftPM `.binaryTarget`). The `BedTerm.xcscheme` build pre-action runs `scripts/build-rust-xcframework.sh ${CONFIGURATION} ${PLATFORM_NAME}` automatically — `PLATFORM_NAME` narrows the build to the one slice Xcode actually needs (`iphonesimulator` → sim only; empty/release → all three). The script is idempotent: a no-op build skips the `-create-xcframework` step entirely. The whole xcframework directory is gitignored — every build regenerates `Info.plist` plus the slice `.a` files from scratch.
+The Rust core (`rust-core/bedterm-core`) is packaged into `BedTermKit/BinaryFrameworks/BedTermIOS.xcframework` (consumed as a SwiftPM `.binaryTarget`). The `BedTerm.xcscheme` build pre-action runs `scripts/build-rust-xcframework.sh ${CONFIGURATION} ${PLATFORM_NAME}` automatically — `PLATFORM_NAME` narrows the build to the one slice Xcode actually needs (`iphonesimulator` → sim only; empty/release → all three). The script is idempotent: a no-op build skips the `-create-xcframework` step entirely. The whole xcframework directory is gitignored — every build regenerates `Info.plist` plus the slice `.a` files from scratch.
 
 Build & test go through the `xc-dev` skill (`xc-dev build|test|run` — tasks defined in `.xc-dev/tasks.toml`); the skill picks the right simulator (via `.xc-dev/simulator.toml`, with the per-machine UDID cached in `simulator.local.toml`) and the Rust xcframework pre-action runs from the `BedTerm.xcscheme`. Tests live inside the `BedTermKit` Swift package (`BedTermKit/Tests/BedTermKitTests/`) and use the Swift Testing framework (`import Testing`, `@Suite`, `@Test`, `#expect`, `#require`). New test files don't need any Xcode project bookkeeping — SwiftPM picks them up automatically.
 
@@ -95,7 +95,7 @@ Device pixels = points × scale.
 ### Device presets
 
 Use `--device <name>` to pick a real iOS screen. Scale and viewport are set automatically.
-Full list in `rust-core/bedterm_core/src/device_presets.rs`.
+Full list in `rust-core/bedterm-core/src/device_presets.rs`.
 
 | Flag | Viewport (pt) | Scale |
 |---|---|---|
@@ -128,7 +128,7 @@ automatically — no per-palette hardcoded tokens needed.
 
 ```sh
 # Font size in pts, scale = device-pixel ratio
-cargo run -p bedterm_core --bin bedterm-render cell-size --font-size 14 --scale 3.0
+cargo run -p bedterm-core --bin bedterm-render cell-size --font-size 14 --scale 3.0
 # → 35 50   (cell_w_px cell_h_px)
 ```
 
@@ -140,21 +140,21 @@ No simulator needed. Build and render a fixture, compare visually or against gol
 
 ```sh
 # Grid mode — terminal frame from stdin byte stream
-echo -e '\x1b[32mHello World\x1b[0m' | cargo run -p bedterm_core --bin bedterm-render grid > /tmp/out.png
+echo -e '\x1b[32mHello World\x1b[0m' | cargo run -p bedterm-core --bin bedterm-render grid > /tmp/out.png
 
 # Grid mode with device preset
-cargo run -p bedterm_core --bin bedterm-render grid --device iphone17 > /tmp/out.png
+cargo run -p bedterm-core --bin bedterm-render grid --device iphone17 > /tmp/out.png
 
 # Block list mode — wrap stdin as a single block
-ls --color=always | cargo run -p bedterm_core --bin bedterm-render blocks --wrap > /tmp/out.png
+ls --color=always | cargo run -p bedterm-core --bin bedterm-render blocks --wrap > /tmp/out.png
 
 # Block list with device + palette
-cat multi-block.bin | cargo run -p bedterm_core --bin bedterm-render blocks \
+cat multi-block.bin | cargo run -p bedterm-core --bin bedterm-render blocks \
     --device iphone17 --palette bedterm-light > /tmp/out.png
 
 # From fixture files
-cargo run -p bedterm_core --bin bedterm-render grid tests/fixtures/ls-color.bin > /tmp/out.png
-cargo run -p bedterm_core --bin bedterm-render blocks tests/fixtures/multi-block.bin > /tmp/out.png
+cargo run -p bedterm-core --bin bedterm-render grid tests/fixtures/ls-color.bin > /tmp/out.png
+cargo run -p bedterm-core --bin bedterm-render blocks tests/fixtures/multi-block.bin > /tmp/out.png
 
 # Batch render across all device presets
 bash scripts/sgr-test/render-all-matrix.sh
@@ -169,13 +169,13 @@ cols/rows — text wrapping is byte-identical.
 
 ```sh
 # Build both tools
-cargo build -p bedterm_core -p bedterm-record
+cargo build -p bedterm-core -p bedterm-record
 
 # Record a command
 cargo run -p bedterm-record -- --cmd "ls --color=always" --device iphone17 -o session.bin
 
 # Render with context sidecar (guarantees consistent cols/rows)
-cat session.bin | cargo run -p bedterm_core --bin bedterm-render blocks \
+cat session.bin | cargo run -p bedterm-core --bin bedterm-render blocks \
     --context session.meta.json > out.png
 
 # Record an interactive Claude session
@@ -196,9 +196,9 @@ the same dimensions.
 ### Block list layout changes → verify with mock SSH
 
 ```sh
-cargo run -p bedterm_mock_ssh -- --script tests/fixtures/multi-block.json &
+cargo run -p bedterm-mock-ssh -- --script tests/fixtures/multi-block.json &
 ssh localhost -p 2222 "cmd1; cmd2; cmd3" 2>&1 | \
-  cargo run -p bedterm_core --bin bedterm-render blocks - > /tmp/out.png
+  cargo run -p bedterm-core --bin bedterm-render blocks - > /tmp/out.png
 ```
 
 ### Swift UIKit changes → iOS only

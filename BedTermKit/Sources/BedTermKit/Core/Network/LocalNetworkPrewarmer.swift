@@ -103,7 +103,7 @@ final class LocalNetworkPrewarmer {
     /// permission prompt: RFC1918 IPv4, IPv6 unique-local / link-local, or an
     /// mDNS `.local` name. Loopback and public addresses return false.
     ///
-    /// Implementation moved to `rust-core/bedterm_ios/src/net_util.rs`.
+    /// Implementation moved to `rust-core/bedterm-ios/src/net_util.rs`.
     static func isLAN(host: String) -> Bool {
         host.withCString { bt_ios_net_is_lan_host($0) }
     }

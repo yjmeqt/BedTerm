@@ -142,7 +142,7 @@ fn parse_args() -> Args {
                 query_cell_size(args.font_size_pt, args.scale).unwrap_or_else(|| {
                     eprintln!(
                         "[record] ERROR: cannot query cell-size from bedterm-render. \
-                         Build it first: cargo build -p bedterm_core --bin bedterm-render"
+                         Build it first: cargo build -p bedterm-core --bin bedterm-render"
                     );
                     std::process::exit(1);
                 });
@@ -165,9 +165,9 @@ fn parse_args() -> Args {
 
 fn find_integration_script() -> PathBuf {
     for c in [
-        "../bedterm_ios/assets/bedterm-integration.sh",
-        "../../rust-core/bedterm_ios/assets/bedterm-integration.sh",
-        "rust-core/bedterm_ios/assets/bedterm-integration.sh",
+        "../bedterm-ios/assets/bedterm-integration.sh",
+        "../../rust-core/bedterm-ios/assets/bedterm-integration.sh",
+        "rust-core/bedterm-ios/assets/bedterm-integration.sh",
     ] {
         let p = PathBuf::from(c);
         if p.exists() {

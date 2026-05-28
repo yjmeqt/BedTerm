@@ -1,3 +1,6 @@
+disabled_rules:
+  - opening_brace
+
 opt_in_rules:
   - force_unwrapping
   - implicit_return

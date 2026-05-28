@@ -6,7 +6,7 @@ import Foundation
 /// the shell has produced its first byte.
 ///
 /// The script body lives in the Rust crate at
-/// `rust-core/bedterm_ios/assets/bedterm-integration.sh` and is embedded
+/// `rust-core/bedterm-ios/assets/bedterm-integration.sh` and is embedded
 /// into the staticlib at build time via `include_bytes!`. Swift fetches
 /// the bytes from `.rodata` via [`bt_ios_shell_integration_payload`] —
 /// no SwiftPM resource, no `Bundle.module` lookup, no failure mode short

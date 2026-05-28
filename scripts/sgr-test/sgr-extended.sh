@@ -3,7 +3,7 @@
 # overline, double underline.
 #
 # Run locally and pipe to bedterm-render:
-#   bash sgr-extended.sh | cargo run -p bedterm_core --bin bedterm-render grid --palette tokyo-night > /tmp/sgr-extended.png
+#   bash sgr-extended.sh | cargo run -p bedterm-core --bin bedterm-render grid --palette tokyo-night > /tmp/sgr-extended.png
 
 esc=$'\033'
 

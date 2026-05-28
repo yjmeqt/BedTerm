@@ -1,3 +1,4 @@
+import BedTermIOS
 import Foundation
 import UIKit
 import UniformTypeIdentifiers
@@ -11,7 +12,7 @@ import UniformTypeIdentifiers
 /// - **File picker** — `bt_swift_connect_form_pick_key` (presents
 ///   `UIDocumentPickerViewController`), plus the take/free key-bytes trio.
 /// - **Persistence** — `bt_swift_hosts_store_save_json` deserialises the
-///   `SaveOutcome` JSON and calls `HostsStore().save()`.
+///   `SaveOutcome` JSON and persists the entry via `bt_ios_hosts_save_blob`.
 ///
 /// All accessors are main-actor isolated — the Rust VC calls them on the
 /// main thread (selector handlers).
@@ -123,7 +124,7 @@ public func btSwiftConnectFormFreeKeyBytes(_ ptr: UnsafeMutablePointer<UInt8>?) 
 }
 
 /// Deserialise a JSON `SaveOutcome` from the Rust VM and persist it
-/// through `HostsStore`.
+/// directly through the Rust Keychain FFI (`bt_ios_hosts_save_blob`).
 @_cdecl("bt_swift_hosts_store_save_json")
 public func btSwiftHostsStoreSaveJson(_ jsonPtr: UnsafePointer<CChar>?) {
     guard let jsonPtr else { return }
@@ -152,10 +153,13 @@ public func btSwiftHostsStoreSaveJson(_ jsonPtr: UnsafePointer<CChar>?) {
         }
         let credential = HostCredential(host: hostStr, port: port, username: username, auth: auth)
         let entry = SavedHost(id: uuid, label: label, credential: credential)
-        do {
-            try HostsStore().save(entry)
-        } catch {
-            // Non-fatal — the Rust VC already committed the data.
+        if let data = try? JSONEncoder().encode(entry) {
+            _ = entry.id.uuidString.withCString { idPtr in
+                data.withUnsafeBytes { raw -> Bool in
+                    let base = raw.baseAddress?.assumingMemoryBound(to: UInt8.self)
+                    return bt_ios_hosts_save_blob(idPtr, base, UInt(raw.count))
+                }
+            }
         }
     }
 }

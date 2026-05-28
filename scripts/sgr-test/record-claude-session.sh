@@ -47,7 +47,7 @@ png_file="/tmp/claude-session-${device}-${timestamp}.png"
 # ── Build if needed ────────────────────────────────────────────────────
 if [[ ! -x "$BIN_RECORD" ]] || [[ ! -x "$BIN_RENDER" ]]; then
     echo "=== Building tools ==="
-    cargo build --manifest-path "$WORKSPACE/Cargo.toml" -p bedterm-record -p bedterm_core 2>&1 | tail -2
+    cargo build --manifest-path "$WORKSPACE/Cargo.toml" -p bedterm-record -p bedterm-core 2>&1 | tail -2
 fi
 
 # ── Record ─────────────────────────────────────────────────────────────

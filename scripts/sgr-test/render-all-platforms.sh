@@ -121,7 +121,7 @@ if $mode_ios; then
         echo "Running via xcodebuild..."
         xcodebuild test \
             -scheme BedTerm \
-            -destination 'platform=iOS Simulator,name=iPhone 17' \
+            -destination 'platform=iOS Simulator,name=iPhone 17,arch=arm64' \
             -only-testing "BedTermKitTests/TerminalRendererSnapshotTests" \
             2>&1 | tail -20
     fi

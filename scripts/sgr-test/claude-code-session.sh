@@ -3,7 +3,7 @@
 # Uses DCS shell-integration events so bedterm-render blocks mode can
 # render it as a block list.
 #
-#   bash claude-code-session.sh | cargo run -p bedterm_core --bin bedterm-render blocks > /tmp/claude.png
+#   bash claude-code-session.sh | cargo run -p bedterm-core --bin bedterm-render blocks > /tmp/claude.png
 
 esc=$'\033'
 

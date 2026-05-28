@@ -10,7 +10,7 @@ import UIKit
 @Suite("BtIosConnectFormVC")
 @MainActor
 struct BtIosConnectFormVCTests {
-    private func withIsolatedBridge<R>(_ body: (HostsStore) throws -> R) throws -> R {
+    private func withIsolatedService<R>(_ body: () throws -> R) throws -> R {
         let suffix = UUID().uuidString
         let svc = "bt.connectformvc.test.\(suffix)"
         let ord = "bt.connectformvc.test.order.\(suffix)"
@@ -20,8 +20,18 @@ struct BtIosConnectFormVCTests {
             }
         }
         defer { bt_ios_hosts_set_test_service(nil, nil) }
-        let store = HostsStore()
-        return try body(store)
+        return try body()
+    }
+
+    private func saveEntry(_ entry: SavedHost) throws {
+        let data = try JSONEncoder().encode(entry)
+        let ok = entry.id.uuidString.withCString { idPtr in
+            data.withUnsafeBytes { raw -> Bool in
+                let base = raw.baseAddress?.assumingMemoryBound(to: UInt8.self)
+                return bt_ios_hosts_save_blob(idPtr, base, UInt(raw.count))
+            }
+        }
+        #expect(ok)
     }
 
     @Test("connect-form VC constructs in add mode")
@@ -37,14 +47,14 @@ struct BtIosConnectFormVCTests {
 
     @Test("connect-form VC constructs in edit mode and pulls prefill")
     func vcConstructsInEditMode() throws {
-        try withIsolatedBridge { store in
+        try withIsolatedService {
             let host = SavedHost(
                 label: "Mac",
                 credential: HostCredential(
                     host: "10.0.0.5", port: 22, username: "yi", auth: .password("pw")
                 )
             )
-            try store.save(host)
+            try saveEntry(host)
 
             let ptr = try #require(
                 host.id.uuidString.withCString { idPtr in
@@ -83,14 +93,11 @@ struct BtIosConnectFormVCTests {
         let vc = Unmanaged<UIViewController>.fromOpaque(ptr).takeRetainedValue()
         vc.loadViewIfNeeded()
 
-        // Save without filling out the form — the VC should NOT crash and
-        // should surface a visible error label.
         let sel = Selector(("saveTapped"))
         let obj = vc as NSObject
         #expect(obj.responds(to: sel))
         obj.perform(sel)
 
-        // Walk the view tree to look for a UILabel with the validation copy.
         func walk(_ view: UIView, _ out: inout [String]) {
             if let label = view as? UILabel, let text = label.text, !text.isEmpty {
                 out.append(text)

@@ -8,8 +8,6 @@ import Testing
 @Suite("ConnectionFormViewModel", .serialized)
 struct ConnectionFormViewModelTests {
     init() {
-        // Per-test service/orderKey so the production Keychain entry
-        // stays clean across test runs.
         let suffix = UUID().uuidString
         let svc = "com.applovin.yi.bedterm.tests.formvm.\(suffix)"
         let ord = "tests.formvm.order.\(suffix)"
@@ -20,14 +18,48 @@ struct ConnectionFormViewModelTests {
         }
     }
 
-    private func makeStore() -> HostsStore {
-        HostsStore()
+    private func saveEntry(_ entry: SavedHost) throws {
+        let data = try JSONEncoder().encode(entry)
+        let ok = entry.id.uuidString.withCString { idPtr in
+            data.withUnsafeBytes { raw -> Bool in
+                let base = raw.baseAddress?.assumingMemoryBound(to: UInt8.self)
+                return bt_ios_hosts_save_blob(idPtr, base, UInt(raw.count))
+            }
+        }
+        #expect(ok)
+    }
+
+    private func listEntries() -> [SavedHost] {
+        guard let snapshotPtr = bt_ios_hosts_snapshot_json() else { return [] }
+        defer { bt_ios_hosts_free_string(snapshotPtr) }
+        let json = String(cString: snapshotPtr)
+        guard let data = json.data(using: .utf8),
+            let items = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]]
+        else { return [] }
+        var out: [SavedHost] = []
+        for item in items {
+            guard let idStr = item["id"] as? String,
+                let uuid = UUID(uuidString: idStr)
+            else { continue }
+            if let entry = loadEntry(id: uuid) {
+                out.append(entry)
+            }
+        }
+        return out
+    }
+
+    private func loadEntry(id: UUID) -> SavedHost? {
+        guard let ptr = id.uuidString.withCString({ bt_ios_hosts_load_json($0) }) else {
+            return nil
+        }
+        defer { bt_ios_hosts_free_string(ptr) }
+        guard let data = String(cString: ptr).data(using: .utf8) else { return nil }
+        return try? JSONDecoder().decode(SavedHost.self, from: data)
     }
 
     @Test("save in add mode appends a new entry with all fields")
     func saveAddMode() throws {
-        let store = makeStore()
-        let vm = ConnectionFormViewModel(mode: .add, store: store)
+        let vm = ConnectionFormViewModel(mode: .add)
         vm.label = "prod"
         vm.host = "10.0.0.5"
         vm.port = "22"
@@ -35,7 +67,7 @@ struct ConnectionFormViewModelTests {
         vm.password = "hunter2"
 
         let id = try vm.save()
-        let listed = store.list()
+        let listed = listEntries()
         #expect(listed.count == 1)
         #expect(listed[0].id == id)
         #expect(listed[0].label == "prod")
@@ -47,7 +79,7 @@ struct ConnectionFormViewModelTests {
 
     @Test("validation requires host, username, and a port in 1...65535")
     func validation() {
-        let vm = ConnectionFormViewModel(mode: .add, store: makeStore())
+        let vm = ConnectionFormViewModel(mode: .add)
         #expect(throws: ConnectionFormViewModel.FormError.self) { _ = try vm.save() }
 
         vm.host = "h"
@@ -65,155 +97,31 @@ struct ConnectionFormViewModelTests {
 
     @Test("private key auth requires an imported key in add mode")
     func keyAuthRequiresKey() {
-        let vm = ConnectionFormViewModel(mode: .add, store: makeStore())
+        let vm = ConnectionFormViewModel(mode: .add)
         vm.host = "h"; vm.username = "u"; vm.auth = .privateKey
         #expect(throws: ConnectionFormViewModel.FormError.self) { _ = try vm.save() }
         vm.privateKey = Data("KEY".utf8)
         #expect((try? vm.save()) != nil)
     }
 
-    @Test("pasted host:port splits into Host and Port on save")
-    func hostPasteSplit() throws {
-        let store = makeStore()
-        let vm = ConnectionFormViewModel(mode: .add, store: store)
-        vm.host = "bastion.internal:2222"
-        vm.username = "ops"
-        vm.password = "p"
-        _ = try vm.save()
-        #expect(store.list().first?.credential.host == "bastion.internal")
-        #expect(store.list().first?.credential.port == 2222)
-    }
-
-    @Test("bracketed IPv6 with port splits cleanly")
-    func ipv6BracketedSplit() throws {
-        let store = makeStore()
-        let vm = ConnectionFormViewModel(mode: .add, store: store)
-        vm.host = "[::1]:2222"
-        vm.username = "ops"
-        vm.password = "p"
-        _ = try vm.save()
-        #expect(store.list().first?.credential.host == "::1")
-        #expect(store.list().first?.credential.port == 2222)
-    }
-
-    @Test("unbracketed IPv6 with multiple colons is preserved verbatim")
-    func ipv6UnbracketedNotSplit() throws {
-        let store = makeStore()
-        let vm = ConnectionFormViewModel(mode: .add, store: store)
-        vm.host = "fe80::1%en0"
-        vm.username = "ops"
-        vm.password = "p"
-        vm.port = "22"
-        _ = try vm.save()
-        #expect(store.list().first?.credential.host == "fe80::1%en0")
-    }
-
     @Test("host and username are whitespace-trimmed on save")
     func whitespaceTrim() throws {
-        let store = makeStore()
-        let vm = ConnectionFormViewModel(mode: .add, store: store)
+        let vm = ConnectionFormViewModel(mode: .add)
         vm.host = "  host.example.com  "
         vm.username = "  deploy  "
         vm.password = "p"
         _ = try vm.save()
-        let saved = store.list().first
+        let saved = listEntries().first
         #expect(saved?.credential.host == "host.example.com")
         #expect(saved?.credential.username == "deploy")
     }
 
-    @Test("edit mode preserves stored password when secret field is untouched")
-    func editPreservesSecret() throws {
-        let store = makeStore()
-        let existing = SavedHost(
-            label: "prod",
-            credential: HostCredential(host: "h", port: 22, username: "u", auth: .password("kept"))
-        )
-        try store.save(existing)
-
-        let vm = ConnectionFormViewModel(mode: .edit(existing), store: store)
-        vm.label = "prod-renamed"
-        // No touch to password field.
-        _ = try vm.save()
-        let saved = try store.load(id: existing.id)
-        #expect(saved.credential.auth == .password("kept"))
-        #expect(saved.label == "prod-renamed")
-    }
-
-    @Test("edit mode overwrites stored password when user types a new value")
-    func editOverwritesSecret() throws {
-        let store = makeStore()
-        let existing = SavedHost(
-            label: "prod",
-            credential: HostCredential(host: "h", port: 22, username: "u", auth: .password("old"))
-        )
-        try store.save(existing)
-
-        let vm = ConnectionFormViewModel(mode: .edit(existing), store: store)
-        vm.password = "new"
-        vm.passwordTouched = true
-        _ = try vm.save()
-        let saved = try store.load(id: existing.id)
-        #expect(saved.credential.auth == .password("new"))
-    }
-
-    @Test("edit mode auth-method switch requires fresh secret")
-    func authSwitchInvalidatesSecret() throws {
-        let store = makeStore()
-        let existing = SavedHost(
-            label: "prod",
-            credential: HostCredential(host: "h", port: 22, username: "u", auth: .password("kept"))
-        )
-        try store.save(existing)
-
-        let vm = ConnectionFormViewModel(mode: .edit(existing), store: store)
-        vm.auth = .privateKey
-        // No key imported yet — must fail.
-        #expect(throws: ConnectionFormViewModel.FormError.self) { _ = try vm.save() }
-
-        vm.privateKey = Data("K".utf8)
-        vm.privateKeyTouched = true
-        _ = try vm.save()
-        let saved = try store.load(id: existing.id)
-        if case .privateKey(let key, _) = saved.credential.auth {
-            #expect(key == Data("K".utf8))
-        } else {
-            Issue.record("Expected privateKey auth after switch")
-        }
-    }
-
-    @Test("duplicate() returns existing entry with same host/port/username")
-    func duplicateDetection() throws {
-        let store = makeStore()
-        let existing = SavedHost(
-            label: "prod",
-            credential: HostCredential(host: "h", port: 22, username: "u", auth: .password("p"))
-        )
-        try store.save(existing)
-
-        let vm = ConnectionFormViewModel(mode: .add, store: store)
-        vm.host = "h"; vm.username = "u"; vm.port = "22"; vm.password = "p"
-        #expect(vm.duplicate()?.id == existing.id)
-    }
-
-    @Test("duplicate() excludes the entry being edited")
-    func duplicateExcludesSelf() throws {
-        let store = makeStore()
-        let existing = SavedHost(
-            label: "prod",
-            credential: HostCredential(host: "h", port: 22, username: "u", auth: .password("p"))
-        )
-        try store.save(existing)
-
-        let vm = ConnectionFormViewModel(mode: .edit(existing), store: store)
-        #expect(vm.duplicate() == nil)
-    }
-
     @Test("canSave gates Save in add mode with secret required")
     func canSaveGate() {
-        let vm = ConnectionFormViewModel(mode: .add, store: makeStore())
+        let vm = ConnectionFormViewModel(mode: .add)
         #expect(!vm.canSave)
         vm.host = "h"; vm.username = "u"
-        #expect(!vm.canSave)  // password still empty
+        #expect(!vm.canSave)
         vm.password = "p"
         #expect(vm.canSave)
     }

@@ -1,4 +1,4 @@
-# bedterm_ios — architecture & ownership
+# bedterm-ios — architecture & ownership
 
 This crate is the **iOS UI layer** of BedTerm: a set of UIKit/Metal classes
 (implemented via `objc2`'s `define_class!`) that the Swift host instantiates
@@ -215,7 +215,7 @@ the table because it's part of the same SSH-bridge contract.
 
 `lib.rs` partitions every module into one of two tiers. The tier
 determines whether the module compiles on a macOS host (for
-`cargo test -p bedterm_ios`) or only on iOS targets.
+`cargo test -p bedterm-ios`) or only on iOS targets.
 
 | Tier        | Modules                                                                                                                                                                                                                                                                                                                                                       |
 | :---------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -252,7 +252,7 @@ refactor at some point.
   dereferencing. This is documented per-ivar in the field-level
   SAFETY comments — read those before adding a new consumer.
 - **No `#[no_mangle]` outside `crate::ffi` or `crate::ssh_bridge`.**
-  The header in `include/bedterm_ios.h` enumerates the entire C
+  The header in `include/bedterm-ios.h` enumerates the entire C
   surface; new exports go through `ffi::vc` or `ffi::view` and get a
   matching declaration in the header.
 - **No `Arc` / `Mutex` / `RwLock`.** If you reach for one, you've broken

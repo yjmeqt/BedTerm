@@ -8,12 +8,11 @@ import Observation
 /// `@Observable` properties so existing `withObservationTracking`
 /// observers keep firing on the same key paths.
 ///
-/// Persistence still lives in Swift because `HostCredential` is Codable
-/// on the Swift side. `save()` asks Rust to validate + resolve every
-/// field (including secret preservation in edit mode) via
+/// `save()` asks Rust to validate + resolve every field (including
+/// secret preservation in edit mode) via
 /// `bt_ios_connect_form_vm_try_save`, decodes the resolved JSON, and
-/// writes the materialised `SavedHost` through the supplied
-/// `HostsStore`.
+/// persists the `SavedHost` blob directly through the Rust Keychain
+/// FFI (`bt_ios_hosts_save_blob`).
 @MainActor
 @Observable
 public final class ConnectionFormViewModel {
@@ -80,11 +79,8 @@ public final class ConnectionFormViewModel {
 
     public var errorMessage: String?
 
-    private let store: HostsStore
-
-    public init(mode: Mode, store: HostsStore = HostsStore()) {
+    public init(mode: Mode) {
         self.mode = mode
-        self.store = store
         switch mode {
         case .add:
             bt_ios_connect_form_vm_reset_to_add()
@@ -129,12 +125,31 @@ public final class ConnectionFormViewModel {
             if case .edit(let entry) = self.mode { return entry.id }
             return nil
         }()
-        return self.store.list().first { entry in
-            entry.id != excludeID
-                && entry.credential.host == normalized
-                && entry.credential.port == portValue
-                && entry.credential.username == user
+        guard let snapshotPtr = bt_ios_hosts_snapshot_json() else { return nil }
+        defer { bt_ios_hosts_free_string(snapshotPtr) }
+        let json = String(cString: snapshotPtr)
+        guard let data = json.data(using: .utf8),
+            let items = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]]
+        else { return nil }
+        for item in items {
+            guard let idStr = item["id"] as? String,
+                let uuid = UUID(uuidString: idStr),
+                uuid != excludeID,
+                let hostStr = item["host"] as? String, hostStr == normalized,
+                let portVal = item["port"] as? Int, portVal == portValue,
+                let userStr = item["username"] as? String, userStr == user
+            else { continue }
+            guard let entryPtr = uuid.uuidString.withCString({ bt_ios_hosts_load_json($0) }) else {
+                continue
+            }
+            defer { bt_ios_hosts_free_string(entryPtr) }
+            if let entryData = String(cString: entryPtr).data(using: .utf8),
+                let entry = try? JSONDecoder().decode(SavedHost.self, from: entryData)
+            {
+                return entry
+            }
         }
+        return nil
     }
 
     // MARK: - Save
@@ -164,9 +179,21 @@ public final class ConnectionFormViewModel {
             self.errorMessage = message
             throw FormError.validation(message)
         }
+        let data: Data
         do {
-            try self.store.save(entry)
+            data = try JSONEncoder().encode(entry)
         } catch {
+            let msg = String(localized: "Could not save host.")
+            self.errorMessage = msg
+            throw FormError.validation(msg)
+        }
+        let ok = entry.id.uuidString.withCString { idPtr in
+            data.withUnsafeBytes { raw -> Bool in
+                let base = raw.baseAddress?.assumingMemoryBound(to: UInt8.self)
+                return bt_ios_hosts_save_blob(idPtr, base, UInt(raw.count))
+            }
+        }
+        if !ok {
             let msg = String(localized: "Could not save host.")
             self.errorMessage = msg
             throw FormError.validation(msg)

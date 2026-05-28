@@ -2,7 +2,7 @@ import BedTermIOS
 import Foundation
 
 /// Terminal mode flags exposed by the Rust core. Mirrors the `BT_MODE_*`
-/// constants in `bedterm_core.h`; if you add a bit there, add it here too.
+/// constants in `bedterm_ios.h`; if you add a bit there, add it here too.
 public struct BedTermMode: OptionSet, Sendable, Equatable {
     public let rawValue: UInt32
 

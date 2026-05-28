@@ -27,9 +27,9 @@ public enum SSHClientFactoryOverride {
 /// `HostsViewModel.load()` time without touching the Keychain.
 ///
 /// **DEBUG / UI-test use only.** When `current` is non-nil and
-/// non-empty, those entries are appended to whatever the real
-/// `HostsStore` returned so the test can tap a known row without
-/// driving the add-host form. Production launches never set `current`.
+/// non-empty, those entries are prepended to the Keychain-backed list
+/// so the test can tap a known row without driving the add-host form.
+/// Production launches never set `current`.
 @MainActor
 public enum HostsStoreInjection {
     public static var current: [SavedHost] = []

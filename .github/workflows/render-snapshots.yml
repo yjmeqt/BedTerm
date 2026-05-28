@@ -2,9 +2,9 @@ name: render-snapshots
 on:
   pull_request:
     paths:
-      - 'rust-core/bedterm_core/src/renderer/**'
-      - 'rust-core/bedterm_core/src/bin/bedterm-render/**'
-      - 'rust-core/bedterm_core/src/device_presets.rs'
+      - 'rust-core/bedterm-core/src/renderer/**'
+      - 'rust-core/bedterm-core/src/bin/bedterm-render/**'
+      - 'rust-core/bedterm-core/src/device_presets.rs'
       - 'BedTermKit/Sources/BedTermKit/**'
       - 'BedTermKit/Tests/BedTermKitTests/**'
       - 'scripts/sgr-test/**'
@@ -55,7 +55,7 @@ jobs:
         run: |
           xcodebuild test \
             -scheme BedTerm \
-            -destination 'platform=iOS Simulator,name=iPhone 17' \
+            -destination 'platform=iOS Simulator,name=iPhone 17,arch=arm64' \
             -only-testing "BedTermKitTests/TerminalRendererSnapshotTests" \
             2>&1 | tail -30
 

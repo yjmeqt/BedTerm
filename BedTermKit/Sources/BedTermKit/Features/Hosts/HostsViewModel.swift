@@ -36,12 +36,10 @@ public final class HostsViewModel {
     /// the channel pristine.
     public var bootstrapPayloadProvider: (@MainActor () -> String?)?
 
-    private let store: HostsStore
     private let connectFactory: @MainActor () -> ConnectAttempt
     private var inFlightTask: Task<Void, Never>?
 
-    public init(store: HostsStore = HostsStore()) {
-        self.store = store
+    public init() {
         self.connectFactory = {
             ConnectAttempt(clientFactory: {
                 // UI-test override: when a launch-arg-driven stub is
@@ -58,8 +56,7 @@ public final class HostsViewModel {
         self.syncFromRust()
     }
 
-    init(store: HostsStore, connectFactory: @MainActor @escaping () -> ConnectAttempt) {
-        self.store = store
+    init(connectFactory: @MainActor @escaping () -> ConnectAttempt) {
         self.connectFactory = connectFactory
         self.syncFromRust()
     }
@@ -164,15 +161,17 @@ public final class HostsViewModel {
         if let injected = HostsStoreInjection.current.first(where: { $0.id == id }) {
             entry = injected
         } else {
-            do {
-                entry = try self.store.load(id: id)
-            } catch {
+            guard
+                let data = Self.loadHostJSON(id: id),
+                let loaded = try? JSONDecoder().decode(SavedHost.self, from: data)
+            else {
                 id.uuidString.withCString { bt_ios_hosts_vm_connect_completed_error($0) }
                 self.syncFromRust()
                 self.onConnectError?(
                     id, String(localized: "Could not load saved host."), false)
                 return
             }
+            entry = loaded
         }
         let attempt = self.connectFactory()
         let outcome = await attempt.run(
@@ -259,7 +258,7 @@ public final class HostsViewModel {
             self.lastSession?.disconnect()
             self.lastSession = nil
         }
-        self.store.delete(id: uuid)
+        uuid.uuidString.withCString { bt_ios_hosts_delete($0) }
         self.syncFromRust()
     }
 
@@ -286,15 +285,9 @@ public final class HostsViewModel {
 
     // MARK: - Internal
 
-    /// Pull state from Rust and mirror into the @Observable properties.
-    /// Each property write fires `withObservationTracking` observers in
-    /// the controller layer, just like the pre-port direct mutations did.
+    /// Mirror Rust VM state into @Observable properties so
+    /// `withObservationTracking` fires on each change.
     private func syncFromRust() {
-        // entries — display snapshot doesn't carry HostCredential, so
-        // we still need the Swift HostsStore to materialise SavedHost
-        // values. The Rust mirror is the source of truth for *which*
-        // ids are present; we resolve each via `store.load` (or
-        // `HostsStoreInjection` for UI-test stubs).
         let entriesJSONPtr = bt_ios_hosts_vm_entries_json()
         defer { bt_ios_hosts_free_string(entriesJSONPtr) }
         let entriesJSON = entriesJSONPtr.map { String(cString: $0) } ?? "[]"
@@ -307,7 +300,9 @@ public final class HostsViewModel {
                 resolved.append(injected)
                 continue
             }
-            if let entry = try? self.store.load(id: ref.id) {
+            if let entry = Self.loadHostJSON(id: ref.id).flatMap({
+                try? JSONDecoder().decode(SavedHost.self, from: $0)
+            }) {
                 resolved.append(entry)
             }
         }
@@ -340,6 +335,16 @@ public final class HostsViewModel {
     }
 
     // MARK: - JSON helpers
+
+    /// Load the full JSON blob for a single host entry from Rust's Keychain
+    /// store. Returns nil when the entry doesn't exist or isn't valid UTF-8.
+    private static func loadHostJSON(id: UUID) -> Data? {
+        guard let ptr = id.uuidString.withCString({ bt_ios_hosts_load_json($0) }) else {
+            return nil
+        }
+        defer { bt_ios_hosts_free_string(ptr) }
+        return String(cString: ptr).data(using: .utf8)
+    }
 
     private static func decodeEntryMirror(_ json: String) -> [HostsEntryRef] {
         guard let data = json.data(using: .utf8) else { return [] }

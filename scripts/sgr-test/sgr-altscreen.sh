@@ -2,7 +2,7 @@
 # Alternate screen buffer test — all lines ≤31 visible chars.
 # Exercises ESC[?1049h/l (smcup/rmcup) used by vim/less/top.
 #
-#   bash sgr-altscreen.sh | cargo run -p bedterm_core --bin bedterm-render grid > /tmp/alt.png
+#   bash sgr-altscreen.sh | cargo run -p bedterm-core --bin bedterm-render grid > /tmp/alt.png
 
 esc=$'\033'
 

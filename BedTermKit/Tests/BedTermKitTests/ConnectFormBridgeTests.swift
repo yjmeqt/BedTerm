@@ -75,8 +75,8 @@ struct ConnectFormBridgeTests {
         btSwiftConnectFormFreeKeyBytes(nil)
     }
 
-    @Test("hosts_store_save_json persists a save-outcome through HostsStore")
-    func hostSavePersistsThroughHostsStore() throws {
+    @Test("hosts_store_save_json persists a save-outcome through Rust Keychain FFI")
+    func hostSavePersistsThroughFFI() throws {
         let suffix = UUID().uuidString
         let svc = "bt.hostssave.test.\(suffix)"
         let ord = "bt.hostssave.test.order.\(suffix)"
@@ -94,14 +94,25 @@ struct ConnectFormBridgeTests {
             + "\"port\":2222,\"username\":\"yi\",\"authIsKey\":false,\"password\":\"hunter2\"}"
         json.withCString { btSwiftHostsStoreSaveJson($0) }
 
-        let store = HostsStore()
-        let list = store.list()
-        #expect(list.count == 1)
-        let entry = try #require(list.first)
-        #expect(entry.label == "Saved Host")
-        #expect(entry.credential.host == "10.0.0.5")
-        #expect(entry.credential.port == 2222)
-        #expect(entry.credential.username == "yi")
+        // Verify via direct FFI.
+        guard let snapshotPtr = bt_ios_hosts_snapshot_json() else {
+            Issue.record("snapshot_json returned NULL")
+            return
+        }
+        defer { bt_ios_hosts_free_string(snapshotPtr) }
+        let snapshot = String(cString: snapshotPtr)
+        guard let data = snapshot.data(using: .utf8),
+            let items = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]]
+        else {
+            Issue.record("failed to parse snapshot JSON")
+            return
+        }
+        #expect(items.count == 1)
+        let item = try #require(items.first)
+        #expect(item["label"] as? String == "Saved Host")
+        #expect(item["host"] as? String == "10.0.0.5")
+        #expect(item["port"] as? Int == 2222)
+        #expect(item["username"] as? String == "yi")
     }
 
     @Test("hosts_store_save_json is null-safe")

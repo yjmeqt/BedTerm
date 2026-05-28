@@ -65,10 +65,11 @@ pub extern "C" fn bt_ios_hosts_snapshot_json() -> *mut c_char {
         .unwrap_or_else(|_| CString::new("[]").expect("static literal").into_raw())
 }
 
-/// Free a string returned by `bt_ios_hosts_snapshot_json`. NULL-safe.
+/// Free a string returned by any `bt_ios_hosts_*` function that returns
+/// `*mut c_char`. NULL-safe.
 ///
 /// # Safety
-/// `ptr` must have been returned by `bt_ios_hosts_snapshot_json` and not
+/// `ptr` must have been returned by a `bt_ios_hosts_*` function and not
 /// yet freed.
 #[no_mangle]
 pub unsafe extern "C" fn bt_ios_hosts_free_string(ptr: *mut c_char) {
@@ -76,6 +77,26 @@ pub unsafe extern "C" fn bt_ios_hosts_free_string(ptr: *mut c_char) {
         return;
     }
     drop(unsafe { CString::from_raw(ptr) });
+}
+
+/// Load the full `SavedHost` JSON blob for `uuid` as a UTF-8 C string.
+/// Returns NULL when no item is stored or the blob isn't valid UTF-8.
+/// Free via [`bt_ios_hosts_free_string`].
+///
+/// # Safety
+/// `uuid` is a UTF-8 nul-terminated C string borrowed for the call.
+#[no_mangle]
+pub unsafe extern "C" fn bt_ios_hosts_load_json(uuid: *const c_char) -> *mut c_char {
+    if uuid.is_null() {
+        return std::ptr::null_mut();
+    }
+    let Ok(uuid_str) = (unsafe { CStr::from_ptr(uuid) }).to_str() else {
+        return std::ptr::null_mut();
+    };
+    match hosts_store::load_json(uuid_str) {
+        Some(s) => into_c(s),
+        None => std::ptr::null_mut(),
+    }
 }
 
 /// Load the raw `SavedHost` JSON blob for `uuid`. Returns NULL when no

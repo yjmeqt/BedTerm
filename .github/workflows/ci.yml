@@ -109,6 +109,6 @@ jobs:
           xcodebuild test \
             -workspace BedTerm.xcworkspace \
             -scheme BedTerm \
-            -destination 'platform=iOS Simulator,name=iPhone 17' \
+            -destination 'platform=iOS Simulator,name=iPhone 17,arch=arm64' \
             -skipPackagePluginValidation \
             | mint run xcbeautify

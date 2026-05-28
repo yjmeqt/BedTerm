@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-# Builds bedterm_ios (the Swift-facing crate, which links bedterm_core in
+# Builds bedterm-ios (the Swift-facing crate, which links bedterm-core in
 # transitively as a workspace dep) for iOS device + iOS sim + macOS, then
 # assembles BedTermIOS.xcframework consumed by BedTermKit as a binary target.
 #
 # The xcframework and its SwiftPM module are named `BedTermIOS`, matching
-# the `bedterm_ios` crate. The static library is `libbedterm_ios.a` (which
-# transitively contains all of `bedterm_core`'s symbols by Rust staticlib
+# the `bedterm-ios` crate. The static library is `libbedterm_ios.a` (which
+# transitively contains all of `bedterm-core`'s symbols by Rust staticlib
 # linkage), and the staged header is a straight copy of cbindgen's
-# `bedterm_ios.h` output — cbindgen on `bedterm_ios` generates declarations
+# `bedterm_ios.h` output — cbindgen on `bedterm-ios` generates declarations
 # for both crates (its `parse.parse_deps` + `parse.extra_bindings`
-# whitelist walks into `bedterm_core`).
+# whitelist walks into `bedterm-core`).
 #
 # Run from repo root or via Xcode pre-action / build phase:
 #     ./scripts/build-rust-xcframework.sh [debug|release|Debug|Release] [PLATFORM_NAME]
@@ -50,10 +50,10 @@ RUST_DIR="$REPO_ROOT/rust-core"
 OUT_DIR="$REPO_ROOT/BedTermKit/BinaryFrameworks"
 FW_DIR="$OUT_DIR/BedTermIOS.xcframework"
 LIB_NAME="libbedterm_ios.a"
-# Single source of truth: cbindgen, configured on `bedterm_ios`, walks
-# into the `bedterm_core` path-dep and emits both `bt_term_*` (core) and
+# Single source of truth: cbindgen, configured on `bedterm-ios`, walks
+# into the `bedterm-core` path-dep and emits both `bt_term_*` (core) and
 # `bt_ios_*` (ui) declarations into one file.
-HEADER="$RUST_DIR/bedterm_ios/include/bedterm_ios.h"
+HEADER="$RUST_DIR/bedterm-ios/include/bedterm_ios.h"
 
 # rust-target → xcframework slice id.
 ALL_TARGETS=(
@@ -79,12 +79,12 @@ esac
 echo "==> building slices: ${SLICE_IDS[*]} (PLATFORM_NAME='${PLATFORM_NAME_RAW}')"
 
 cd "$RUST_DIR"
-# Building `bedterm_ios` triggers its `build.rs` cbindgen step, which
-# walks both this crate and the `bedterm_core` path-dep and regenerates
-# `bedterm_ios/include/bedterm_ios.h` (consumed below as $HEADER).
+# Building `bedterm-ios` triggers its `build.rs` cbindgen step, which
+# walks both this crate and the `bedterm-core` path-dep and regenerates
+# `bedterm-ios/include/bedterm_ios.h` (consumed below as $HEADER).
 for t in "${TARGETS[@]}"; do
-  echo "==> cargo build -p bedterm_ios --target $t ($PROFILE)"
-  cargo build -p bedterm_ios \
+  echo "==> cargo build -p bedterm-ios --target $t ($PROFILE)"
+  cargo build -p bedterm-ios \
     "${CARGO_PROFILE_ARG[@]+"${CARGO_PROFILE_ARG[@]}"}" \
     --target "$t"
 done
