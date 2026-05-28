@@ -49,17 +49,17 @@ struct BtIosHostsListVCTests {
         defer { bt_ios_hosts_free_string(snapshotPtr) }
         let json = String(cString: snapshotPtr)
         guard let data = json.data(using: .utf8),
-              let items = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]]
+            let items = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]]
         else { return [] }
         var out: [SavedHost] = []
         for item in items {
             guard let idStr = item["id"] as? String,
-                  let uuid = UUID(uuidString: idStr)
+                let uuid = UUID(uuidString: idStr)
             else { continue }
             if let ptr = uuid.uuidString.withCString({ bt_ios_hosts_load_json($0) }) {
                 defer { bt_ios_hosts_free_string(ptr) }
                 if let entryData = String(cString: ptr).data(using: .utf8),
-                   let entry = try? JSONDecoder().decode(SavedHost.self, from: entryData) {
+                    let entry = try? JSONDecoder().decode(SavedHost.self, from: entryData) {
                     out.append(entry)
                 }
             }

@@ -102,7 +102,7 @@ struct ConnectFormBridgeTests {
         defer { bt_ios_hosts_free_string(snapshotPtr) }
         let snapshot = String(cString: snapshotPtr)
         guard let data = snapshot.data(using: .utf8),
-              let items = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]]
+            let items = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]]
         else {
             Issue.record("failed to parse snapshot JSON")
             return

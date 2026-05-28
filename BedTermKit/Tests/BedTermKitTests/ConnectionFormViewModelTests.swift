@@ -34,12 +34,12 @@ struct ConnectionFormViewModelTests {
         defer { bt_ios_hosts_free_string(snapshotPtr) }
         let json = String(cString: snapshotPtr)
         guard let data = json.data(using: .utf8),
-              let items = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]]
+            let items = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]]
         else { return [] }
         var out: [SavedHost] = []
         for item in items {
             guard let idStr = item["id"] as? String,
-                  let uuid = UUID(uuidString: idStr)
+                let uuid = UUID(uuidString: idStr)
             else { continue }
             if let entry = loadEntry(id: uuid) {
                 out.append(entry)

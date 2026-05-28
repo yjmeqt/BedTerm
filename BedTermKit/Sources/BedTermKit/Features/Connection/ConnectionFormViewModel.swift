@@ -129,22 +129,22 @@ public final class ConnectionFormViewModel {
         defer { bt_ios_hosts_free_string(snapshotPtr) }
         let json = String(cString: snapshotPtr)
         guard let data = json.data(using: .utf8),
-              let items = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]]
+            let items = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]]
         else { return nil }
         for item in items {
             guard let idStr = item["id"] as? String,
-                  let uuid = UUID(uuidString: idStr),
-                  uuid != excludeID,
-                  let hostStr = item["host"] as? String, hostStr == normalized,
-                  let portVal = item["port"] as? Int, portVal == portValue,
-                  let userStr = item["username"] as? String, userStr == user
+                let uuid = UUID(uuidString: idStr),
+                uuid != excludeID,
+                let hostStr = item["host"] as? String, hostStr == normalized,
+                let portVal = item["port"] as? Int, portVal == portValue,
+                let userStr = item["username"] as? String, userStr == user
             else { continue }
             guard let entryPtr = uuid.uuidString.withCString({ bt_ios_hosts_load_json($0) }) else {
                 continue
             }
             defer { bt_ios_hosts_free_string(entryPtr) }
             if let entryData = String(cString: entryPtr).data(using: .utf8),
-               let entry = try? JSONDecoder().decode(SavedHost.self, from: entryData) {
+                let entry = try? JSONDecoder().decode(SavedHost.self, from: entryData) {
                 return entry
             }
         }
