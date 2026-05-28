@@ -1,4 +1,4 @@
-import BedTermCoreC
+import BedTermIOS
 import Foundation
 
 /// Terminal mode flags exposed by the Rust core. Mirrors the `BT_MODE_*`

@@ -1,4 +1,4 @@
-import BedTermCoreC
+import BedTermIOS
 import Foundation
 
 /// Per-host SSH host-key fingerprint store.

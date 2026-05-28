@@ -366,7 +366,7 @@ impl BtIosBlockListViewController {
 
     /// Push the per-frame layout descriptor table to the shared metal
     /// view. The Rust↔C bridge for `BtBlockLayoutEntry` /
-    /// `BtBlockHeaderEntry` lives in `BedTermCoreC` and isn't yet
+    /// `BtBlockHeaderEntry` lives in `BedTermIOS` and isn't yet
     /// exposed to this crate — wiring lands in W7. We do still compute
     /// the ranges + sticky descriptor so the math is exercised.
     fn push_layout_to_metal_view(&self) {

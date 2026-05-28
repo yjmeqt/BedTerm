@@ -1,4 +1,4 @@
-import BedTermCoreC
+import BedTermIOS
 import Foundation
 
 /// Bundled DCS shell-integration snippet. Returns the raw bytes (UTF-8

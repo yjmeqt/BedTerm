@@ -1,4 +1,4 @@
-import BedTermCoreC
+import BedTermIOS
 import UIKit
 
 // Swap + delete confirmation alerts for `HostsConnectController`.

@@ -89,9 +89,8 @@ fn main() {
 
     // ── cbindgen: emit `include/bedterm_ios.h` covering this crate + the
     //    whitelisted `bedterm_core` path-dep (see `cbindgen.toml`). The
-    //    `bedterm_ios.h` filename matches what the staging script reads;
-    //    the script then copies it into the xcframework slice as the
-    //    legacy `bedterm_core.h` (kept for Swift module compatibility).
+    //    staging script copies it into the xcframework slice and the
+    //    xcframework Headers/ directory via its module.modulemap.
     let header_out = PathBuf::from(&crate_dir)
         .join("include")
         .join("bedterm_ios.h");

@@ -1,18 +1,15 @@
 #!/usr/bin/env bash
 # Builds bedterm_ios (the Swift-facing crate, which links bedterm_core in
 # transitively as a workspace dep) for iOS device + iOS sim + macOS, then
-# assembles BedTermCore.xcframework consumed by BedTermKit as a binary target.
+# assembles BedTermIOS.xcframework consumed by BedTermKit as a binary target.
 #
-# The xcframework keeps its legacy `BedTermCore.xcframework` name and its
-# legacy `BedTermCoreC` SwiftPM module / `bedterm_core.h` header name to
-# avoid churning every `import BedTermCoreC` call site in Swift. The
-# contents, however, are now produced from `bedterm_ios`: the static
-# library is `libbedterm_ios.a` (which transitively contains all of
-# `bedterm_core`'s symbols by Rust staticlib linkage), and the staged
-# header is a straight copy of cbindgen's `bedterm_ios.h` output —
-# cbindgen on `bedterm_ios` now generates declarations for both crates
-# (its `parse.parse_deps` + `parse.extra_bindings` whitelist walks into
-# `bedterm_core`), so there is exactly one C header on disk.
+# The xcframework and its SwiftPM module are named `BedTermIOS`, matching
+# the `bedterm_ios` crate. The static library is `libbedterm_ios.a` (which
+# transitively contains all of `bedterm_core`'s symbols by Rust staticlib
+# linkage), and the staged header is a straight copy of cbindgen's
+# `bedterm_ios.h` output — cbindgen on `bedterm_ios` generates declarations
+# for both crates (its `parse.parse_deps` + `parse.extra_bindings`
+# whitelist walks into `bedterm_core`).
 #
 # Run from repo root or via Xcode pre-action / build phase:
 #     ./scripts/build-rust-xcframework.sh [debug|release|Debug|Release] [PLATFORM_NAME]
@@ -51,27 +48,14 @@ fi
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 RUST_DIR="$REPO_ROOT/rust-core"
 OUT_DIR="$REPO_ROOT/BedTermKit/BinaryFrameworks"
-FW_DIR="$OUT_DIR/BedTermCore.xcframework"
-# The xcframework slice library is now `libbedterm_ios.a`. Because
-# `bedterm_ios` depends on `bedterm_core` (path dep) and is built as a
-# `staticlib`, Rust links bedterm_core's object files into the produced
-# `.a` automatically, so the single staticlib carries every `bt_*` /
-# `bedterm_*` symbol Swift currently calls. We keep the staged file name
-# inside the xcframework as `libbedterm_core.a` (the legacy name the
-# committed xcframework Info.plist references) to avoid editing
-# Info.plist + Package.swift in this wave; logically it is just a copy
-# of `libbedterm_ios.a`.
-LIB_NAME="libbedterm_core.a"
-IOS_LIB_NAME="libbedterm_ios.a"
+FW_DIR="$OUT_DIR/BedTermIOS.xcframework"
+LIB_NAME="libbedterm_ios.a"
 # Single source of truth: cbindgen, configured on `bedterm_ios`, walks
 # into the `bedterm_core` path-dep and emits both `bt_term_*` (core) and
-# `bt_ios_*` (ui) declarations into one file. The xcframework keeps the
-# legacy `bedterm_core.h` filename inside its slice `Headers/` and the
-# `BedTermCoreC` SwiftPM target's include directory — only the
-# *generator source* moved.
+# `bt_ios_*` (ui) declarations into one file.
 HEADER="$RUST_DIR/bedterm_ios/include/bedterm_ios.h"
 
-# rust-target → xcframework slice id (matches the Info.plist committed alongside).
+# rust-target → xcframework slice id.
 ALL_TARGETS=(
   "aarch64-apple-ios"
   "aarch64-apple-ios-sim"
@@ -105,21 +89,20 @@ for t in "${TARGETS[@]}"; do
     --target "$t"
 done
 
-# Fast-path: skip the expensive xcframework rebuild when the staged merged .a
-# is current. Because the staged .a is produced by libtool (not a direct copy
-# of a cargo artifact), we track freshness via a sidecar SHA256 digest file
-# stored next to the staged .a. The digest covers both input .a files so any
-# change to either crate triggers a rebuild.
+# Fast-path: skip the expensive xcframework rebuild when the staged .a
+# is current. We track freshness via a sidecar SHA256 digest file stored
+# next to the staged .a. The digest covers the input .a so any change
+# triggers a rebuild.
 need_rebuild=0
 for i in "${!TARGETS[@]}"; do
-  ios_src="$RUST_DIR/target/${TARGETS[$i]}/$PROFILE_DIR/$IOS_LIB_NAME"
+  src="$RUST_DIR/target/${TARGETS[$i]}/$PROFILE_DIR/$LIB_NAME"
   digest_file="$FW_DIR/${SLICE_IDS[$i]}/.bedterm_input_digest"
   staged="$FW_DIR/${SLICE_IDS[$i]}/$LIB_NAME"
   if [ ! -f "$staged" ] || [ ! -f "$digest_file" ]; then
     need_rebuild=1
     break
   fi
-  current_digest="$(shasum -a 256 "$ios_src" 2>/dev/null | awk '{print $1}')"
+  current_digest="$(shasum -a 256 "$src" 2>/dev/null | awk '{print $1}')"
   stored_digest="$(cat "$digest_file" 2>/dev/null || true)"
   if [ "$current_digest" != "$stored_digest" ]; then
     need_rebuild=1
@@ -138,21 +121,20 @@ trap 'rm -rf "$STAGE"' EXIT
 for t in "${TARGETS[@]}"; do
   slice_dir="$STAGE/$t"
   mkdir -p "$slice_dir/Headers"
-  # `libbedterm_ios.a` already contains all of bedterm_core's object
-  # files (Rust staticlib linkage), so we copy it straight in under the
-  # legacy `libbedterm_core.a` slice filename — no libtool merge needed.
-  cp "$RUST_DIR/target/$t/$PROFILE_DIR/$IOS_LIB_NAME" "$slice_dir/$LIB_NAME"
-  # cbindgen emitted a complete header covering both `bedterm_core` and
-  # `bedterm_ios` symbols — just copy it into the slice under the
-  # legacy `bedterm_core.h` filename the Swift module expects.
-  cp "$HEADER" "$slice_dir/Headers/bedterm_core.h"
-  # No module.modulemap in the xcframework: the BedTermCoreC SwiftPM C target
-  # in Sources/BedTermCoreC/include/ provides the module for Swift importers.
+  cp "$RUST_DIR/target/$t/$PROFILE_DIR/$LIB_NAME" "$slice_dir/$LIB_NAME"
+  cp "$HEADER" "$slice_dir/Headers/bedterm_ios.h"
+  # Module map so Swift can `import BedTermIOS` directly — no wrapper C target.
+  cat > "$slice_dir/Headers/module.modulemap" <<EOF
+module BedTermIOS {
+    header "bedterm_ios.h"
+    export *
+}
+EOF
 done
 
 # Preserve the committed Info.plist by rebuilding into a staging dir and
 # moving it into place atomically.
-TMP_FW="$STAGE/BedTermCore.xcframework"
+TMP_FW="$STAGE/BedTermIOS.xcframework"
 XCFW_ARGS=()
 for t in "${TARGETS[@]}"; do
   XCFW_ARGS+=( -library "$STAGE/$t/$LIB_NAME" -headers "$STAGE/$t/Headers" )
@@ -165,17 +147,9 @@ mv "$TMP_FW" "$FW_DIR"
 
 # Write per-slice digest files so the idempotency check works on the next run.
 for i in "${!TARGETS[@]}"; do
-  ios_src="$RUST_DIR/target/${TARGETS[$i]}/$PROFILE_DIR/$IOS_LIB_NAME"
+  src="$RUST_DIR/target/${TARGETS[$i]}/$PROFILE_DIR/$LIB_NAME"
   digest_file="$FW_DIR/${SLICE_IDS[$i]}/.bedterm_input_digest"
-  shasum -a 256 "$ios_src" 2>/dev/null | awk '{print $1}' > "$digest_file"
+  shasum -a 256 "$src" 2>/dev/null | awk '{print $1}' > "$digest_file"
 done
-
-# Keep the tracked header copy in sync so `import BedTermCoreC` stays correct.
-# Same single-source header (`bedterm_ios.h`), re-filed as `bedterm_core.h`
-# under the legacy SwiftPM include path.
-SWIFT_INCLUDE="$REPO_ROOT/BedTermKit/Sources/BedTermCoreC/include"
-mkdir -p "$SWIFT_INCLUDE"
-cp "$FW_DIR/ios-arm64-simulator/Headers/bedterm_core.h" "$SWIFT_INCLUDE/bedterm_core.h"
-echo "==> updated $SWIFT_INCLUDE/bedterm_core.h"
 
 echo "==> built $FW_DIR"

@@ -1,4 +1,4 @@
-import BedTermCoreC
+import BedTermIOS
 import Foundation
 import Observation
 import UIKit

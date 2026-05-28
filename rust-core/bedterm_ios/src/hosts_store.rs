@@ -43,7 +43,7 @@ extern "C" {
 }
 use std::collections::HashMap;
 use std::ptr;
-use std::sync::RwLock;
+use std::sync::{Mutex, RwLock};
 
 const SERVICE: &str = "com.applovin.yi.bedterm.savedHosts";
 const ORDER_KEY: &str = "hosts.order";
@@ -343,7 +343,10 @@ fn reconcile_order() -> Vec<String> {
 /// that fail to parse are logged + skipped.
 pub fn list_snapshot_json() -> String {
     let order = reconcile_order();
-    let mut items: Vec<serde_json::Value> = Vec::with_capacity(order.len());
+    // Prepend UI-test injected entries before the Keychain-backed rows.
+    let injected = INJECTED.lock().unwrap_or_else(|p| p.into_inner());
+    let mut items: Vec<serde_json::Value> = injected.clone();
+    items.reserve(order.len());
     for uuid in &order {
         let Some(bytes) = load_blob_raw(uuid) else {
             continue;
@@ -402,6 +405,37 @@ pub fn list_snapshot_json() -> String {
         }));
     }
     serde_json::to_string(&items).unwrap_or_else(|_| "[]".to_string())
+}
+
+// ── UI-test injected entries ─────────────────────────────────────────────
+
+/// In-memory stub entries injected via `-uitest-injectStubHost`. These
+/// live here (not in `hosts_vm`) so `list_snapshot_json` can surface them
+/// to the Rust hosts VC, which reads from the store directly.
+static INJECTED: Mutex<Vec<serde_json::Value>> = Mutex::new(Vec::new());
+
+/// Append JSON-encoded display-snapshot entries to the in-memory injection
+/// buffer. Callers must also call `hosts_vm::merge_injected` to keep the VM
+/// in sync for the Swift-side `HostsViewModel.entries` mirror.
+pub fn merge_injected(json: &str) {
+    let Ok(extras) = serde_json::from_str::<Vec<serde_json::Value>>(json) else {
+        return;
+    };
+    let mut injected = INJECTED.lock().unwrap_or_else(|p| p.into_inner());
+    for extra in extras {
+        let id = extra.get("id").and_then(|v| v.as_str()).unwrap_or("");
+        if !injected
+            .iter()
+            .any(|e| e.get("id").and_then(|v| v.as_str()) == Some(id))
+        {
+            injected.push(extra);
+        }
+    }
+}
+
+/// Test-only — clear the injected entries buffer.
+pub fn test_clear_injected() {
+    INJECTED.lock().unwrap_or_else(|p| p.into_inner()).clear();
 }
 
 /// Public API consumed by the FFI surface.

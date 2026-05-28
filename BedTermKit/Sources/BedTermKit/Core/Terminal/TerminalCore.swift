@@ -1,4 +1,4 @@
-import BedTermCoreC
+import BedTermIOS
 import Foundation
 
 /// Read-only mirror of a Rust-owned `Block`. Copied out per call —

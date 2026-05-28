@@ -1,4 +1,4 @@
-import BedTermCoreC
+import BedTermIOS
 import Testing
 import UIKit
 

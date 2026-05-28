@@ -6,7 +6,7 @@
 //! same ranges in W6/W7 via an FFI descriptor table — we don't build
 //! the FFI struct here because the live `BtBlockLayoutEntry` /
 //! `BtBlockHeaderEntry` C structs aren't yet exposed through
-//! `bedterm_core` to this crate (they live in BedTermCoreC headers).
+//! `bedterm_core` to this crate (they live in BedTermIOS headers).
 //! W7 lands the BlockSource → session glue, but the
 //! `BtBlockLayoutEntry` / `BtBlockHeaderEntry` C bridge is still
 //! pending — tracked as `TODO(post-block-list-painter-ffi)` in `block_list/mod.rs`.

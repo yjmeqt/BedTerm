@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-# Asserts that a Release-flavoured BedTermCore.xcframework contains no
+# Asserts that a Release-flavoured BedTermIOS.xcframework contains no
 # bt_mock_tty_* exported symbols. Run from CI on every PR.
 #
 # Usage: ./scripts/check-release-no-mock-symbols.sh
 #   Run *after* a Release build (./scripts/build-rust-xcframework.sh Release).
 set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-FW="$REPO_ROOT/BedTermKit/BinaryFrameworks/BedTermCore.xcframework"
+FW="$REPO_ROOT/BedTermKit/BinaryFrameworks/BedTermIOS.xcframework"
 fail=0
 for slice in ios-arm64 ios-arm64-simulator macos-arm64; do
-  lib="$FW/$slice/libbedterm_core.a"
+  lib="$FW/$slice/libbedterm_ios.a"
   if [ ! -f "$lib" ]; then
     echo "missing $lib"
     exit 1

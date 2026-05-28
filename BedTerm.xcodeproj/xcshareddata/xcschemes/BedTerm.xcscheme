@@ -9,7 +9,7 @@
          <ExecutionAction
             ActionType = "Xcode.IDEStandardExecutionActionsCore.ExecutionActionType.ShellScriptAction">
             <ActionContent
-               title = "Build Rust xcframework (BedTermCore)"
+               title = "Build Rust xcframework (BedTermIOS)"
                scriptText = "&quot;${PROJECT_DIR}/scripts/build-rust-xcframework.sh&quot; &quot;${CONFIGURATION:-Debug}&quot; &quot;${PLATFORM_NAME:-}&quot;">
                <EnvironmentBuildable>
                   <BuildableReference

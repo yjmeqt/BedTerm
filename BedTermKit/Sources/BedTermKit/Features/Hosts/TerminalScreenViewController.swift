@@ -1,4 +1,4 @@
-import BedTermCoreC
+import BedTermIOS
 import UIKit
 
 /// UIKit shell that hosts the Rust-backed terminal VC as a direct child

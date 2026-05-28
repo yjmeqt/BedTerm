@@ -17,7 +17,7 @@
 // the credential — it just relays the token.
 //
 
-import BedTermCoreC
+import BedTermIOS
 import Foundation
 
 /// Wraps an `SSHClient` for the C ABI bridge. Constructed by

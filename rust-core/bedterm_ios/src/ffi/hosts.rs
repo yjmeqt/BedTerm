@@ -267,6 +267,9 @@ pub extern "C" fn bt_ios_hosts_vm_load_from_store() {
 pub unsafe extern "C" fn bt_ios_hosts_vm_merge_injected(json: *const c_char) {
     let Some(j) = cstr(json) else { return };
     vm_lock().merge_injected(j);
+    // Also populate the store so the Rust hosts VC (which reads from
+    // hosts_store directly) can surface the injected rows.
+    hosts_store::merge_injected(j);
 }
 
 /// Mark the VM as having failed its most recent load — Swift uses
