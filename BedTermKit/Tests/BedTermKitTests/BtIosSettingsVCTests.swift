@@ -1,4 +1,4 @@
-import BedTermCoreC
+import BedTermIOS
 import Foundation
 import Testing
 import UIKit
@@ -30,7 +30,7 @@ struct BtIosSettingsVCTests {
             let stacks = scroll.subviews.compactMap { $0 as? UIStackView }
             #expect(!stacks.isEmpty)
             if let content = stacks.first {
-                #expect(content.arrangedSubviews.count >= 2)
+                #expect(!content.arrangedSubviews.isEmpty)
             }
         }
     }
@@ -62,17 +62,10 @@ struct BtIosSettingsVCTests {
     func settingsRoundTripThroughCABI() {
         // The store is a singleton wrapping NSUserDefaults.standard, so
         // capture + restore whatever the device already has.
-        let prevReserve = bt_ios_settings_reserve_top_safe_area()
         let prevBlocks = bt_ios_settings_show_command_blocks()
         defer {
-            bt_ios_settings_set_reserve_top_safe_area(prevReserve)
             bt_ios_settings_set_show_command_blocks(prevBlocks)
         }
-
-        bt_ios_settings_set_reserve_top_safe_area(false)
-        #expect(!bt_ios_settings_reserve_top_safe_area())
-        bt_ios_settings_set_reserve_top_safe_area(true)
-        #expect(bt_ios_settings_reserve_top_safe_area())
 
         bt_ios_settings_set_show_command_blocks(true)
         #expect(bt_ios_settings_show_command_blocks())

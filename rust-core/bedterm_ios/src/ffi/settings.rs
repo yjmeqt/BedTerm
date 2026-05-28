@@ -50,19 +50,6 @@ pub unsafe extern "C" fn bt_ios_release_settings_vc(vc_ptr: *mut std::ffi::c_voi
 // thread-safe but the app's UIKit consumers run on the main actor, so
 // callers don't need to hop.
 
-/// Read the "reserve top safe area in alt-screen" setting. Defaults to
-/// `true` when no value has ever been written.
-#[no_mangle]
-pub extern "C" fn bt_ios_settings_reserve_top_safe_area() -> bool {
-    settings_store::reserve_top_safe_area()
-}
-
-/// Persist the "reserve top safe area in alt-screen" setting.
-#[no_mangle]
-pub extern "C" fn bt_ios_settings_set_reserve_top_safe_area(value: bool) {
-    settings_store::set_reserve_top_safe_area(value);
-}
-
 /// Read the "show command blocks (Warp-style)" setting. Defaults to
 /// `false` (beta opt-in) when no value has ever been written.
 #[no_mangle]

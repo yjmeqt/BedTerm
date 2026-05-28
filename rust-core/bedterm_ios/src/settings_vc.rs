@@ -128,30 +128,7 @@ define_class!(
                 trailing: spacing::LG,
             });
 
-            // ---- Section 1 — Display ---------------------------------------
-            let reserve_initial = settings_store::reserve_top_safe_area();
-            let (reserve_row, reserve_switch) = toggle_row(
-                mtm,
-                &t("Keep first row visible in full-screen apps"),
-                reserve_initial,
-                self.as_ref(),
-                sel!(toggleReserveTopSafeArea:),
-            );
-            crate::a11y::set_a11y_id(
-                &*reserve_switch as &AnyObject,
-                "settings.reserveTopSafeArea",
-            );
-            let display_section = form_card(
-                mtm,
-                &t("Display"),
-                Some(&t(
-                    "When vim, htop, claude or other full-screen tools run, reserve the top safe area so the Dynamic Island, notch, or status bar doesn't cover their first row.",
-                )),
-                &[reserve_row],
-            );
-            content.addArrangedSubview(&display_section);
-
-            // ---- Section 2 — Blocks ----------------------------------------
+            // ---- Section — Blocks ------------------------------------------
             let blocks_initial = settings_store::show_command_blocks();
             let (blocks_row, blocks_switch) = toggle_row(
                 mtm,
@@ -253,12 +230,6 @@ define_class!(
                 let ctx = ivars.ctx.get();
                 unsafe { cb(ctx) };
             }
-        }
-
-        #[unsafe(method(toggleReserveTopSafeArea:))]
-        fn toggle_reserve_top_safe_area(&self, sender: &UISwitch) {
-            let on: bool = unsafe { msg_send![sender, isOn] };
-            settings_store::set_reserve_top_safe_area(on);
         }
 
         #[unsafe(method(toggleShowCommandBlocks:))]

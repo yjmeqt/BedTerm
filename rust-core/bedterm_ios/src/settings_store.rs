@@ -13,7 +13,6 @@ use objc2::rc::Retained;
 use objc2::runtime::AnyObject;
 use objc2_foundation::{NSString, NSUserDefaults};
 
-const KEY_RESERVE_TOP: &str = "settings.reserveTopSafeAreaInAltScreen";
 const KEY_SHOW_BLOCKS: &str = "settings.showCommandBlocks";
 const KEY_ONBOARDING_COMPLETED: &str = "com.applovin.yi.bedterm.onboardingCompleted";
 
@@ -44,14 +43,6 @@ fn read_bool(d: &NSUserDefaults, k: &str, fallback: bool) -> bool {
 fn write_bool(d: &NSUserDefaults, k: &str, value: bool) {
     let s = key(k);
     let _: () = unsafe { msg_send![d, setBool: value, forKey: &*s] };
-}
-
-pub fn reserve_top_safe_area() -> bool {
-    read_bool(&defaults(), KEY_RESERVE_TOP, true)
-}
-
-pub fn set_reserve_top_safe_area(value: bool) {
-    write_bool(&defaults(), KEY_RESERVE_TOP, value);
 }
 
 pub fn show_command_blocks() -> bool {
