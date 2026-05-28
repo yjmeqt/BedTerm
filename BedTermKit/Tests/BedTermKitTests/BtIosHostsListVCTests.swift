@@ -18,11 +18,7 @@ struct BtIosHostsListVCTests {
         box.fired = true
     }
 
-    /// Install a per-test UUID suite + service key so the suite leaves
-    /// no residue in the Keychain / UserDefaults. Uses the in-memory
-    /// Keychain backend because SPM xctest bundles have no host-app
-    /// entitlement for the real `SecItem*` path.
-    private func withIsolatedService<R>(_ body: (HostsStore) throws -> R) throws -> R {
+    private func withIsolatedService<R>(_ body: () throws -> R) throws -> R {
         let suffix = UUID().uuidString
         let svc = "bt.hostsvc.test.\(suffix)"
         let ord = "bt.hostsvc.test.order.\(suffix)"
@@ -32,10 +28,47 @@ struct BtIosHostsListVCTests {
             }
         }
         defer { bt_ios_hosts_set_test_service(nil, nil) }
-        let store = HostsStore()
         let priorConnect = HostsBridge.connectHandler
         defer { HostsBridge.connectHandler = priorConnect }
-        return try body(store)
+        return try body()
+    }
+
+    private func saveEntry(_ entry: SavedHost) throws {
+        let data = try JSONEncoder().encode(entry)
+        let ok = entry.id.uuidString.withCString { idPtr in
+            data.withUnsafeBytes { raw -> Bool in
+                let base = raw.baseAddress?.assumingMemoryBound(to: UInt8.self)
+                return bt_ios_hosts_save_blob(idPtr, base, UInt(raw.count))
+            }
+        }
+        #expect(ok)
+    }
+
+    private func listEntries() -> [SavedHost] {
+        guard let snapshotPtr = bt_ios_hosts_snapshot_json() else { return [] }
+        defer { bt_ios_hosts_free_string(snapshotPtr) }
+        let json = String(cString: snapshotPtr)
+        guard let data = json.data(using: .utf8),
+              let items = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]]
+        else { return [] }
+        var out: [SavedHost] = []
+        for item in items {
+            guard let idStr = item["id"] as? String,
+                  let uuid = UUID(uuidString: idStr)
+            else { continue }
+            if let ptr = uuid.uuidString.withCString({ bt_ios_hosts_load_json($0) }) {
+                defer { bt_ios_hosts_free_string(ptr) }
+                if let entryData = String(cString: ptr).data(using: .utf8),
+                   let entry = try? JSONDecoder().decode(SavedHost.self, from: entryData) {
+                    out.append(entry)
+                }
+            }
+        }
+        return out
+    }
+
+    private func deleteEntry(id: UUID) {
+        id.uuidString.withCString { bt_ios_hosts_delete($0) }
     }
 
     @Test("hosts list VC constructs and loads")
@@ -72,8 +105,7 @@ struct BtIosHostsListVCTests {
 
     @Test("VC row count matches bridge snapshot")
     func rowCountMatchesBridge() throws {
-        try withIsolatedService { store in
-            // Seed two hosts via the store directly.
+        try withIsolatedService {
             let host1 = SavedHost(
                 label: "Mac",
                 credential: HostCredential(
@@ -86,19 +118,15 @@ struct BtIosHostsListVCTests {
                     host: "1.2.3.4", port: 2222, username: "root",
                     auth: .privateKey(Data(), passphrase: nil))
             )
-            try store.save(host1)
-            try store.save(host2)
+            try saveEntry(host1)
+            try saveEntry(host2)
 
             let ptr = try #require(bt_ios_create_hosts_list_vc(nil, nil))
             let vc = Unmanaged<UIViewController>.fromOpaque(ptr).takeRetainedValue()
             vc.loadViewIfNeeded()
-            // The VC pulls the snapshot in viewWillAppear; invoke
-            // beginAppearanceTransition to drive the framework into firing
-            // it without needing a hosting window.
             vc.beginAppearanceTransition(true, animated: false)
             vc.endAppearanceTransition()
 
-            // Walk the scroll-view → content-stack chain and count rows.
             let scroll = try #require(
                 vc.view.subviews.compactMap { $0 as? UIScrollView }.first)
             let content = try #require(
@@ -109,14 +137,14 @@ struct BtIosHostsListVCTests {
 
     @Test("row tap dispatches connect to bridge handler")
     func rowTapDispatchesConnect() throws {
-        try withIsolatedService { store in
+        try withIsolatedService {
             let host = SavedHost(
                 label: "Mac",
                 credential: HostCredential(
                     host: "10.0.0.5", port: 22, username: "yi",
                     auth: .password("pw"))
             )
-            try store.save(host)
+            try saveEntry(host)
 
             var received: UUID?
             HostsBridge.connectHandler = { id in received = id }
@@ -127,12 +155,8 @@ struct BtIosHostsListVCTests {
             vc.beginAppearanceTransition(true, animated: false)
             vc.endAppearanceTransition()
 
-            // Find the row UIButton (only one row → first button in tree).
             let button = try #require(firstButton(in: vc.view))
-            // The row VC stores its UIButton with .tag = row index (0 here).
             #expect(button.tag == 0)
-            // Fire `rowTapped:` directly with the button as sender so the
-            // VC's selector handler routes through the bridge.
             let sel = Selector(("rowTapped:"))
             let obj = vc as NSObject
             #expect(obj.responds(to: sel))
@@ -152,20 +176,18 @@ struct BtIosHostsListVCTests {
 
     @Test("swipe-delete invokes bridge delete and removes the row")
     func swipeDeleteInvokesBridge() throws {
-        try withIsolatedService { store in
+        try withIsolatedService {
             let host = SavedHost(
                 label: "Mac",
                 credential: HostCredential(
                     host: "10.0.0.5", port: 22, username: "yi",
                     auth: .password("pw"))
             )
-            try store.save(host)
-            #expect(store.list().count == 1)
+            try saveEntry(host)
+            #expect(listEntries().count == 1)
 
-            // Delete via HostsStore — the Rust VC now calls
-            // `hosts_store::delete()` directly, which is the same path.
-            store.delete(id: host.id)
-            #expect(store.list().isEmpty)
+            deleteEntry(id: host.id)
+            #expect(listEntries().isEmpty)
         }
     }
 }

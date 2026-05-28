@@ -1,3 +1,4 @@
+import BedTermIOS
 import SwiftUI
 
 struct HostKeyMismatchReviewSheet: View {
@@ -6,7 +7,6 @@ struct HostKeyMismatchReviewSheet: View {
     let onReject: () -> Void
 
     @State private var confirmTrust = false
-    private let hostKeyStore = HostKeyStore()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -89,11 +89,11 @@ struct HostKeyMismatchReviewSheet: View {
             titleVisibility: .visible
         ) {
             Button(String(localized: "Trust new key"), role: .destructive) {
-                try? hostKeyStore.store(
-                    fingerprint: mismatch.remote,
-                    host: mismatch.host,
-                    port: mismatch.port
-                )
+                _ = mismatch.host.withCString { hostPtr in
+                    mismatch.remote.withCString { fpPtr in
+                        bt_ios_host_keys_save(hostPtr, UInt16(mismatch.port), fpPtr)
+                    }
+                }
                 onTrust()
             }
             Button(String(localized: "Cancel"), role: .cancel) {}

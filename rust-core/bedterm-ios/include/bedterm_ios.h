@@ -889,13 +889,24 @@ void bt_ios_release_hosts_list_vc(void *vc_ptr);
 char *bt_ios_hosts_snapshot_json(void);
 
 /**
- * Free a string returned by `bt_ios_hosts_snapshot_json`. NULL-safe.
+ * Free a string returned by any `bt_ios_hosts_*` function that returns
+ * `*mut c_char`. NULL-safe.
  *
  * # Safety
- * `ptr` must have been returned by `bt_ios_hosts_snapshot_json` and not
+ * `ptr` must have been returned by a `bt_ios_hosts_*` function and not
  * yet freed.
  */
 void bt_ios_hosts_free_string(char *ptr);
+
+/**
+ * Load the full `SavedHost` JSON blob for `uuid` as a UTF-8 C string.
+ * Returns NULL when no item is stored or the blob isn't valid UTF-8.
+ * Free via [`bt_ios_hosts_free_string`].
+ *
+ * # Safety
+ * `uuid` is a UTF-8 nul-terminated C string borrowed for the call.
+ */
+char *bt_ios_hosts_load_json(const char *uuid);
 
 /**
  * Load the raw `SavedHost` JSON blob for `uuid`. Returns NULL when no
