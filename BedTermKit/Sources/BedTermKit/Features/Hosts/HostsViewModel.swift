@@ -11,13 +11,13 @@ import UIKit
 /// that came back.
 ///
 /// Swift still owns the async SSH connect path (`ConnectAttempt`) and
-/// the live `TerminalSession` reference — neither has a Rust analogue.
+/// the live `RustTerminalSession` reference — neither has a Rust analogue.
 @MainActor
 @Observable
 public final class HostsViewModel {
     public private(set) var entries: [SavedHost] = []
     public private(set) var inFlightID: UUID?
-    private(set) var lastSession: TerminalSession?
+    private(set) var lastSession: RustTerminalSession?
     public private(set) var currentSessionID: UUID?
     public var pendingMismatch: PendingMismatch?
     public var swapConfirmation: SwapConfirmation?
@@ -40,19 +40,10 @@ public final class HostsViewModel {
     private var inFlightTask: Task<Void, Never>?
 
     public init() {
-        self.connectFactory = {
-            ConnectAttempt(clientFactory: {
-                // UI-test override: when a launch-arg-driven stub is
-                // registered, every production Connect tap routes
-                // through the scripted `MockSSHClient` instead of
-                // `CitadelSSHClient`. Production launches never set
-                // this — see `SSHClientFactoryOverride`.
-                if let factory = SSHClientFactoryOverride.current {
-                    return factory()
-                }
-                return CitadelSSHClient()
-            })
-        }
+        // Follow-up: update UI tests to use Rust-level mock injection instead
+        // of `SSHClientFactoryOverride` — the `clientFactory` indirection was
+        // removed when `ConnectAttempt` migrated to `RustTerminalSession`.
+        self.connectFactory = { ConnectAttempt() }
         self.syncFromRust()
     }
 

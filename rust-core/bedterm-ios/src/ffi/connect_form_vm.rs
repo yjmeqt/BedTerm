@@ -13,6 +13,7 @@
 
 #![cfg(target_os = "ios")]
 
+use crate::connect_form::model::{normalized_host, normalized_port};
 use crate::connect_form_vm::{self, ConnectFormVM};
 use std::ffi::{c_char, CStr, CString};
 
@@ -256,4 +257,23 @@ pub extern "C" fn bt_ios_connect_form_vm_try_save() -> *mut c_char {
         },
         Err(_) => std::ptr::null_mut(),
     }
+}
+
+/// Returns the normalized host from the current VM host field (splits
+/// `host:port` paste, strips brackets around IPv6 addresses, trims
+/// whitespace). Caller frees via
+/// [`bt_ios_connect_form_vm_free_string`].
+#[no_mangle]
+pub extern "C" fn bt_ios_connect_form_vm_normalized_host() -> *mut c_char {
+    let host = vm_lock().host.clone();
+    into_c(normalized_host(&host))
+}
+
+/// Returns the normalized port from the current VM host + port fields.
+/// Returns 0 when no valid port is recoverable (port 0 is never valid
+/// for SSH, so 0 serves as a safe sentinel for "no port").
+#[no_mangle]
+pub extern "C" fn bt_ios_connect_form_vm_normalized_port() -> u16 {
+    let vm = vm_lock();
+    normalized_port(&vm.host, &vm.port).unwrap_or(0)
 }

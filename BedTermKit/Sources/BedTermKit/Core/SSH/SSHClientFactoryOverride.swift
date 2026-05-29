@@ -3,24 +3,37 @@ import Foundation
 /// Process-wide test hook for substituting the production `SSHClient`
 /// implementation with a deterministic stub.
 ///
-/// **DEBUG / UI-test use only.** Production launches never set
-/// `current`, so `ConnectAttempt` falls through to `CitadelSSHClient()`
-/// exactly as before. The override exists so end-to-end UI tests can
-/// route every saved-host Connect tap through a scripted `MockSSHClient`
-/// without touching the network — the full
-/// `IosTerminalView` → `TerminalSession` → `SSHClient` → Rust glyph
-/// renderer stack stays intact, only the wire layer is mocked.
+/// **DEBUG / UI-test use only.** The `clientFactory` indirection in
+/// `ConnectAttempt` was removed when the connect path migrated to
+/// `RustTerminalSession`. This type is retained for `MockSSHClient`-based
+/// unit tests that construct the client directly.
 ///
-/// See `BedTermUITests/RustTerminalEndToEndSSHUITests.swift` for the
-/// consumer, and `BedTermApp` for the launch-arg parsing that sets
-/// `current` at startup.
+/// For UI tests, use `RustTerminalSessionMockOverride` instead — it
+/// installs the mock at the Rust FFI level so the full production
+/// `RustTerminalSession` connect path is exercised.
 public typealias SSHClientFactory = @MainActor () -> any SSHClient
 
 @MainActor
 public enum SSHClientFactoryOverride {
-    /// When non-nil, `ConnectAttempt`'s default client factory delegates
-    /// to this closure instead of constructing `CitadelSSHClient()`.
+    /// When non-nil, registers a scripted stub in place of the real SSH
+    /// transport. Not used by `RustTerminalSession` — see
+    /// `RustTerminalSessionMockOverride` for the active UI-test injection
+    /// point.
     public static var current: SSHClientFactory?
+}
+
+/// Process-wide test hook that installs a named mock script in every new
+/// `RustTerminalSession` before its first connect call.
+///
+/// **DEBUG / UI-test use only.** Set by `UITestSupport` when the app is
+/// launched with `-uitest-stubSSH <script>`.
+///
+/// When `scriptName` is non-nil, `RustTerminalSession.init()` calls
+/// `bt_terminal_session_install_mock` with this script name so the session
+/// uses scripted mock behaviour instead of real SSH.
+@MainActor
+public enum RustTerminalSessionMockOverride {
+    public static var scriptName: String?
 }
 
 /// Process-wide test hook for pre-populating the saved-hosts list at

@@ -21,7 +21,7 @@ final class TerminalScreenViewController: UIViewController {
     private let bootstrapPayloadProvider: @MainActor () -> String?
 
     init(
-        session: TerminalSession,
+        session: RustTerminalSession,
         credential: HostCredential,
         hostName: String,
         bootstrapPayloadProvider: @escaping @MainActor () -> String?,

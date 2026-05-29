@@ -1,14 +1,13 @@
-//! Rust-side bindings for the Swift `SSHClientBridge`.
+//! Deprecated C-vtable SSH bridge.
 //!
-//! Scaffolding only. Full design at
-//! `bedterm/docs/specs/swift-rust-ssh-bridge.md`. When `TerminalSession`
-//! is ported to Rust, the port will hold an `SSHBridgeHandle` and call
-//! through the vtable installed by Swift via `bt_ios_ssh_register`.
+//! Rust now owns the SSH client directly (see [`crate::ffi::ssh_client_ffi`]).
+//! The types `BtSSHResultCode`, `BtSSHCompletion`, and `BtSSHOutputSink`
+//! are still used by the new FFI; the vtable bridge types
+//! (`BtSSHClientVTable`, `SSHBridgeHandle`, `SSHBridge`) and entry points
+//! (`bt_ios_register_ssh_bridge`, `bt_ios_ssh_bridge_release`) are kept
+//! as harmless dead code for now.
 //!
-//! W1.B defines the C ABI types and the Rust-facing `SSHBridge` trait,
-//! but does not export a register entry point yet — that lands with the
-//! first Rust call site (post-W5). The existing Swift `TerminalSession`
-//! keeps owning Citadel directly until then.
+//! Full original design at `bedterm/docs/specs/swift-rust-ssh-bridge.md`.
 
 use std::ffi::c_void;
 
@@ -126,9 +125,8 @@ pub struct SSHBridgeHandle {
 }
 
 impl SSHBridgeHandle {
-    /// Wrap a freshly-registered bridge — vtable filled by Swift's
-    /// `SSHClientBridge`, `ctx` is a +1 retained `Unmanaged<SSHClientBridge>`
-    /// opaque pointer.
+    /// Wrap a freshly-registered bridge — `ctx` is a +1 retained
+    /// `Unmanaged<SSHClientBridge>` opaque pointer.
     pub fn new(vtable: BtSSHClientVTable, ctx: *mut c_void) -> Self {
         Self { vtable, ctx }
     }
@@ -179,40 +177,6 @@ impl SSHBridge for SSHBridgeHandle {
     fn set_output_sink(&self, sink: BtSSHOutputSink, ctx: *mut c_void) {
         unsafe { (self.vtable.set_output_sink)(self.ctx, sink, ctx) };
     }
-}
-
-/// Read a Swift-supplied retained `NSString *` detail pointer into a Rust
-/// `String`, releasing the retain via `bt_ssh_release_message` once we've
-/// copied the bytes. Safe to call with null.
-pub fn copy_swift_detail_message(msg: *const c_void) -> Option<String> {
-    if msg.is_null() {
-        return None;
-    }
-    // Read UTF8 via `-[NSString UTF8String]` then release.
-    let s = unsafe {
-        use objc2::runtime::AnyObject;
-        use objc2::{msg_send, sel};
-        let _ = sel!(UTF8String);
-        let cstr: *const std::os::raw::c_char = msg_send![&*(msg as *const AnyObject), UTF8String];
-        if cstr.is_null() {
-            None
-        } else {
-            Some(
-                std::ffi::CStr::from_ptr(cstr)
-                    .to_string_lossy()
-                    .into_owned(),
-            )
-        }
-    };
-    unsafe { bt_ssh_release_message(msg) };
-    s
-}
-
-extern "C" {
-    /// Swift-side detail-string release. Balances the `+1` retained
-    /// `NSString *` produced by `BtSSHCompletion`. Defined in
-    /// `SSHClientBridge.swift`.
-    pub fn bt_ssh_release_message(msg: *const c_void);
 }
 
 /// Register a Swift-built SSH bridge. The `vtable` is copied by value;

@@ -168,7 +168,26 @@ typedef enum BtSSHResultCode {
   BtSSHResultOther = 99,
 } BtSSHResultCode;
 
+/**
+ * Session lifecycle state. Transitions are always monotone:
+ * Idle → Connecting → Open → Closed.
+ */
+typedef enum BtSessionState {
+  Idle = 0,
+  Connecting = 1,
+  Open = 2,
+  Closed = 3,
+} BtSessionState;
+
 typedef struct BtTerm BtTerm;
+
+/**
+ * Opaque handle owning a running SSH terminal session.
+ *
+ * Created by [`bt_terminal_session_create`], freed by
+ * [`bt_terminal_session_close`].
+ */
+typedef struct BtTerminalSessionHandle BtTerminalSessionHandle;
 
 /**
  * Rust-owned handle. Holds the vtable + ctx returned by
@@ -176,6 +195,14 @@ typedef struct BtTerm BtTerm;
  * balance Swift's retain.
  */
 typedef struct SSHBridgeHandle SSHBridgeHandle;
+
+/**
+ * Opaque handle owning a running SSH client + tokio runtime + background
+ * read-loop thread.
+ *
+ * Created by [`bt_ssh_client_create`], freed by [`bt_ssh_client_close`].
+ */
+typedef struct SshClientHandle SshClientHandle;
 
 /**
  * C-compatible mirror of `SSHConnectionRequest`. Lifetimes: pointers
@@ -600,13 +627,6 @@ extern void bt_swift_hosts_store_save_json(const char *json);
 extern void bt_swift_request_local_network(void *ctx, void (*completion)(void*));
 
 /**
- * Swift-side detail-string release. Balances the `+1` retained
- * `NSString *` produced by `BtSSHCompletion`. Defined in
- * `SSHClientBridge.swift`.
- */
-extern void bt_ssh_release_message(const void *msg);
-
-/**
  * Register a Swift-built SSH bridge. The `vtable` is copied by value;
  * `ctx` ownership transfers to the returned handle (the handle's `Drop`
  * invokes `vtable.release(ctx)`).
@@ -788,6 +808,21 @@ char *bt_ios_connect_form_vm_validate(void);
  * `bt_ios_connect_form_vm_error_message` to retrieve the message).
  */
 char *bt_ios_connect_form_vm_try_save(void);
+
+/**
+ * Returns the normalized host from the current VM host field (splits
+ * `host:port` paste, strips brackets around IPv6 addresses, trims
+ * whitespace). Caller frees via
+ * [`bt_ios_connect_form_vm_free_string`].
+ */
+char *bt_ios_connect_form_vm_normalized_host(void);
+
+/**
+ * Returns the normalized port from the current VM host + port fields.
+ * Returns 0 when no valid port is recoverable (port 0 is never valid
+ * for SSH, so 0 serves as a safe sentinel for "no port").
+ */
+uint16_t bt_ios_connect_form_vm_normalized_port(void);
 
 /**
  * Load the stored fingerprint for `host:port`. Returns NULL when none
@@ -1250,6 +1285,215 @@ bool bt_ios_settings_onboarding_completed(void);
 void bt_ios_settings_set_onboarding_completed(bool value);
 
 /**
+ * Create a new SSH client handle.
+ *
+ * Spawns a single-threaded tokio runtime and returns an opaque handle.
+ * The handle is ready for [`bt_ssh_client_connect`].
+ *
+ * Returns NULL if the tokio runtime could not be created.
+ */
+struct SshClientHandle *bt_ssh_client_create(void);
+
+/**
+ * Connect to an SSH server.
+ *
+ * Parses the connection parameters, calls
+ * [`RusshSshClient::connect`](SshClient::connect) on the tokio runtime
+ * (blocking the calling thread until complete), and stores the connected
+ * client in the handle.
+ *
+ * The completion callback is invoked on the *calling* thread.
+ *
+ * # Parameters
+ *
+ * - `handle`: opaque handle from [`bt_ssh_client_create`].
+ * - `host`: UTF-8 C string, remote hostname or IP.  Must not be NULL.
+ * - `port`: TCP port (typically 22).
+ * - `username`: UTF-8 C string, SSH username.  Must not be NULL.
+ * - `credential_json`: UTF-8 C string.  JSON describing a
+ *   [`HostCredential`] (see [`parse_credential`]).  Must not be NULL.
+ * - `proxy_command`: UTF-8 C string or NULL for no proxy command.
+ * - `completion`: callback invoked with the connection result.
+ * - `completion_ctx`: opaque context threaded verbatim to `completion`.
+ *
+ * # Safety
+ *
+ * See the module-level safety documentation.  NULL string parameters
+ * (other than `proxy_command`) cause a `BtSSHResultOther` completion.
+ */
+void bt_ssh_client_connect(struct SshClientHandle *handle,
+                           const char *host,
+                           uint16_t port,
+                           const char *username,
+                           const char *credential_json,
+                           const char *proxy_command,
+                           BtSSHCompletion completion,
+                           void *completion_ctx);
+
+/**
+ * Open a PTY shell on the connected SSH session.
+ *
+ * After the shell is opened, the background read loop is automatically
+ * started (if a read callback has already been installed by
+ * [`bt_ssh_client_set_read_callback`]).
+ *
+ * The completion callback is invoked on the *calling* thread.
+ *
+ * # Parameters
+ *
+ * - `handle`: opaque handle, must be connected.
+ * - `cols`: terminal width in character cells.
+ * - `rows`: terminal height in character cells.
+ * - `width_px`: pixel width of the viewport (0 if unknown).
+ * - `height_px`: pixel height of the viewport (0 if unknown).
+ * - `completion`: callback invoked with the result.
+ * - `completion_ctx`: opaque context for `completion`.
+ *
+ * # Safety
+ *
+ * See the module-level safety documentation.
+ */
+void bt_ssh_client_open_shell(struct SshClientHandle *handle,
+                              uint16_t cols,
+                              uint16_t rows,
+                              uint16_t width_px,
+                              uint16_t height_px,
+                              BtSSHCompletion completion,
+                              void *completion_ctx);
+
+/**
+ * Install a read callback on the SSH client.
+ *
+ * The callback is invoked for every chunk of data received from the SSH
+ * channel.  If the shell is already open and no read thread is running,
+ * calling this function automatically spawns the background read loop.
+ *
+ * Use [`bt_ssh_client_clear_read_callback`] to unset an existing callback
+ * (subsequent data will be silently dropped).
+ *
+ * # Parameters
+ *
+ * - `handle`: opaque handle.
+ * - `sink`: callback function pointer.  Must be non-null.
+ * - `sink_ctx`: opaque context threaded verbatim to `sink`.
+ *
+ * # Safety
+ *
+ * `sink` must be a valid function pointer valid for the lifetime of the
+ * handle or until a subsequent call to [`bt_ssh_client_clear_read_callback`]
+ * or [`bt_ssh_client_close`].  `sink_ctx` must remain valid for the same
+ * duration.
+ */
+void bt_ssh_client_set_read_callback(struct SshClientHandle *handle,
+                                     BtSSHOutputSink sink,
+                                     void *sink_ctx);
+
+/**
+ * Clear a previously-installed read callback.
+ *
+ * Subsequent data received from the SSH channel will be silently dropped
+ * until a new callback is installed.
+ *
+ * # Parameters
+ *
+ * - `handle`: opaque handle.
+ *
+ * # Safety
+ *
+ * See the module-level safety documentation.  NULL handles are a no-op.
+ */
+void bt_ssh_client_clear_read_callback(struct SshClientHandle *handle);
+
+/**
+ * Write bytes to the SSH channel (stdin of the remote shell).
+ *
+ * The completion callback is invoked on the *calling* thread after the
+ * write completes (or fails).
+ *
+ * # Parameters
+ *
+ * - `handle`: opaque handle, shell must be open.
+ * - `bytes`: pointer to `len` bytes of data.
+ * - `len`: number of bytes to write.
+ * - `completion`: callback invoked with the result.
+ * - `completion_ctx`: opaque context for `completion`.
+ *
+ * # Safety
+ *
+ * `bytes` must be valid for `len` bytes.  Passing NULL with len > 0 is
+ * undefined behaviour.
+ */
+void bt_ssh_client_write(struct SshClientHandle *handle,
+                         const uint8_t *bytes,
+                         uintptr_t len,
+                         BtSSHCompletion completion,
+                         void *completion_ctx);
+
+/**
+ * Resize the remote PTY.
+ *
+ * The completion callback is invoked on the *calling* thread after the
+ * resize completes (or fails).
+ *
+ * # Parameters
+ *
+ * - `handle`: opaque handle, shell must be open.
+ * - `cols`: new terminal width in character cells.
+ * - `rows`: new terminal height in character cells.
+ * - `width_px`: pixel width of the viewport (0 if unknown).
+ * - `height_px`: pixel height of the viewport (0 if unknown).
+ * - `completion`: callback invoked with the result.
+ * - `completion_ctx`: opaque context for `completion`.
+ *
+ * # Safety
+ *
+ * See the module-level safety documentation.
+ */
+void bt_ssh_client_resize(struct SshClientHandle *handle,
+                          uint16_t cols,
+                          uint16_t rows,
+                          uint16_t width_px,
+                          uint16_t height_px,
+                          BtSSHCompletion completion,
+                          void *completion_ctx);
+
+/**
+ * Close the SSH connection and free the handle.
+ *
+ * Signals the background read loop to stop, joins the read-loop thread,
+ * calls [`SshClient::close`] on the connected client, and deallocates
+ * the handle.
+ *
+ * After this call the handle pointer is invalid and must not be used
+ * again.  Safe to call with NULL.
+ *
+ * # Safety
+ *
+ * `handle` must be non-NULL and returned by [`bt_ssh_client_create`]
+ * that has not already been passed to `bt_ssh_client_close`.
+ */
+void bt_ssh_client_close(struct SshClientHandle *handle);
+
+/**
+ * Produce a user-facing description for a [`BtSSHResultCode`], optionally
+ * embedding a detail string.
+ *
+ * The returned `*const c_char` points into a thread-local buffer that is
+ * valid until the next call from the same thread.  Swift must copy the
+ * string before calling this function again.
+ *
+ * Pass `detail = NULL` for error variants that do not carry a detail.
+ *
+ * The descriptions match the existing `TerminalSession.describe()` output.
+ *
+ * # Safety
+ *
+ * `detail` must be NULL or a valid nul-terminated UTF-8 C string borrowed
+ * for the duration of the call.
+ */
+const char *bt_ssh_error_describe(enum BtSSHResultCode code, const char *detail);
+
+/**
  * Create the iOS terminal `UIViewController *` (returned as `*mut c_void` so
  * the C header can stay type-agnostic).
  *
@@ -1343,6 +1587,234 @@ void bt_ios_view_set_on_resize(void *view_ptr,
  * Main thread. `view_ptr` must be a live `BtIosMetalInputView *`.
  */
 void bt_ios_view_grid_dim(void *view_ptr, uint16_t *out_cols, uint16_t *out_rows);
+
+/**
+ * Create a new terminal session handle.
+ *
+ * Spawns a single-threaded tokio runtime and returns an opaque handle
+ * ready for [`bt_terminal_session_connect`].
+ *
+ * Returns NULL if the tokio runtime could not be created.
+ *
+ * # Parameters
+ *
+ * - `state_cb`: nullable state-change callback. Fired on each lifecycle
+ *   transition (Connecting → Open → Closed).
+ * - `state_ctx`: opaque context threaded verbatim to `state_cb`.
+ *
+ * # Safety
+ *
+ * `state_cb` (if non-null) must be a valid function pointer valid for the
+ * lifetime of the handle. `state_ctx` must remain valid for the same
+ * duration.
+ */
+struct BtTerminalSessionHandle *bt_terminal_session_create(void (*state_cb)(void *ctx,
+                                                                            enum BtSessionState state,
+                                                                            enum BtSSHResultCode error_code,
+                                                                            int32_t exit_code),
+                                                           void *state_ctx);
+
+/**
+ * Connect to an SSH server, open a PTY shell, and optionally send a
+ * bootstrap payload — all in one blocking call on the calling thread.
+ *
+ * On success: stores the client, transitions state → Open, fires
+ * `state_cb`, starts the background read loop (if a data sink is
+ * installed), then calls `completion(Ok)`.
+ *
+ * On error: transitions state → Closed with the appropriate error code,
+ * then calls `completion(Err)`.
+ *
+ * # Parameters
+ *
+ * - `handle`: opaque handle from [`bt_terminal_session_create`].
+ * - `host`: UTF-8 C string, remote hostname or IP. Must not be NULL.
+ * - `port`: TCP port (typically 22).
+ * - `username`: UTF-8 C string, SSH username. Must not be NULL.
+ * - `credential_json`: UTF-8 C string JSON describing the credential.
+ *   Must not be NULL.
+ * - `bootstrap_payload`: nullable UTF-8 C string sent to the shell
+ *   immediately after opening (e.g. a shell integration script).
+ * - `cols` / `rows`: initial PTY dimensions in character cells.
+ * - `timeout_ms`: if > 0, the entire connect + open_shell sequence is
+ *   wrapped in a timeout. 0 means no timeout.
+ * - `completion`: callback invoked with the connection result.
+ * - `completion_ctx`: opaque context for `completion`.
+ *
+ * # Safety
+ *
+ * See the module-level safety documentation.
+ */
+void bt_terminal_session_connect(struct BtTerminalSessionHandle *handle,
+                                 const char *host,
+                                 uint16_t port,
+                                 const char *username,
+                                 const char *credential_json,
+                                 const char *bootstrap_payload,
+                                 uint16_t cols,
+                                 uint16_t rows,
+                                 uint64_t timeout_ms,
+                                 BtSSHCompletion completion,
+                                 void *completion_ctx);
+
+/**
+ * Install (or replace) the data sink for inbound PTY bytes.
+ *
+ * If the shell is already open and no read thread is running, calling
+ * this function automatically spawns the background read loop.
+ *
+ * # Parameters
+ *
+ * - `handle`: opaque handle.
+ * - `sink`: callback function pointer. Must be non-null.
+ * - `sink_ctx`: opaque context threaded verbatim to `sink`.
+ *
+ * # Safety
+ *
+ * `sink` must be a valid function pointer valid for the lifetime of the
+ * handle or until [`bt_terminal_session_close`] is called. `sink_ctx`
+ * must remain valid for the same duration.
+ */
+void bt_terminal_session_set_data_sink(struct BtTerminalSessionHandle *handle,
+                                       BtSSHOutputSink sink,
+                                       void *sink_ctx);
+
+/**
+ * Write bytes to the SSH channel (stdin of the remote shell).
+ *
+ * The completion callback is invoked on the *calling* thread after the
+ * write completes (or fails).
+ *
+ * # Parameters
+ *
+ * - `handle`: opaque handle, shell must be open.
+ * - `bytes`: pointer to `len` bytes of data.
+ * - `len`: number of bytes to write.
+ * - `completion`: callback invoked with the result.
+ * - `completion_ctx`: opaque context for `completion`.
+ *
+ * # Safety
+ *
+ * `bytes` must be valid for `len` bytes. Passing NULL with len > 0 is
+ * undefined behaviour.
+ */
+void bt_terminal_session_send(struct BtTerminalSessionHandle *handle,
+                              const uint8_t *bytes,
+                              uintptr_t len,
+                              BtSSHCompletion completion,
+                              void *completion_ctx);
+
+/**
+ * Resize the remote PTY.
+ *
+ * The completion callback is invoked on the *calling* thread after the
+ * resize completes (or fails).
+ *
+ * # Parameters
+ *
+ * - `handle`: opaque handle, shell must be open.
+ * - `cols`: new terminal width in character cells.
+ * - `rows`: new terminal height in character cells.
+ * - `completion`: callback invoked with the result.
+ * - `completion_ctx`: opaque context for `completion`.
+ *
+ * # Safety
+ *
+ * See the module-level safety documentation.
+ */
+void bt_terminal_session_resize(struct BtTerminalSessionHandle *handle,
+                                uint16_t cols,
+                                uint16_t rows,
+                                BtSSHCompletion completion,
+                                void *completion_ctx);
+
+/**
+ * Initiate a non-blocking disconnect.
+ *
+ * Sets the stop flag (so the read loop exits on its next wake), takes
+ * the SSH client, closes it, and fires the state callback with
+ * `Closed + BtSSHResultOk` to signal a caller-initiated disconnect.
+ *
+ * This call does NOT join the read thread — use
+ * [`bt_terminal_session_close`] to fully tear down the handle.
+ *
+ * # Safety
+ *
+ * See the module-level safety documentation.
+ */
+void bt_terminal_session_disconnect(struct BtTerminalSessionHandle *handle);
+
+/**
+ * Fully tear down the session handle and free all resources.
+ *
+ * Signals the background read loop to stop, joins the read-loop thread,
+ * takes and closes the SSH client, then deallocates the handle.
+ *
+ * After this call the handle pointer is invalid and must not be used
+ * again. Safe to call with NULL.
+ *
+ * # Safety
+ *
+ * `handle` must be non-NULL and returned by [`bt_terminal_session_create`]
+ * that has not already been passed to `bt_terminal_session_close`.
+ */
+void bt_terminal_session_close(struct BtTerminalSessionHandle *handle);
+
+/**
+ * Return the current session lifecycle state.
+ *
+ * # Safety
+ *
+ * `handle` must be non-null and valid (not yet passed to
+ * [`bt_terminal_session_close`]).
+ */
+enum BtSessionState bt_terminal_session_state(const struct BtTerminalSessionHandle *handle);
+
+/**
+ * Return the error code from the last session close (or `BtSSHResultOk`
+ * if the session closed normally / has not yet closed).
+ *
+ * # Safety
+ *
+ * `handle` must be non-null and valid.
+ */
+enum BtSSHResultCode bt_terminal_session_last_error_code(const struct BtTerminalSessionHandle *handle);
+
+/**
+ * Return the shell exit code from the last session close (0 if not a
+ * shell-exited close, or the session has not yet closed).
+ *
+ * # Safety
+ *
+ * `handle` must be non-null and valid.
+ */
+int32_t bt_terminal_session_last_exit_code(const struct BtTerminalSessionHandle *handle);
+
+/**
+ * Install a named mock SSH client for UI testing.
+ *
+ * Must be called **before** [`bt_terminal_session_connect`]. When a
+ * non-empty script name is installed, the next connect bypasses real SSH
+ * and uses a [`MockSshClient`] instead. The override is consumed on the
+ * first connect so a subsequent reconnect uses the real SSH path.
+ *
+ * Scripts (matching `UITestSupport.swift`):
+ *
+ * | Name         | Behaviour                                             |
+ * |--------------|-------------------------------------------------------|
+ * | `"hello"`    | Emits `"Hello, world!\r\n"` then blocks.              |
+ * | `"ansiColors"` | Emits ANSI red/green/blue sequence then blocks.     |
+ * | `"prompt"`   | Emits `"bedterm$ "` then blocks.                      |
+ * | `"echo"`     | Emits `"bedterm$ "`, echoes writes back as magenta.   |
+ *
+ * NULL or empty `script` is a no-op.
+ *
+ * # Safety
+ *
+ * `handle` must be a live handle not yet connected.
+ * `script` is a UTF-8 nul-terminated C string borrowed for the call.
+ */
+void bt_terminal_session_install_mock(struct BtTerminalSessionHandle *handle, const char *script);
 
 /**
  * # Safety

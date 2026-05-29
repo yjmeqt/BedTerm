@@ -210,21 +210,25 @@ dependencies = [
 name = "bedterm-ios"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "bedterm-core",
  "block2",
  "cbindgen",
  "core-foundation",
  "core-foundation-sys",
+ "data-encoding",
  "objc2",
  "objc2-foundation",
  "objc2-metal",
  "objc2-metal-kit",
  "objc2-quartz-core",
  "objc2-ui-kit",
+ "russh",
  "security-framework",
  "security-framework-sys",
  "serde",
  "serde_json",
+ "tokio",
 ]
 
 [[package]]

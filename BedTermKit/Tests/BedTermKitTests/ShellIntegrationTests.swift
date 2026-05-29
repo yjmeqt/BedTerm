@@ -40,7 +40,7 @@ struct ShellIntegrationTests {
 
     @Test("bootstrap payload matches raw script body")
     func bootstrapPayloadMatchesRawScriptBody() throws {
-        // The SFTP path in CitadelSSHClient+Bootstrap writes the bootstrap
+        // The SSH bootstrap writes the bootstrap
         // payload verbatim to ~/.cache/bedterm/integration.sh — no heredoc
         // wrapping, no HISTCONTROL prefix. So bootstrapPayload must equal
         // the raw script body returned by load().
@@ -48,34 +48,4 @@ struct ShellIntegrationTests {
         let payload = try #require(ShellIntegrationScript.bootstrapPayload())
         #expect(payload == body)
     }
-
-    // MARK: - End-to-end: bootstrap flows through connect
-
-    @Test("connect propagates bootstrap payload to client")
-    func connectPropagatesBootstrapPayloadToClient() async throws {
-        let mock = MockSSHClient()
-        let session = TerminalSession(client: mock)
-        let credential = HostCredential(host: "test.example.com", port: 22, username: "alice", auth: .password(""))
-        let payload = try #require(ShellIntegrationScript.bootstrapPayload())
-        await session.connect(
-            credential: credential,
-            initialPTY: .init(cols: 80, rows: 24),
-            bootstrapPayload: payload
-        )
-        let captured = try #require(mock.lastConnectRequest)
-        #expect(captured.bootstrapPayload == payload)
-    }
-
-    @Test("connect omits bootstrap when not provided")
-    func connectOmitsBootstrapWhenNotProvided() async {
-        let mock = MockSSHClient()
-        let session = TerminalSession(client: mock)
-        let credential = HostCredential(host: "test.example.com", port: 22, username: "alice", auth: .password(""))
-        await session.connect(
-            credential: credential,
-            initialPTY: .init(cols: 80, rows: 24)
-        )
-        #expect(mock.lastConnectRequest?.bootstrapPayload == nil)
-    }
-
 }

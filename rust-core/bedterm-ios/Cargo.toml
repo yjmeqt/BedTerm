@@ -20,6 +20,14 @@ crate-type = ["staticlib", "rlib"]
 # objects; they exercise the pure-Rust code paths only.
 [dependencies]
 bedterm-core = { path = "../bedterm-core" }
+async-trait = "0.1"
+# SSH client (P2+): russh backs the production `SshClient` implementation.
+# Also used by bedterm-mock-ssh (workspace sibling) at the same version.
+russh = "0.45"
+# Base64 decoding for OpenSSH key header inspection in `detect_key_type`.
+# Already a transitive dependency of `russh-keys` — listed explicitly here
+# so `russh_impl.rs` can import it without depending on an internal re-export.
+data-encoding = "2"
 # `disable-encoding-assertions` is the upstream-blessed escape hatch for
 # `UITextInputTraits` protocol-property setters that the runtime sees as
 # missing during debug-time `class_getInstanceMethod` verification (see
@@ -31,6 +39,11 @@ bedterm-core = { path = "../bedterm-core" }
 # logic modules that need `Encode` impls + `msg_send!` macro type
 # plumbing.
 objc2 = { version = "0.6", features = ["disable-encoding-assertions"] }
+# Tokio runtime used by `russh` for async SSH. Features are pulled in
+# transitively from `russh` (net, process, rt, sync, macros, etc.).  We
+# declare an explicit dep here so code in `russh_impl` can import tokio
+# types directly without re-exporting from `russh`.
+tokio = "1"
 # `block2` is needed (iOS-only target dep below pulls it in for objc2-ui-kit's
 # block-taking selectors, e.g. `colorWithDynamicProvider:`). Pulled here as
 # the explicit version pin matching what objc2 0.6 transitively requires.

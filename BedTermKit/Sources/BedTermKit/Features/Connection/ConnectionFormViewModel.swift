@@ -115,10 +115,14 @@ public final class ConnectionFormViewModel {
 
     /// Looks up an existing saved entry that matches `(host, port, username)`
     /// other than the entry being edited. Drives the inline warning in
-    /// R3.duplicate_host_warning.
+    /// R3.duplicate_host_warning. Host/port normalization delegates to Rust
+    /// (the source of truth for the save path too).
     public func duplicate() -> SavedHost? {
-        let normalized = self.normalizedHost()
-        guard !normalized.isEmpty, let portValue = self.normalizedPort() else { return nil }
+        guard let normalizedPtr = bt_ios_connect_form_vm_normalized_host() else { return nil }
+        defer { bt_ios_connect_form_vm_free_string(normalizedPtr) }
+        let normalized = String(cString: normalizedPtr)
+        let portValue = Int(bt_ios_connect_form_vm_normalized_port())
+        guard !normalized.isEmpty, portValue > 0 else { return nil }
         let user = self.username.trimmingCharacters(in: .whitespaces)
         guard !user.isEmpty else { return nil }
         let excludeID: UUID? = {
@@ -202,45 +206,6 @@ public final class ConnectionFormViewModel {
         return entry.id
     }
 
-    // MARK: - Helpers
-
-    /// Splits a pasted `host:port` into the corresponding fields, then
-    /// trims. Kept as a thin Swift-side mirror for `duplicate()`; the
-    /// Rust VM applies the same rule on save.
-    func normalizedHost() -> String {
-        let raw = self.host.trimmingCharacters(in: .whitespaces)
-        guard !raw.isEmpty else { return "" }
-
-        if raw.hasPrefix("["), let bracket = raw.firstIndex(of: "]") {
-            let after = raw.index(after: bracket)
-            if after < raw.endIndex && raw[after] == ":" {
-                return String(raw[..<bracket]).replacingOccurrences(of: "[", with: "")
-            }
-            return raw
-        }
-
-        let colonCount = raw.filter { $0 == ":" }.count
-        guard colonCount == 1, let colon = raw.lastIndex(of: ":") else { return raw }
-        guard Int(raw[raw.index(after: colon)...]) != nil else { return raw }
-        return String(raw[..<colon])
-    }
-
-    func normalizedPort() -> Int? {
-        let raw = self.host.trimmingCharacters(in: .whitespaces)
-        if raw.hasPrefix("["), let bracket = raw.firstIndex(of: "]") {
-            let after = raw.index(after: bracket)
-            if after < raw.endIndex && raw[after] == ":" {
-                let portPart = raw[raw.index(after: after)...]
-                if let parsed = Int(portPart) { return parsed }
-            }
-        }
-        let colonCount = raw.filter { $0 == ":" }.count
-        if colonCount == 1, let colon = raw.lastIndex(of: ":") {
-            if let parsed = Int(raw[raw.index(after: colon)...]) { return parsed }
-        }
-        return Int(self.port.trimmingCharacters(in: .whitespaces))
-    }
-
     // MARK: - Bridge plumbing
 
     private func pushString(
@@ -283,7 +248,6 @@ public final class ConnectionFormViewModel {
 
     // Nest the `withCString` / `withUnsafeBytes` borrows so all
     // pointers remain valid for the duration of the FFI call.
-    // swiftlint:disable:next function_parameter_count
     private static func callPrefill(
         id: String,
         label: String,

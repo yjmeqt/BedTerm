@@ -2,23 +2,27 @@ import UIKit
 import XCTest
 
 /// End-to-end UI tests that exercise the full production stack —
-/// `HostsScreen` → `HostsViewModel` → `ConnectAttempt` → injected
-/// `MockSSHClient` → `TerminalSession` → `IosTerminalView` →
+/// `HostsScreen` → `HostsViewModel` → `ConnectAttempt` → Rust mock client
+/// → `RustTerminalSession` → `IosTerminalView` →
 /// `bt_ios_view_feed_bytes` → Rust glyph renderer.
 ///
 /// Unlike `RustTerminalSmokeUITests` (which mounts the Rust VC
 /// directly via `-uitest-rustTerminalDirect` and bypasses SSH +
-/// `TerminalSession` entirely), this suite drives the same code path
+/// `RustTerminalSession` entirely), this suite drives the same code path
 /// production users hit: tap a saved-host row, watch the connecting
 /// overlay clear, assert the metal view paints scripted bytes from the
-/// mock SSH client.
+/// Rust mock client.
+///
+/// The mock is injected at the Rust FFI level via
+/// `bt_terminal_session_install_mock` (set up in `UITestSupport`), so
+/// the full `RustTerminalSession` connect path is exercised.
 ///
 /// Launch args:
 ///   `-uitest-skipOnboarding`     — skip onboarding flow
-///   `-uitest-stubSSH <script>`   — swap `CitadelSSHClient` for a scripted
-///                                  `MockSSHClient` (scripts:
-///                                  `hello` / `ansiColors` / `prompt` /
-///                                  `echo`)
+///   `-uitest-stubSSH <script>`   — install a Rust mock client via
+///                                  `RustTerminalSessionMockOverride`
+///                                  (scripts: `hello` / `ansiColors` /
+///                                  `prompt` / `echo`)
 ///   `-uitest-injectStubHost`     — prepend an in-memory fake "stub" row
 ///                                  to the saved-hosts list so the test
 ///                                  has something to tap without filling
@@ -151,8 +155,8 @@ final class RustTerminalEndToEndSSHUITests: XCTestCase {
     // MARK: - Tests
 
     /// Production stack smoke: tapping the injected host with the
-    /// `hello` script produces "Hello, world!\r\n" through the real
-    /// `TerminalSession` → SSH → bridge pipeline and the Rust glyph
+    /// `hello` script produces "Hello, world!\r\n" through the Rust mock
+    /// client → `RustTerminalSession` → feed pipeline and the Rust glyph
     /// renderer paints non-trivial pixels.
     @MainActor
     func test_stubSSH_helloRendersViaProductionPath() throws {
@@ -191,8 +195,8 @@ final class RustTerminalEndToEndSSHUITests: XCTestCase {
     }
 
     /// Hardware-keyboard typing routes through the Rust metal view's
-    /// `on_send` callback → `TerminalSession.send` → SSH client. With
-    /// the `echo` script the mock loops written bytes back as a
+    /// `on_send` callback → `RustTerminalSession.send` → Rust mock client.
+    /// With the `echo` script the mock loops written bytes back as a
     /// magenta SGR run, so the metal view's content fingerprint must
     /// change between pre-type and post-type.
     ///
@@ -218,8 +222,8 @@ final class RustTerminalEndToEndSSHUITests: XCTestCase {
         Thread.sleep(forTimeInterval: 0.3)
         metal.typeText("xy")
 
-        // Allow the round-trip: typeText → on_send → TerminalSession.send →
-        // MockSSHClient.write → echo back via output stream → feed pump →
+        // Allow the round-trip: typeText → on_send → RustTerminalSession.send →
+        // Rust MockSshClient.write → echo back via output stream → feed pump →
         // bt_ios_view_feed_bytes → next Metal draw.
         Thread.sleep(forTimeInterval: 1.5)
         let post = contentFingerprint(metal.screenshot().image)

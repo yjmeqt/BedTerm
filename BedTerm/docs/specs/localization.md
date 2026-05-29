@@ -15,7 +15,7 @@ Six locales declared in `knownRegions`: `Base`, `en`, `zh-Hans`, `zh-Hant`, `ja`
 
 - **SwiftUI literals** — write English directly: `Text("Connect")`, `Button("Cancel")`, `.navigationTitle("…")`, `TextField("Host", …)`, `Label`, alert titles, `.accessibilityLabel("…")`. Catalog auto-extracts these on build.
 - **Non-SwiftUI strings** — wrap in `String(localized: "…")` at the point of construction (view models, helpers, anything that builds an error message). Use interpolation `\(value)` for substituted values; keep the surrounding sentence in the literal.
-- **Never** concatenate localizable text with `+` — that downgrades the expression from `LocalizedStringKey` to `String` and the key isn't extracted. If a sentence is long, keep it on one line and suppress `line_length` with a `// swiftlint:disable:next line_length` comment.
+- **Never** concatenate localizable text with `+` — that downgrades the expression from `LocalizedStringKey` to `String` and the key isn't extracted. If a sentence is long, keep it on one line.
 - **Never** use Swift string comparison on a user-facing string for control flow. Surface a typed error or enum case instead (see `TerminalSession.lastError`).
 - **Don't wrap**: terminal pty output, debug log lines, assert messages, the brand name "BedTerm" — per PRD R4.
 

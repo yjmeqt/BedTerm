@@ -41,7 +41,6 @@ final class LocalNetworkPrewarmer {
         return await requestPermission()
     }
 
-    // swiftlint:disable cyclomatic_complexity
     func requestPermission() async -> Result {
         let descriptor = NWBrowser.Descriptor.bonjour(type: bonjourType, domain: nil)
         let params = NWParameters()
@@ -89,7 +88,6 @@ final class LocalNetworkPrewarmer {
         }
         return outcome
     }
-    // swiftlint:enable cyclomatic_complexity
 
     /// True when the `NWError` indicates the user denied the Local Network
     /// permission. iOS reports this as a DNS error with code -65555

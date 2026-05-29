@@ -42,7 +42,7 @@ enum ShellIntegrationScript {
     }
 
     /// Return the raw script body. The SFTP path in
-    /// `CitadelSSHClient+Bootstrap` writes this verbatim to
+    /// The SSH bootstrap command writes this verbatim to
     /// `~/.cache/bedterm/integration.sh` on the remote, then triggers
     /// a single `source` line on the PTY — no inline wrapper needed.
     static func bootstrapPayload() -> String? {

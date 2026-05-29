@@ -1,33 +1,29 @@
 import Foundation
 
-/// Runs a single SSH connection attempt: LAN prewarm if needed, then `TerminalSession.connect`.
+/// Runs a single SSH connection attempt: LAN prewarm if needed, then
+/// `RustTerminalSession.connect`.
 ///
-/// One driver, two callers — both the saved-hosts row tap and the legacy form
-/// route go through this so the connect path stays in lockstep.
+/// One driver, two callers — both the saved-hosts row tap and the legacy
+/// form route go through this so the connect path stays in lockstep.
 @MainActor
 final class ConnectAttempt {
     enum Outcome {
-        case session(TerminalSession)
+        case session(RustTerminalSession)
         case mismatch(stored: String, remote: String, host: String, port: Int)
         case error(message: String, permissionDenied: Bool)
     }
 
-    private let clientFactory: () -> any SSHClient
     private let prewarmer: LocalNetworkPrewarmer
 
-    init(
-        clientFactory: @escaping () -> any SSHClient,
-        prewarmer: LocalNetworkPrewarmer? = nil
-    ) {
-        self.clientFactory = clientFactory
+    init(prewarmer: LocalNetworkPrewarmer? = nil) {
         self.prewarmer = prewarmer ?? .shared
     }
 
-    /// Run the attempt. `onPrewarm(true)` fires when the LAN permission prompt is in flight;
-    /// `onPrewarm(false)` fires when it resolves so the caller can show/hide UI.
-    /// `bootstrapPayload` is the shell-integration heredoc to push after the
-    /// remote shell emits its first byte; pass `nil` to keep the channel
-    /// pristine (default).
+    /// Run the attempt. `onPrewarm(true)` fires when the LAN permission
+    /// prompt is in flight; `onPrewarm(false)` fires when it resolves.
+    /// `bootstrapPayload` is the shell-integration heredoc to push after
+    /// the remote shell emits its first byte; pass `nil` to keep the
+    /// channel pristine (default).
     func run(
         credential: HostCredential,
         bootstrapPayload: String? = nil,
@@ -50,11 +46,12 @@ final class ConnectAttempt {
             // .unknown — fall through and let SSH surface the real failure.
         }
 
-        let session = TerminalSession(client: self.clientFactory())
+        let session = RustTerminalSession()
         await session.connect(
             credential: credential,
             initialPTY: .init(cols: 80, rows: 24),
-            bootstrapPayload: bootstrapPayload)
+            bootstrapPayload: bootstrapPayload
+        )
 
         switch session.state {
         case .open:

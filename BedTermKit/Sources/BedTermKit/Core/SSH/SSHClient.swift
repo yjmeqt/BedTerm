@@ -9,6 +9,8 @@ public struct PTYDimensions: Equatable, Sendable {
     }
 }
 
+// MARK: - SSH error
+
 public enum SSHError: Error, Equatable, Sendable {
     case dnsResolution
     case tcpRefused
@@ -22,6 +24,44 @@ public enum SSHError: Error, Equatable, Sendable {
     case peerReset
     case shellExited(Int)
 }
+
+extension SSHError {
+    /// Returns a user-facing description string for this error via Rust FFI.
+    public func describe() -> String {
+        let (code, detail) = sshErrorCodeAndDetail(self)
+        let buf: UnsafePointer<CChar>?
+        if let detail {
+            buf = detail.withCString { bt_ssh_error_describe(code, $0) }
+        } else {
+            buf = bt_ssh_error_describe(code, nil)
+        }
+        guard let buf else { return "SSH error (\(code))" }
+        return String(cString: buf)
+    }
+}
+
+private func sshErrorCodeAndDetail(_ error: SSHError) -> (Int32, String?) {
+    switch error {
+    case .dnsResolution: return (1, nil)
+    case .tcpRefused: return (2, nil)
+    case .timeout: return (3, nil)
+    case .handshakeFailed(let reason): return (4, reason)
+    case .authenticationFailed: return (5, nil)
+    case .privateKeyParse: return (6, nil)
+    case .privateKeyPassphraseRequired: return (7, nil)
+    case .hostKeyMismatch(let stored, let remote): return (8, "stored: \(stored), remote: \(remote)")
+    case .disconnected(let reason): return (9, reason)
+    case .peerReset: return (10, nil)
+    case .shellExited(let exitCode): return (11, "\(exitCode)")
+    }
+}
+
+/// FFI declaration — maps a `BtSSHResultCode` and optional detail to a
+/// static C string. The returned pointer is valid until the next call
+/// from the same thread; the Swift `String(cString:)` initializer copies
+/// the bytes immediately so this is safe.
+@_silgen_name("bt_ssh_error_describe")
+private func bt_ssh_error_describe(_ code: Int32, _ detail: UnsafePointer<CChar>?) -> UnsafePointer<CChar>?
 
 public struct SSHConnectionRequest: Sendable {
     public let credential: HostCredential

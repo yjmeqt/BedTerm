@@ -5,8 +5,8 @@ import Foundation
 /// across the FFI boundary with the Rust-side `hosts_vm` mirror.
 ///
 /// These were nested inside `HostsViewModel` pre-port; lifted to the
-/// top level so SwiftLint's `nesting` rule (1-level cap) is satisfied
-/// once `CodingKeys` lives inside each struct.
+/// top level so `CodingKeys` can nest inside each struct without hitting
+/// Swift's nesting restrictions.
 
 public struct HostsPendingMismatch: Equatable, Codable {
     public let stored: String

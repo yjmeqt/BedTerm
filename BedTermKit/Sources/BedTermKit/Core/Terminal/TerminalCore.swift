@@ -178,7 +178,7 @@ public final class TerminalCore {
     /// Zero-filled `BtBlockView` for in/out FFI calls. cbindgen surfaces
     /// the struct's C arrays as Swift tuples, so every padding tuple
     /// must be enumerated explicitly; pulled out of `block(at:)` to
-    /// keep that function's body under SwiftLint's length cap.
+    /// keep that function's body manageable.
     private static func emptyBlockView() -> BtBlockView {
         BtBlockView(
             id: 0,

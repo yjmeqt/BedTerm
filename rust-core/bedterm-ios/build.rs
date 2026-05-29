@@ -107,12 +107,15 @@ fn main() {
     println!("cargo:rerun-if-changed=src/ssh_bridge.rs");
     println!("cargo:rerun-if-changed=src/ffi/mod.rs");
     println!("cargo:rerun-if-changed=src/ffi/connect_form.rs");
+    println!("cargo:rerun-if-changed=src/ffi/connect_form_vm.rs");
     println!("cargo:rerun-if-changed=src/ffi/host_keys.rs");
     println!("cargo:rerun-if-changed=src/ffi/hosts.rs");
     println!("cargo:rerun-if-changed=src/ffi/onboarding.rs");
     println!("cargo:rerun-if-changed=src/ffi/settings.rs");
     println!("cargo:rerun-if-changed=src/ffi/vc.rs");
     println!("cargo:rerun-if-changed=src/ffi/view.rs");
+    println!("cargo:rerun-if-changed=src/ssh_client/mock_impl.rs");
+    println!("cargo:rerun-if-changed=src/terminal_session/mod.rs");
     println!("cargo:rerun-if-changed=../bedterm-core/src/ffi.rs");
     println!("cargo:rerun-if-changed=../bedterm-core/src/lib.rs");
     println!("cargo:rerun-if-changed=../bedterm-core/src/blocks_ffi.rs");

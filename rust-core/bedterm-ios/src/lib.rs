@@ -44,6 +44,9 @@ mod metal_selection_layer;
 mod net_util;
 mod prompt_context;
 mod scroll_physics;
+// Pure SSH client trait and types — no iOS dependency, host-testable.
+#[allow(dead_code)]
+mod ssh_client;
 
 // `block_list` is mostly pure (layout/scroll/sticky/selection state).
 // The `BtIosBlockListViewController` UIKit class inside `block_list::mod`
@@ -125,13 +128,11 @@ mod hosts_vm;
 mod connect_form_vm;
 #[cfg(target_os = "ios")]
 mod settings_vc;
-// `ssh_bridge` exposes a vtable + result enum the Swift side fills in
-// at runtime. Several items (the result-code variants, the Swift
-// detail-message extern) are only reached across the FFI boundary, so
-// the dead-code lint can't see their consumers — silence it here
-// rather than touching the module itself.
+// `ssh_bridge` holds the shared `BtSSHResultCode` enum used by
+// `ssh_client_ffi.rs` plus the deprecated vtable bridge types.
+// The `#[allow(dead_code)]` silences warnings on the vtable types
+// that nobody calls anymore.
 #[allow(dead_code)]
-#[cfg(target_os = "ios")]
 mod ssh_bridge;
 #[cfg(target_os = "ios")]
 mod terminal_palette;
@@ -146,6 +147,11 @@ mod vc;
 // match the modules they front.
 #[cfg(target_os = "ios")]
 mod ffi;
+
+// Higher-level terminal session FFI: combines SSH lifecycle into a single
+// handle-based abstraction (connect → open_shell → byte pump → disconnect).
+#[cfg(target_os = "ios")]
+pub mod terminal_session;
 
 /// Opaque callback type fired when the in-VC back button is tapped.
 ///

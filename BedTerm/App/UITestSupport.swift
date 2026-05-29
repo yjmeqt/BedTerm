@@ -41,38 +41,21 @@ enum UITestSupport {
     /// overrides. Called from `AppDelegate.application(_:didFinishLaunching:)`
     /// so they're in place before any view mounts. Production launches
     /// don't pass these args so this is a no-op outside the UI-test target.
+    ///
+    /// `-uitest-stubSSH <script>` sets `RustTerminalSessionMockOverride.scriptName`
+    /// so every new `RustTerminalSession` installs the named Rust mock client
+    /// before its first connect call.
     @MainActor
     static func installOverridesIfNeeded() {
         let args = ProcessInfo.processInfo.arguments
         if let stubIdx = args.firstIndex(of: "-uitest-stubSSH") {
             let next = stubIdx + 1
             let script = (next < args.count && !args[next].hasPrefix("-")) ? args[next] : "hello"
-            SSHClientFactoryOverride.current = { makeStubClient(script: script) }
+            RustTerminalSessionMockOverride.scriptName = script
         }
         if args.contains("-uitest-injectStubHost") {
             HostsStoreInjection.current = [stubHost()]
         }
-    }
-
-    @MainActor
-    private static func makeStubClient(script: String) -> any SSHClient {
-        let client = MockSSHClient()
-        switch script {
-        case "ansiColors":
-            let bytes: [UInt8] = Array(
-                "\u{1B}[31mred\u{1B}[0m \u{1B}[32mgreen\u{1B}[0m \u{1B}[34mblue\u{1B}[0m\r\n".utf8
-            )
-            client.script(output: [Data(bytes)])
-        case "prompt":
-            client.script(output: [Data("bedterm$ ".utf8)])
-        case "echo":
-            client.script(output: [Data("bedterm$ ".utf8)])
-            client.scriptEchoOnWrite()
-        default:
-            // Default fixture (also used for explicit "hello").
-            client.script(output: [Data("Hello, world!\r\n".utf8)])
-        }
-        return client
     }
 
     private static func stubHost() -> SavedHost {

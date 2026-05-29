@@ -7,11 +7,10 @@
 //!   callbacks, grid metrics.
 //!
 //! The SSH bridge exports (`bt_ios_register_ssh_bridge`,
-//! `bt_ios_ssh_bridge_release`, `bt_ssh_release_message`) stay co-located
-//! with their owning module in [`crate::ssh_bridge`] — the
-//! `#[no_mangle]` symbols are picked up by the linker regardless of
-//! module path, so there's no value in funnelling them through a
-//! re-export here.
+//! `bt_ios_ssh_bridge_release`) stay co-located with their owning module
+//! in [`crate::ssh_bridge`] — the `#[no_mangle]` symbols are picked up
+//! by the linker regardless of module path, so there's no value in
+//! funnelling them through a re-export here.
 
 #![cfg(target_os = "ios")]
 
@@ -21,5 +20,6 @@ pub mod host_keys;
 pub mod hosts;
 pub mod onboarding;
 pub mod settings;
+pub mod ssh_client_ffi;
 pub mod vc;
 pub mod view;

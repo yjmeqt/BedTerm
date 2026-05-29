@@ -2,8 +2,7 @@ import BedTermIOS
 import UIKit
 
 // Swap + delete confirmation alerts for `HostsConnectController`.
-// Lifted to a sibling file so the controller stays under the
-// SwiftLint file-length cap.
+// Lifted to a sibling file to keep the controller focused.
 //
 // All alert text — title / message / button labels — comes from Rust
 // (`bt_ios_hosts_vm_*_alert`). Swift owns presentation lifecycle only;

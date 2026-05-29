@@ -74,7 +74,6 @@ exercise the real `CitadelSSHClient` against this server. See
 ## Lint
 
 ```sh
-mint run swiftlint lint --strict
 xcrun swift-format lint -r --strict BedTerm BedTermKit/Sources BedTermKit/Tests
 ```
 

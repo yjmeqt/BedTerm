@@ -8,24 +8,24 @@ import UIKit
 ///
 /// Architecture
 /// ------------
-/// Swift `TerminalSession` remains the SSH driver (Citadel client +
-/// `TerminalCore` byte feed).
+/// Swift `RustTerminalSession` is the SSH driver (backed by the Rust
+/// `BtTerminalSessionHandle` FFI + a `TerminalCore` byte feed).
 /// The Rust VC is hosted by `TerminalScreenViewController` (a UIKit
 /// container pushed directly onto the app's `UINavigationController`) and
 /// rendering is forwarded:
 ///
-///   - Inbound: `TerminalSession.feed` (`AsyncStream<Data>`) → the Rust
-///     metal view's owned `BtTerm` via `bt_ios_view_feed_bytes`. The Rust
-///     glyph renderer paints in `drawRect:`.
+///   - Inbound: `RustTerminalSession.feed` (`AsyncStream<Data>`) → the
+///     Rust metal view's owned `BtTerm` via `bt_ios_view_feed_bytes`. The
+///     Rust glyph renderer paints in `drawRect:`.
 ///   - Outbound (hardware-keyboard / IME commit): the metal view's
 ///     `on_send` callback (installed via `bt_ios_view_set_on_send`) →
-///     `TerminalSession.send`.
+///     `RustTerminalSession.send`.
 ///
 /// Deferrals
 /// ---------
 /// The Rust VC's composer / keybar / dpad chips call `session.send(...)`
 /// on an attached **Rust** `BtIosTerminalSession`; we don't attach one
-/// here (it would require bridging the live Citadel client into Rust and
+/// here (it would require bridging the live SSH client into Rust and
 /// duplicating block-store ownership). Hardware-keyboard text entry
 /// works end-to-end via `on_send`; the on-screen composer / keybar taps
 /// are visual-only until the Rust session is wired into the Swift flow.
@@ -33,7 +33,7 @@ import UIKit
 @MainActor
 @Observable
 final class IosTerminalHost {
-    let session: TerminalSession
+    let session: RustTerminalSession
     /// Retained Rust VC pointer (`+1`); released in `teardown()`.
     @ObservationIgnored fileprivate var vcPtr: UnsafeMutableRawPointer?
     /// Feed-forwarding pump.
@@ -47,7 +47,7 @@ final class IosTerminalHost {
     /// `layoutSubviews`, in grid units.
     @ObservationIgnored fileprivate var latestGridDim: PTYDimensions?
 
-    init(session: TerminalSession) {
+    init(session: RustTerminalSession) {
         self.session = session
     }
 
@@ -97,7 +97,7 @@ final class IosTerminalHost {
             )
             installResizeCallback(metalView: mv)
         }
-        // Start the inbound feed pump — every `TerminalSession.feed`
+        // Start the inbound feed pump — every `RustTerminalSession.feed`
         // chunk is also pushed into the Rust metal view's owned BtTerm
         // so the Rust glyph renderer paints what the SSH bridge sees.
         let vcRef = raw
