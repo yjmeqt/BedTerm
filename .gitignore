@@ -30,7 +30,8 @@ Pods/
 # Worktrees
 .worktrees/
 
-# Superpowers planning artifacts (kept local, not tracked)
+# Spec and planning artifacts (kept local, not tracked)
+docs/specs/
 docs/superpowers/
 .superpowers/
 
