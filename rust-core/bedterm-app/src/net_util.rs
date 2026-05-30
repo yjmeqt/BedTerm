@@ -59,8 +59,7 @@ pub fn is_lan_host(host: &str) -> bool {
 ///
 /// # Safety
 /// `host` must be NULL or a valid nul-terminated UTF-8 string.
-#[no_mangle]
-pub unsafe extern "C" fn bt_ios_net_is_lan_host(host: *const c_char) -> bool {
+pub(crate) unsafe fn bt_ios_net_is_lan_host(host: *const c_char) -> bool {
     if host.is_null() {
         return false;
     }

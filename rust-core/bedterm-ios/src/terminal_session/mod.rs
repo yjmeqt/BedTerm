@@ -374,8 +374,7 @@ fn try_start_read_loop(handle: &BtTerminalSessionHandle) {
 /// `state_cb` (if non-null) must be a valid function pointer valid for the
 /// lifetime of the handle. `state_ctx` must remain valid for the same
 /// duration.
-#[no_mangle]
-pub unsafe extern "C" fn bt_terminal_session_create(
+pub(crate) unsafe fn bt_terminal_session_create(
     // Inline the bare-fn type rather than `Option<BtSessionStateCallback>` so
     // cbindgen emits a nullable C function pointer rather than an Option_ struct.
     state_cb: Option<
@@ -453,9 +452,8 @@ pub unsafe extern "C" fn bt_terminal_session_create(
 /// # Safety
 ///
 /// See the module-level safety documentation.
-#[no_mangle]
 #[allow(clippy::too_many_arguments)]
-pub unsafe extern "C" fn bt_terminal_session_connect(
+pub(crate) unsafe fn bt_terminal_session_connect(
     handle: *mut BtTerminalSessionHandle,
     host: *const c_char,
     port: u16,
@@ -645,8 +643,7 @@ pub unsafe extern "C" fn bt_terminal_session_connect(
 /// `sink` must be a valid function pointer valid for the lifetime of the
 /// handle or until [`bt_terminal_session_close`] is called. `sink_ctx`
 /// must remain valid for the same duration.
-#[no_mangle]
-pub unsafe extern "C" fn bt_terminal_session_set_data_sink(
+pub(crate) unsafe fn bt_terminal_session_set_data_sink(
     handle: *mut BtTerminalSessionHandle,
     sink: BtSSHOutputSink,
     sink_ctx: *mut c_void,
@@ -682,8 +679,7 @@ pub unsafe extern "C" fn bt_terminal_session_set_data_sink(
 /// [`bt_terminal_session_create`]. `metal_view_ptr` must point to a live
 /// `BtIosMetalInputView` that outlives the session. Must be called on the
 /// main thread (the metal view is a UIKit object).
-#[no_mangle]
-pub unsafe extern "C" fn bt_terminal_session_attach_metal_view(
+pub(crate) unsafe fn bt_terminal_session_attach_metal_view(
     handle: *mut BtTerminalSessionHandle,
     metal_view_ptr: *mut c_void,
 ) {
@@ -720,8 +716,7 @@ unsafe extern "C" fn metal_view_sink_trampoline(ctx: *mut c_void, bytes: *const 
 ///
 /// `handle` must be non-NULL and returned by [`bt_terminal_session_create`]
 /// that has not already been passed to `bt_terminal_session_close`.
-#[no_mangle]
-pub unsafe extern "C" fn bt_terminal_session_close(handle: *mut BtTerminalSessionHandle) {
+pub(crate) unsafe fn bt_terminal_session_close(handle: *mut BtTerminalSessionHandle) {
     let _ = std::panic::catch_unwind(|| {
         if handle.is_null() {
             return;

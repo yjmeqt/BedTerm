@@ -28,8 +28,7 @@ pub const PAYLOAD_BYTES: &[u8] = include_bytes!("../assets/bedterm-integration.s
 /// # Safety
 /// `out_len` must be a valid, writable pointer to a `usize`. Pass NULL
 /// to skip the length write (only useful as a liveness check).
-#[no_mangle]
-pub unsafe extern "C" fn bt_ios_shell_integration_payload(out_len: *mut usize) -> *const u8 {
+pub(crate) unsafe fn bt_ios_shell_integration_payload(out_len: *mut usize) -> *const u8 {
     if !out_len.is_null() {
         unsafe { *out_len = PAYLOAD_BYTES.len() };
     }
@@ -60,8 +59,7 @@ pub fn payload_cstr() -> &'static std::ffi::CStr {
 ///
 /// The returned pointer is valid for the lifetime of the process. The
 /// caller must not free or mutate the pointed-to memory.
-#[no_mangle]
-pub unsafe extern "C" fn bt_ios_shell_integration_script() -> *const std::ffi::c_char {
+pub(crate) unsafe fn bt_ios_shell_integration_script() -> *const std::ffi::c_char {
     payload_cstr().as_ptr()
 }
 

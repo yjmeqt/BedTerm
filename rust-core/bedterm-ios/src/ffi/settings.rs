@@ -21,7 +21,6 @@ use crate::settings_vc;
 /// `on_done` is invoked on the main thread. `ctx` is never dereffed by
 /// Rust; the Swift host owns its lifetime until either it clears the
 /// pair or the VC is released.
-#[no_mangle]
 pub unsafe extern "C" fn bt_ios_create_settings_vc(
     on_done: Option<unsafe extern "C" fn(ctx: *mut std::ffi::c_void)>,
     ctx: *mut std::ffi::c_void,
@@ -35,7 +34,6 @@ pub unsafe extern "C" fn bt_ios_create_settings_vc(
 /// # Safety
 /// `vc_ptr` must have been returned by `bt_ios_create_settings_vc` and
 /// not yet released.
-#[no_mangle]
 pub unsafe extern "C" fn bt_ios_release_settings_vc(vc_ptr: *mut std::ffi::c_void) {
     settings_vc::release_settings_vc(vc_ptr);
 }

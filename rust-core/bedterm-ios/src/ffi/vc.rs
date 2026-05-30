@@ -31,21 +31,11 @@ pub unsafe extern "C" fn bt_ios_create_vc(
     vc::create_vc(on_back, ctx)
 }
 
-/// Release a `UIViewController *` previously returned by `bt_ios_create_vc`.
-/// Safe to call with null.
-///
-/// # Safety
-/// `vc_ptr` must be a pointer returned by `bt_ios_create_vc` and not yet
-/// released.
-#[no_mangle]
-pub unsafe extern "C" fn bt_ios_release_vc(vc_ptr: *mut std::ffi::c_void) {
+pub(crate) unsafe fn bt_ios_release_vc(vc_ptr: *mut std::ffi::c_void) {
     vc::release_vc(vc_ptr);
 }
 
-// ── Host-key mismatch review VC ──────────────────────────────────────────
-
-#[no_mangle]
-pub unsafe extern "C" fn bt_ios_create_mismatch_vc(
+pub(crate) unsafe fn bt_ios_create_mismatch_vc(
     on_trust: host_key_mismatch_vc::MismatchCallback,
     on_reject: host_key_mismatch_vc::MismatchCallback,
     ctx: *mut std::ffi::c_void,
@@ -53,7 +43,6 @@ pub unsafe extern "C" fn bt_ios_create_mismatch_vc(
     unsafe { host_key_mismatch_vc::create_mismatch_vc(on_trust, on_reject, ctx) }
 }
 
-#[no_mangle]
-pub unsafe extern "C" fn bt_ios_release_mismatch_vc(vc_ptr: *mut std::ffi::c_void) {
+pub(crate) unsafe fn bt_ios_release_mismatch_vc(vc_ptr: *mut std::ffi::c_void) {
     unsafe { host_key_mismatch_vc::release_mismatch_vc(vc_ptr) };
 }

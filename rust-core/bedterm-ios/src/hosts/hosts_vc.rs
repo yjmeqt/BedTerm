@@ -320,13 +320,17 @@ define_class!(
                 rows.get(idx).map(|r| r.entry.id.clone())
             };
             if let Some(id) = id_string {
-                if let Ok(cstr) = CString::new(id) {
-                    unsafe {
-                        crate::ffi::hosts::bt_ios_hosts_vm_request_connect(
-                            cstr.as_ptr(),
-                            std::ptr::null_mut(),
-                        )
-                    };
+                let mut vm = bedterm_app::hosts_vm::VM.lock().unwrap_or_else(|e| e.into_inner());
+                let action = vm.request_connect(&id);
+                let connect_cb = vm.connect_cb;
+                let connect_ctx = vm.connect_ctx;
+                drop(vm);
+                if let bedterm_app::hosts_vm::Action::Connect(ref cid) = action {
+                    if let Some(cb) = connect_cb {
+                        if let Ok(cstr) = CString::new(cid.as_str()) {
+                            unsafe { cb(connect_ctx.0, cstr.as_ptr()) };
+                        }
+                    }
                 }
             }
         }

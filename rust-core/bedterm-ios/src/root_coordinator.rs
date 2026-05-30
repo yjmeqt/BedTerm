@@ -2,8 +2,6 @@
 //!
 //! Owns the app window, nav stack, toaster overlay, and connect
 //! orchestration. Entry point: `bt_ios_start_root_coordinator(window_ptr)`.
-//! Callback trampolines are free functions (module-level) because cbindgen
-//! doesn't handle `unsafe extern "C" fn` inside `impl` blocks.
 
 #![cfg(target_os = "ios")]
 
@@ -17,7 +15,16 @@ use objc2_ui_kit::{
 use std::cell::RefCell;
 use std::ffi::{c_char, c_void, CString};
 
+use crate::connect_form::connect_form_vc::create_connect_form_vc;
+use crate::host_key_mismatch_vc;
+use crate::hosts::hosts_vc::create_hosts_list_vc;
+use crate::hosts_store;
 use crate::terminal_session::BtTerminalSessionHandle;
+use crate::toaster::create_toaster_view;
+use crate::vc;
+
+use bedterm_app::connect_form_vm;
+use bedterm_app::hosts_vm;
 
 static mut COORDINATOR: Option<RootCoordinator> = None;
 
@@ -47,8 +54,6 @@ impl RootCoordinator {
     }
 
     pub fn start(&self) {
-        // SceneDelegate already gatekeeps: this entry point is only reached
-        // when onboarding is either completed or skipped (-uitest-skipOnboarding).
         self.install_hosts_root();
         self.window.makeKeyAndVisible();
         self.install_toaster_overlay();
@@ -58,16 +63,13 @@ impl RootCoordinator {
 
     fn install_hosts_root(&self) {
         self.install_vm_callbacks();
-        crate::ffi::hosts::bt_ios_hosts_vm_load_from_store();
+        hosts_vm_load_from_store();
 
         let ctx = self as *const Self as *mut c_void;
-        let raw =
-            unsafe { crate::ffi::hosts::bt_ios_create_hosts_list_vc(Some(add_trampoline), ctx) };
+        let raw = unsafe { create_hosts_list_vc(Some(add_trampoline), ctx) };
         let vc = unsafe { Retained::retain(raw as *mut UIViewController).unwrap() };
         *self.hosts_vc.borrow_mut() = Some(vc);
 
-        // Use the hosts VC directly as the nav root so its navigation
-        // items ("hosts.add" bar button, etc.) are visible to XCUI.
         let hosts_vc_ref = self.hosts_vc.borrow();
         let root: &UIViewController = hosts_vc_ref.as_ref().unwrap();
         let nav = UINavigationController::initWithRootViewController(
@@ -86,34 +88,27 @@ impl RootCoordinator {
 
     fn install_vm_callbacks(&self) {
         let ctx = self as *const Self as *mut c_void;
-        unsafe {
-            crate::ffi::hosts::bt_ios_hosts_vm_set_callbacks(
-                Some(connect_trampoline),
-                ctx,
-                Some(disconnect_trampoline),
-                ctx,
-                None,
-                std::ptr::null_mut(),
-            );
-            crate::ffi::connect_form_vm::bt_ios_connect_form_vm_set_callbacks(
-                None,
-                std::ptr::null_mut(),
-                Some(form_save_trampoline),
-                ctx,
-            );
-        }
+        hosts_vm_lock().set_callbacks(
+            Some(connect_trampoline),
+            hosts_vm::CallbackCtx(ctx),
+            Some(disconnect_trampoline),
+            hosts_vm::CallbackCtx(ctx),
+            None,
+            hosts_vm::CallbackCtx(std::ptr::null_mut()),
+        );
+        connect_form_vm_lock().set_callbacks(Some(form_save_trampoline), ctx);
     }
 
     // -- Connect flow ----------------------------------------------------
 
     fn run_connect(&self, id_str: &str) {
-        // Load the saved host directly via Rust deserialization — no FFI
-        // field-by-field extraction needed.
-        let Some(saved) = crate::hosts_store::load_host(id_str) else {
+        let Some(saved) = hosts_store::load_host(id_str) else {
             let id_c = CString::new(id_str).unwrap_or_default();
-            unsafe {
-                crate::ffi::hosts::bt_ios_hosts_vm_connect_completed_error(id_c.as_ptr());
-            }
+            hosts_vm_lock().connect_completed_error(
+                unsafe { std::ffi::CStr::from_ptr(id_c.as_ptr()) }
+                    .to_str()
+                    .unwrap_or(""),
+            );
             return;
         };
 
@@ -122,9 +117,11 @@ impl RootCoordinator {
         };
         if h.is_null() {
             let id_c = CString::new(id_str).unwrap_or_default();
-            unsafe {
-                crate::ffi::hosts::bt_ios_hosts_vm_connect_completed_error(id_c.as_ptr());
-            }
+            hosts_vm_lock().connect_completed_error(
+                unsafe { std::ffi::CStr::from_ptr(id_c.as_ptr()) }
+                    .to_str()
+                    .unwrap_or(""),
+            );
             return;
         }
 
@@ -133,7 +130,6 @@ impl RootCoordinator {
         let uc = CString::new(&*saved.credential.username).unwrap_or_default();
         let p = saved.credential.port;
 
-        // Serialise the auth method to the JSON schema terminal_session expects.
         let cred = credential_for_terminal(&saved.credential.auth);
         let cred_json = serde_json::to_string(&cred).unwrap_or_default();
         let ac = CString::new(cred_json).unwrap_or_default();
@@ -156,22 +152,24 @@ impl RootCoordinator {
 
         *self.session_handle.borrow_mut() = Some(h);
         let id_c = CString::new(id_str).unwrap_or_default();
-        unsafe {
-            crate::ffi::hosts::bt_ios_hosts_vm_connect_completed_session(id_c.as_ptr());
-        }
+        hosts_vm_lock().connect_completed_session(
+            unsafe { std::ffi::CStr::from_ptr(id_c.as_ptr()) }
+                .to_str()
+                .unwrap_or(""),
+        );
         self.push_terminal(h, &hname, p);
     }
 
     fn push_terminal(&self, h: *mut BtTerminalSessionHandle, host: &str, _port: u16) {
         let ctx = self as *const Self as *mut c_void;
-        let raw = unsafe { crate::ffi::vc::bt_ios_create_vc(Some(back_trampoline), ctx) };
+        let raw = unsafe { vc::create_vc(Some(back_trampoline), ctx) };
         if raw.is_null() {
             return;
         }
         let vc: Retained<UIViewController> =
             unsafe { Retained::retain(raw as *mut UIViewController).unwrap() };
         vc.loadViewIfNeeded();
-        let mv = unsafe { crate::ffi::view::bt_ios_vc_metal_view(raw) };
+        let mv = unsafe { bt_ios_vc_metal_view(raw) };
         if !mv.is_null() {
             unsafe {
                 crate::terminal_session::bt_terminal_session_attach_metal_view(h, mv);
@@ -208,7 +206,7 @@ impl RootCoordinator {
     }
 
     fn refresh_hosts_list(&self) {
-        crate::ffi::hosts::bt_ios_hosts_vm_load_from_store();
+        hosts_vm_load_from_store();
         if let Some(ref vc) = *self.hosts_vc.borrow() {
             unsafe {
                 let _: () = msg_send![vc, beginAppearanceTransition: true, animated: false];
@@ -222,15 +220,13 @@ impl RootCoordinator {
     #[allow(dead_code)]
     fn present_settings(&self) {
         let ctx = self as *const Self as *mut c_void;
-        let raw = unsafe {
-            crate::ffi::settings::bt_ios_create_settings_vc(Some(settings_done_trampoline), ctx)
-        };
+        let raw =
+            unsafe { crate::settings_vc::create_settings_vc(Some(settings_done_trampoline), ctx) };
         if raw.is_null() {
             return;
         }
         let vc: Retained<UIViewController> =
             unsafe { Retained::retain(raw as *mut UIViewController).unwrap() };
-        // Wrap in a modal nav.
         let modal = UINavigationController::initWithRootViewController(
             self.mtm.alloc::<UINavigationController>(),
             &vc,
@@ -245,9 +241,9 @@ impl RootCoordinator {
     fn present_host_form(&self) {
         let ctx = self as *const Self as *mut c_void;
         let raw = unsafe {
-            crate::ffi::connect_form::bt_ios_create_connect_form_vc(
-                std::ptr::null(), // add mode
-                false,            // connect_on_save
+            create_connect_form_vc(
+                None,  // add mode
+                false, // connect_on_save
                 Some(form_done_trampoline),
                 Some(form_cancel_trampoline),
                 ctx,
@@ -267,7 +263,7 @@ impl RootCoordinator {
     fn present_mismatch(&self) {
         let ctx = self as *const Self as *mut c_void;
         let raw = unsafe {
-            crate::ffi::vc::bt_ios_create_mismatch_vc(
+            host_key_mismatch_vc::create_mismatch_vc(
                 Some(mismatch_trust_trampoline),
                 Some(mismatch_reject_trampoline),
                 ctx,
@@ -288,11 +284,8 @@ impl RootCoordinator {
     // -- Toaster ---------------------------------------------------------
 
     fn install_toaster_overlay(&self) {
-        let raw = unsafe { crate::ffi::toaster::bt_ios_toaster_view_new() };
-        if raw.is_null() {
-            return;
-        }
-        let v: Retained<UIView> = unsafe { Retained::retain(raw as *mut UIView).unwrap() };
+        let view = create_toaster_view();
+        let v: Retained<UIView> = Retained::into_super(view);
         v.setTranslatesAutoresizingMaskIntoConstraints(false);
         let _: () = unsafe { msg_send![&*self.window, addSubview: &*v] };
         self.window.bringSubviewToFront(&v);
@@ -316,7 +309,7 @@ impl RootCoordinator {
 }
 
 // ---------------------------------------------------------------------------
-// FFI entry point
+// FFI entry points (called from Swift — keep #[no_mangle])
 // ---------------------------------------------------------------------------
 
 /// Called from Swift's AppDelegate to boot the Rust coordinator.
@@ -330,9 +323,52 @@ pub unsafe extern "C" fn bt_ios_start_root_coordinator(window: *mut c_void) {
     RootCoordinator::coordinator().start();
 }
 
-/// Called from Swift when the onboarding flow completes. Transitions to
-/// the hosts root (same as `installHostsRoot` in the Swift version).
-#[no_mangle]
+// ---------------------------------------------------------------------------
+// Internal helpers
+// ---------------------------------------------------------------------------
+
+/// Resolve the metal view from a VC — thin helper used by push_terminal.
+unsafe fn bt_ios_vc_metal_view(vc_ptr: *mut std::ffi::c_void) -> *mut std::ffi::c_void {
+    if vc_ptr.is_null() {
+        return std::ptr::null_mut();
+    }
+    let vc_obj = vc_ptr as *mut objc2::runtime::AnyObject;
+    let mv: *const crate::metal_view::BtIosMetalInputView =
+        unsafe { objc2::msg_send![&*vc_obj, btIosMetalView] };
+    mv as *mut std::ffi::c_void
+}
+
+fn hosts_vm_lock() -> std::sync::MutexGuard<'static, hosts_vm::HostsVM> {
+    match hosts_vm::VM.lock() {
+        Ok(g) => g,
+        Err(poisoned) => poisoned.into_inner(),
+    }
+}
+
+fn hosts_vm_load_from_store() {
+    let json = hosts_store::list_snapshot_json();
+    hosts_vm_lock().set_entries_from_snapshot(&json);
+}
+
+fn connect_form_vm_lock() -> std::sync::MutexGuard<'static, connect_form_vm::ConnectFormVM> {
+    match connect_form_vm::VM.lock() {
+        Ok(g) => g,
+        Err(poisoned) => poisoned.into_inner(),
+    }
+}
+
+fn credential_for_terminal(
+    auth: &bedterm_app::hosts::model::AuthMethod,
+) -> bedterm_app::credential::HostCredential {
+    match auth {
+        bedterm_app::hosts::model::AuthMethod::Password(pwd) => {
+            bedterm_app::credential::HostCredential::Password {
+                password: pwd.clone(),
+            }
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Callback trampolines
 // ---------------------------------------------------------------------------
@@ -377,9 +413,12 @@ unsafe extern "C" fn form_save_trampoline(ctx: *mut c_void, json: *const c_char)
             serde_json::to_string(&data).ok(),
         ) {
             let ic = CString::new(id).unwrap_or_default();
-            unsafe {
-                crate::ffi::hosts::bt_ios_hosts_save_blob(ic.as_ptr(), blob.as_ptr(), blob.len());
-            }
+            hosts_store::save(
+                unsafe { std::ffi::CStr::from_ptr(ic.as_ptr()) }
+                    .to_str()
+                    .unwrap_or(""),
+                blob.as_bytes(),
+            );
             this.refresh_hosts_list();
         }
     }
@@ -449,7 +488,6 @@ unsafe extern "C" fn mismatch_trust_trampoline(ctx: *mut c_void) {
             let _: () = msg_send![&**nav, dismissViewControllerAnimated: true, completion: std::ptr::null::<c_void>()];
         }
     }
-    // TODO: retry connect after trust — needs source ID tracking.
 }
 
 #[allow(dead_code)]
@@ -471,18 +509,4 @@ unsafe extern "C" fn noop_completion(
     _: *const c_void,
     _: i32,
 ) {
-}
-
-/// Map the persistence-layer auth method to the transport-layer credential
-/// shape that `bt_terminal_session_connect` expects.
-fn credential_for_terminal(
-    auth: &bedterm_app::hosts::model::AuthMethod,
-) -> bedterm_app::credential::HostCredential {
-    match auth {
-        bedterm_app::hosts::model::AuthMethod::Password(pwd) => {
-            bedterm_app::credential::HostCredential::Password {
-                password: pwd.clone(),
-            }
-        }
-    }
 }

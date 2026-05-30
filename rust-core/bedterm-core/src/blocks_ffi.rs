@@ -75,7 +75,6 @@ pub const BT_CLI_AGENT_VIBE: u8 = 13;
 
 /// # Safety
 /// `h` must be a valid `BtTerm *` returned by `bt_term_new`.
-#[no_mangle]
 pub unsafe extern "C" fn bt_term_block_count(h: *const BtTerm) -> usize {
     if h.is_null() {
         return 0;
@@ -87,7 +86,6 @@ pub unsafe extern "C" fn bt_term_block_count(h: *const BtTerm) -> usize {
 /// `h` must be a valid `BtTerm *`; `out` must point to a writable
 /// `BtBlockView`. String pointers in `*out` are invalidated by the next
 /// call as described in the module-level docs.
-#[no_mangle]
 pub unsafe extern "C" fn bt_term_block_at(
     h: *mut BtTerm,
     idx: usize,
@@ -223,7 +221,6 @@ pub unsafe extern "C" fn bt_term_block_at(
 ///
 /// The returned pointer lives in the binary's `.rodata` and must NOT be
 /// freed by the caller.
-#[no_mangle]
 pub extern "C" fn bt_cli_agent_display_name(tag: u8) -> *const c_char {
     match tag {
         BT_CLI_AGENT_NONE => std::ptr::null(),
@@ -251,7 +248,6 @@ pub extern "C" fn bt_cli_agent_display_name(tag: u8) -> *const c_char {
 ///
 /// The returned pointer lives in the binary's `.rodata` and must NOT be
 /// freed by the caller.
-#[no_mangle]
 pub extern "C" fn bt_cli_agent_icon_name(tag: u8) -> *const c_char {
     match tag {
         BT_CLI_AGENT_CLAUDE => CliAgent::Claude

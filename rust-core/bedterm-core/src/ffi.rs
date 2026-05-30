@@ -39,7 +39,6 @@ impl BtTerm {
     }
 }
 
-#[no_mangle]
 pub extern "C" fn bt_term_new(cols: u16, rows: u16) -> *mut BtTerm {
     let cols = cols.max(1);
     let rows = rows.max(1);
@@ -52,7 +51,6 @@ pub extern "C" fn bt_term_new(cols: u16, rows: u16) -> *mut BtTerm {
 
 /// # Safety
 /// `h` must be a pointer returned by `bt_term_new` that has not yet been freed.
-#[no_mangle]
 pub unsafe extern "C" fn bt_term_free(h: *mut BtTerm) {
     if h.is_null() {
         return;
@@ -62,7 +60,6 @@ pub unsafe extern "C" fn bt_term_free(h: *mut BtTerm) {
 
 /// # Safety
 /// `h` must be a valid, non-freed handle. `bytes` must point to at least `len` bytes.
-#[no_mangle]
 pub unsafe extern "C" fn bt_term_feed(h: *mut BtTerm, bytes: *const u8, len: usize) {
     if h.is_null() || bytes.is_null() || len == 0 {
         return;
@@ -75,7 +72,6 @@ pub unsafe extern "C" fn bt_term_feed(h: *mut BtTerm, bytes: *const u8, len: usi
 
 /// # Safety
 /// `h` must be a valid, non-freed handle.
-#[no_mangle]
 pub unsafe extern "C" fn bt_term_resize(h: *mut BtTerm, cols: u16, rows: u16) {
     if h.is_null() {
         return;
@@ -87,7 +83,6 @@ pub unsafe extern "C" fn bt_term_resize(h: *mut BtTerm, cols: u16, rows: u16) {
 
 /// # Safety
 /// `h` must be a valid, non-freed handle.
-#[no_mangle]
 pub unsafe extern "C" fn bt_term_scroll_by(h: *mut BtTerm, delta: i32) {
     if h.is_null() {
         return;
@@ -99,7 +94,6 @@ pub unsafe extern "C" fn bt_term_scroll_by(h: *mut BtTerm, delta: i32) {
 
 /// # Safety
 /// `h` must be a valid, non-freed handle.
-#[no_mangle]
 pub unsafe extern "C" fn bt_term_scroll_to_bottom(h: *mut BtTerm) {
     if h.is_null() {
         return;
@@ -111,7 +105,6 @@ pub unsafe extern "C" fn bt_term_scroll_to_bottom(h: *mut BtTerm) {
 
 /// # Safety
 /// `h` must be a valid, non-freed handle.
-#[no_mangle]
 pub unsafe extern "C" fn bt_term_scroll_offset(h: *const BtTerm) -> u32 {
     if h.is_null() {
         return 0;
@@ -121,7 +114,6 @@ pub unsafe extern "C" fn bt_term_scroll_offset(h: *const BtTerm) -> u32 {
 
 /// # Safety
 /// `h` must be a valid, non-freed handle.
-#[no_mangle]
 pub unsafe extern "C" fn bt_term_scrollback_lines(h: *const BtTerm) -> u32 {
     if h.is_null() {
         return 0;
@@ -134,7 +126,6 @@ pub unsafe extern "C" fn bt_term_scrollback_lines(h: *const BtTerm) -> u32 {
 ///
 /// # Safety
 /// `h` must be a valid, non-freed handle.
-#[no_mangle]
 pub unsafe extern "C" fn bt_term_mode(h: *const BtTerm) -> u32 {
     if h.is_null() {
         return 0;
@@ -148,7 +139,6 @@ pub unsafe extern "C" fn bt_term_mode(h: *const BtTerm) -> u32 {
 ///
 /// # Safety
 /// `h` must be a valid, non-freed handle.
-#[no_mangle]
 pub unsafe extern "C" fn bt_term_current_line(h: *const BtTerm) -> i32 {
     if h.is_null() {
         return 0;
@@ -163,7 +153,6 @@ pub unsafe extern "C" fn bt_term_current_line(h: *const BtTerm) -> i32 {
 ///
 /// # Safety
 /// `h` must be a valid, non-freed handle.
-#[no_mangle]
 pub unsafe extern "C" fn bt_term_screen_bottom_line(h: *const BtTerm) -> i32 {
     if h.is_null() {
         return 0;

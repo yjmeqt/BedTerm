@@ -16,10 +16,9 @@
 //!
 //! ## FFI
 //!
-//! `#[no_mangle]` exports (`bt_ios_set_locale`, `bt_ios_shell_integration_payload`,
-//! `bt_ios_net_is_lan_host`) live here. They are picked up by `bedterm-ios`'s
-//! cbindgen run (configured via `cbindgen.toml`'s `extra_bindings`) and appear
-//! in the single `bedterm_ios.h` header.
+//! The only `#[no_mangle]` export here is `bt_ios_set_locale` (called from
+//! Swift). All other FFI exports were internal Rust-to-Rust calls that have
+//! been converted to normal `pub(crate)` functions.
 
 // Allow dead_code on macOS host where iOS-gated consumers in bedterm-ios
 // aren't compiled.
