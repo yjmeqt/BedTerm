@@ -12,8 +12,8 @@
 //!   pushed onto `self` as the user advances).
 //!
 //! The terminal step (LocalPermission) asks Swift to run the
-//! `LocalNetworkPrewarmer` Bonjour probe via the
-//! `bt_swift_request_local_network` cross-FFI; on its completion callback
+//! `LocalNetworkPrewarmer` Bonjour probe via a callback injected at
+//! flow-VC creation time; on its completion callback
 //! the coordinator marks onboarding completed
 //! (`bt_swift_onboarding_set_completed(true)`) and fires the host's
 //! `on_completed` callback.
@@ -25,7 +25,7 @@ use crate::onboarding::local_permission_vc::create_local_permission_vc;
 use crate::onboarding::location_vc::create_location_vc;
 use crate::onboarding::mac_tutorial_vc::create_mac_tutorial_vc;
 use crate::onboarding::state::{HostKind, Location, OnboardingState, Step};
-use crate::onboarding::BtIosOnboardingFlowCompletedCallback;
+use crate::onboarding::{BtIosOnboardingFlowCompletedCallback, BtIosRequestLocalNetworkCallback};
 use objc2::rc::{Allocated, Retained};
 use objc2::runtime::AnyObject;
 use objc2::{define_class, msg_send, DefinedClass, MainThreadOnly};
@@ -33,20 +33,6 @@ use objc2_foundation::MainThreadMarker;
 use objc2_ui_kit::{UINavigationController, UIViewController};
 use std::cell::{Cell, RefCell};
 use std::ffi::c_void;
-
-// Swift-side bridge — `bt_swift_request_local_network(ctx, completion)`
-// triggers the Bonjour-based Local Network permission probe and, when
-// iOS resolves it, invokes `completion(ctx)` on the main queue.
-//
-// The persistent "onboarding completed" flag lives in Rust now (see
-// `crate::settings_store`); reach for it directly instead of through
-// a Swift bridge.
-extern "C" {
-    fn bt_swift_request_local_network(
-        ctx: *mut c_void,
-        completion: unsafe extern "C" fn(*mut c_void),
-    );
-}
 
 /// Heap-allocated coordinator pinned to the flow VC. Holds the entire
 /// onboarding state machine + the host's completion callback. Lifetime is
@@ -61,6 +47,10 @@ pub(crate) struct Coordinator {
     /// Weak handle to the flow VC; used to push step VCs and to look up
     /// the coordinator pointer from the per-step C trampolines.
     pub(crate) nav: RefCell<Option<*const BtIosOnboardingFlowVC>>,
+    /// Injected by the Swift host at creation time. When `Some`, Rust
+    /// calls this instead of a global `@_cdecl` symbol to trigger the
+    /// Bonjour-based Local Network permission probe.
+    pub(crate) request_local_network: Cell<Option<BtIosRequestLocalNetworkCallback>>,
 }
 
 impl Coordinator {
@@ -70,6 +60,7 @@ impl Coordinator {
             on_completed: Cell::new(None),
             host_ctx: Cell::new(std::ptr::null_mut()),
             nav: RefCell::new(None),
+            request_local_network: Cell::new(None),
         }
     }
 }
@@ -139,10 +130,12 @@ impl BtIosOnboardingFlowVC {
         &self,
         on_completed: Option<BtIosOnboardingFlowCompletedCallback>,
         ctx: *mut c_void,
+        request_local_network: Option<BtIosRequestLocalNetworkCallback>,
     ) {
         let c = self.coordinator();
         c.on_completed.set(on_completed);
         c.host_ctx.set(ctx);
+        c.request_local_network.set(request_local_network);
         *c.nav.borrow_mut() = Some(self as *const _);
     }
 
@@ -263,10 +256,17 @@ unsafe extern "C" fn local_permission_continue_cb(ctx: *mut c_void) {
     let flow = unsafe { &*(ctx as *const BtIosOnboardingFlowVC) };
     let loc = flow.coordinator().state.borrow().location;
     if matches!(loc, Some(Location::SameWifi)) {
-        // Kick the Bonjour probe; finish on its completion. `ctx` is the
-        // flow VC pointer; same value flows into the completion thunk.
-        unsafe {
-            bt_swift_request_local_network(ctx, local_permission_probe_done_cb);
+        // Kick the Bonjour probe; finish on its completion. The
+        // `request_local_network` function pointer is injected by the
+        // Swift host at flow-VC creation time — no global `@_cdecl`.
+        if let Some(req) = flow.coordinator().request_local_network.get() {
+            unsafe {
+                req(ctx, local_permission_probe_done_cb);
+            }
+        } else {
+            // Defensive: no permission probe injected — finish anyway
+            // so onboarding doesn't stall.
+            flow.finish();
         }
     } else {
         flow.finish();
@@ -287,11 +287,12 @@ unsafe extern "C" fn local_permission_probe_done_cb(ctx: *mut c_void) {
 pub(crate) unsafe fn create_flow_vc(
     on_completed: Option<BtIosOnboardingFlowCompletedCallback>,
     ctx: *mut c_void,
+    request_local_network: Option<BtIosRequestLocalNetworkCallback>,
 ) -> *mut c_void {
     let mtm = unsafe { MainThreadMarker::new_unchecked() };
     let nav: Retained<BtIosOnboardingFlowVC> =
         unsafe { msg_send![mtm.alloc::<BtIosOnboardingFlowVC>(), init] };
-    nav.set_callback(on_completed, ctx);
+    nav.set_callback(on_completed, ctx, request_local_network);
 
     let nav_ptr = (&*nav as *const BtIosOnboardingFlowVC) as *mut c_void;
     let host_kind_raw = unsafe { create_host_kind_vc(Some(host_kind_choice_cb), nav_ptr) };

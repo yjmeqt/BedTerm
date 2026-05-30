@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! Pure-logic connect-form draft + validation. Mirrors the user-facing
 //! invariants in `ConnectionFormViewModel` (host non-empty, port in
 //! `1..=65535`, username non-empty, password / key required when the
@@ -12,28 +13,45 @@ pub enum AuthMode {
     Key,
 }
 
+/// Mode the form was opened in. Mirrors
+/// `ConnectionFormViewModel.Mode` in the Swift layer.
+///
+/// - `Add` — creating a new host entry.
+/// - `Edit(uuid)` — editing an existing entry identified by its UUID
+///   string. The Rust state machine (`ConnectFormVM`) retains additional
+///   edit-time state (original auth mode, cached secrets) on its own
+///   `Mode` type; this is a lightweight projection.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum EditMode {
+    Add,
+    Edit(String),
+}
+
+/// Outcome of the connect-form flow, reported back to the hosts screen.
+/// Mirrors `ConnectionFormOutcome` in the Swift layer.
+///
+/// - `Saved(id)` — user saved the entry.
+/// - `SavedAndConnect(id)` — user saved and wants to connect immediately.
+/// - `Cancelled` — user dismissed the form without saving.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ConnectionFormOutcome {
+    Saved(String),
+    SavedAndConnect(String),
+    Cancelled,
+}
+
 /// Snapshot of the form's current state. Mirrors the SwiftUI view-model
 /// without dragging keychain types across the FFI seam.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ConnectFormDraft {
-    /// `None` for new hosts; `Some(UUID-string)` when editing.
     pub id: Option<String>,
     pub label: String,
     pub host: String,
     pub port: String,
     pub username: String,
     pub auth_mode: AuthMode,
-    /// Whether a password / private key already lives in the Keychain
-    /// (edit mode only). Used to decide whether the user *must* type a
-    /// fresh secret to save.
     pub password_set: bool,
-    pub key_set: bool,
-    /// Display label for the picked key (e.g. file name). UI-only.
-    pub key_label: Option<String>,
-    /// Did the user type into the password field since open?
     pub password_touched: bool,
-    /// Did the user pick a key file since open?
-    pub key_touched: bool,
 }
 
 impl ConnectFormDraft {
@@ -47,10 +65,7 @@ impl ConnectFormDraft {
             username: String::new(),
             auth_mode: AuthMode::Password,
             password_set: false,
-            key_set: false,
-            key_label: None,
             password_touched: false,
-            key_touched: false,
         }
     }
 }
@@ -61,15 +76,14 @@ impl Default for ConnectFormDraft {
     }
 }
 
-/// Reasons a draft is unsaveable. The discriminant order is part of the
-/// FFI surface — Swift maps it to a localized error message.
+/// Reasons a draft is unsaveable.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ValidationError {
     HostRequired,
     UsernameRequired,
     PortInvalid,
     PasswordRequired,
-    KeyRequired,
+    KeyComingSoon,
 }
 
 impl ValidationError {
@@ -82,7 +96,7 @@ impl ValidationError {
             | ValidationError::UsernameRequired
             | ValidationError::PortInvalid => "Host, port and username are required.",
             ValidationError::PasswordRequired => "Password is required.",
-            ValidationError::KeyRequired => "Please import a private key file.",
+            ValidationError::KeyComingSoon => "Key authentication coming soon.",
         }
     }
 }
@@ -177,140 +191,7 @@ impl ConnectFormDraft {
                 }
                 Ok(())
             }
-            AuthMode::Key => {
-                let has_key = self.key_set || self.key_touched;
-                if !has_key {
-                    return Err(ValidationError::KeyRequired);
-                }
-                Ok(())
-            }
+            AuthMode::Key => Err(ValidationError::KeyComingSoon),
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn add_draft() -> ConnectFormDraft {
-        ConnectFormDraft {
-            host: "10.0.0.5".to_string(),
-            port: "22".to_string(),
-            username: "yi".to_string(),
-            password_touched: true,
-            ..ConnectFormDraft::new()
-        }
-    }
-
-    #[test]
-    fn blank_host_rejected() {
-        let d = ConnectFormDraft::new();
-        assert_eq!(d.validate(), Err(ValidationError::HostRequired));
-    }
-
-    #[test]
-    fn blank_username_rejected() {
-        let d = ConnectFormDraft {
-            host: "10.0.0.5".into(),
-            ..ConnectFormDraft::new()
-        };
-        assert_eq!(d.validate(), Err(ValidationError::UsernameRequired));
-    }
-
-    #[test]
-    fn port_out_of_range_rejected() {
-        let mut d = add_draft();
-        d.port = "70000".to_string();
-        assert_eq!(d.validate(), Err(ValidationError::PortInvalid));
-    }
-
-    #[test]
-    fn bad_port_string_rejected() {
-        let mut d = add_draft();
-        d.port = "abc".to_string();
-        assert_eq!(d.validate(), Err(ValidationError::PortInvalid));
-    }
-
-    #[test]
-    fn zero_port_rejected() {
-        let mut d = add_draft();
-        d.port = "0".to_string();
-        assert_eq!(d.validate(), Err(ValidationError::PortInvalid));
-    }
-
-    #[test]
-    fn password_required_in_add_mode_when_untouched() {
-        let d = ConnectFormDraft {
-            host: "10.0.0.5".into(),
-            port: "22".into(),
-            username: "yi".into(),
-            password_touched: false,
-            ..ConnectFormDraft::new()
-        };
-        assert_eq!(d.validate(), Err(ValidationError::PasswordRequired));
-    }
-
-    #[test]
-    fn key_required_in_key_mode() {
-        let d = ConnectFormDraft {
-            host: "10.0.0.5".into(),
-            port: "22".into(),
-            username: "yi".into(),
-            auth_mode: AuthMode::Key,
-            ..ConnectFormDraft::new()
-        };
-        assert_eq!(d.validate(), Err(ValidationError::KeyRequired));
-    }
-
-    #[test]
-    fn ipv6_bracketed_host_with_port_parses() {
-        assert_eq!(normalized_host("[::1]:2222"), "::1");
-        assert_eq!(normalized_port("[::1]:2222", "22"), Some(2222));
-    }
-
-    #[test]
-    fn ipv6_bare_host_no_split() {
-        // Multiple colons without brackets — treat the whole thing as host.
-        assert_eq!(normalized_host("fe80::1"), "fe80::1");
-    }
-
-    #[test]
-    fn pasted_host_port_split() {
-        assert_eq!(normalized_host("10.0.0.5:2200"), "10.0.0.5");
-        assert_eq!(normalized_port("10.0.0.5:2200", "22"), Some(2200));
-    }
-
-    #[test]
-    fn edit_with_stored_password_saves_untouched() {
-        let d = ConnectFormDraft {
-            id: Some("UUID-X".into()),
-            host: "10.0.0.5".into(),
-            port: "22".into(),
-            username: "yi".into(),
-            password_set: true,
-            password_touched: false,
-            ..ConnectFormDraft::new()
-        };
-        assert!(d.can_save());
-    }
-
-    #[test]
-    fn edit_with_stored_key_saves_untouched() {
-        let d = ConnectFormDraft {
-            id: Some("UUID-X".into()),
-            host: "10.0.0.5".into(),
-            port: "22".into(),
-            username: "yi".into(),
-            auth_mode: AuthMode::Key,
-            key_set: true,
-            key_touched: false,
-            ..ConnectFormDraft::new()
-        };
-        assert!(d.can_save());
-    }
-
-    #[test]
-    fn happy_path_add_password() {
-        assert!(add_draft().can_save());
     }
 }

@@ -34,51 +34,37 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use crate::credential;
 use crate::ssh_bridge::{BtSSHCompletion, BtSSHOutputSink, BtSSHResultCode};
-use crate::ssh_client::mock_impl::MockSshClient;
 use crate::ssh_client::russh_impl::RusshSshClient;
-use crate::ssh_client::{HostCredential, PtyDimensions, SshClient, SshConnectionRequest, SshError};
+use crate::ssh_client::{PtyDimensions, SshClient, SshConnectionRequest, SshError};
 
 // ---------------------------------------------------------------------------
-// AnyClient — dispatch enum over real and mock SSH clients
+// ---------------------------------------------------------------------------
+// AnyClient — newtype wrapper over the production SSH client
 // ---------------------------------------------------------------------------
 
-/// Holds either a production `RusshSshClient` or an in-process `MockSshClient`.
-///
-/// Exists so `TerminalSessionInner.client` can be typed without boxing, while
-/// the read/write/resize/close operations dispatch to the correct impl.
-enum AnyClient {
-    Real(RusshSshClient),
-    Mock(MockSshClient),
-}
+/// Wraps a production `RusshSshClient` so `TerminalSessionInner.client` can be
+/// typed as `Option<AnyClient>` without boxing.
+struct AnyClient(RusshSshClient);
 
 impl AnyClient {
     async fn read(&mut self) -> Result<Vec<u8>, SshError> {
-        match self {
-            AnyClient::Real(client) => client.read().await,
-            AnyClient::Mock(client) => client.read().await,
-        }
+        self.0.read().await
     }
 
+    #[allow(dead_code)]
     async fn write(&mut self, data: &[u8]) -> Result<(), SshError> {
-        match self {
-            AnyClient::Real(client) => client.write(data).await,
-            AnyClient::Mock(client) => client.write(data).await,
-        }
+        self.0.write(data).await
     }
 
+    #[allow(dead_code)]
     async fn resize(&mut self, dims: PtyDimensions) -> Result<(), SshError> {
-        match self {
-            AnyClient::Real(client) => client.resize(dims).await,
-            AnyClient::Mock(client) => client.resize(dims).await,
-        }
+        self.0.resize(dims).await
     }
 
     async fn close(self) -> Result<(), SshError> {
-        match self {
-            AnyClient::Real(client) => client.close().await,
-            AnyClient::Mock(client) => client.close().await,
-        }
+        self.0.close().await
     }
 }
 
@@ -173,13 +159,6 @@ pub struct BtTerminalSessionHandle {
     inner: Arc<TerminalSessionInner>,
     /// Background OS thread running the read loop (if spawned).
     read_thread: Mutex<Option<std::thread::JoinHandle<()>>>,
-    /// Mock script name installed by [`bt_terminal_session_install_mock`].
-    ///
-    /// When non-`None`, [`bt_terminal_session_connect`] bypasses real SSH
-    /// and constructs a [`MockSshClient`] instead. The value is consumed
-    /// (set back to `None`) on the first connect so a reconnect attempt
-    /// uses the real SSH path.
-    mock_script_override: Mutex<Option<String>>,
 }
 
 // ---------------------------------------------------------------------------
@@ -228,7 +207,10 @@ unsafe fn call_completion(
     completion(ctx, code, std::ptr::null(), extra);
 }
 
-/// Parse a JSON credential string into a [`HostCredential`].
+/// Parse a JSON credential string into a [`credential::HostCredential`].
+///
+/// Uses the canonical [`credential::HostCredential`] serde definition for
+/// the JSON schema instead of a local ad-hoc enum.
 ///
 /// Expected JSON shapes (selected by `"type"` discriminator):
 ///
@@ -237,34 +219,9 @@ unsafe fn call_completion(
 /// {"type": "private_key", "private_key": "…", "passphrase": "…"}
 /// {"type": "agent"}
 /// ```
-fn parse_credential(json: &str) -> Result<HostCredential, String> {
-    #[derive(serde::Deserialize)]
-    #[serde(tag = "type")]
-    enum JsonCredential {
-        #[serde(rename = "password")]
-        Password { password: String },
-        #[serde(rename = "private_key")]
-        PrivateKey {
-            private_key: String,
-            passphrase: Option<String>,
-        },
-        #[serde(rename = "agent")]
-        Agent,
-    }
-
-    let jc: JsonCredential =
-        serde_json::from_str(json).map_err(|e| format!("invalid credential JSON: {e}"))?;
-    Ok(match jc {
-        JsonCredential::Password { password } => HostCredential::Password { password },
-        JsonCredential::PrivateKey {
-            private_key,
-            passphrase,
-        } => HostCredential::PrivateKey {
-            private_key: private_key.into_bytes(),
-            passphrase,
-        },
-        JsonCredential::Agent => HostCredential::Agent,
-    })
+fn parse_credential(json: &str) -> Result<credential::HostCredential, String> {
+    serde_json::from_str::<credential::HostCredential>(json)
+        .map_err(|e| format!("invalid credential JSON: {e}"))
 }
 
 // ---------------------------------------------------------------------------
@@ -457,7 +414,6 @@ pub unsafe extern "C" fn bt_terminal_session_create(
                         stop_flag: AtomicBool::new(false),
                     }),
                     read_thread: Mutex::new(None),
-                    mock_script_override: Mutex::new(None),
                 };
                 Box::into_raw(Box::new(handle))
             }
@@ -559,15 +515,10 @@ pub unsafe extern "C" fn bt_terminal_session_connect(
                 return;
             }
         };
-        // bootstrap_payload is nullable — copy to owned String now so it
-        // can cross the async boundary.
-        let bootstrap_bytes: Option<Vec<u8>> = cstr(bootstrap_payload)
-            .filter(|s| !s.is_empty())
-            .map(|s| s.as_bytes().to_vec());
 
         // ── Parse credential ───────────────────────────────────────────────
 
-        let credential = match parse_credential(credential_json_str) {
+        let canonical_cred = match parse_credential(credential_json_str) {
             Ok(c) => c,
             Err(msg) => {
                 call_completion(completion, completion_ctx, Err(SshError::Other(msg)));
@@ -575,17 +526,44 @@ pub unsafe extern "C" fn bt_terminal_session_connect(
             }
         };
 
-        // ── Build connection request ───────────────────────────────────────
+        // ── Convert to transport-level credential for the SSH trait ─────────
+
+        let transport_cred = match &canonical_cred {
+            credential::HostCredential::Password { password } => {
+                crate::ssh_client::HostCredential::Password {
+                    password: password.clone(),
+                }
+            }
+            credential::HostCredential::Agent => crate::ssh_client::HostCredential::Agent,
+        };
+
+        // ── Build canonical connection request ────────────────────────────────
+
+        let canonical_request = credential::SshConnectionRequest {
+            credential: credential::ConnectionFields {
+                host: host_str.to_string(),
+                port,
+                username: username_str.to_string(),
+                credential: canonical_cred,
+            },
+            initial_pty: PtyDimensions::new(cols, rows),
+            bootstrap_payload: cstr(bootstrap_payload)
+                .filter(|s| !s.is_empty())
+                .map(String::from),
+        };
+
+        // ── Build transport request from canonical fields ─────────────────────
 
         let request = SshConnectionRequest {
-            host: host_str.to_string(),
-            port,
-            username: username_str.to_string(),
-            credential,
+            host: canonical_request.credential.host.clone(),
+            port: canonical_request.credential.port,
+            username: canonical_request.credential.username.clone(),
+            credential: transport_cred,
             proxy_command: None,
         };
 
         let dims = PtyDimensions::new(cols, rows);
+        let bs = canonical_request.bootstrap_payload.clone();
 
         // ── Transition → Connecting ────────────────────────────────────────
 
@@ -596,46 +574,26 @@ pub unsafe extern "C" fn bt_terminal_session_connect(
             0,
         );
 
-        // ── Check for mock override ────────────────────────────────────────
-        //
-        // Consume the mock-script override (if set) so that a subsequent
-        // reconnect attempt falls through to the real SSH path.
-        let mock_script = { lock(&handle.mock_script_override).take() };
-
         // ── Connect + open_shell (blocking) ───────────────────────────────
 
-        let connect_result: Result<AnyClient, SshError> = if let Some(script_name) = mock_script {
-            // Mock path: skip real SSH, construct the mock directly.
-            handle.inner.runtime.block_on(async {
-                let mut mock_client = MockSshClient::from_script(&script_name);
-                mock_client.open_shell(dims).await?;
-                if let Some(ref payload) = bootstrap_bytes {
-                    // write() in non-echo mode is a no-op, so this is safe.
-                    mock_client.write(payload).await?;
+        let connect_result: Result<AnyClient, SshError> = handle.inner.runtime.block_on(async {
+            let connect_fut = async {
+                let mut client = RusshSshClient::connect(request).await?;
+                client.open_shell(dims).await?;
+                if let Some(ref payload) = bs {
+                    client.write(payload.as_bytes()).await?;
                 }
-                Ok::<AnyClient, SshError>(AnyClient::Mock(mock_client))
-            })
-        } else {
-            // Real SSH path.
-            handle.inner.runtime.block_on(async {
-                let connect_fut = async {
-                    let mut client = RusshSshClient::connect(request).await?;
-                    client.open_shell(dims).await?;
-                    if let Some(payload) = bootstrap_bytes {
-                        client.write(&payload).await?;
-                    }
-                    Ok::<AnyClient, SshError>(AnyClient::Real(client))
-                };
+                Ok::<AnyClient, SshError>(AnyClient(client))
+            };
 
-                if timeout_ms > 0 {
-                    tokio::time::timeout(Duration::from_millis(timeout_ms), connect_fut)
-                        .await
-                        .unwrap_or(Err(SshError::Timeout))
-                } else {
-                    connect_fut.await
-                }
-            })
-        };
+            if timeout_ms > 0 {
+                tokio::time::timeout(Duration::from_millis(timeout_ms), connect_fut)
+                    .await
+                    .unwrap_or(Err(SshError::Timeout))
+            } else {
+                connect_fut.await
+            }
+        });
 
         // ── Handle result ─────────────────────────────────────────────────
 
@@ -709,184 +667,45 @@ pub unsafe extern "C" fn bt_terminal_session_set_data_sink(
     });
 }
 
-/// Write bytes to the SSH channel (stdin of the remote shell).
+/// Replaces the per-session data sink with a direct feed into the given
+/// `BtIosMetalInputView`. After this call, inbound PTY bytes are pushed
+/// straight into the metal view's `BtTerm` renderer — no Swift pump task,
+/// no `AsyncStream`, no C-callback trampoline through Swift.
 ///
-/// The completion callback is invoked on the *calling* thread after the
-/// write completes (or fails).
-///
-/// # Parameters
-///
-/// - `handle`: opaque handle, shell must be open.
-/// - `bytes`: pointer to `len` bytes of data.
-/// - `len`: number of bytes to write.
-/// - `completion`: callback invoked with the result.
-/// - `completion_ctx`: opaque context for `completion`.
+/// This is the Phase 3 bridge: the Swift `RustTerminalSession` pump task
+/// (`startPumpTask`) and the `IosTerminalHost` feed-forwarding task can
+/// both be retired once every session calls this function.
 ///
 /// # Safety
 ///
-/// `bytes` must be valid for `len` bytes. Passing NULL with len > 0 is
-/// undefined behaviour.
+/// `handle` must be a valid non-null pointer returned by
+/// [`bt_terminal_session_create`]. `metal_view_ptr` must point to a live
+/// `BtIosMetalInputView` that outlives the session. Must be called on the
+/// main thread (the metal view is a UIKit object).
 #[no_mangle]
-pub unsafe extern "C" fn bt_terminal_session_send(
+pub unsafe extern "C" fn bt_terminal_session_attach_metal_view(
     handle: *mut BtTerminalSessionHandle,
-    bytes: *const u8,
-    len: usize,
-    completion: BtSSHCompletion,
-    completion_ctx: *mut c_void,
+    metal_view_ptr: *mut c_void,
 ) {
-    let result = std::panic::catch_unwind(|| {
-        let handle = if handle.is_null() {
-            call_completion(
-                completion,
-                completion_ctx,
-                Err(SshError::Other("null handle".into())),
-            );
-            return;
-        } else {
-            &*handle
-        };
-
-        let data: &[u8] = if len == 0 || bytes.is_null() {
-            &[]
-        } else {
-            unsafe { std::slice::from_raw_parts(bytes, len) }
-        };
-
-        let mut guard = lock(&handle.inner.client);
-        let client = match guard.as_mut() {
-            Some(c) => c,
-            None => {
-                call_completion(
-                    completion,
-                    completion_ctx,
-                    Err(SshError::Other("shell not open".into())),
-                );
-                return;
-            }
-        };
-
-        let result = handle.inner.runtime.block_on(client.write(data));
-
-        match result {
-            Ok(()) => call_completion(completion, completion_ctx, Ok(())),
-            Err(e) => call_completion(completion, completion_ctx, Err(e)),
-        }
-    });
-
-    if result.is_err() {
-        call_completion(
-            completion,
-            completion_ctx,
-            Err(SshError::Other("Rust panic during send".into())),
-        );
+    // Null metal_view_ptr is a no-op — callers can use it to detach.
+    if metal_view_ptr.is_null() {
+        return;
+    }
+    // Safety: bt_ios_view_feed_bytes does its own null checks and is
+    // main-thread-only, same as the caller contract above.
+    let sink: BtSSHOutputSink = metal_view_sink_trampoline;
+    // The ctx IS the metal view pointer — no indirection.
+    let ctx = metal_view_ptr;
+    unsafe {
+        bt_terminal_session_set_data_sink(handle, sink, ctx);
     }
 }
 
-/// Resize the remote PTY.
-///
-/// The completion callback is invoked on the *calling* thread after the
-/// resize completes (or fails).
-///
-/// # Parameters
-///
-/// - `handle`: opaque handle, shell must be open.
-/// - `cols`: new terminal width in character cells.
-/// - `rows`: new terminal height in character cells.
-/// - `completion`: callback invoked with the result.
-/// - `completion_ctx`: opaque context for `completion`.
-///
-/// # Safety
-///
-/// See the module-level safety documentation.
-#[no_mangle]
-pub unsafe extern "C" fn bt_terminal_session_resize(
-    handle: *mut BtTerminalSessionHandle,
-    cols: u16,
-    rows: u16,
-    completion: BtSSHCompletion,
-    completion_ctx: *mut c_void,
-) {
-    let result = std::panic::catch_unwind(|| {
-        let handle = if handle.is_null() {
-            call_completion(
-                completion,
-                completion_ctx,
-                Err(SshError::Other("null handle".into())),
-            );
-            return;
-        } else {
-            &*handle
-        };
-
-        let dims = PtyDimensions::new(cols, rows);
-        let mut guard = lock(&handle.inner.client);
-        let client = match guard.as_mut() {
-            Some(c) => c,
-            None => {
-                call_completion(
-                    completion,
-                    completion_ctx,
-                    Err(SshError::Other("shell not open".into())),
-                );
-                return;
-            }
-        };
-
-        let result = handle.inner.runtime.block_on(client.resize(dims));
-
-        match result {
-            Ok(()) => call_completion(completion, completion_ctx, Ok(())),
-            Err(e) => call_completion(completion, completion_ctx, Err(e)),
-        }
-    });
-
-    if result.is_err() {
-        call_completion(
-            completion,
-            completion_ctx,
-            Err(SshError::Other("Rust panic during resize".into())),
-        );
-    }
-}
-
-/// Initiate a non-blocking disconnect.
-///
-/// Sets the stop flag (so the read loop exits on its next wake), takes
-/// the SSH client, closes it, and fires the state callback with
-/// `Closed + BtSSHResultOk` to signal a caller-initiated disconnect.
-///
-/// This call does NOT join the read thread — use
-/// [`bt_terminal_session_close`] to fully tear down the handle.
-///
-/// # Safety
-///
-/// See the module-level safety documentation.
-#[no_mangle]
-pub unsafe extern "C" fn bt_terminal_session_disconnect(handle: *mut BtTerminalSessionHandle) {
-    let _ = std::panic::catch_unwind(|| {
-        if handle.is_null() {
-            return;
-        }
-        let handle = &*handle;
-
-        // 1. Signal the read loop to stop.
-        handle.inner.stop_flag.store(true, Ordering::SeqCst);
-
-        // 2. Take the client and close it immediately (don't wait for the
-        //    read loop thread to observe the stop flag).
-        let client = { lock(&handle.inner.client).take() };
-        if let Some(client) = client {
-            let _ = handle.inner.runtime.block_on(client.close());
-        }
-
-        // 3. Transition → Closed with Ok (caller-initiated).
-        transition_state(
-            &handle.inner,
-            BtSessionState::Closed,
-            BtSSHResultCode::BtSSHResultOk,
-            0,
-        );
-    });
+/// Trampoline from `BtSSHOutputSink` signature to `bt_ios_view_feed_bytes`.
+/// The `ctx` parameter is the `BtIosMetalInputView *` raw pointer.
+unsafe extern "C" fn metal_view_sink_trampoline(ctx: *mut c_void, bytes: *const u8, len: usize) {
+    // Forward to the shared FFI function which does its own null checks.
+    crate::ffi::view::bt_ios_view_feed_bytes(ctx, bytes, len);
 }
 
 /// Fully tear down the session handle and free all resources.
@@ -928,105 +747,5 @@ pub unsafe extern "C" fn bt_terminal_session_close(handle: *mut BtTerminalSessio
 
         // 4. `handle` (the Box) drops here, which drops the
         //    `Arc<TerminalSessionInner>`, and the tokio runtime drops last.
-    });
-}
-
-/// Return the current session lifecycle state.
-///
-/// # Safety
-///
-/// `handle` must be non-null and valid (not yet passed to
-/// [`bt_terminal_session_close`]).
-#[no_mangle]
-pub unsafe extern "C" fn bt_terminal_session_state(
-    handle: *const BtTerminalSessionHandle,
-) -> BtSessionState {
-    let result = std::panic::catch_unwind(|| {
-        if handle.is_null() {
-            return BtSessionState::Closed;
-        }
-        let handle = &*handle;
-        lock(&handle.inner.session_info).state
-    });
-    result.unwrap_or(BtSessionState::Closed)
-}
-
-/// Return the error code from the last session close (or `BtSSHResultOk`
-/// if the session closed normally / has not yet closed).
-///
-/// # Safety
-///
-/// `handle` must be non-null and valid.
-#[no_mangle]
-pub unsafe extern "C" fn bt_terminal_session_last_error_code(
-    handle: *const BtTerminalSessionHandle,
-) -> BtSSHResultCode {
-    let result = std::panic::catch_unwind(|| {
-        if handle.is_null() {
-            return BtSSHResultCode::BtSSHResultOther;
-        }
-        let handle = &*handle;
-        lock(&handle.inner.session_info).error_code
-    });
-    result.unwrap_or(BtSSHResultCode::BtSSHResultOther)
-}
-
-/// Return the shell exit code from the last session close (0 if not a
-/// shell-exited close, or the session has not yet closed).
-///
-/// # Safety
-///
-/// `handle` must be non-null and valid.
-#[no_mangle]
-pub unsafe extern "C" fn bt_terminal_session_last_exit_code(
-    handle: *const BtTerminalSessionHandle,
-) -> i32 {
-    let result = std::panic::catch_unwind(|| {
-        if handle.is_null() {
-            return -1;
-        }
-        let handle = &*handle;
-        lock(&handle.inner.session_info).exit_code
-    });
-    result.unwrap_or(-1)
-}
-
-/// Install a named mock SSH client for UI testing.
-///
-/// Must be called **before** [`bt_terminal_session_connect`]. When a
-/// non-empty script name is installed, the next connect bypasses real SSH
-/// and uses a [`MockSshClient`] instead. The override is consumed on the
-/// first connect so a subsequent reconnect uses the real SSH path.
-///
-/// Scripts (matching `UITestSupport.swift`):
-///
-/// | Name         | Behaviour                                             |
-/// |--------------|-------------------------------------------------------|
-/// | `"hello"`    | Emits `"Hello, world!\r\n"` then blocks.              |
-/// | `"ansiColors"` | Emits ANSI red/green/blue sequence then blocks.     |
-/// | `"prompt"`   | Emits `"bedterm$ "` then blocks.                      |
-/// | `"echo"`     | Emits `"bedterm$ "`, echoes writes back as magenta.   |
-///
-/// NULL or empty `script` is a no-op.
-///
-/// # Safety
-///
-/// `handle` must be a live handle not yet connected.
-/// `script` is a UTF-8 nul-terminated C string borrowed for the call.
-#[no_mangle]
-pub unsafe extern "C" fn bt_terminal_session_install_mock(
-    handle: *mut BtTerminalSessionHandle,
-    script: *const c_char,
-) {
-    let _ = std::panic::catch_unwind(|| {
-        if handle.is_null() {
-            return;
-        }
-        let handle = &*handle;
-        if let Some(script_str) = cstr(script) {
-            if !script_str.is_empty() {
-                *lock(&handle.mock_script_override) = Some(script_str.to_string());
-            }
-        }
     });
 }

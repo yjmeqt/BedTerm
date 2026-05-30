@@ -112,6 +112,7 @@ impl BtIosMetalInputView {
 
     /// Cell pixel size as reported by the renderer's glyph atlas. Returns
     /// `(0, 0)` if the renderer didn't initialise (headless tests).
+    #[allow(dead_code)]
     pub fn cell_pixel_size(&self) -> (u32, u32) {
         self.ivars().cell_px.get()
     }

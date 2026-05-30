@@ -2,25 +2,18 @@
 //!
 //! Owns a `UIScrollView` + vertical `UIStackView` of three form
 //! sections: Identity (label), Connection (host / port / username), and
-//! Authentication (segmented control + password OR key picker + optional
-//! passphrase). All state flows through the Rust `connect_form_vm::VM`
-//! singleton — the Swift round-trip is eliminated. Cancel fires the
-//! cancel callback; Save validates via the VM, resolves secrets, and
-//! persists through a single thin FFI call.
+//! Authentication (segmented control + password, or "Coming Soon" for key).
+//! Key auth is not yet implemented; selecting it shows a placeholder.
 
 #![cfg(target_os = "ios")]
 
 use crate::a11y;
-use crate::connect_form::bridge::{
-    bt_swift_connect_form_free_key_bytes, bt_swift_connect_form_pick_key,
-    bt_swift_connect_form_take_pending_key_bytes, bt_swift_hosts_store_save_json,
-};
 use crate::connect_form::{BtIosConnectFormCancelCallback, BtIosConnectFormDoneCallback};
 use crate::connect_form_vm;
 use crate::design_system::{
     colors,
     components::{
-        form_card, make_secure_text_field, make_segmented_control, make_text_field, primary_button,
+        form_card, make_secure_text_field, make_segmented_control, make_text_field,
         TextFieldConfig, TextFieldHandle,
     },
     spacing, typography,
@@ -32,12 +25,12 @@ use objc2::runtime::AnyObject;
 use objc2::{define_class, msg_send, sel, DefinedClass, MainThreadMarker, MainThreadOnly};
 use objc2_foundation::NSString;
 use objc2_ui_kit::{
-    NSDirectionalEdgeInsets, UIBarButtonItem, UIBarButtonItemStyle, UIButton,
+    NSDirectionalEdgeInsets, UIBarButtonItem, UIBarButtonItemStyle, UILabel,
     UILayoutConstraintAxis, UINavigationItem, UIScrollView, UISegmentedControl, UIStackView,
     UIStackViewAlignment, UIStackViewDistribution, UIView, UIViewController,
 };
 use std::cell::{Cell, RefCell};
-use std::ffi::{c_char, c_void, CStr, CString};
+use std::ffi::{c_void, CString};
 
 /// Internal layout pin — the auth section's secret rows toggle visibility
 /// when the segmented control flips. We keep retained refs to both
@@ -46,7 +39,6 @@ use std::ffi::{c_char, c_void, CStr, CString};
 pub struct Ivars {
     on_done: Cell<Option<BtIosConnectFormDoneCallback>>,
     on_cancel: Cell<Option<BtIosConnectFormCancelCallback>>,
-    /// SAFETY: never dereffed on Rust side.
     ctx: Cell<*mut c_void>,
 
     scroll: RefCell<Option<Retained<UIScrollView>>>,
@@ -57,36 +49,16 @@ pub struct Ivars {
     port_field: RefCell<Option<TextFieldHandle>>,
     username_field: RefCell<Option<TextFieldHandle>>,
     password_field: RefCell<Option<TextFieldHandle>>,
-    passphrase_field: RefCell<Option<TextFieldHandle>>,
 
     segmented: RefCell<Option<Retained<UISegmentedControl>>>,
     password_row: RefCell<Option<Retained<UIView>>>,
-    key_row: RefCell<Option<Retained<UIView>>>,
-    passphrase_row: RefCell<Option<Retained<UIView>>>,
-    key_button: RefCell<Option<Retained<UIButton>>>,
+    key_coming_soon_row: RefCell<Option<Retained<UIView>>>,
     error_label: RefCell<Option<Retained<UIView>>>,
 
-    /// Editing UUID (if any) — pinned at construction time.
     editing_id: RefCell<Option<String>>,
-    /// When true, the Save button reads "Save & Connect" to mirror the
-    /// SwiftUI `ConnectionFormScreen.primaryActionTitle` branch — the
-    /// "Add Host" entry point in the hosts list uses this so the save
-    /// also dials in to the host on success.
     connect_on_save: Cell<bool>,
-    /// Set once the user touches the password field. Reserved for a
-    /// future "the field has been edited even if empty" signal that the
-    /// SwiftUI form tracks via `onChange`; today the in-buffer text
-    /// drives the touched flag in `current_draft`.
-    #[allow(dead_code)]
-    password_touched: Cell<bool>,
-    /// Set once the user picks a key file.
-    #[allow(dead_code)]
-    key_touched: Cell<bool>,
-    /// Backing flags pulled from the prefill snapshot (kept for future UX).
-    #[allow(dead_code)]
+    _password_touched: Cell<bool>,
     password_set: Cell<bool>,
-    #[allow(dead_code)]
-    key_set: Cell<bool>,
 }
 
 // SAFETY: only accessed on the main thread (MainThreadOnly).
@@ -255,9 +227,6 @@ define_class!(
             *self.ivars().username_field.borrow_mut() = Some(username_handle);
 
             // ---- Authentication card -------------------------------------
-            // Mirrors SwiftUI `authenticationCard`: segmented control on
-            // top, then either the password row or the key-picker +
-            // passphrase rows depending on the segment selection.
             let seg_password = t("Password");
             let seg_key = t("Key");
             let segmented = make_segmented_control(
@@ -279,26 +248,19 @@ define_class!(
                 "connection.password",
             );
 
-            // Key row: a UIButton showing "Import private key" / file name.
-            let key_button = primary_button(
-                mtm,
-                "doc.badge.plus",
-                &t("Import private key"),
-                self.as_ref(),
-                sel!(pickKeyTapped),
-            );
-            a11y::set_a11y_id(&*key_button as &AnyObject, "connection.pickKey");
-            let key_row: Retained<UIView> =
-                unsafe { Retained::cast_unchecked::<UIView>(key_button.clone()) };
-            key_row.setHidden(true);
-
-            let (passphrase_row, passphrase_handle) =
-                make_secure_text_field(mtm, &t("Passphrase"), &t("Optional"));
-            a11y::set_a11y_id(
-                &*passphrase_handle.field as &AnyObject,
-                "connection.passphrase",
-            );
-            passphrase_row.setHidden(true);
+            // Key "Coming Soon" placeholder label.
+            let key_coming_soon = UILabel::new(mtm);
+            key_coming_soon.setText(Some(&NSString::from_str(&t("Key authentication coming soon."))));
+            key_coming_soon.setNumberOfLines(0);
+            key_coming_soon.setTextAlignment(objc2_ui_kit::NSTextAlignment(1)); // NSTextAlignmentCenter
+            unsafe {
+                key_coming_soon.setFont(Some(&typography::caption()));
+                key_coming_soon.setTextColor(Some(&colors::shadcn_muted_foreground()));
+            }
+            a11y::set_a11y_id(&*key_coming_soon as &AnyObject, "connection.keyComingSoon");
+            let key_coming_soon_row: Retained<UIView> =
+                unsafe { Retained::cast_unchecked::<UIView>(key_coming_soon) };
+            key_coming_soon_row.setHidden(true);
 
             let auth_section = form_card(
                 mtm,
@@ -307,25 +269,20 @@ define_class!(
                 &[
                     seg_view,
                     password_row.clone(),
-                    key_row.clone(),
-                    passphrase_row.clone(),
+                    key_coming_soon_row.clone(),
                 ],
             );
             content.addArrangedSubview(&auth_section);
 
-            // Error label — hidden by default, shown by saveTapped on
-            // validation failure.
+            // Error label.
             let error_view = make_error_label(mtm, "");
             error_view.setHidden(true);
             content.addArrangedSubview(&error_view);
 
             *self.ivars().segmented.borrow_mut() = Some(segmented);
             *self.ivars().password_row.borrow_mut() = Some(password_row);
-            *self.ivars().key_row.borrow_mut() = Some(key_row);
-            *self.ivars().passphrase_row.borrow_mut() = Some(passphrase_row);
-            *self.ivars().key_button.borrow_mut() = Some(key_button);
+            *self.ivars().key_coming_soon_row.borrow_mut() = Some(key_coming_soon_row);
             *self.ivars().password_field.borrow_mut() = Some(password_handle);
-            *self.ivars().passphrase_field.borrow_mut() = Some(passphrase_handle);
             *self.ivars().error_label.borrow_mut() = Some(error_view);
 
             // Mount.
@@ -410,34 +367,6 @@ define_class!(
             let idx: i64 = unsafe { msg_send![sender, selectedSegmentIndex] };
             self.update_auth_rows_visibility(idx);
         }
-
-        #[unsafe(method(pickKeyTapped))]
-        fn pick_key_tapped(&self) {
-            extern "C" fn on_picked(ctx: *mut c_void, label: *const c_char) {
-                if ctx.is_null() {
-                    return;
-                }
-                let vc_ptr = ctx as *mut BtIosConnectFormViewController;
-                let vc = unsafe { &*vc_ptr };
-                let label_str = if label.is_null() {
-                    None
-                } else {
-                    Some(unsafe { CStr::from_ptr(label) }.to_string_lossy().into_owned())
-                };
-                if let Some(label_text) = label_str {
-                    vc.ivars().key_touched.set(true);
-                    if let Some(btn) = vc.ivars().key_button.borrow().as_ref() {
-                        let cstr = format!("{} · {label_text}", t("Replace key"));
-                        let ns = NSString::from_str(&cstr);
-                        unsafe {
-                            let _: () = msg_send![&**btn, setTitle: &*ns, forState: 0_i64];
-                        }
-                    }
-                }
-            }
-            let ctx = self as *const Self as *mut c_void;
-            unsafe { bt_swift_connect_form_pick_key(on_picked, ctx) };
-        }
     }
 );
 
@@ -512,30 +441,8 @@ impl BtIosConnectFormViewController {
             .and_then(|v| v.as_str())
             .map(|s| s.to_string());
 
-        let (existing_private_key, existing_passphrase) = if let Some(auth) = auth_obj {
-            if let Some(pk_val) = auth.get("privateKey") {
-                let key_bytes: Option<Vec<u8>> = match pk_val {
-                    serde_json::Value::String(s) => connect_form_vm::base64_decode(s.as_str()),
-                    serde_json::Value::Object(inner) => inner
-                        .get("_0")
-                        .and_then(|v: &serde_json::Value| v.as_str())
-                        .and_then(connect_form_vm::base64_decode),
-                    _ => None,
-                };
-                let pass: Option<String> = auth
-                    .get("passphrase")
-                    .and_then(|v: &serde_json::Value| v.as_str())
-                    .map(|s: &str| s.to_string());
-                (key_bytes, pass)
-            } else {
-                (None, None)
-            }
-        } else {
-            (None, None)
-        };
-
         // Push all extracted fields to the VM.
-        let (vm_label, vm_host, vm_port_text, vm_username, vm_is_using_key, pw_set, k_set) = {
+        let (vm_label, vm_host, vm_port_text, vm_username, vm_is_using_key, pw_set) = {
             let mut vm = connect_form_vm::VM.lock().unwrap();
             vm.prefill_edit(
                 id,
@@ -545,8 +452,6 @@ impl BtIosConnectFormViewController {
                 username,
                 auth_is_key,
                 existing_password,
-                existing_private_key,
-                existing_passphrase,
             );
             (
                 vm.label.clone(),
@@ -555,7 +460,6 @@ impl BtIosConnectFormViewController {
                 vm.username.clone(),
                 vm.is_using_key,
                 vm.has_password(),
-                vm.has_private_key(),
             )
         };
 
@@ -580,20 +484,16 @@ impl BtIosConnectFormViewController {
         self.update_auth_rows_visibility(seg_idx);
 
         self.ivars().password_set.set(pw_set);
-        self.ivars().key_set.set(k_set);
     }
 
     fn update_auth_rows_visibility(&self, mode: i64) {
         let password_hidden = mode != 0;
-        let key_hidden = mode != 1;
+        let key_coming_soon_hidden = mode != 1;
         if let Some(v) = self.ivars().password_row.borrow().as_ref() {
             v.setHidden(password_hidden);
         }
-        if let Some(v) = self.ivars().key_row.borrow().as_ref() {
-            v.setHidden(key_hidden);
-        }
-        if let Some(v) = self.ivars().passphrase_row.borrow().as_ref() {
-            v.setHidden(key_hidden);
+        if let Some(v) = self.ivars().key_coming_soon_row.borrow().as_ref() {
+            v.setHidden(key_coming_soon_hidden);
         }
         if let Some(view) = self.view() {
             unsafe {
@@ -639,13 +539,6 @@ impl BtIosConnectFormViewController {
             .as_ref()
             .map(|h| h.text())
             .unwrap_or_default();
-        let passphrase = self
-            .ivars()
-            .passphrase_field
-            .borrow()
-            .as_ref()
-            .map(|h| h.text())
-            .unwrap_or_default();
         let mode_idx: i64 = self
             .ivars()
             .segmented
@@ -665,18 +558,6 @@ impl BtIosConnectFormViewController {
         if !password.is_empty() {
             vm.set_password(password);
         }
-        if !passphrase.is_empty() {
-            vm.set_passphrase(passphrase);
-        }
-
-        // Pull pending key bytes from the file-picker (set by Swift).
-        let mut key_len: usize = 0;
-        let key_ptr = unsafe { bt_swift_connect_form_take_pending_key_bytes(&mut key_len) };
-        if !key_ptr.is_null() && key_len > 0 {
-            let key_bytes = unsafe { std::slice::from_raw_parts(key_ptr, key_len) }.to_vec();
-            vm.set_private_key_bytes(key_bytes);
-            unsafe { bt_swift_connect_form_free_key_bytes(key_ptr) };
-        }
 
         // Validate through the VM.
         if let Some(err) = vm.validate() {
@@ -688,18 +569,11 @@ impl BtIosConnectFormViewController {
         match vm.try_save() {
             Ok(outcome) => {
                 let id = outcome.id.clone();
-                let json = match serde_json::to_string(&outcome) {
-                    Ok(s) => s,
-                    Err(_) => {
-                        self.show_error(&t("Internal error encoding form data."));
-                        return;
-                    }
-                };
-                drop(vm); // Release VM lock before FFI calls.
+                let host = crate::hosts::model::SavedHost::from(outcome);
+                drop(vm); // Release VM lock before persistence.
 
-                // Persist through the thin Swift callback.
-                let json_c = CString::new(json).unwrap_or_default();
-                unsafe { bt_swift_hosts_store_save_json(json_c.as_ptr()) };
+                // Persist directly through the Rust Keychain store.
+                crate::hosts_store::save_host(&host);
 
                 // Dispatch on_done.
                 let id_c = CString::new(id).unwrap_or_default();

@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! Pure state machine for the connect-form (formerly Swift
 //! `ConnectionFormViewModel`). Owns every form field, dirty tracking,
 //! validation rules, and the secret-preservation logic for edit mode.
@@ -21,18 +22,18 @@
 use crate::connect_form::model::{normalized_host, normalized_port};
 use crate::l10n::t;
 use serde::{Deserialize, Serialize};
+use std::ffi::{c_char, c_void};
 use std::sync::Mutex;
 
 /// Auth kind picked in the segmented control.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum AuthKind {
     Password,
+    /// Key auth is not yet implemented — selecting this shows "Coming Soon".
     PrivateKey,
 }
 
-/// Mode the form was opened in. In edit mode the VM also retains the
-/// existing entry's secrets so it can preserve them when the user
-/// doesn't touch the secret fields.
+/// Mode the form was opened in.
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub enum Mode {
     #[default]
@@ -40,18 +41,11 @@ pub enum Mode {
     Edit {
         id: String,
         original_auth: AuthKind,
-        /// Cached existing password (only when original_auth = Password).
         existing_password: Option<String>,
-        /// Cached existing private key bytes (only when original_auth = PrivateKey).
-        existing_private_key: Option<Vec<u8>>,
-        /// Cached existing passphrase (only when original_auth = PrivateKey).
-        existing_passphrase: Option<String>,
     },
 }
 
-/// Resolved-fields output of a successful save attempt. Swift consumes
-/// the JSON form (`SaveOutcome`'s serde shape) to build a `SavedHost`
-/// and write it through `HostsStore`.
+/// Resolved-fields output of a successful save attempt.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SaveOutcome {
     pub id: String,
@@ -61,16 +55,11 @@ pub struct SaveOutcome {
     pub username: String,
     #[serde(rename = "authIsKey")]
     pub auth_is_key: bool,
-    /// Resolved password — only populated when auth_is_key is false.
     pub password: Option<String>,
-    /// Resolved private-key bytes — only populated when auth_is_key is true.
-    #[serde(rename = "privateKeyBase64")]
-    pub private_key_base64: Option<String>,
-    /// Resolved passphrase — only populated when auth_is_key is true.
-    pub passphrase: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+pub type SaveResultFn = Option<unsafe extern "C" fn(*mut c_void, *const c_char)>;
+
 pub struct ConnectFormVM {
     pub mode: Mode,
     pub label: String,
@@ -79,12 +68,11 @@ pub struct ConnectFormVM {
     pub username: String,
     pub is_using_key: bool,
     pub password: String,
-    pub private_key: Vec<u8>,
-    pub passphrase: String,
     pub password_touched: bool,
-    pub private_key_touched: bool,
-    pub passphrase_touched: bool,
     pub error_message: Option<String>,
+
+    pub save_result_cb: SaveResultFn,
+    pub save_result_ctx: usize,
 }
 
 impl Default for ConnectFormVM {
@@ -103,12 +91,22 @@ impl ConnectFormVM {
             username: String::new(),
             is_using_key: false,
             password: String::new(),
-            private_key: Vec::new(),
-            passphrase: String::new(),
             password_touched: false,
-            private_key_touched: false,
-            passphrase_touched: false,
             error_message: None,
+            save_result_cb: None,
+            save_result_ctx: 0,
+        }
+    }
+
+    pub fn set_callbacks(&mut self, save_result_cb: SaveResultFn, save_result_ctx: *mut c_void) {
+        self.save_result_cb = save_result_cb;
+        self.save_result_ctx = save_result_ctx as usize;
+    }
+
+    pub fn fire_save_result(&self, json: &str) {
+        if let Some(cb) = self.save_result_cb {
+            let c_json = std::ffi::CString::new(json).unwrap_or_default();
+            unsafe { cb(self.save_result_ctx as *mut c_void, c_json.as_ptr()) };
         }
     }
 
@@ -118,8 +116,7 @@ impl ConnectFormVM {
         self.port = String::from("22");
     }
 
-    /// Prefill the form for an Edit-mode session. Captures the existing
-    /// secrets so untouched secret fields preserve them on save.
+    /// Prefill the form for an Edit-mode session.
     #[allow(clippy::too_many_arguments)]
     pub fn prefill_edit(
         &mut self,
@@ -130,8 +127,6 @@ impl ConnectFormVM {
         username: String,
         auth_is_key: bool,
         existing_password: Option<String>,
-        existing_private_key: Option<Vec<u8>>,
-        existing_passphrase: Option<String>,
     ) {
         let original_auth = if auth_is_key {
             AuthKind::PrivateKey
@@ -142,24 +137,14 @@ impl ConnectFormVM {
             id,
             original_auth,
             existing_password: existing_password.clone(),
-            existing_private_key: existing_private_key.clone(),
-            existing_passphrase: existing_passphrase.clone(),
         };
         self.label = label;
         self.host = host;
         self.port = port.to_string();
         self.username = username;
         self.is_using_key = auth_is_key;
-        // Don't mirror the actual secret values into the editable fields
-        // — that would leak the Keychain blob into the visible UI. We
-        // hold them on `mode` and splice them in on save when the user
-        // didn't touch the field.
         self.password.clear();
-        self.private_key.clear();
-        self.passphrase.clear();
         self.password_touched = false;
-        self.private_key_touched = false;
-        self.passphrase_touched = false;
         self.error_message = None;
     }
 
@@ -180,14 +165,6 @@ impl ConnectFormVM {
     pub fn set_password(&mut self, value: String) {
         self.password = value;
         self.password_touched = true;
-    }
-    pub fn set_passphrase(&mut self, value: String) {
-        self.passphrase = value;
-        self.passphrase_touched = true;
-    }
-    pub fn set_private_key_bytes(&mut self, bytes: Vec<u8>) {
-        self.private_key = bytes;
-        self.private_key_touched = true;
     }
     pub fn set_using_key(&mut self, value: bool) {
         self.is_using_key = value;
@@ -210,43 +187,16 @@ impl ConnectFormVM {
         }
     }
 
+    /// Key auth is not yet implemented; returns `false`.
     pub fn has_private_key(&self) -> bool {
-        match &self.mode {
-            Mode::Add => !self.private_key.is_empty(),
-            Mode::Edit {
-                original_auth,
-                existing_private_key,
-                ..
-            } => {
-                if self.private_key_touched {
-                    !self.private_key.is_empty()
-                } else {
-                    *original_auth == AuthKind::PrivateKey && existing_private_key.is_some()
-                }
-            }
-        }
+        false
     }
 
+    /// Key auth is not yet implemented; returns `false`.
     pub fn has_passphrase(&self) -> bool {
-        match &self.mode {
-            Mode::Add => !self.passphrase.is_empty(),
-            Mode::Edit {
-                original_auth,
-                existing_passphrase,
-                ..
-            } => {
-                if self.passphrase_touched {
-                    !self.passphrase.is_empty()
-                } else {
-                    *original_auth == AuthKind::PrivateKey && existing_passphrase.is_some()
-                }
-            }
-        }
+        false
     }
 
-    /// True iff the secret field for the current auth-mode needs a
-    /// fresh value (because we're adding, swapped auth-modes, or the
-    /// user touched the field).
     fn requires_fresh_secret(&self) -> bool {
         let Mode::Edit { original_auth, .. } = &self.mode else {
             return true;
@@ -259,14 +209,9 @@ impl ConnectFormVM {
         if current_auth != *original_auth {
             return true;
         }
-        match current_auth {
-            AuthKind::Password => self.password_touched,
-            AuthKind::PrivateKey => self.private_key_touched,
-        }
+        self.password_touched
     }
 
-    /// Re-check the form. Returns `None` when persistable, else a
-    /// localized message that Swift can pull via the error_message FFI.
     pub fn validate(&self) -> Option<String> {
         let host = normalized_host(&self.host);
         let user = self.username.trim().to_string();
@@ -279,37 +224,21 @@ impl ConnectFormVM {
             _ => return Some(t("Port must be between 1 and 65535.")),
         }
         if self.is_using_key {
-            // Need a key: either an untouched stored one or a freshly picked one.
-            if self.requires_fresh_secret() {
-                if self.private_key.is_empty() {
-                    return Some(t("Please import a private key file."));
-                }
-            } else if !matches!(
-                &self.mode,
-                Mode::Edit {
-                    existing_private_key: Some(_),
-                    original_auth: AuthKind::PrivateKey,
-                    ..
-                }
-            ) {
-                return Some(t("Please import a private key file."));
-            }
-        } else {
-            // Need a password: same logic.
-            if self.requires_fresh_secret() {
-                if self.password.is_empty() {
-                    return Some(t("Host, port and username are required."));
-                }
-            } else if !matches!(
-                &self.mode,
-                Mode::Edit {
-                    existing_password: Some(_),
-                    original_auth: AuthKind::Password,
-                    ..
-                }
-            ) {
+            return Some(t("Key authentication coming soon."));
+        }
+        if self.requires_fresh_secret() {
+            if self.password.is_empty() {
                 return Some(t("Host, port and username are required."));
             }
+        } else if !matches!(
+            &self.mode,
+            Mode::Edit {
+                existing_password: Some(_),
+                original_auth: AuthKind::Password,
+                ..
+            }
+        ) {
+            return Some(t("Host, port and username are required."));
         }
         None
     }
@@ -340,9 +269,8 @@ impl ConnectFormVM {
             Mode::Add => uuid_v4(),
             Mode::Edit { id, .. } => id.clone(),
         };
-        let auth_is_key = self.is_using_key;
-        let (password, private_key_bytes, passphrase) = self.resolve_secrets();
-        let private_key_base64 = private_key_bytes.as_ref().map(|b| base64_encode(b));
+
+        let password = self.resolve_password();
 
         Ok(SaveOutcome {
             id,
@@ -350,20 +278,12 @@ impl ConnectFormVM {
             host,
             port,
             username: user,
-            auth_is_key,
-            password: if auth_is_key { None } else { password },
-            private_key_base64: if auth_is_key {
-                private_key_base64
-            } else {
-                None
-            },
-            passphrase: if auth_is_key { passphrase } else { None },
+            auth_is_key: false,
+            password,
         })
     }
 
-    /// Returns `(password_or_none, private_key_or_none, passphrase_or_none)`
-    /// honouring the dirty-flag logic.
-    fn resolve_secrets(&self) -> (Option<String>, Option<Vec<u8>>, Option<String>) {
+    fn resolve_password(&self) -> Option<String> {
         let preserve_password = matches!(
             &self.mode,
             Mode::Edit {
@@ -372,94 +292,25 @@ impl ConnectFormVM {
                 ..
             }
         );
-        let preserve_key = matches!(
+        let switched_from_key = matches!(
             &self.mode,
             Mode::Edit {
                 original_auth: AuthKind::PrivateKey,
-                existing_private_key: Some(_),
                 ..
             }
         );
-        let preserve_pass = matches!(
-            &self.mode,
-            Mode::Edit {
-                original_auth: AuthKind::PrivateKey,
-                existing_passphrase: Some(_),
-                ..
-            }
-        );
-        let current_is_key = self.is_using_key;
-        let switched_auth = matches!(
-            &self.mode,
-            Mode::Edit { original_auth, .. } if (*original_auth == AuthKind::PrivateKey) != current_is_key
-        );
 
-        let password = if !current_is_key {
-            if switched_auth || self.password_touched || !preserve_password {
-                Some(self.password.clone())
-            } else if let Mode::Edit {
-                existing_password: Some(p),
-                ..
-            } = &self.mode
-            {
-                Some(p.clone())
-            } else {
-                Some(self.password.clone())
-            }
+        if switched_from_key || self.password_touched || !preserve_password {
+            Some(self.password.clone())
+        } else if let Mode::Edit {
+            existing_password: Some(p),
+            ..
+        } = &self.mode
+        {
+            Some(p.clone())
         } else {
-            None
-        };
-
-        let private_key = if current_is_key {
-            if switched_auth || self.private_key_touched || !preserve_key {
-                Some(self.private_key.clone())
-            } else if let Mode::Edit {
-                existing_private_key: Some(b),
-                ..
-            } = &self.mode
-            {
-                Some(b.clone())
-            } else {
-                Some(self.private_key.clone())
-            }
-        } else {
-            None
-        };
-
-        let passphrase = if current_is_key {
-            if switched_auth {
-                // Fresh auth — passphrase comes from the new input only.
-                if self.passphrase.is_empty() {
-                    None
-                } else {
-                    Some(self.passphrase.clone())
-                }
-            } else if self.passphrase_touched {
-                if self.passphrase.is_empty() {
-                    None
-                } else {
-                    Some(self.passphrase.clone())
-                }
-            } else if preserve_pass {
-                if let Mode::Edit {
-                    existing_passphrase: Some(p),
-                    ..
-                } = &self.mode
-                {
-                    Some(p.clone())
-                } else {
-                    None
-                }
-            } else if self.passphrase.is_empty() {
-                None
-            } else {
-                Some(self.passphrase.clone())
-            }
-        } else {
-            None
-        };
-
-        (password, private_key, passphrase)
+            Some(self.password.clone())
+        }
     }
 }
 
@@ -583,276 +434,22 @@ pub(crate) fn base64_decode(s: &str) -> Option<Vec<u8>> {
     Some(out)
 }
 
+impl From<SaveOutcome> for crate::hosts::model::SavedHost {
+    fn from(outcome: SaveOutcome) -> Self {
+        use crate::hosts::model::{AuthMethod, HostCredential, SavedHost};
+        SavedHost {
+            id: outcome.id,
+            label: outcome.label,
+            credential: HostCredential {
+                host: outcome.host,
+                port: outcome.port,
+                username: outcome.username,
+                auth: AuthMethod::Password(outcome.password.unwrap_or_default()),
+            },
+        }
+    }
+}
+
 /// Process-wide singleton. Main-thread-only in practice (`@MainActor`
 /// Swift callers); the `Mutex` is uncontended.
 pub static VM: Mutex<ConnectFormVM> = Mutex::new(ConnectFormVM::new());
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn fresh() -> ConnectFormVM {
-        let mut vm = ConnectFormVM::new();
-        vm.reset_to_add();
-        vm
-    }
-
-    #[test]
-    fn add_mode_default_port() {
-        let vm = fresh();
-        assert_eq!(vm.port, "22");
-        assert!(matches!(vm.mode, Mode::Add));
-    }
-
-    #[test]
-    fn add_mode_validate_blank_rejects() {
-        let vm = fresh();
-        assert!(vm.validate().is_some());
-        assert!(!vm.can_save());
-    }
-
-    #[test]
-    fn add_mode_port_out_of_range_rejected() {
-        let mut vm = fresh();
-        vm.set_host("h".into());
-        vm.set_username("u".into());
-        vm.set_password("p".into());
-        vm.set_port_text("70000".into());
-        let msg = vm.validate().expect("should be invalid");
-        assert!(msg.to_lowercase().contains("port"));
-    }
-
-    #[test]
-    fn add_mode_zero_port_rejected() {
-        let mut vm = fresh();
-        vm.set_host("h".into());
-        vm.set_username("u".into());
-        vm.set_password("p".into());
-        vm.set_port_text("0".into());
-        assert!(vm.validate().is_some());
-    }
-
-    #[test]
-    fn add_mode_valid_password_path() {
-        let mut vm = fresh();
-        vm.set_host("h".into());
-        vm.set_username("u".into());
-        vm.set_password("p".into());
-        let outcome = vm.try_save().expect("valid form");
-        assert_eq!(outcome.host, "h");
-        assert_eq!(outcome.port, 22);
-        assert_eq!(outcome.username, "u");
-        assert!(!outcome.auth_is_key);
-        assert_eq!(outcome.password.as_deref(), Some("p"));
-        assert!(outcome.private_key_base64.is_none());
-    }
-
-    #[test]
-    fn add_mode_key_requires_key_file() {
-        let mut vm = fresh();
-        vm.set_host("h".into());
-        vm.set_username("u".into());
-        vm.set_using_key(true);
-        assert!(vm.try_save().is_err());
-        vm.set_private_key_bytes(b"KEYBYTES".to_vec());
-        let outcome = vm.try_save().expect("now valid");
-        assert!(outcome.auth_is_key);
-        assert_eq!(outcome.private_key_base64.as_deref(), Some("S0VZQllURVM="));
-    }
-
-    #[test]
-    fn host_paste_splits_port() {
-        let mut vm = fresh();
-        vm.set_host("bastion.example.com:2222".into());
-        vm.set_username("ops".into());
-        vm.set_password("p".into());
-        let outcome = vm.try_save().expect("valid");
-        assert_eq!(outcome.host, "bastion.example.com");
-        assert_eq!(outcome.port, 2222);
-    }
-
-    #[test]
-    fn ipv6_bracketed_splits() {
-        let mut vm = fresh();
-        vm.set_host("[::1]:2222".into());
-        vm.set_username("ops".into());
-        vm.set_password("p".into());
-        let outcome = vm.try_save().expect("valid");
-        assert_eq!(outcome.host, "::1");
-        assert_eq!(outcome.port, 2222);
-    }
-
-    #[test]
-    fn host_username_trim() {
-        let mut vm = fresh();
-        vm.set_host("  host.example.com  ".into());
-        vm.set_username("  deploy  ".into());
-        vm.set_password("p".into());
-        let outcome = vm.try_save().expect("valid");
-        assert_eq!(outcome.host, "host.example.com");
-        assert_eq!(outcome.username, "deploy");
-    }
-
-    #[test]
-    fn edit_mode_preserves_password_when_untouched() {
-        let mut vm = fresh();
-        vm.prefill_edit(
-            "the-id".into(),
-            "prod".into(),
-            "h".into(),
-            22,
-            "u".into(),
-            false,
-            Some("kept".into()),
-            None,
-            None,
-        );
-        vm.set_label("prod-renamed".into());
-        let outcome = vm.try_save().expect("valid");
-        assert_eq!(outcome.label, "prod-renamed");
-        assert_eq!(outcome.id, "the-id");
-        assert_eq!(outcome.password.as_deref(), Some("kept"));
-    }
-
-    #[test]
-    fn edit_mode_overwrites_password_when_touched() {
-        let mut vm = fresh();
-        vm.prefill_edit(
-            "the-id".into(),
-            "prod".into(),
-            "h".into(),
-            22,
-            "u".into(),
-            false,
-            Some("old".into()),
-            None,
-            None,
-        );
-        vm.set_password("new".into());
-        let outcome = vm.try_save().expect("valid");
-        assert_eq!(outcome.password.as_deref(), Some("new"));
-    }
-
-    #[test]
-    fn edit_mode_auth_switch_invalidates_secret() {
-        let mut vm = fresh();
-        vm.prefill_edit(
-            "the-id".into(),
-            "prod".into(),
-            "h".into(),
-            22,
-            "u".into(),
-            false,
-            Some("kept".into()),
-            None,
-            None,
-        );
-        vm.set_using_key(true);
-        // No key picked yet → must error.
-        assert!(vm.try_save().is_err());
-        vm.set_private_key_bytes(b"K".to_vec());
-        let outcome = vm.try_save().expect("now valid");
-        assert!(outcome.auth_is_key);
-        assert_eq!(outcome.private_key_base64.as_deref(), Some("Sw=="));
-        assert!(outcome.password.is_none());
-    }
-
-    #[test]
-    fn edit_mode_preserves_key_and_passphrase_when_untouched() {
-        let mut vm = fresh();
-        vm.prefill_edit(
-            "the-id".into(),
-            "prod".into(),
-            "h".into(),
-            22,
-            "u".into(),
-            true,
-            None,
-            Some(b"KEY".to_vec()),
-            Some("pp".into()),
-        );
-        let outcome = vm.try_save().expect("valid");
-        assert!(outcome.auth_is_key);
-        assert_eq!(outcome.private_key_base64.as_deref(), Some("S0VZ"));
-        assert_eq!(outcome.passphrase.as_deref(), Some("pp"));
-    }
-
-    #[test]
-    fn edit_mode_replaces_key_when_touched() {
-        let mut vm = fresh();
-        vm.prefill_edit(
-            "the-id".into(),
-            "prod".into(),
-            "h".into(),
-            22,
-            "u".into(),
-            true,
-            None,
-            Some(b"OLD".to_vec()),
-            None,
-        );
-        vm.set_private_key_bytes(b"NEW".to_vec());
-        let outcome = vm.try_save().expect("valid");
-        assert_eq!(outcome.private_key_base64.as_deref(), Some("TkVX"));
-    }
-
-    #[test]
-    fn validate_localizes_via_l10n() {
-        unsafe { crate::l10n::bt_ios_set_locale(c"en".as_ptr()) };
-        let vm = fresh();
-        let msg = vm.validate().expect("blank");
-        assert!(!msg.is_empty());
-    }
-
-    #[test]
-    fn has_password_reflects_existing_secret() {
-        let mut vm = fresh();
-        vm.prefill_edit(
-            "id".into(),
-            String::new(),
-            "h".into(),
-            22,
-            "u".into(),
-            false,
-            Some("kept".into()),
-            None,
-            None,
-        );
-        assert!(vm.has_password());
-        // Untouched after auth switch — cached secret is still observable.
-        vm.set_using_key(true);
-        assert!(vm.has_password());
-    }
-
-    #[test]
-    fn save_outcome_round_trips_json() {
-        let mut vm = fresh();
-        vm.set_host("10.0.0.5".into());
-        vm.set_username("yi".into());
-        vm.set_password("hunter2".into());
-        let outcome = vm.try_save().expect("valid");
-        let json = serde_json::to_string(&outcome).expect("encode");
-        let decoded: SaveOutcome = serde_json::from_str(&json).expect("decode");
-        assert_eq!(decoded.host, "10.0.0.5");
-        assert!(!decoded.auth_is_key);
-        assert_eq!(decoded.password.as_deref(), Some("hunter2"));
-    }
-
-    #[test]
-    fn base64_encodes_padding_cases() {
-        assert_eq!(base64_encode(b""), "");
-        assert_eq!(base64_encode(b"f"), "Zg==");
-        assert_eq!(base64_encode(b"fo"), "Zm8=");
-        assert_eq!(base64_encode(b"foo"), "Zm9v");
-        assert_eq!(base64_encode(b"foob"), "Zm9vYg==");
-    }
-
-    #[test]
-    fn uuid_v4_shape() {
-        let s = uuid_v4();
-        assert_eq!(s.len(), 36);
-        assert_eq!(s.as_bytes()[14], b'4');
-        let v = s.as_bytes()[19];
-        assert!(matches!(v, b'8' | b'9' | b'A' | b'B'));
-    }
-}

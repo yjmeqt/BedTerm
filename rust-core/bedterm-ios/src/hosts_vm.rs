@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 //! Pure state machine for the saved-hosts list (formerly Swift
 //! `HostsViewModel`). Owns the entry array, in-flight/current-session
 //! bookkeeping, and the swap/mismatch/delete confirmation pieces.
@@ -19,6 +20,7 @@
 #![cfg_attr(not(target_os = "ios"), allow(dead_code))]
 
 use serde::{Deserialize, Serialize};
+use std::ffi::{c_char, c_void};
 use std::sync::Mutex;
 
 /// Display-shape mirror of `SavedHost`. Rust never sees the full
@@ -62,8 +64,13 @@ pub struct SwapConfirmation {
     pub target_id: String,
     /// Only used Rust-side for alert formatting (`swap_alert()`).
     /// Swift no longer decodes this field — see HostsViewModelState trim.
-    #[serde(skip_serializing)]
+    #[serde(default, skip_serializing)]
     pub display_name: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct EntryRef {
+    pub id: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -72,15 +79,15 @@ pub struct DeleteConfirmation {
     pub target_id: String,
     /// Only used Rust-side for alert formatting (`delete_alert()`).
     /// Swift no longer decodes this field — see HostsViewModelState trim.
-    #[serde(skip_serializing)]
+    #[serde(default, skip_serializing)]
     pub display_name: String,
     /// Only used Rust-side for state cleanup (`confirm_delete()`).
     /// Swift no longer decodes this field — see HostsViewModelState trim.
-    #[serde(skip_serializing)]
+    #[serde(default, skip_serializing)]
     pub is_live: bool,
     /// Only used Rust-side for state cleanup (`confirm_delete()`).
     /// Swift no longer decodes this field — see HostsViewModelState trim.
-    #[serde(skip_serializing)]
+    #[serde(default, skip_serializing)]
     pub is_in_flight: bool,
 }
 
@@ -97,7 +104,32 @@ pub enum Action {
     Disconnect,
 }
 
-#[derive(Debug, Default, Clone)]
+pub type ConnectFn = Option<unsafe extern "C" fn(*mut c_void, *const c_char)>;
+pub type DisconnectFn = Option<unsafe extern "C" fn(*mut c_void)>;
+pub type AlertFn = Option<
+    unsafe extern "C" fn(*mut c_void, *const c_char, *const c_char, *const c_char, *const c_char),
+>;
+
+/// Wraps an opaque `*mut c_void` context pointer so it is `Send` + `Sync`.
+/// Swift sets this once at initialisation with a heap-allocated box; the
+/// pointer is only read back on the main thread when a callback fires.
+#[derive(Debug, Clone, Copy)]
+#[repr(transparent)]
+pub struct CallbackCtx(pub *mut c_void);
+
+// SAFETY: CallbackCtx is set once on the main thread and only accessed
+// from the main thread when callbacks fire. The opaque pointer is never
+// dereferenced by Rust — it is an opaque cookie for the Swift side.
+unsafe impl Send for CallbackCtx {}
+unsafe impl Sync for CallbackCtx {}
+
+impl CallbackCtx {
+    pub const fn null() -> Self {
+        Self(std::ptr::null_mut())
+    }
+}
+
+#[derive(Debug, Clone)]
 pub struct HostsVM {
     pub entries: Vec<EntryMeta>,
     pub in_flight_id: Option<String>,
@@ -106,6 +138,21 @@ pub struct HostsVM {
     pub swap_confirmation: Option<SwapConfirmation>,
     pub delete_confirmation: Option<DeleteConfirmation>,
     pub load_failed: bool,
+
+    // Side-effect callbacks installed by Swift (Phase 2 migration).
+    // Fire on the calling thread; the Swift host dispatches to MainActor.
+    pub connect_cb: ConnectFn,
+    pub connect_ctx: CallbackCtx,
+    pub disconnect_cb: DisconnectFn,
+    pub disconnect_ctx: CallbackCtx,
+    pub alert_cb: AlertFn,
+    pub alert_ctx: CallbackCtx,
+}
+
+impl Default for HostsVM {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl HostsVM {
@@ -118,6 +165,70 @@ impl HostsVM {
             swap_confirmation: None,
             delete_confirmation: None,
             load_failed: false,
+            connect_cb: None,
+            connect_ctx: CallbackCtx::null(),
+            disconnect_cb: None,
+            disconnect_ctx: CallbackCtx::null(),
+            alert_cb: None,
+            alert_ctx: CallbackCtx::null(),
+        }
+    }
+
+    // MARK: - Side-effect callbacks (Phase 2)
+
+    /// Install C callbacks that the VM fires instead of returning Action
+    /// discriminants. Swift installs these once at initialisation; when set,
+    /// each mutator that would return `Action::Connect` / `Disconnect` fires
+    /// the callback directly in addition to the normal return value.
+    pub fn set_callbacks(
+        &mut self,
+        connect_cb: ConnectFn,
+        connect_ctx: CallbackCtx,
+        disconnect_cb: DisconnectFn,
+        disconnect_ctx: CallbackCtx,
+        alert_cb: AlertFn,
+        alert_ctx: CallbackCtx,
+    ) {
+        self.connect_cb = connect_cb;
+        self.connect_ctx = connect_ctx;
+        self.disconnect_cb = disconnect_cb;
+        self.disconnect_ctx = disconnect_ctx;
+        self.alert_cb = alert_cb;
+        self.alert_ctx = alert_ctx;
+    }
+
+    /// Fire the connect callback if installed. Safe to call with any id;
+    /// the Swift host validates the UUID and dispatches an SSH attempt.
+    pub fn fire_connect(&self, id: &str) {
+        if let Some(cb) = self.connect_cb {
+            let c_id = std::ffi::CString::new(id).unwrap_or_default();
+            unsafe { cb(self.connect_ctx.0, c_id.as_ptr()) };
+        }
+    }
+
+    pub fn fire_disconnect(&self) {
+        if let Some(cb) = self.disconnect_cb {
+            unsafe { cb(self.disconnect_ctx.0) };
+        }
+    }
+
+    /// Fire the alert callback. All four strings are NUL-terminated C
+    /// strings borrowed for the duration of the call.
+    pub fn fire_alert(&self, title: &str, message: &str, confirm: &str, cancel: &str) {
+        if let Some(cb) = self.alert_cb {
+            let t = std::ffi::CString::new(title).unwrap_or_default();
+            let m = std::ffi::CString::new(message).unwrap_or_default();
+            let y = std::ffi::CString::new(confirm).unwrap_or_default();
+            let n = std::ffi::CString::new(cancel).unwrap_or_default();
+            unsafe {
+                cb(
+                    self.alert_ctx.0,
+                    t.as_ptr(),
+                    m.as_ptr(),
+                    y.as_ptr(),
+                    n.as_ptr(),
+                )
+            };
         }
     }
 
@@ -751,5 +862,637 @@ mod tests {
         assert!(alert.title.contains("example.com"));
         assert!(!alert.message.is_empty());
         assert_eq!(alert.confirm_label, "Review");
+    }
+
+    // MARK: - State struct Serialize / Deserialize
+
+    #[test]
+    fn entry_ref_deserializes_id_from_entries_json() {
+        // JSON shape produced by bt_ios_hosts_vm_entries_json()
+        let json = r#"[
+            {"id":"E621E1F8-C36C-495A-93FC-0C247A3E6E5F","label":"prod","host":"example.com","port":22,"username":"alice","authIsKey":true},
+            {"id":"00000000-0000-0000-0000-000000000000","label":"","host":"test.local","port":2222,"username":"root","authIsKey":false}
+        ]"#;
+        let refs: Vec<EntryRef> = serde_json::from_str(json).expect("deserialize EntryRef");
+        assert_eq!(refs.len(), 2);
+        assert_eq!(refs[0].id, "E621E1F8-C36C-495A-93FC-0C247A3E6E5F");
+        assert_eq!(refs[1].id, "00000000-0000-0000-0000-000000000000");
+    }
+
+    #[test]
+    fn entry_ref_deserializes_with_only_id_field_present() {
+        // Minimal JSON — decoder only needs "id", extra fields are ignored.
+        let json = r#"[{"id":"abc-123"}]"#;
+        let refs: Vec<EntryRef> = serde_json::from_str(json).expect("deserialize EntryRef");
+        assert_eq!(refs[0].id, "abc-123");
+    }
+
+    #[test]
+    fn entry_ref_rejects_missing_id() {
+        let result = serde_json::from_str::<Vec<EntryRef>>(r#"[{"label":"nope"}]"#);
+        assert!(result.is_err(), "should fail without id field");
+    }
+
+    #[test]
+    fn pending_mismatch_round_trip() {
+        let original = PendingMismatch {
+            stored: "SHA256:A1B2".into(),
+            remote: "SHA256:C3D4".into(),
+            host: "server.example.com".into(),
+            port: 22,
+            source_id: "uuid-from-swift".into(),
+        };
+        let json = serde_json::to_string(&original).expect("serialize PendingMismatch");
+        // Verify field-name mapping: source_id → "sourceID" (camelCase)
+        assert!(
+            json.contains(r#""sourceID":"#),
+            "JSON should use sourceID key: {json}"
+        );
+        assert!(json.contains(r#""stored":"#));
+        assert!(json.contains(r#""remote":"#));
+
+        let parsed: PendingMismatch =
+            serde_json::from_str(&json).expect("deserialize PendingMismatch");
+        assert_eq!(parsed, original);
+    }
+
+    #[test]
+    fn swap_confirmation_round_trip() {
+        let original = SwapConfirmation {
+            target_id: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F".into(),
+            display_name: String::new(), // skip_serializing — ignored
+        };
+        let json = serde_json::to_string(&original).expect("serialize SwapConfirmation");
+        // display_name is skip_serializing, so it should NOT appear in JSON
+        assert!(
+            !json.contains("display_name"),
+            "display_name should be skipped"
+        );
+        assert!(
+            json.contains(r#""targetID":"#),
+            "JSON should use targetID key: {json}"
+        );
+
+        let parsed: SwapConfirmation =
+            serde_json::from_str(&json).expect("deserialize SwapConfirmation");
+        assert_eq!(parsed.target_id, original.target_id);
+        assert!(parsed.display_name.is_empty());
+    }
+
+    #[test]
+    fn swap_confirmation_deserializes_from_swift_json() {
+        // Swift sends exactly this shape
+        let json = r#"{"targetID":"550e8400-e29b-41d4-a716-446655440000"}"#;
+        let parsed: SwapConfirmation =
+            serde_json::from_str(json).expect("deserialize SwapConfirmation");
+        assert_eq!(parsed.target_id, "550e8400-e29b-41d4-a716-446655440000");
+        // display_name has skip_serializing but NOT skip_deserializing, so
+        // serde still deserializes from its default if missing
+        assert!(parsed.display_name.is_empty());
+    }
+
+    #[test]
+    fn delete_confirmation_round_trip() {
+        let original = DeleteConfirmation {
+            target_id: "delete-me-uuid".into(),
+            display_name: String::new(), // skip_serializing
+            is_live: true,               // skip_serializing
+            is_in_flight: false,         // skip_serializing
+        };
+        let json = serde_json::to_string(&original).expect("serialize DeleteConfirmation");
+        // Only targetID should appear in JSON
+        assert!(json.contains(r#""targetID":"#));
+        assert!(
+            !json.contains("display_name"),
+            "display_name should be skipped"
+        );
+        assert!(!json.contains("is_live"), "is_live should be skipped");
+        assert!(
+            !json.contains("is_in_flight"),
+            "is_in_flight should be skipped"
+        );
+
+        let parsed: DeleteConfirmation =
+            serde_json::from_str(&json).expect("deserialize DeleteConfirmation");
+        assert_eq!(parsed.target_id, original.target_id);
+        // Fields with skip_serializing that also have skip_deserializing use
+        // Default::default() when round-tripping — but we set them in original
+        // and they get Default::default() on deserialize. The PartialEq impl
+        // will thus fail if we compare with original since is_live differs.
+        assert!(parsed.display_name.is_empty());
+        assert!(
+            !parsed.is_live,
+            "is_live should default to false after round-trip"
+        );
+        assert!(
+            !parsed.is_in_flight,
+            "is_in_flight should default to false after round-trip"
+        );
+    }
+
+    #[test]
+    fn delete_confirmation_deserializes_from_swift_json() {
+        // Swift sends only the targetID; Rust fills internal fields as defaults
+        let json = r#"{"targetID":"abc-def-ghi"}"#;
+        let parsed: DeleteConfirmation =
+            serde_json::from_str(json).expect("deserialize DeleteConfirmation");
+        assert_eq!(parsed.target_id, "abc-def-ghi");
+        assert!(parsed.display_name.is_empty());
+        assert!(!parsed.is_live);
+        assert!(!parsed.is_in_flight);
+    }
+
+    #[test]
+    fn pending_mismatch_deserializes_from_swift_json() {
+        // Exact JSON shape Swift sends across the FFI
+        let json = r#"{"stored":"SHA256:abc","remote":"SHA256:def","host":"example.com","port":22,"sourceID":"some-uuid"}"#;
+        let parsed: PendingMismatch =
+            serde_json::from_str(json).expect("deserialize PendingMismatch");
+        assert_eq!(parsed.stored, "SHA256:abc");
+        assert_eq!(parsed.remote, "SHA256:def");
+        assert_eq!(parsed.host, "example.com");
+        assert_eq!(parsed.port, 22);
+        assert_eq!(parsed.source_id, "some-uuid");
+    }
+
+    #[test]
+    fn entry_meta_deserializes_from_snapshot_json() {
+        // JSON shape Swift's HostsStoreInjection produces
+        let json = r#"{"id":"e1","label":"My Server","host":"myserver.com","port":2222,"username":"admin","authIsKey":true}"#;
+        let parsed: EntryMeta = serde_json::from_str(json).expect("deserialize EntryMeta");
+        assert_eq!(parsed.id, "e1");
+        assert_eq!(parsed.label, "My Server");
+        assert_eq!(parsed.host, "myserver.com");
+        assert_eq!(parsed.port, 2222);
+        assert_eq!(parsed.username, "admin");
+        assert!(parsed.auth_is_key);
+    }
+
+    #[test]
+    fn entry_meta_defaults_auth_is_key_to_false() {
+        let json = r#"{"id":"e1","label":"","host":"h","port":22,"username":"u"}"#;
+        let parsed: EntryMeta = serde_json::from_str(json).expect("deserialize EntryMeta");
+        assert!(!parsed.auth_is_key, "authIsKey should default to false");
+    }
+
+    // ── EntryRef edge cases ──────────────────────────────────────────────
+
+    #[test]
+    fn entry_ref_accepts_empty_string_id() {
+        let refs: Vec<EntryRef> =
+            serde_json::from_str(r#"[{"id":""}]"#).expect("deserialize EntryRef");
+        assert_eq!(refs[0].id, "");
+    }
+
+    #[test]
+    fn entry_ref_rejects_null_id() {
+        let result = serde_json::from_value::<Vec<EntryRef>>(serde_json::json!([{"id": null}]));
+        assert!(result.is_err(), "null id should be rejected");
+    }
+
+    #[test]
+    fn entry_ref_ignores_extra_fields() {
+        let refs: Vec<EntryRef> =
+            serde_json::from_str(r#"[{"id":"abc","unexpected":"value","extra":99}]"#)
+                .expect("deserialize EntryRef with extra fields");
+        assert_eq!(refs[0].id, "abc");
+    }
+
+    #[test]
+    fn entry_ref_rejects_object_not_wrapped_in_array() {
+        let result = serde_json::from_str::<Vec<EntryRef>>(r#"{"id":"abc"}"#);
+        assert!(
+            result.is_err(),
+            "object without array wrapper should be rejected"
+        );
+    }
+
+    // ── PendingMismatch edge cases ───────────────────────────────────────
+
+    #[test]
+    fn pending_mismatch_rejects_missing_stored() {
+        let result = serde_json::from_str::<PendingMismatch>(
+            r#"{"remote":"R","host":"h","port":22,"sourceID":"s"}"#,
+        );
+        assert!(result.is_err(), "missing stored should be rejected");
+    }
+
+    #[test]
+    fn pending_mismatch_rejects_missing_remote() {
+        let result = serde_json::from_str::<PendingMismatch>(
+            r#"{"stored":"S","host":"h","port":22,"sourceID":"s"}"#,
+        );
+        assert!(result.is_err(), "missing remote should be rejected");
+    }
+
+    #[test]
+    fn pending_mismatch_rejects_missing_host() {
+        let result = serde_json::from_str::<PendingMismatch>(
+            r#"{"stored":"S","remote":"R","port":22,"sourceID":"s"}"#,
+        );
+        assert!(result.is_err(), "missing host should be rejected");
+    }
+
+    #[test]
+    fn pending_mismatch_rejects_missing_port() {
+        let result = serde_json::from_str::<PendingMismatch>(
+            r#"{"stored":"S","remote":"R","host":"h","sourceID":"s"}"#,
+        );
+        assert!(result.is_err(), "missing port should be rejected");
+    }
+
+    #[test]
+    fn pending_mismatch_rejects_missing_source_id() {
+        let result = serde_json::from_str::<PendingMismatch>(
+            r#"{"stored":"S","remote":"R","host":"h","port":22}"#,
+        );
+        assert!(result.is_err(), "missing sourceID should be rejected");
+    }
+
+    #[test]
+    fn pending_mismatch_rejects_null_stored() {
+        let json = serde_json::json!(
+            {"stored":null,"remote":"R","host":"h","port":22,"sourceID":"s"}
+        );
+        let result = serde_json::from_value::<PendingMismatch>(json);
+        assert!(result.is_err(), "null stored should be rejected");
+    }
+
+    #[test]
+    fn pending_mismatch_rejects_null_remote() {
+        let json = serde_json::json!(
+            {"stored":"S","remote":null,"host":"h","port":22,"sourceID":"s"}
+        );
+        let result = serde_json::from_value::<PendingMismatch>(json);
+        assert!(result.is_err(), "null remote should be rejected");
+    }
+
+    #[test]
+    fn pending_mismatch_rejects_null_host() {
+        let json = serde_json::json!(
+            {"stored":"S","remote":"R","host":null,"port":22,"sourceID":"s"}
+        );
+        let result = serde_json::from_value::<PendingMismatch>(json);
+        assert!(result.is_err(), "null host should be rejected");
+    }
+
+    #[test]
+    fn pending_mismatch_rejects_null_port() {
+        let json = serde_json::json!(
+            {"stored":"S","remote":"R","host":"h","port":null,"sourceID":"s"}
+        );
+        let result = serde_json::from_value::<PendingMismatch>(json);
+        assert!(result.is_err(), "null port should be rejected");
+    }
+
+    #[test]
+    fn pending_mismatch_rejects_null_source_id() {
+        let json = serde_json::json!(
+            {"stored":"S","remote":"R","host":"h","port":22,"sourceID":null}
+        );
+        let result = serde_json::from_value::<PendingMismatch>(json);
+        assert!(result.is_err(), "null sourceID should be rejected");
+    }
+
+    #[test]
+    fn pending_mismatch_accepts_empty_strings() {
+        let parsed: PendingMismatch =
+            serde_json::from_str(r#"{"stored":"","remote":"","host":"","port":0,"sourceID":""}"#)
+                .expect("deserialize PendingMismatch with empty strings");
+        assert_eq!(parsed.stored, "");
+        assert_eq!(parsed.remote, "");
+        assert_eq!(parsed.host, "");
+        assert_eq!(parsed.port, 0, "port 0 is valid for u16");
+        assert_eq!(parsed.source_id, "");
+    }
+
+    #[test]
+    fn pending_mismatch_ignores_extra_fields() {
+        let parsed: PendingMismatch = serde_json::from_str(
+            r#"{"stored":"S","remote":"R","host":"h","port":22,"sourceID":"s","extraField":"x","another":42}"#,
+        )
+        .expect("deserialize PendingMismatch with extra fields");
+        assert_eq!(parsed.stored, "S");
+        assert_eq!(parsed.remote, "R");
+        assert_eq!(parsed.host, "h");
+        assert_eq!(parsed.port, 22);
+        assert_eq!(parsed.source_id, "s");
+    }
+
+    #[test]
+    fn pending_mismatch_accepts_boundary_port_values() {
+        // u16 range: 0..=65535
+        let parsed: PendingMismatch = serde_json::from_str(
+            r#"{"stored":"S","remote":"R","host":"h","port":0,"sourceID":"s"}"#,
+        )
+        .expect("deserialize port 0");
+        assert_eq!(parsed.port, 0);
+
+        let parsed: PendingMismatch = serde_json::from_str(
+            r#"{"stored":"S","remote":"R","host":"h","port":65535,"sourceID":"s"}"#,
+        )
+        .expect("deserialize port 65535");
+        assert_eq!(parsed.port, 65535);
+    }
+
+    // ── SwapConfirmation edge cases ──────────────────────────────────────
+
+    #[test]
+    fn swap_confirmation_rejects_missing_target_id() {
+        let result = serde_json::from_str::<SwapConfirmation>(r#"{"display_name":"nope"}"#);
+        assert!(result.is_err(), "missing targetID should be rejected");
+    }
+
+    #[test]
+    fn swap_confirmation_rejects_null_target_id() {
+        let result =
+            serde_json::from_value::<SwapConfirmation>(serde_json::json!({"targetID": null}));
+        assert!(result.is_err(), "null targetID should be rejected");
+    }
+
+    #[test]
+    fn swap_confirmation_accepts_empty_target_id() {
+        let parsed: SwapConfirmation = serde_json::from_str(r#"{"targetID":""}"#)
+            .expect("deserialize SwapConfirmation with empty targetID");
+        assert_eq!(parsed.target_id, "");
+        assert!(parsed.display_name.is_empty());
+    }
+
+    #[test]
+    fn swap_confirmation_deserializes_display_name_when_present() {
+        // display_name has #[serde(default, skip_serializing)] but NOT
+        // skip_deserializing, so if Swift sends it the value is honoured.
+        let json = r#"{"targetID":"abc","display_name":"My Server"}"#;
+        let parsed: SwapConfirmation =
+            serde_json::from_str(json).expect("deserialize SwapConfirmation");
+        assert_eq!(parsed.target_id, "abc");
+        assert_eq!(parsed.display_name, "My Server");
+    }
+
+    #[test]
+    fn swap_confirmation_ignores_extra_fields() {
+        let parsed: SwapConfirmation =
+            serde_json::from_str(r#"{"targetID":"abc","extraKey":99,"unknown":true}"#)
+                .expect("deserialize SwapConfirmation with extra fields");
+        assert_eq!(parsed.target_id, "abc");
+    }
+
+    // ── DeleteConfirmation edge cases ────────────────────────────────────
+
+    #[test]
+    fn delete_confirmation_rejects_missing_target_id() {
+        let result = serde_json::from_str::<DeleteConfirmation>(r#"{"display_name":"nope"}"#);
+        assert!(result.is_err(), "missing targetID should be rejected");
+    }
+
+    #[test]
+    fn delete_confirmation_rejects_null_target_id() {
+        let result =
+            serde_json::from_value::<DeleteConfirmation>(serde_json::json!({"targetID": null}));
+        assert!(result.is_err(), "null targetID should be rejected");
+    }
+
+    #[test]
+    fn delete_confirmation_accepts_empty_target_id() {
+        let parsed: DeleteConfirmation = serde_json::from_str(r#"{"targetID":""}"#)
+            .expect("deserialize DeleteConfirmation with empty targetID");
+        assert_eq!(parsed.target_id, "");
+        assert!(parsed.display_name.is_empty());
+        assert!(!parsed.is_live);
+        assert!(!parsed.is_in_flight);
+    }
+
+    #[test]
+    fn delete_confirmation_deserializes_display_name_when_present() {
+        // display_name has #[serde(default, skip_serializing)] but NOT
+        // skip_deserializing, so an explicit value is honoured.
+        let parsed: DeleteConfirmation =
+            serde_json::from_str(r#"{"targetID":"abc","display_name":"My Server"}"#)
+                .expect("deserialize DeleteConfirmation");
+        assert_eq!(parsed.target_id, "abc");
+        assert_eq!(parsed.display_name, "My Server");
+    }
+
+    #[test]
+    fn delete_confirmation_ignores_extra_fields() {
+        let parsed: DeleteConfirmation =
+            serde_json::from_str(r#"{"targetID":"abc","extraKey":99,"unknown":"value"}"#)
+                .expect("deserialize DeleteConfirmation with extra fields");
+        assert_eq!(parsed.target_id, "abc");
+    }
+
+    // ── EntryMeta edge cases ─────────────────────────────────────────────
+
+    #[test]
+    fn entry_meta_rejects_missing_host() {
+        let result =
+            serde_json::from_str::<EntryMeta>(r#"{"id":"e1","label":"","port":22,"username":"u"}"#);
+        assert!(result.is_err(), "missing host should be rejected");
+    }
+
+    #[test]
+    fn entry_meta_rejects_missing_port() {
+        let result = serde_json::from_str::<EntryMeta>(
+            r#"{"id":"e1","label":"","host":"h","username":"u"}"#,
+        );
+        assert!(result.is_err(), "missing port should be rejected");
+    }
+
+    #[test]
+    fn entry_meta_rejects_missing_username() {
+        let result =
+            serde_json::from_str::<EntryMeta>(r#"{"id":"e1","label":"","host":"h","port":22}"#);
+        assert!(result.is_err(), "missing username should be rejected");
+    }
+
+    #[test]
+    fn entry_meta_rejects_null_host() {
+        let json = serde_json::json!(
+            {"id":"e1","label":"","host":null,"port":22,"username":"u"}
+        );
+        let result = serde_json::from_value::<EntryMeta>(json);
+        assert!(result.is_err(), "null host should be rejected");
+    }
+
+    #[test]
+    fn entry_meta_rejects_null_port() {
+        let json = serde_json::json!(
+            {"id":"e1","label":"","host":"h","port":null,"username":"u"}
+        );
+        let result = serde_json::from_value::<EntryMeta>(json);
+        assert!(result.is_err(), "null port should be rejected");
+    }
+
+    #[test]
+    fn entry_meta_rejects_null_username() {
+        let json = serde_json::json!(
+            {"id":"e1","label":"","host":"h","port":22,"username":null}
+        );
+        let result = serde_json::from_value::<EntryMeta>(json);
+        assert!(result.is_err(), "null username should be rejected");
+    }
+
+    #[test]
+    fn entry_meta_defaults_label_to_empty_when_missing() {
+        let json = r#"{"id":"e1","host":"h","port":22,"username":"u"}"#;
+        let parsed: EntryMeta =
+            serde_json::from_str(json).expect("deserialize EntryMeta without label");
+        assert_eq!(parsed.label, "", "label should default to empty string");
+    }
+
+    #[test]
+    fn entry_meta_defaults_auth_is_key_when_null() {
+        let json = serde_json::json!(
+            {"id":"e1","label":"","host":"h","port":22,"username":"u","authIsKey":null}
+        );
+        let result = serde_json::from_value::<EntryMeta>(json);
+        // #[serde(default)] on auth_is_key means null is treated as default → false
+        assert!(result.is_err(), "null authIsKey should be rejected");
+    }
+
+    #[test]
+    fn entry_meta_accepts_empty_strings_for_required_fields() {
+        // id, host, and username are required but may be empty strings
+        let parsed: EntryMeta =
+            serde_json::from_str(r#"{"id":"","label":"","host":"","port":22,"username":""}"#)
+                .expect("deserialize EntryMeta with empty strings");
+        assert_eq!(parsed.id, "");
+        assert_eq!(parsed.label, "");
+        assert_eq!(parsed.host, "");
+        assert_eq!(parsed.port, 22);
+        assert_eq!(parsed.username, "");
+        assert!(!parsed.auth_is_key);
+    }
+
+    #[test]
+    fn entry_meta_ignores_extra_fields() {
+        let parsed: EntryMeta = serde_json::from_str(
+            r#"{"id":"e1","label":"","host":"h","port":22,"username":"u","unknownKey":"x","num":3}"#,
+        )
+        .expect("deserialize EntryMeta with extra fields");
+        assert_eq!(parsed.id, "e1");
+        assert_eq!(parsed.host, "h");
+        assert_eq!(parsed.port, 22);
+        assert_eq!(parsed.username, "u");
+    }
+
+    #[test]
+    fn entry_meta_rejects_negative_port() {
+        let json = serde_json::json!(
+            {"id":"e1","label":"","host":"h","port":-1,"username":"u"}
+        );
+        let result = serde_json::from_value::<EntryMeta>(json);
+        assert!(result.is_err(), "negative port should be rejected by u16");
+    }
+
+    // ── EntryMeta JSON round-trip (serialize → deserialize) ──────────
+
+    #[test]
+    fn entry_meta_round_trip_all_fields() {
+        let original = EntryMeta {
+            id: "uuid-123".into(),
+            label: "My Server".into(),
+            host: "10.0.0.5".into(),
+            port: 2222,
+            username: "admin".into(),
+            auth_is_key: false,
+        };
+        let json = serde_json::to_string(&original).expect("serialize EntryMeta");
+        let deserialized: EntryMeta = serde_json::from_str(&json).expect("deserialize EntryMeta");
+        assert_eq!(original, deserialized);
+    }
+
+    #[test]
+    fn entry_meta_round_trip_minimal() {
+        let original = EntryMeta {
+            id: "uuid-456".into(),
+            label: String::new(),
+            host: "example.com".into(),
+            port: 22,
+            username: "user".into(),
+            auth_is_key: false,
+        };
+        let json = serde_json::to_string(&original).expect("serialize EntryMeta");
+        let deserialized: EntryMeta = serde_json::from_str(&json).expect("deserialize EntryMeta");
+        assert_eq!(original, deserialized);
+    }
+
+    #[test]
+    fn entry_meta_round_trip_auth_is_key_json_key() {
+        let original = EntryMeta {
+            id: "uuid-789".into(),
+            label: "Server".into(),
+            host: "host.local".into(),
+            port: 22,
+            username: "root".into(),
+            auth_is_key: false,
+        };
+        let json = serde_json::to_string(&original).expect("serialize EntryMeta");
+        assert!(
+            json.contains(r#""authIsKey":true"#),
+            "JSON should use camelCase authIsKey: {json}"
+        );
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed["authIsKey"], true);
+        // Verify the field is not snake_case
+        assert!(
+            !json.contains("auth_is_key"),
+            "JSON must not use snake_case: {json}"
+        );
+    }
+
+    #[test]
+    fn entry_meta_round_trip_ipv6_host() {
+        let original = EntryMeta {
+            id: "uuid-ipv6".into(),
+            label: String::new(),
+            host: "::1".into(),
+            port: 22,
+            username: "alice".into(),
+            auth_is_key: false,
+        };
+        let json = serde_json::to_string(&original).expect("serialize EntryMeta");
+        let deserialized: EntryMeta = serde_json::from_str(&json).expect("deserialize EntryMeta");
+        assert_eq!(original, deserialized);
+    }
+
+    #[test]
+    fn entry_meta_round_trip_boundary_port_values() {
+        let min_port = EntryMeta {
+            id: "min".into(),
+            label: String::new(),
+            host: "h".into(),
+            port: 0,
+            username: "u".into(),
+            auth_is_key: false,
+        };
+        let json = serde_json::to_string(&min_port).expect("serialize port 0");
+        let parsed: EntryMeta = serde_json::from_str(&json).expect("deserialize port 0");
+        assert_eq!(parsed.port, 0);
+
+        let max_port = EntryMeta {
+            id: "max".into(),
+            label: String::new(),
+            host: "h".into(),
+            port: 65535,
+            username: "u".into(),
+            auth_is_key: false,
+        };
+        let json = serde_json::to_string(&max_port).expect("serialize port 65535");
+        let parsed: EntryMeta = serde_json::from_str(&json).expect("deserialize port 65535");
+        assert_eq!(parsed.port, 65535);
+    }
+
+    #[test]
+    fn entry_meta_json_ignores_extra_fields_on_deserialize() {
+        // JSON with extra fields should still deserialize correctly
+        let json = r#"{"id":"e1","label":"L","host":"h","port":22,"username":"u","authIsKey":false,"extra":"value","count":99}"#;
+        let parsed: EntryMeta = serde_json::from_str(json).expect("deserialize with extra fields");
+        assert_eq!(parsed.id, "e1");
+        assert_eq!(parsed.label, "L");
+        assert_eq!(parsed.host, "h");
+        assert_eq!(parsed.port, 22);
+        assert_eq!(parsed.username, "u");
+        assert!(!parsed.auth_is_key);
     }
 }

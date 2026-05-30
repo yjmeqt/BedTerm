@@ -147,10 +147,7 @@
 #define BT_MODE_FOCUS_IN_OUT (1 << 5)
 
 /**
- * Result code packed into completion callbacks. Mirrors `SSHError`
- * (see spec § "Error mapping"). Variants that carry detail strings
- * receive them via the `msg` slot (a retained `NSString *`, copied and
- * released by the Rust side).
+ * Result code matching the C header's `BtSSHResultCode` enum.
  */
 typedef enum BtSSHResultCode {
   BtSSHResultOk = 0,
@@ -159,8 +156,6 @@ typedef enum BtSSHResultCode {
   BtSSHResultTimeout = 3,
   BtSSHResultHandshakeFailed = 4,
   BtSSHResultAuthenticationFailed = 5,
-  BtSSHResultPrivateKeyParse = 6,
-  BtSSHResultPrivateKeyPassphraseRequired = 7,
   BtSSHResultHostKeyMismatch = 8,
   BtSSHResultDisconnected = 9,
   BtSSHResultPeerReset = 10,
@@ -189,96 +184,25 @@ typedef struct BtTerm BtTerm;
  */
 typedef struct BtTerminalSessionHandle BtTerminalSessionHandle;
 
-/**
- * Rust-owned handle. Holds the vtable + ctx returned by
- * `bt_ssh_bridge_make` (Swift side). `Drop` calls `release(ctx)` to
- * balance Swift's retain.
- */
-typedef struct SSHBridgeHandle SSHBridgeHandle;
+typedef void (*SaveResultFn)(void*, const char*);
+
+typedef void (*ConnectFn)(void*, const char*);
+
+typedef void (*DisconnectFn)(void*);
+
+typedef void (*AlertFn)(void*, const char*, const char*, const char*, const char*);
+
+typedef void (*MismatchCallback)(void*);
 
 /**
- * Opaque handle owning a running SSH client + tokio runtime + background
- * read-loop thread.
- *
- * Created by [`bt_ssh_client_create`], freed by [`bt_ssh_client_close`].
- */
-typedef struct SshClientHandle SshClientHandle;
-
-/**
- * C-compatible mirror of `SSHConnectionRequest`. Lifetimes: pointers
- * are valid only for the duration of the `connect` thunk call; Swift
- * copies anything it needs before returning.
- */
-typedef struct BtSSHConnectRequest {
-  /**
-   * Pointer to a `HostCredential`-shaped opaque payload owned by
-   * Rust. The exact shape is TBD when `HostCredential` itself moves
-   * to Rust; for now Swift accepts an opaque `*const c_void` and
-   * resolves it via a side table.
-   */
-  const void *credential_opaque;
-  int32_t cols;
-  int32_t rows;
-  /**
-   * UTF-8, nul-terminated. NULL == no bootstrap payload.
-   */
-  const char *bootstrap_payload;
-} BtSSHConnectRequest;
-
-/**
- * Generic completion: `code` + optional detail `msg` (retained
- * `NSString *`, Rust must release).
+ * Generic completion: `code` + optional detail `msg`.
  */
 typedef void (*BtSSHCompletion)(void *ctx, enum BtSSHResultCode code, const void *msg, int32_t extra);
 
 /**
- * Output-data sink installed by Rust. Called per inbound chunk on the
- * main queue. `bytes` is valid only for the duration of the call.
+ * Output-data sink. Called per inbound chunk on the main queue.
  */
 typedef void (*BtSSHOutputSink)(void *ctx, const uint8_t *bytes, uintptr_t len);
-
-/**
- * Function-pointer table filled by Swift's `SSHClientBridge` and
- * handed to Rust via `bt_ios_ssh_register`. See spec § "Swift-side
- * wrapper" for the contract of each thunk.
- */
-typedef struct BtSSHClientVTable {
-  void (*connect)(void *ctx,
-                  struct BtSSHConnectRequest req,
-                  BtSSHCompletion completion,
-                  void *completion_ctx);
-  void (*write)(void *ctx,
-                const uint8_t *bytes,
-                uintptr_t len,
-                BtSSHCompletion completion,
-                void *completion_ctx);
-  void (*resize)(void *ctx,
-                 int32_t cols,
-                 int32_t rows,
-                 BtSSHCompletion completion,
-                 void *completion_ctx);
-  void (*disconnect)(void *ctx, BtSSHCompletion completion, void *completion_ctx);
-  void (*set_output_sink)(void *ctx, BtSSHOutputSink sink, void *sink_ctx);
-  /**
-   * Balance the +1 retain Swift gave us when constructing `ctx`.
-   */
-  void (*release)(void *ctx);
-} BtSSHClientVTable;
-
-/**
- * Localized alert-text bundle handed across the FFI. All fields are
- * `+1` retained UTF-8 C strings owned by the caller — free the whole
- * struct via [`bt_ios_hosts_free_alert_text`] (which also frees the
- * inner strings). Never partially-NULL: when the formatter has nothing
- * to say (e.g. mismatch toast has no cancel button) the field is an
- * empty string, not NULL.
- */
-typedef struct BtIosHostsAlertText {
-  char *title;
-  char *message;
-  char *confirm_label;
-  char *cancel_label;
-} BtIosHostsAlertText;
 
 typedef struct BtBlockView {
   uint64_t id;
@@ -548,15 +472,6 @@ typedef void (*BtIosOnResizeCallback)(void *ctx, uint16_t cols, uint16_t rows);
 extern "C" {
 #endif // __cplusplus
 
-/**
- * FFI entry point — `bt_ios_net_is_lan_host(host)` returns `true` when
- * `host` is a LAN address, matching `is_lan_host`.
- *
- * # Safety
- * `host` must be a valid nullable UTF-8 C string. NULL yields `false`.
- */
-bool bt_ios_net_is_lan_host(const char *host);
-
 extern double CACurrentMediaTime(void);
 
 /**
@@ -585,72 +500,16 @@ void bt_ios_set_locale(const char *code);
 const uint8_t *bt_ios_shell_integration_payload(uintptr_t *out_len);
 
 /**
- * Fire Swift's existing connect-flow orchestration for the given
- * host id. Swift owns the toaster / mismatch dialog / terminal
- * push behaviour from here on out.
+ * Called from Swift's AppDelegate to boot the Rust coordinator.
+ * `window` is a +1 retained `UIWindow *`.
  */
-extern void bt_swift_hosts_connect(const char *id);
+void bt_ios_start_root_coordinator(void *window);
 
 /**
- * Present the system document picker and pipe the picked file's
- * bytes into `ConnectFormBridge.pendingKeyBytes`. Fires
- * `on_picked(ctx, label_or_null)` once the user picks (or
- * cancels — `label_or_null` is NULL on cancel). The label is the
- * file's `lastPathComponent` (e.g. `id_ed25519`).
+ * Called from Swift when the onboarding flow completes. Transitions to
+ * the hosts root (same as `installHostsRoot` in the Swift version).
  */
-extern void bt_swift_connect_form_pick_key(void (*on_picked)(void *ctx, const char *label),
-                                           void *ctx);
-
-/**
- * Take ownership of the bytes parked by the most recent successful
- * picker round-trip. Writes the byte count via `out_len` and
- * returns a +1 malloc'd buffer (caller frees with
- * [`bt_swift_connect_form_free_key_bytes`]). Returns NULL when no
- * pending key is parked. Clears the pending slot regardless.
- */
-extern uint8_t *bt_swift_connect_form_take_pending_key_bytes(uintptr_t *out_len);
-
-/**
- * Free a buffer returned by
- * [`bt_swift_connect_form_take_pending_key_bytes`]. NULL-safe.
- */
-extern void bt_swift_connect_form_free_key_bytes(uint8_t *ptr);
-
-/**
- * Persist a JSON-encoded [`crate::connect_form_vm::SaveOutcome`]
- * through Swift's `HostsStore`. Swift deserialises the JSON, builds a
- * `SavedHost`, and calls `HostsStore().save()`. The JSON pointer is
- * borrowed for the duration of the call.
- */
-extern void bt_swift_hosts_store_save_json(const char *json);
-
-extern void bt_swift_request_local_network(void *ctx, void (*completion)(void*));
-
-/**
- * Register a Swift-built SSH bridge. The `vtable` is copied by value;
- * `ctx` ownership transfers to the returned handle (the handle's `Drop`
- * invokes `vtable.release(ctx)`).
- *
- * Returns a +1 owned `*mut SSHBridgeHandle`; release with
- * `bt_ios_ssh_bridge_release`.
- *
- * # Safety
- * `vtable` must point to a fully-populated `BtSSHClientVTable`. `ctx`
- * must be a valid retained handle. Caller must not free `ctx` itself —
- * the returned handle owns it.
- */
-struct SSHBridgeHandle *bt_ios_register_ssh_bridge(const struct BtSSHClientVTable *vtable,
-                                                   void *ctx);
-
-/**
- * Release an `SSHBridgeHandle *` previously returned by
- * `bt_ios_register_ssh_bridge`. Safe to call with null.
- *
- * # Safety
- * `handle` must be a pointer returned by `bt_ios_register_ssh_bridge`
- * and not yet released.
- */
-void bt_ios_ssh_bridge_release(struct SSHBridgeHandle *handle);
+void add_trampoline(void *ctx);
 
 /**
  * Create a connect-form VC.
@@ -690,550 +549,56 @@ void *bt_ios_create_connect_form_vc(const char *editing_id_or_null,
 void bt_ios_release_connect_form_vc(void *vc_ptr);
 
 /**
- * Free a string returned by any `bt_ios_connect_form_vm_*` getter that
- * returns a `*mut c_char`. NULL-safe.
- *
- * # Safety
- * `ptr` must have been returned by one of the `bt_ios_connect_form_vm_*`
- * FFI exports and not yet freed.
+ * Install the save-result side-effect callback.
  */
-void bt_ios_connect_form_vm_free_string(char *ptr);
+void bt_ios_connect_form_vm_set_callbacks(SaveResultFn save_result_cb,
+                                          void *save_result_ctx,
+                                          void (*_alert_cb)(void*, const char*),
+                                          void *_alert_ctx);
 
-/**
- * Reset the VM to an empty Add-mode draft (port "22").
- */
-void bt_ios_connect_form_vm_reset_to_add(void);
-
-/**
- * Prefill the VM for an Edit-mode session. Existing secrets are passed
- * as `*const c_char` (NULL → unset). `existing_private_key` is a raw
- * byte buffer with `private_key_len` bytes; pass `(NULL, 0)` for no
- * key. All inputs are borrowed for the duration of the call.
- *
- * # Safety
- * All `*const c_char` pointers must be NULL or valid UTF-8
- * nul-terminated strings borrowed for the call. `existing_private_key`
- * may be NULL iff `private_key_len == 0`.
- */
-void bt_ios_connect_form_vm_prefill_edit(const char *id,
-                                         const char *label,
-                                         const char *host,
-                                         uint16_t port,
-                                         const char *username,
-                                         bool auth_is_key,
-                                         const char *existing_password,
-                                         const uint8_t *existing_private_key,
-                                         uintptr_t private_key_len,
-                                         const char *existing_passphrase);
-
-/**
- * # Safety
- * `value` is a UTF-8 nul-terminated C string borrowed for the call.
- */
-void bt_ios_connect_form_vm_set_label(const char *value);
-
-/**
- * # Safety
- * `value` is a UTF-8 nul-terminated C string borrowed for the call.
- */
-void bt_ios_connect_form_vm_set_host(const char *value);
-
-/**
- * # Safety
- * `value` is a UTF-8 nul-terminated C string borrowed for the call.
- */
-void bt_ios_connect_form_vm_set_port_text(const char *value);
-
-/**
- * # Safety
- * `value` is a UTF-8 nul-terminated C string borrowed for the call.
- */
-void bt_ios_connect_form_vm_set_username(const char *value);
-
-/**
- * # Safety
- * `value` is a UTF-8 nul-terminated C string borrowed for the call.
- */
-void bt_ios_connect_form_vm_set_password(const char *value);
-
-/**
- * # Safety
- * `value` is a UTF-8 nul-terminated C string borrowed for the call.
- */
-void bt_ios_connect_form_vm_set_passphrase(const char *value);
-
-/**
- * # Safety
- * `bytes` may be NULL iff `len == 0`.
- */
-void bt_ios_connect_form_vm_set_private_key_bytes(const uint8_t *bytes, uintptr_t len);
-
-void bt_ios_connect_form_vm_set_using_key(bool value);
-
-char *bt_ios_connect_form_vm_label(void);
-
-char *bt_ios_connect_form_vm_host(void);
-
-char *bt_ios_connect_form_vm_port_text(void);
-
-char *bt_ios_connect_form_vm_username(void);
-
-bool bt_ios_connect_form_vm_is_using_key(void);
-
-bool bt_ios_connect_form_vm_has_password(void);
-
-bool bt_ios_connect_form_vm_has_private_key(void);
-
-bool bt_ios_connect_form_vm_has_passphrase(void);
-
-bool bt_ios_connect_form_vm_can_save(void);
-
-/**
- * Returns the current error message (set by the most recent
- * `try_save` failure), or NULL when none. Caller frees via
- * `bt_ios_connect_form_vm_free_string`.
- */
-char *bt_ios_connect_form_vm_error_message(void);
-
-/**
- * Validate without mutating. Returns NULL when persistable, else a
- * localized error message owned by the caller (free via
- * `bt_ios_connect_form_vm_free_string`).
- */
-char *bt_ios_connect_form_vm_validate(void);
-
-/**
- * Attempt to save. Returns the JSON-encoded [`SaveOutcome`] (caller
- * frees) on success, or NULL on validation failure (call
- * `bt_ios_connect_form_vm_error_message` to retrieve the message).
- */
-char *bt_ios_connect_form_vm_try_save(void);
-
-/**
- * Returns the normalized host from the current VM host field (splits
- * `host:port` paste, strips brackets around IPv6 addresses, trims
- * whitespace). Caller frees via
- * [`bt_ios_connect_form_vm_free_string`].
- */
-char *bt_ios_connect_form_vm_normalized_host(void);
-
-/**
- * Returns the normalized port from the current VM host + port fields.
- * Returns 0 when no valid port is recoverable (port 0 is never valid
- * for SSH, so 0 serves as a safe sentinel for "no port").
- */
-uint16_t bt_ios_connect_form_vm_normalized_port(void);
-
-/**
- * Load the stored fingerprint for `host:port`. Returns NULL when none
- * is stored. Caller frees via [`bt_ios_host_keys_free_string`].
- *
- * # Safety
- * `host` is a UTF-8 nul-terminated C string borrowed for the call.
- */
-char *bt_ios_host_keys_load(const char *host, uint16_t port);
-
-/**
- * Free a string returned by any `bt_ios_host_keys_*` accessor. NULL-safe.
- *
- * # Safety
- * `ptr` must have been returned by a `bt_ios_host_keys_*` accessor and
- * not yet freed.
- */
-void bt_ios_host_keys_free_string(char *ptr);
-
-/**
- * Persist `fingerprint` for `host:port`. Returns `false` on Keychain
- * error or invalid input.
- *
- * # Safety
- * `host` and `fingerprint` are UTF-8 nul-terminated C strings borrowed
- * for the call.
- */
-bool bt_ios_host_keys_save(const char *host, uint16_t port, const char *fingerprint);
-
-/**
- * Drop the stored fingerprint for `host:port`. No-op when none stored.
- *
- * # Safety
- * `host` is a UTF-8 nul-terminated C string borrowed for the call.
- */
-void bt_ios_host_keys_delete(const char *host, uint16_t port);
-
-/**
- * Compare `remote` against the stored fingerprint for `host:port`.
- * Returns the verdict discriminant:
- *   0 = Match, 1 = Mismatch, 2 = Unknown.
- * When the result is `Mismatch (1)` and `out_stored` is non-NULL,
- * `*out_stored` is set to a newly-allocated UTF-8 C string carrying
- * the stored fingerprint; caller frees via
- * [`bt_ios_host_keys_free_string`]. For other verdicts `*out_stored`
- * is set to NULL.
- *
- * # Safety
- * `host` and `remote` are UTF-8 nul-terminated C strings borrowed for
- * the call. `out_stored` may be NULL.
- */
-int32_t bt_ios_host_keys_verify(const char *host,
-                                uint16_t port,
-                                const char *remote,
-                                char **out_stored);
-
-/**
- * Test-only seam — route subsequent reads/writes to a per-test
- * in-process backend so simulator-backed unit tests don't pollute the
- * production Keychain. Pass NULL to restore the production backend.
- *
- * # Safety
- * `service`, when non-NULL, is a UTF-8 nul-terminated C string borrowed
- * for the call.
- */
-void bt_ios_host_keys_set_test_service(const char *service);
-
-/**
- * Create the Rust-built Hosts list `UIViewController *` (returned as
- * opaque `*mut c_void`). +1 retained — release via
- * [`bt_ios_release_hosts_list_vc`].
- *
- * - `on_add`: callback fired on the main thread when the user taps the
- *   navigation-bar `+` button. The Swift host responds by presenting
- *   the (still-SwiftUI) connect form sheet. May be NULL.
- * - `ctx`: opaque pointer threaded through to `on_add`. May be NULL.
- *
- * # Safety
- * `on_add` is invoked on the main thread. `ctx` is never dereffed by
- * Rust; the Swift host owns its lifetime until the VC is released.
- */
 void *bt_ios_create_hosts_list_vc(void (*on_add)(void *ctx), void *ctx);
 
-/**
- * Release a Hosts list `UIViewController *` previously returned by
- * [`bt_ios_create_hosts_list_vc`]. Safe to call with NULL.
- *
- * # Safety
- * `vc_ptr` must have been returned by `bt_ios_create_hosts_list_vc`
- * and not yet released.
- */
 void bt_ios_release_hosts_list_vc(void *vc_ptr);
 
-/**
- * Return the saved-hosts display snapshot as a `+1` retained UTF-8
- * C string. Free via `bt_ios_hosts_free_string`. Never NULL — an empty
- * store yields `"[]"`.
- */
-char *bt_ios_hosts_snapshot_json(void);
-
-/**
- * Free a string returned by any `bt_ios_hosts_*` function that returns
- * `*mut c_char`. NULL-safe.
- *
- * # Safety
- * `ptr` must have been returned by a `bt_ios_hosts_*` function and not
- * yet freed.
- */
-void bt_ios_hosts_free_string(char *ptr);
-
-/**
- * Load the full `SavedHost` JSON blob for `uuid` as a UTF-8 C string.
- * Returns NULL when no item is stored or the blob isn't valid UTF-8.
- * Free via [`bt_ios_hosts_free_string`].
- *
- * # Safety
- * `uuid` is a UTF-8 nul-terminated C string borrowed for the call.
- */
-char *bt_ios_hosts_load_json(const char *uuid);
-
-/**
- * Load the raw `SavedHost` JSON blob for `uuid`. Returns NULL when no
- * item is stored. `*out_len` is set to the buffer length on success.
- * Free with `bt_ios_hosts_free_blob`.
- *
- * # Safety
- * `uuid` is a UTF-8 nul-terminated C string borrowed for the call.
- * `out_len` may be NULL.
- */
-uint8_t *bt_ios_hosts_load_blob(const char *uuid, uintptr_t *out_len);
-
-/**
- * Free a blob returned by `bt_ios_hosts_load_blob`. NULL-safe.
- *
- * # Safety
- * `(ptr, len)` must have been returned together by
- * `bt_ios_hosts_load_blob` and not yet freed.
- */
-void bt_ios_hosts_free_blob(uint8_t *ptr, uintptr_t len);
-
-/**
- * Persist `bytes` as the `SavedHost` blob for `uuid`. Returns `false`
- * on Keychain error or invalid input.
- *
- * # Safety
- * `uuid` is a UTF-8 nul-terminated C string borrowed for the call.
- * `bytes` may be NULL only if `len == 0`.
- */
 bool bt_ios_hosts_save_blob(const char *uuid, const uint8_t *bytes, uintptr_t len);
 
-/**
- * Delete the entry for `uuid` from the Keychain + order index. No-op
- * when `uuid` is missing.
- *
- * # Safety
- * `uuid` is a UTF-8 nul-terminated C string borrowed for the call.
- */
-void bt_ios_hosts_delete(const char *uuid);
-
-/**
- * Reload the entries array from the saved-hosts store. Reads the
- * display-shape JSON via [`crate::hosts_store::list_snapshot_json`]
- * and parses it into the VM.
- */
 void bt_ios_hosts_vm_load_from_store(void);
 
-/**
- * UI-test seam — append stub entries (HostsStoreInjection.current)
- * that aren't backed by Keychain. JSON must be an array matching the
- * display snapshot schema (id, label, host, port, username, authIsKey).
- *
- * # Safety
- * `json` is a UTF-8 nul-terminated C string borrowed for the call.
- */
-void bt_ios_hosts_vm_merge_injected(const char *json);
+void bt_ios_hosts_vm_set_callbacks(ConnectFn connect_cb,
+                                   void *connect_ctx,
+                                   DisconnectFn disconnect_cb,
+                                   void *disconnect_ctx,
+                                   AlertFn alert_cb,
+                                   void *alert_ctx);
 
-/**
- * Mark the VM as having failed its most recent load — Swift uses
- * this when `UIApplication.shared.isProtectedDataAvailable` returns
- * false.
- */
-void bt_ios_hosts_vm_set_load_failed(bool value);
-
-bool bt_ios_hosts_vm_load_failed(void);
-
-char *bt_ios_hosts_vm_entries_json(void);
-
-char *bt_ios_hosts_vm_in_flight_id(void);
-
-char *bt_ios_hosts_vm_current_session_id(void);
-
-char *bt_ios_hosts_vm_pending_mismatch_json(void);
-
-char *bt_ios_hosts_vm_swap_confirmation_json(void);
-
-char *bt_ios_hosts_vm_delete_confirmation_json(void);
-
-/**
- * Returns the display name for `uuid` (label, or "user@host" fallback,
- * or "" when no match). Caller frees.
- *
- * # Safety
- * `uuid` is a UTF-8 nul-terminated C string borrowed for the call.
- */
-char *bt_ios_hosts_vm_display_name_for(const char *uuid);
-
-/**
- * Row's Connect tap. Drives the swap-confirm dance. Returns the action
- * discriminant (see `encode_action`); when 1 (Connect), `*out_uuid` is
- * the UUID Swift should kick the SSH attempt for.
- *
- * # Safety
- * `uuid` is a UTF-8 nul-terminated C string. `out_uuid` may be NULL;
- * when non-NULL, the callee writes either NULL or an owned C string
- * that the caller must free via `bt_ios_hosts_free_string`.
- */
 int32_t bt_ios_hosts_vm_request_connect(const char *uuid, char **out_uuid);
 
-/**
- * Accept the swap dialog. Returns the target UUID via `*out_uuid` when
- * a swap was pending, else NULL. The Swift caller is responsible for
- * disconnecting its `lastSession` *before* kicking off the new attempt.
- *
- * # Safety
- * `out_uuid` may be NULL.
- */
-void bt_ios_hosts_vm_confirm_swap(char **out_uuid);
-
-void bt_ios_hosts_vm_cancel_swap(void);
-
-/**
- * Swift's SSH attempt produced a session. No-op when the in-flight id
- * doesn't match (late callback from a cancelled task).
- *
- * # Safety
- * `uuid` is a UTF-8 nul-terminated C string borrowed for the call.
- */
 void bt_ios_hosts_vm_connect_completed_session(const char *uuid);
 
-/**
- * Swift's SSH attempt hit a host-key mismatch.
- *
- * # Safety
- * All `*const c_char` args are UTF-8 nul-terminated C strings borrowed
- * for the call.
- */
-void bt_ios_hosts_vm_connect_completed_mismatch(const char *uuid,
-                                                const char *stored,
-                                                const char *remote,
-                                                const char *host,
-                                                uint16_t port);
-
-/**
- * Swift's SSH attempt failed (network, auth, etc.). Swift fires its own
- * `onConnectError` toast; the VM just clears in-flight.
- *
- * # Safety
- * `uuid` is a UTF-8 nul-terminated C string borrowed for the call.
- */
 void bt_ios_hosts_vm_connect_completed_error(const char *uuid);
 
 /**
- * Retry after the user trusts a new host key. Returns Connect / None
- * via the action encoding.
- *
- * # Safety
- * `out_uuid` may be NULL.
- */
-int32_t bt_ios_hosts_vm_retry_after_mismatch(char **out_uuid);
-
-void bt_ios_hosts_vm_clear_mismatch(void);
-
-void bt_ios_hosts_vm_session_ended(void);
-
-/**
- * End the live session. Returns Disconnect / None via the action
- * encoding; no payload (Swift already owns the session ref).
- */
-int32_t bt_ios_hosts_vm_end_live_session(void);
-
-/**
- * Surface the delete-confirmation dialog state for `uuid`. Swift then
- * reads `bt_ios_hosts_vm_delete_confirmation_json` to drive the alert.
- *
- * # Safety
- * `uuid` is a UTF-8 nul-terminated C string borrowed for the call.
- */
-void bt_ios_hosts_vm_request_delete(const char *uuid);
-
-/**
- * Commit the pending delete. Returns the target UUID as an owned
- * string (caller frees), or NULL when no delete was pending. Drops
- * the entry from the mirrored array. Swift must follow up with
- * `bt_ios_hosts_delete` to remove the Keychain blob.
- */
-char *bt_ios_hosts_vm_confirm_delete(void);
-
-void bt_ios_hosts_vm_cancel_delete(void);
-
-/**
- * Free a `BtIosHostsAlertText *` returned by one of the
- * `bt_ios_hosts_vm_*_alert` getters. NULL-safe.
- *
- * # Safety
- * `ptr` must have been returned by `bt_ios_hosts_vm_swap_alert`,
- * `bt_ios_hosts_vm_delete_alert`, or `bt_ios_hosts_vm_mismatch_alert`
- * and not yet freed.
- */
-void bt_ios_hosts_free_alert_text(struct BtIosHostsAlertText *ptr);
-
-/**
- * Formatted, localized swap-confirmation alert text — title / message
- * / confirm / cancel labels with the target host's display name already
- * interpolated. Returns NULL when no swap is pending. Free via
- * [`bt_ios_hosts_free_alert_text`].
- */
-struct BtIosHostsAlertText *bt_ios_hosts_vm_swap_alert(void);
-
-/**
- * Formatted, localized delete-confirmation alert text. Live vs idle
- * branch (whether the session is currently connected) is chosen Rust-
- * side — Swift just renders the strings. Returns NULL when no delete
- * is pending. Free via [`bt_ios_hosts_free_alert_text`].
- */
-struct BtIosHostsAlertText *bt_ios_hosts_vm_delete_alert(void);
-
-/**
- * Formatted, localized host-key-mismatch toast text. The actual review
- * is a SwiftUI sheet; this only powers the toast that opens it. The
- * `cancel_label` field is always empty (toast has no cancel button)
- * but is included so the struct shape stays uniform across all three
- * flows. Returns NULL when no mismatch is pending. Free via
- * [`bt_ios_hosts_free_alert_text`].
- */
-struct BtIosHostsAlertText *bt_ios_hosts_vm_mismatch_alert(void);
-
-/**
- * Test-only seam — wipe just the order index, leaving Keychain blobs
- * intact. Used by the reconciliation test to assert that the next
- * `bt_ios_hosts_snapshot_json` call rebuilds the order from surviving
- * items.
- */
-void bt_ios_hosts_test_clear_order(void);
-
-/**
- * Test-only seam — route subsequent reads/writes to a per-test
- * `(service, order_key)` pair so simulator-backed unit tests don't
- * pollute the production Keychain / UserDefaults entries. Pass
- * `(NULL, NULL)` to restore the production defaults.
- *
- * # Safety
- * Both pointers, when non-NULL, must be UTF-8 nul-terminated C strings
- * borrowed for the duration of the call.
- */
-void bt_ios_hosts_set_test_service(const char *service, const char *order_key);
-
-/**
- * Create the host-kind step VC (`onboarding/host_kind_vc.rs`).
- * `on_choice(ctx, choice)`: `choice == 0` → macOS, `choice == 1` → Linux/other.
- *
- * # Safety
- * `on_choice` and `ctx` are stored and invoked on the main thread only.
- */
-void *bt_ios_create_onboarding_host_kind_vc(void (*on_choice)(void *ctx, int32_t choice),
-                                            void *ctx);
-
-/**
- * Create the location step VC.
- * `on_choice(ctx, choice)`: `0` → same-Wi-Fi, `1` → remote.
- *
- * # Safety
- * Same as `bt_ios_create_onboarding_host_kind_vc`.
- */
-void *bt_ios_create_onboarding_location_vc(void (*on_choice)(void *ctx, int32_t choice), void *ctx);
-
-/**
- * Create the macOS tutorial step VC. Fires `on_continue(ctx)` once when
- * the user taps Continue.
- *
- * # Safety
- * Same as the other onboarding-VC entry points.
- */
-void *bt_ios_create_onboarding_mac_tutorial_vc(void (*on_continue)(void *ctx), void *ctx);
-
-/**
- * Create the local-network-permission terminator step VC. `is_remote`
- * selects the "All set" copy variant (remote host); pass `false` for the
- * same-Wi-Fi prose. Fires `on_continue(ctx)` once on tap; the Swift
- * coordinator is responsible for the `LocalNetworkPrewarmer` Bonjour
- * probe (the VC has no async story).
- *
- * # Safety
- * Same as the other onboarding-VC entry points.
- */
-void *bt_ios_create_onboarding_local_permission_vc(void (*on_continue)(void *ctx),
-                                                   void *ctx,
-                                                   bool is_remote);
-
-/**
  * Create the full onboarding-flow VC — a `UINavigationController`
- * subclass (`BtIosOnboardingFlowVC`) that owns the
- * `OnboardingState` state machine and pushes each step VC as the user
- * advances. The Swift host installs the returned VC as its window root
- * and reacts to `on_completed(ctx)` by swapping to the hosts root.
+ * subclass (`BtIosOnboardingFlowVC`) that owns the `OnboardingState`
+ * state machine and pushes each step VC as the user advances.
  *
  * The returned pointer is +1 retained; release with `bt_ios_release_vc`.
  *
+ * - `on_completed`: fired once when onboarding finishes.
+ * - `ctx`: opaque host context threaded into `on_completed`.
+ * - `request_local_network`: injected by Swift to trigger the Bonjour-based
+ *   Local Network permission prompt. When NULL the permission step is
+ *   skipped (harmless: the OS prompts on first actual LAN connection).
+ *   Called with `(ctx, completion)` — Swift runs the probe and calls
+ *   `completion(ctx)` on the main thread when the OS resolves the prompt.
+ *
  * # Safety
- * `on_completed` and `ctx` are stored and invoked on the main thread only.
+ * All callbacks are stored and invoked on the main thread only.
  */
-void *bt_ios_create_onboarding_flow_vc(void (*on_completed)(void *ctx), void *ctx);
+void *bt_ios_create_onboarding_flow_vc(void (*on_completed)(void *ctx),
+                                       void *ctx,
+                                       void (*request_local_network)(void *ctx,
+                                                                     void (*completion)(void*)));
 
 /**
  * Create the Rust-built Settings `UIViewController *` (returned as
@@ -1261,237 +626,20 @@ void *bt_ios_create_settings_vc(void (*on_done)(void *ctx), void *ctx);
 void bt_ios_release_settings_vc(void *vc_ptr);
 
 /**
- * Read the "show command blocks (Warp-style)" setting. Defaults to
- * `false` (beta opt-in) when no value has ever been written.
- */
-bool bt_ios_settings_show_command_blocks(void);
-
-/**
- * Persist the "show command blocks" setting.
- */
-void bt_ios_settings_set_show_command_blocks(bool value);
-
-/**
  * True iff the user has finished the onboarding flow. Defaults to
- * `false` on first launch — same key the previous Swift
- * `OnboardingPersistenceBridge` wrote.
+ * `false` on first launch.
  */
 bool bt_ios_settings_onboarding_completed(void);
 
 /**
- * Persist the onboarding-completion flag. Called from
- * `onboarding::coordinator` once the user lands on the final step.
- */
-void bt_ios_settings_set_onboarding_completed(bool value);
-
-/**
- * Create a new SSH client handle.
- *
- * Spawns a single-threaded tokio runtime and returns an opaque handle.
- * The handle is ready for [`bt_ssh_client_connect`].
- *
- * Returns NULL if the tokio runtime could not be created.
- */
-struct SshClientHandle *bt_ssh_client_create(void);
-
-/**
- * Connect to an SSH server.
- *
- * Parses the connection parameters, calls
- * [`RusshSshClient::connect`](SshClient::connect) on the tokio runtime
- * (blocking the calling thread until complete), and stores the connected
- * client in the handle.
- *
- * The completion callback is invoked on the *calling* thread.
- *
- * # Parameters
- *
- * - `handle`: opaque handle from [`bt_ssh_client_create`].
- * - `host`: UTF-8 C string, remote hostname or IP.  Must not be NULL.
- * - `port`: TCP port (typically 22).
- * - `username`: UTF-8 C string, SSH username.  Must not be NULL.
- * - `credential_json`: UTF-8 C string.  JSON describing a
- *   [`HostCredential`] (see [`parse_credential`]).  Must not be NULL.
- * - `proxy_command`: UTF-8 C string or NULL for no proxy command.
- * - `completion`: callback invoked with the connection result.
- * - `completion_ctx`: opaque context threaded verbatim to `completion`.
+ * Create a `BtIosToasterView *` (returned as `*mut c_void`). The result
+ * is **+1 retained** and owned by the caller; release with
+ * `Retained::from_raw`.
  *
  * # Safety
- *
- * See the module-level safety documentation.  NULL string parameters
- * (other than `proxy_command`) cause a `BtSSHResultOther` completion.
+ * Must be called on the main thread (UIKit construction).
  */
-void bt_ssh_client_connect(struct SshClientHandle *handle,
-                           const char *host,
-                           uint16_t port,
-                           const char *username,
-                           const char *credential_json,
-                           const char *proxy_command,
-                           BtSSHCompletion completion,
-                           void *completion_ctx);
-
-/**
- * Open a PTY shell on the connected SSH session.
- *
- * After the shell is opened, the background read loop is automatically
- * started (if a read callback has already been installed by
- * [`bt_ssh_client_set_read_callback`]).
- *
- * The completion callback is invoked on the *calling* thread.
- *
- * # Parameters
- *
- * - `handle`: opaque handle, must be connected.
- * - `cols`: terminal width in character cells.
- * - `rows`: terminal height in character cells.
- * - `width_px`: pixel width of the viewport (0 if unknown).
- * - `height_px`: pixel height of the viewport (0 if unknown).
- * - `completion`: callback invoked with the result.
- * - `completion_ctx`: opaque context for `completion`.
- *
- * # Safety
- *
- * See the module-level safety documentation.
- */
-void bt_ssh_client_open_shell(struct SshClientHandle *handle,
-                              uint16_t cols,
-                              uint16_t rows,
-                              uint16_t width_px,
-                              uint16_t height_px,
-                              BtSSHCompletion completion,
-                              void *completion_ctx);
-
-/**
- * Install a read callback on the SSH client.
- *
- * The callback is invoked for every chunk of data received from the SSH
- * channel.  If the shell is already open and no read thread is running,
- * calling this function automatically spawns the background read loop.
- *
- * Use [`bt_ssh_client_clear_read_callback`] to unset an existing callback
- * (subsequent data will be silently dropped).
- *
- * # Parameters
- *
- * - `handle`: opaque handle.
- * - `sink`: callback function pointer.  Must be non-null.
- * - `sink_ctx`: opaque context threaded verbatim to `sink`.
- *
- * # Safety
- *
- * `sink` must be a valid function pointer valid for the lifetime of the
- * handle or until a subsequent call to [`bt_ssh_client_clear_read_callback`]
- * or [`bt_ssh_client_close`].  `sink_ctx` must remain valid for the same
- * duration.
- */
-void bt_ssh_client_set_read_callback(struct SshClientHandle *handle,
-                                     BtSSHOutputSink sink,
-                                     void *sink_ctx);
-
-/**
- * Clear a previously-installed read callback.
- *
- * Subsequent data received from the SSH channel will be silently dropped
- * until a new callback is installed.
- *
- * # Parameters
- *
- * - `handle`: opaque handle.
- *
- * # Safety
- *
- * See the module-level safety documentation.  NULL handles are a no-op.
- */
-void bt_ssh_client_clear_read_callback(struct SshClientHandle *handle);
-
-/**
- * Write bytes to the SSH channel (stdin of the remote shell).
- *
- * The completion callback is invoked on the *calling* thread after the
- * write completes (or fails).
- *
- * # Parameters
- *
- * - `handle`: opaque handle, shell must be open.
- * - `bytes`: pointer to `len` bytes of data.
- * - `len`: number of bytes to write.
- * - `completion`: callback invoked with the result.
- * - `completion_ctx`: opaque context for `completion`.
- *
- * # Safety
- *
- * `bytes` must be valid for `len` bytes.  Passing NULL with len > 0 is
- * undefined behaviour.
- */
-void bt_ssh_client_write(struct SshClientHandle *handle,
-                         const uint8_t *bytes,
-                         uintptr_t len,
-                         BtSSHCompletion completion,
-                         void *completion_ctx);
-
-/**
- * Resize the remote PTY.
- *
- * The completion callback is invoked on the *calling* thread after the
- * resize completes (or fails).
- *
- * # Parameters
- *
- * - `handle`: opaque handle, shell must be open.
- * - `cols`: new terminal width in character cells.
- * - `rows`: new terminal height in character cells.
- * - `width_px`: pixel width of the viewport (0 if unknown).
- * - `height_px`: pixel height of the viewport (0 if unknown).
- * - `completion`: callback invoked with the result.
- * - `completion_ctx`: opaque context for `completion`.
- *
- * # Safety
- *
- * See the module-level safety documentation.
- */
-void bt_ssh_client_resize(struct SshClientHandle *handle,
-                          uint16_t cols,
-                          uint16_t rows,
-                          uint16_t width_px,
-                          uint16_t height_px,
-                          BtSSHCompletion completion,
-                          void *completion_ctx);
-
-/**
- * Close the SSH connection and free the handle.
- *
- * Signals the background read loop to stop, joins the read-loop thread,
- * calls [`SshClient::close`] on the connected client, and deallocates
- * the handle.
- *
- * After this call the handle pointer is invalid and must not be used
- * again.  Safe to call with NULL.
- *
- * # Safety
- *
- * `handle` must be non-NULL and returned by [`bt_ssh_client_create`]
- * that has not already been passed to `bt_ssh_client_close`.
- */
-void bt_ssh_client_close(struct SshClientHandle *handle);
-
-/**
- * Produce a user-facing description for a [`BtSSHResultCode`], optionally
- * embedding a detail string.
- *
- * The returned `*const c_char` points into a thread-local buffer that is
- * valid until the next call from the same thread.  Swift must copy the
- * string before calling this function again.
- *
- * Pass `detail = NULL` for error variants that do not carry a detail.
- *
- * The descriptions match the existing `TerminalSession.describe()` output.
- *
- * # Safety
- *
- * `detail` must be NULL or a valid nul-terminated UTF-8 C string borrowed
- * for the duration of the call.
- */
-const char *bt_ssh_error_describe(enum BtSSHResultCode code, const char *detail);
+void *bt_ios_toaster_view_new(void);
 
 /**
  * Create the iOS terminal `UIViewController *` (returned as `*mut c_void` so
@@ -1518,6 +666,10 @@ void *bt_ios_create_vc(void (*on_back)(void *ctx), void *ctx);
  */
 void bt_ios_release_vc(void *vc_ptr);
 
+void *bt_ios_create_mismatch_vc(MismatchCallback on_trust, MismatchCallback on_reject, void *ctx);
+
+void bt_ios_release_mismatch_vc(void *vc_ptr);
+
 /**
  * Resolve the `BtIosMetalInputView *` embedded inside a VC returned by
  * `bt_ios_create_vc`. Returns NULL when the view didn't construct
@@ -1539,54 +691,6 @@ void *bt_ios_vc_metal_view(void *vc_ptr);
  * duration of the call.
  */
 void bt_ios_view_feed_bytes(void *view_ptr, const uint8_t *bytes, uintptr_t len);
-
-/**
- * Cell pixel size (width, height) as reported by the view's renderer
- * atlas. Returns `(0, 0)` if the view has no live renderer (headless
- * tests). Useful for Swift / tests to size scroll surfaces against the
- * authoritative glyph metrics.
- *
- * # Safety
- * Same contract as `bt_ios_view_feed_bytes`.
- */
-void bt_ios_view_cell_size_px(void *view_ptr, uint32_t *out_w, uint32_t *out_h);
-
-/**
- * Install a C-callback PTY sink on the metal view. Replaces any prior
- * sink. Pass `cb = None` (NULL) to clear.
- *
- * # Safety
- * Main thread. `view_ptr` must be a live `BtIosMetalInputView *`. The
- * `cb` + `ctx` must remain valid until cleared or the view is released.
- */
-void bt_ios_view_set_on_send(void *view_ptr, void (*cb)(void *ctx,
-                                                        const uint8_t *bytes,
-                                                        uintptr_t len), void *ctx);
-
-/**
- * Install a resize-notification callback on the metal view. The
- * callback fires from `layoutSubviews` whenever the renderer-derived
- * `(cols, rows)` differs from the previously-reported value. Pass
- * `cb = None` (NULL) to clear.
- *
- * # Safety
- * Main thread. `view_ptr` must be a live `BtIosMetalInputView *`.
- * The `cb` + `ctx` must remain valid until cleared or the view is
- * released.
- */
-void bt_ios_view_set_on_resize(void *view_ptr,
-                               void (*cb)(void *ctx, uint16_t cols, uint16_t rows),
-                               void *ctx);
-
-/**
- * Read the most recent `(cols, rows)` the metal view derived from its
- * bounds + cell pixel size. Both out-params may be NULL. Returns
- * `(0, 0)` before the first layout pass.
- *
- * # Safety
- * Main thread. `view_ptr` must be a live `BtIosMetalInputView *`.
- */
-void bt_ios_view_grid_dim(void *view_ptr, uint16_t *out_cols, uint16_t *out_rows);
 
 /**
  * Create a new terminal session handle.
@@ -1680,69 +784,24 @@ void bt_terminal_session_set_data_sink(struct BtTerminalSessionHandle *handle,
                                        void *sink_ctx);
 
 /**
- * Write bytes to the SSH channel (stdin of the remote shell).
+ * Replaces the per-session data sink with a direct feed into the given
+ * `BtIosMetalInputView`. After this call, inbound PTY bytes are pushed
+ * straight into the metal view's `BtTerm` renderer — no Swift pump task,
+ * no `AsyncStream`, no C-callback trampoline through Swift.
  *
- * The completion callback is invoked on the *calling* thread after the
- * write completes (or fails).
- *
- * # Parameters
- *
- * - `handle`: opaque handle, shell must be open.
- * - `bytes`: pointer to `len` bytes of data.
- * - `len`: number of bytes to write.
- * - `completion`: callback invoked with the result.
- * - `completion_ctx`: opaque context for `completion`.
+ * This is the Phase 3 bridge: the Swift `RustTerminalSession` pump task
+ * (`startPumpTask`) and the `IosTerminalHost` feed-forwarding task can
+ * both be retired once every session calls this function.
  *
  * # Safety
  *
- * `bytes` must be valid for `len` bytes. Passing NULL with len > 0 is
- * undefined behaviour.
+ * `handle` must be a valid non-null pointer returned by
+ * [`bt_terminal_session_create`]. `metal_view_ptr` must point to a live
+ * `BtIosMetalInputView` that outlives the session. Must be called on the
+ * main thread (the metal view is a UIKit object).
  */
-void bt_terminal_session_send(struct BtTerminalSessionHandle *handle,
-                              const uint8_t *bytes,
-                              uintptr_t len,
-                              BtSSHCompletion completion,
-                              void *completion_ctx);
-
-/**
- * Resize the remote PTY.
- *
- * The completion callback is invoked on the *calling* thread after the
- * resize completes (or fails).
- *
- * # Parameters
- *
- * - `handle`: opaque handle, shell must be open.
- * - `cols`: new terminal width in character cells.
- * - `rows`: new terminal height in character cells.
- * - `completion`: callback invoked with the result.
- * - `completion_ctx`: opaque context for `completion`.
- *
- * # Safety
- *
- * See the module-level safety documentation.
- */
-void bt_terminal_session_resize(struct BtTerminalSessionHandle *handle,
-                                uint16_t cols,
-                                uint16_t rows,
-                                BtSSHCompletion completion,
-                                void *completion_ctx);
-
-/**
- * Initiate a non-blocking disconnect.
- *
- * Sets the stop flag (so the read loop exits on its next wake), takes
- * the SSH client, closes it, and fires the state callback with
- * `Closed + BtSSHResultOk` to signal a caller-initiated disconnect.
- *
- * This call does NOT join the read thread — use
- * [`bt_terminal_session_close`] to fully tear down the handle.
- *
- * # Safety
- *
- * See the module-level safety documentation.
- */
-void bt_terminal_session_disconnect(struct BtTerminalSessionHandle *handle);
+void bt_terminal_session_attach_metal_view(struct BtTerminalSessionHandle *handle,
+                                           void *metal_view_ptr);
 
 /**
  * Fully tear down the session handle and free all resources.
@@ -1761,62 +820,6 @@ void bt_terminal_session_disconnect(struct BtTerminalSessionHandle *handle);
 void bt_terminal_session_close(struct BtTerminalSessionHandle *handle);
 
 /**
- * Return the current session lifecycle state.
- *
- * # Safety
- *
- * `handle` must be non-null and valid (not yet passed to
- * [`bt_terminal_session_close`]).
- */
-enum BtSessionState bt_terminal_session_state(const struct BtTerminalSessionHandle *handle);
-
-/**
- * Return the error code from the last session close (or `BtSSHResultOk`
- * if the session closed normally / has not yet closed).
- *
- * # Safety
- *
- * `handle` must be non-null and valid.
- */
-enum BtSSHResultCode bt_terminal_session_last_error_code(const struct BtTerminalSessionHandle *handle);
-
-/**
- * Return the shell exit code from the last session close (0 if not a
- * shell-exited close, or the session has not yet closed).
- *
- * # Safety
- *
- * `handle` must be non-null and valid.
- */
-int32_t bt_terminal_session_last_exit_code(const struct BtTerminalSessionHandle *handle);
-
-/**
- * Install a named mock SSH client for UI testing.
- *
- * Must be called **before** [`bt_terminal_session_connect`]. When a
- * non-empty script name is installed, the next connect bypasses real SSH
- * and uses a [`MockSshClient`] instead. The override is consumed on the
- * first connect so a subsequent reconnect uses the real SSH path.
- *
- * Scripts (matching `UITestSupport.swift`):
- *
- * | Name         | Behaviour                                             |
- * |--------------|-------------------------------------------------------|
- * | `"hello"`    | Emits `"Hello, world!\r\n"` then blocks.              |
- * | `"ansiColors"` | Emits ANSI red/green/blue sequence then blocks.     |
- * | `"prompt"`   | Emits `"bedterm$ "` then blocks.                      |
- * | `"echo"`     | Emits `"bedterm$ "`, echoes writes back as magenta.   |
- *
- * NULL or empty `script` is a no-op.
- *
- * # Safety
- *
- * `handle` must be a live handle not yet connected.
- * `script` is a UTF-8 nul-terminated C string borrowed for the call.
- */
-void bt_terminal_session_install_mock(struct BtTerminalSessionHandle *handle, const char *script);
-
-/**
  * # Safety
  * `h` must be a valid `BtTerm *` returned by `bt_term_new`.
  */
@@ -1829,6 +832,27 @@ uintptr_t bt_term_block_count(const struct BtTerm *h);
  * call as described in the module-level docs.
  */
 int bt_term_block_at(struct BtTerm *h, uintptr_t idx, struct BtBlockView *out);
+
+/**
+ * Return the human-readable display name for a CLI agent identified by
+ * its `BT_CLI_AGENT_*` tag. Returns a static C string, or NULL when the
+ * tag is `BT_CLI_AGENT_NONE` (0) or unknown (forward-compat).
+ *
+ * The returned pointer lives in the binary's `.rodata` and must NOT be
+ * freed by the caller.
+ */
+const char *bt_cli_agent_display_name(uint8_t tag);
+
+/**
+ * Return the asset-catalog icon name for a CLI agent identified by its
+ * `BT_CLI_AGENT_*` tag. Returns a static C string, or NULL when the agent
+ * has no dedicated icon (caller should fall back to a generic glyph),
+ * the tag is `BT_CLI_AGENT_NONE` (0), or unknown.
+ *
+ * The returned pointer lives in the binary's `.rodata` and must NOT be
+ * freed by the caller.
+ */
+const char *bt_cli_agent_icon_name(uint8_t tag);
 
 struct BtTerm *bt_term_new(uint16_t cols, uint16_t rows);
 

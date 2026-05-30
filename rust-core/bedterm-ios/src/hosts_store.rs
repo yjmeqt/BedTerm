@@ -1,11 +1,10 @@
 //! Saved-hosts persistence — Rust-owned, backed by `NSUserDefaults` (order
 //! index) + iOS Keychain (per-UUID `SavedHost` JSON blob).
 //!
-//! Replaces the Swift `HostsStore` storage layer. Swift retains the
-//! `SavedHost` / `HostCredential` Codable types and encodes/decodes the
-//! blobs; this module is opaque to the blob shape except when building
-//! the display-snapshot JSON, where it extracts a handful of fields by
-//! treating the blob as `serde_json::Value`.
+//! All persistence goes through the canonical [`crate::hosts::model::SavedHost`]
+//! type. The raw `save` / `load_blob` / `load_json` / `delete` functions
+//! still exist for the legacy FFI surface (Swift tests that write raw
+//! `SavedHost` blobs); new code should prefer [`save_host`] / [`load_host`].
 //!
 //! Threading: callable from any thread. The Keychain (`SecItem*`) and
 //! `NSUserDefaults` are both thread-safe; production callers run on the
@@ -14,6 +13,7 @@
 
 #![cfg(target_os = "ios")]
 
+use crate::hosts::model::SavedHost;
 use core_foundation::array::{CFArray, CFArrayRef};
 use core_foundation::base::{TCFType, ToVoid};
 use core_foundation::boolean::CFBoolean;
@@ -64,6 +64,7 @@ struct MemoryBackend {
 
 enum TestMode {
     Production,
+    #[allow(dead_code)]
     Memory(RwLock<MemoryBackend>),
 }
 
@@ -86,6 +87,7 @@ fn with_memory<R>(f: impl FnOnce(&mut MemoryBackend) -> R) -> Option<R> {
 ///
 /// Production code never calls this; the Swift test bundle reaches it
 /// via `bt_ios_hosts_set_test_service`.
+#[allow(dead_code)]
 pub fn set_test_override(service: Option<&str>, order_key: Option<&str>) {
     let mut guard = MODE.write().expect("hosts_store MODE poisoned");
     match (service, order_key) {
@@ -340,7 +342,7 @@ fn reconcile_order() -> Vec<String> {
 
 /// Returns the saved-hosts display snapshot as JSON in stored order.
 /// Each entry is `{id, label, host, port, username, authIsKey}`. Blobs
-/// that fail to parse are logged + skipped.
+/// that fail to parse as the canonical [`SavedHost`] schema are skipped.
 pub fn list_snapshot_json() -> String {
     let order = reconcile_order();
     // Prepend UI-test injected entries before the Keychain-backed rows.
@@ -348,60 +350,16 @@ pub fn list_snapshot_json() -> String {
     let mut items: Vec<serde_json::Value> = injected.clone();
     items.reserve(order.len());
     for uuid in &order {
-        let Some(bytes) = load_blob_raw(uuid) else {
+        let Some(host) = load_host(uuid) else {
             continue;
         };
-        let Ok(value) = serde_json::from_slice::<serde_json::Value>(&bytes) else {
-            eprintln!("hosts_store: failed to parse blob for {uuid} as JSON; skipping");
-            continue;
-        };
-        let Some(obj) = value.as_object() else {
-            eprintln!("hosts_store: blob for {uuid} is not a JSON object; skipping");
-            continue;
-        };
-        let id = obj
-            .get("id")
-            .and_then(|v| v.as_str())
-            .unwrap_or(uuid)
-            .to_string();
-        let label = obj
-            .get("label")
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .to_string();
-        let cred = match obj.get("credential").and_then(|v| v.as_object()) {
-            Some(c) => c,
-            None => {
-                eprintln!("hosts_store: blob for {uuid} is missing credential; skipping");
-                continue;
-            }
-        };
-        let host = cred
-            .get("host")
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .to_string();
-        let port = cred.get("port").and_then(|v| v.as_i64()).unwrap_or(22);
-        let username = cred
-            .get("username")
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .to_string();
-        // Swift's Codable AuthMethod encodes a single-key dictionary with
-        // either `password` or `privateKey` under the `auth` field.
-        let auth_is_key = cred
-            .get("auth")
-            .and_then(|v| v.as_object())
-            .map(|o| o.contains_key("privateKey"))
-            .unwrap_or(false);
-
         items.push(serde_json::json!({
-            "id": id,
-            "label": label,
-            "host": host,
-            "port": port,
-            "username": username,
-            "authIsKey": auth_is_key,
+            "id": host.id,
+            "label": host.label,
+            "host": host.credential.host,
+            "port": host.credential.port,
+            "username": host.credential.username,
+            "authIsKey": false,
         }));
     }
     serde_json::to_string(&items).unwrap_or_else(|_| "[]".to_string())
@@ -417,6 +375,7 @@ static INJECTED: Mutex<Vec<serde_json::Value>> = Mutex::new(Vec::new());
 /// Append JSON-encoded display-snapshot entries to the in-memory injection
 /// buffer. Callers must also call `hosts_vm::merge_injected` to keep the VM
 /// in sync for the Swift-side `HostsViewModel.entries` mirror.
+#[allow(dead_code)]
 pub fn merge_injected(json: &str) {
     let Ok(extras) = serde_json::from_str::<Vec<serde_json::Value>>(json) else {
         return;
@@ -434,11 +393,13 @@ pub fn merge_injected(json: &str) {
 }
 
 /// Test-only — clear the injected entries buffer.
+#[allow(dead_code)]
 pub fn test_clear_injected() {
     INJECTED.lock().unwrap_or_else(|p| p.into_inner()).clear();
 }
 
 /// Public API consumed by the FFI surface.
+#[allow(dead_code)]
 pub fn load_blob(uuid: &str) -> Option<Vec<u8>> {
     load_blob_raw(uuid)
 }
@@ -461,9 +422,28 @@ pub fn save(uuid: &str, bytes: &[u8]) -> bool {
     true
 }
 
+/// Persist a canonical [`SavedHost`] to the Keychain. Serialises using
+/// the Rust-defined JSON schema and writes through the raw blob store.
+/// Returns `false` on serialisation or Keychain error.
+pub fn save_host(host: &SavedHost) -> bool {
+    let Ok(bytes) = serde_json::to_vec(host) else {
+        return false;
+    };
+    save(&host.id, &bytes)
+}
+
+/// Load and deserialise a canonical [`SavedHost`] from the Keychain.
+/// Returns `None` when no blob exists or the JSON doesn't match the
+/// canonical schema.
+pub fn load_host(uuid: &str) -> Option<SavedHost> {
+    let bytes = load_blob_raw(uuid)?;
+    serde_json::from_slice::<SavedHost>(&bytes).ok()
+}
+
 /// Test-only — wipe the order index without touching blobs. Used by
 /// `HostsStoreTests.reconcileOrphans` to assert that `list_snapshot_json`
 /// rebuilds the order from surviving Keychain items.
+#[allow(dead_code)]
 pub fn test_clear_order() {
     with_memory(|mem| {
         mem.order.clear();

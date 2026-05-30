@@ -55,3 +55,14 @@ pub type BtIosOnboardingContinueCallback = unsafe extern "C" fn(ctx: *mut c_void
 /// The Swift host should swap to the hosts root in response.
 #[cfg(target_os = "ios")]
 pub type BtIosOnboardingFlowCompletedCallback = unsafe extern "C" fn(ctx: *mut c_void);
+
+/// C callback that Rust calls to trigger the iOS "Local Network" permission
+/// prompt (Bonjour probe). Injected by the Swift host at flow-VC creation
+/// time so Rust never reaches for a global `@_cdecl` symbol.
+///
+/// - `ctx`: the flow-VC pointer (`*const BtIosOnboardingFlowVC`).
+/// - `completion`: Rust-side callback to invoke once the OS resolves the
+///   permission prompt (fired on the main thread).
+#[cfg(target_os = "ios")]
+pub type BtIosRequestLocalNetworkCallback =
+    unsafe extern "C" fn(ctx: *mut c_void, completion: unsafe extern "C" fn(*mut c_void));
