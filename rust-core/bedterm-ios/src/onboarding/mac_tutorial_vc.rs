@@ -6,8 +6,6 @@
 //! ordering is preserved). A bottom-aligned primary "Continue" button fires
 //! the single `on_continue` callback.
 
-#![cfg(target_os = "ios")]
-
 use crate::a11y;
 use crate::design_system::colors;
 use crate::design_system::components::primary_button;

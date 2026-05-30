@@ -11,8 +11,6 @@
 //! All widget construction follows the existing component idioms
 //! (`action_chip.rs`, `keybar.rs`, `disconnect_banner.rs`).
 
-#![cfg(target_os = "ios")]
-
 use super::{ToastAction, ToastKind};
 use crate::a11y;
 use crate::design_system::colors;

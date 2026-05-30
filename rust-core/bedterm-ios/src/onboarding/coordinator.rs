@@ -18,8 +18,6 @@
 //! (`bt_swift_onboarding_set_completed(true)`) and fires the host's
 //! `on_completed` callback.
 
-#![cfg(target_os = "ios")]
-
 use crate::onboarding::host_kind_vc::create_host_kind_vc;
 use crate::onboarding::local_permission_vc::create_local_permission_vc;
 use crate::onboarding::location_vc::create_location_vc;

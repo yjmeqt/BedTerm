@@ -4,8 +4,6 @@
 //! Bytes flow in via `bt_ios_view_feed_bytes`; the send and resize
 //! callbacks were removed — the VC owns those paths directly in Rust.
 
-#![cfg(target_os = "ios")]
-
 use crate::metal_view;
 
 /// Resolve the `BtIosMetalInputView *` embedded inside a VC returned by

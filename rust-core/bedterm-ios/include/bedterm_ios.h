@@ -12,27 +12,10 @@
 
 typedef double CGFloat;
 
-/**
- * Opaque callback type fired when the in-VC back button is tapped.
- *
- * Defined unconditionally (no `#[cfg(target_os = "ios")]`) so cbindgen
- * emits the typedef in the generated C header — Swift tests reference
- * it by name (e.g. `IosTerminalFFITests.onSendCallback: BtIosOnSendCallback`).
- */
 typedef void (*BtIosBackCallback)(void *ctx);
 
-/**
- * PTY-byte sink callback installed on `BtIosMetalInputView`. Swift
- * tests reference this typedef by name; see `BtIosBackCallback` for
- * the cbindgen-visibility rationale.
- */
 typedef void (*BtIosOnSendCallback)(void *ctx, const uint8_t *bytes, uintptr_t len);
 
-/**
- * Grid-resize callback fired from `BtIosMetalInputView::layoutSubviews`.
- * Swift tests reference this typedef by name; see `BtIosBackCallback`
- * for the cbindgen-visibility rationale.
- */
 typedef void (*BtIosOnResizeCallback)(void *ctx, uint16_t cols, uint16_t rows);
 
 #ifdef __cplusplus

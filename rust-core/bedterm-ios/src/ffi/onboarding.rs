@@ -4,8 +4,6 @@
 //! The individual step VCs are created internally by the coordinator;
 //! their FFI exports were removed.
 
-#![cfg(target_os = "ios")]
-
 use crate::onboarding::coordinator::create_flow_vc;
 use std::ffi::c_void;
 

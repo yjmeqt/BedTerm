@@ -13,8 +13,6 @@
 //! Section order, headers, row labels and footer copy mirror the original
 //! SwiftUI screen row-for-row.
 
-#![cfg(target_os = "ios")]
-
 use crate::design_system::{
     colors,
     components::{form_card, toggle_row},

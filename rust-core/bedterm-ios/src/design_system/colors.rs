@@ -4,7 +4,6 @@
 
 pub use bedterm_app::design_system::colors::{Rgba, TokenPair};
 
-#[cfg(target_os = "ios")]
 mod ios {
     use bedterm_app::design_system::colors::{
         self as token, Rgba, TokenPair, BACKGROUND, BORDER, CARD, DESTRUCTIVE, INPUT,
@@ -62,5 +61,4 @@ mod ios {
     cached!(shadcn_card, CARD);
 }
 
-#[cfg(target_os = "ios")]
 pub use ios::*;

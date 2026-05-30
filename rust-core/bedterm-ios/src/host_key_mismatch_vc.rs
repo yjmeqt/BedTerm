@@ -1,5 +1,3 @@
-#![cfg(target_os = "ios")]
-
 use crate::design_system::colors;
 use crate::design_system::components::primary_button;
 use bedterm_app::l10n::t;

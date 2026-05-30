@@ -27,8 +27,6 @@
 //! - The `state_ctx` / `sink_ctx` / `completion_ctx` pointers must remain
 //!   valid for the lifetime of the callbacks.
 
-#![cfg(target_os = "ios")]
-
 use std::ffi::{c_char, c_void, CStr};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};

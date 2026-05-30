@@ -6,8 +6,6 @@
 //! `on_choice(ctx, choice)` exactly once per tap; Swift coordinator drives
 //! the actual step machine.
 
-#![cfg(target_os = "ios")]
-
 use crate::a11y;
 use crate::design_system::{colors, spacing, typography};
 use crate::onboarding::choice_button::make_choice_button;

@@ -3,8 +3,6 @@
 //! Construction + release of the iOS terminal `UIViewController` and
 //! the host-key mismatch review VC.
 
-#![cfg(target_os = "ios")]
-
 use crate::host_key_mismatch_vc;
 use crate::vc;
 

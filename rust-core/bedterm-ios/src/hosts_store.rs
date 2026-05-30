@@ -11,8 +11,6 @@
 //! main actor so no internal locking is needed beyond what the OS gives
 //! us.
 
-#![cfg(target_os = "ios")]
-
 use bedterm_app::hosts::model::SavedHost;
 use core_foundation::array::{CFArray, CFArrayRef};
 use core_foundation::base::{TCFType, ToVoid};

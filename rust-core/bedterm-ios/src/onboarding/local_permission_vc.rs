@@ -7,8 +7,6 @@
 //! the "Local Network Access" / sameWifi prose by default; if the host is
 //! remote the Swift coordinator can swap a different VC instance.
 
-#![cfg(target_os = "ios")]
-
 use crate::a11y;
 use crate::design_system::colors;
 use crate::design_system::components::primary_button;

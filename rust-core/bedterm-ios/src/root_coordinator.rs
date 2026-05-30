@@ -3,8 +3,6 @@
 //! Owns the app window, nav stack, toaster overlay, and connect
 //! orchestration. Entry point: `bt_ios_start_root_coordinator(window_ptr)`.
 
-#![cfg(target_os = "ios")]
-
 use objc2::rc::Retained;
 use objc2::{msg_send, MainThreadMarker};
 use objc2_foundation::NSString;

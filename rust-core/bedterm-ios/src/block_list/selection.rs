@@ -9,14 +9,11 @@ pub use bedterm_app::block_list::selection::{
     block_hit_test, ActiveSelection, BlockHit, BlockSelectionState,
 };
 
-#[cfg(target_os = "ios")]
 use objc2_foundation::NSString;
-#[cfg(target_os = "ios")]
 use objc2_ui_kit::UIPasteboard;
 
 /// Copy a string to `UIPasteboard.generalPasteboard`. Mirrors Swift's
 /// one-liner: just the selected text, nothing prepended.
-#[cfg(target_os = "ios")]
 pub fn copy_to_pasteboard(text: &str) {
     if text.is_empty() {
         return;

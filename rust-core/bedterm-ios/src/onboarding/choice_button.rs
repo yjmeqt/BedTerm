@@ -10,8 +10,6 @@
 //! two-line + chevron choice card; promote to `design_system/components/`
 //! if a second caller appears.
 
-#![cfg(target_os = "ios")]
-
 use crate::design_system::{colors, spacing, typography};
 use bedterm_app::geometry::CGFloat;
 use objc2::rc::Retained;

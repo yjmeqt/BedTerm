@@ -5,8 +5,6 @@
 //! * `bt_ios_settings_onboarding_completed` — read the persisted
 //!   onboarding-completion flag (used by RootCoordinator + SceneDelegate).
 
-#![cfg(target_os = "ios")]
-
 use crate::settings_store;
 use crate::settings_vc;
 

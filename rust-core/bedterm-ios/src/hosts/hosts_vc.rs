@@ -13,8 +13,6 @@
 //! translations live in `BedTerm/Localizable.xcstrings` and are baked
 //! into the binary via `build.rs`.
 
-#![cfg(target_os = "ios")]
-
 use crate::a11y;
 use crate::design_system::{
     colors,

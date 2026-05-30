@@ -6,7 +6,6 @@
 //! class lives in [`vc`] (iOS-gated).
 
 #![allow(dead_code)]
-#![cfg_attr(not(target_os = "ios"), allow(unused_imports))]
 
 // Re-export pure submodules from bedterm-app
 pub use bedterm_app::block_list::layout;
@@ -18,9 +17,7 @@ pub use bedterm_app::block_list::sticky;
 pub mod selection;
 
 // The UIKit class lives in `vc.rs`, gated on iOS.
-#[cfg(target_os = "ios")]
 mod vc;
 
-#[cfg(target_os = "ios")]
 #[allow(unused_imports)]
 pub use vc::BtIosBlockListViewController;

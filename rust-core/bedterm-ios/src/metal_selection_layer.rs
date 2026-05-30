@@ -18,29 +18,21 @@ use bedterm_app::geometry::{CGPoint, CGRect, CGSize};
 // `SelectionRange` math below stays host-compilable, the
 // `MetalSelectionLayer` wrapper that talks to `CAShapeLayer` /
 // `UIBezierPath` is gated.
-#[cfg(target_os = "ios")]
 use objc2::msg_send;
-#[cfg(target_os = "ios")]
 use objc2::rc::Retained;
-#[cfg(target_os = "ios")]
 use objc2::runtime::AnyObject;
-#[cfg(target_os = "ios")]
 use objc2::ClassType;
-#[cfg(target_os = "ios")]
 use objc2_quartz_core::CAShapeLayer;
-#[cfg(target_os = "ios")]
 use objc2_ui_kit::{UIBezierPath, UIColor};
 
 // Re-export pure SelectionRange from bedterm-app
 pub use bedterm_app::selection_range::SelectionRange;
 
 /// `CAShapeLayer` overlay rendering the union of `SelectionRange::rects()`.
-#[cfg(target_os = "ios")]
 pub struct MetalSelectionLayer {
     layer: Retained<CAShapeLayer>,
 }
 
-#[cfg(target_os = "ios")]
 impl MetalSelectionLayer {
     pub fn new() -> Self {
         let layer: Retained<CAShapeLayer> = unsafe { msg_send![CAShapeLayer::class(), layer] };
@@ -96,7 +88,6 @@ impl MetalSelectionLayer {
     }
 }
 
-#[cfg(target_os = "ios")]
 impl Default for MetalSelectionLayer {
     fn default() -> Self {
         Self::new()

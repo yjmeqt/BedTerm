@@ -6,5 +6,4 @@
 //! Deferred until objc2 `UIAlertController` + layout constraint patterns
 //! are verified on-device.
 
-#![cfg(target_os = "ios")]
 // Stub module — no public API yet.

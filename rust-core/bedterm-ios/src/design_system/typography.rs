@@ -1,7 +1,6 @@
 //! UIFont factories. Centralises the size + weight choices the Rust UI
 //! makes so future Settings + Onboarding VCs compose the same ladder.
 
-#![cfg(target_os = "ios")]
 // The ladder is reserved for the upcoming Settings (W23b) + Onboarding
 // (W23c) Rust VCs; only `label_small` and `button_label` have call sites
 // today (via the components below). Allow dead code here until those

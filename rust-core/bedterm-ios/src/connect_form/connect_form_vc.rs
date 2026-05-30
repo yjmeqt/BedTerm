@@ -5,8 +5,6 @@
 //! Authentication (segmented control + password, or "Coming Soon" for key).
 //! Key auth is not yet implemented; selecting it shows a placeholder.
 
-#![cfg(target_os = "ios")]
-
 use crate::a11y;
 use crate::connect_form::{BtIosConnectFormCancelCallback, BtIosConnectFormDoneCallback};
 use crate::design_system::{

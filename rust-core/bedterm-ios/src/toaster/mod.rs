@@ -106,12 +106,9 @@ pub(crate) fn parse_actions(json: &str) -> Vec<ToastAction> {
     serde_json::from_str(json).unwrap_or_default()
 }
 
-#[cfg(target_os = "ios")]
 mod imp;
-#[cfg(target_os = "ios")]
 pub(crate) use imp::{create_toaster_view, BtIosToasterView};
 
-#[cfg(target_os = "ios")]
 mod card;
 
 #[cfg(test)]

@@ -2,8 +2,6 @@
 //!
 //! Mirrors `OnboardingLocationStep`. Two choices: same-Wi-Fi (0) vs remote (1).
 
-#![cfg(target_os = "ios")]
-
 use crate::a11y;
 use crate::design_system::{colors, spacing, typography};
 use crate::onboarding::choice_button::make_choice_button;
