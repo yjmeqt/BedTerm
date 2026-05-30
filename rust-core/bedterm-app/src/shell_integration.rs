@@ -55,6 +55,11 @@ pub fn payload_cstr() -> &'static std::ffi::CStr {
 /// terminator assumption.
 ///
 /// The returned pointer is **static** and must not be freed.
+///
+/// # Safety
+///
+/// The returned pointer is valid for the lifetime of the process. The
+/// caller must not free or mutate the pointed-to memory.
 #[no_mangle]
 pub unsafe extern "C" fn bt_ios_shell_integration_script() -> *const std::ffi::c_char {
     payload_cstr().as_ptr()

@@ -15,10 +15,6 @@
 //! C exports live in [`crate::ffi::hosts`] (iOS-gated). When building for
 //! macOS the FFI consumer is not compiled, so the public API appears dead.
 
-// The pub API is consumed by iOS-gated FFI modules. On macOS (clippy host
-// target) those consumers don't exist — suppress spurious dead_code.
-#![cfg_attr(not(target_os = "ios"), allow(dead_code))]
-
 use serde::{Deserialize, Serialize};
 use std::ffi::{c_char, c_void};
 use std::sync::Mutex;

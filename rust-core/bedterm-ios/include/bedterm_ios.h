@@ -832,6 +832,11 @@ const uint8_t *bt_ios_shell_integration_payload(uintptr_t *out_len);
  * terminator assumption.
  *
  * The returned pointer is **static** and must not be freed.
+ *
+ * # Safety
+ *
+ * The returned pointer is valid for the lifetime of the process. The
+ * caller must not free or mutate the pointed-to memory.
  */
 const char *bt_ios_shell_integration_script(void);
 

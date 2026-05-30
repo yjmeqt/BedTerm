@@ -15,10 +15,6 @@
 //! fields + secrets and hands back a JSON blob with everything Swift
 //! needs to materialise a `SavedHost` and call `HostsStore.save`.
 
-// The pub API is consumed by iOS-gated FFI modules. On macOS (clippy host
-// target) those consumers don't exist — suppress spurious dead_code.
-#![cfg_attr(not(target_os = "ios"), allow(dead_code))]
-
 use crate::connect_form::model::{normalized_host, normalized_port};
 use crate::l10n::t;
 use serde::{Deserialize, Serialize};

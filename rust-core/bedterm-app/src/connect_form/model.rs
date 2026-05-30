@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 //! Pure-logic connect-form draft + validation. Mirrors the user-facing
 //! invariants in `ConnectionFormViewModel` (host non-empty, port in
 //! `1..=65535`, username non-empty, password / key required when the
