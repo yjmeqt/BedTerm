@@ -17,8 +17,7 @@ use crate::vc;
 ///
 /// # Safety
 /// `on_back` and `ctx` are stored and invoked on the main thread only.
-#[no_mangle]
-pub unsafe extern "C" fn bt_ios_create_vc(
+pub(crate) unsafe fn bt_ios_create_vc(
     // Inline the bare-fn type rather than `Option<BtIosBackCallback>`
     // so cbindgen emits a plain nullable function pointer (it only
     // unwraps `Option<extern fn>` when the inner type is a bare fn,

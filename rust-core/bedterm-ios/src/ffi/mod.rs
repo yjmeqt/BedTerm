@@ -1,9 +1,7 @@
 //! FFI exports called from Swift.
 //!
-//! Each module contains the minimum `#[no_mangle]` exports that Swift
-//! directly calls. Internal Rust-to-Rust calls do NOT go through C FFI.
+//! Only `settings` has a `#[no_mangle]` export (`bt_ios_settings_onboarding_completed`).
+//! The main entry points live in `root_coordinator.rs`.
 
-pub mod onboarding;
 pub mod settings;
-pub mod vc;
-pub mod view;
+pub(crate) mod vc;

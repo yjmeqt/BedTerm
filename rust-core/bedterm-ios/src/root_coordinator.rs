@@ -1,7 +1,8 @@
 //! `RootCoordinator` — Rust replacement for Swift's `RootCoordinator.swift`.
 //!
-//! Owns the app window, nav stack, toaster overlay, and connect
-//! orchestration. Entry point: `bt_ios_start_root_coordinator(window_ptr)`.
+//! Owns the app window, nav stack, toaster overlay, onboarding flow
+//! (when needed), hosts list, SSH connect, and terminal push. Single
+//! entry point: `bt_ios_start_root_coordinator(window, request_local_network)`.
 
 use objc2::rc::Retained;
 use objc2::{msg_send, MainThreadMarker};
@@ -17,6 +18,8 @@ use crate::connect_form::connect_form_vc::create_connect_form_vc;
 use crate::host_key_mismatch_vc;
 use crate::hosts::hosts_vc::create_hosts_list_vc;
 use crate::hosts_store;
+use crate::onboarding::coordinator::create_flow_vc;
+use crate::onboarding::BtIosRequestLocalNetworkCallback;
 use crate::terminal_session::BtTerminalSessionHandle;
 use crate::toaster::create_toaster_view;
 use crate::vc;
@@ -55,6 +58,26 @@ impl RootCoordinator {
         self.install_hosts_root();
         self.window.makeKeyAndVisible();
         self.install_toaster_overlay();
+    }
+
+    /// Create the onboarding flow VC, install as window root, and on
+    /// completion proceed to `start()` (hosts root).
+    fn start_onboarding(
+        &self,
+        request_local_network: Option<BtIosRequestLocalNetworkCallback>,
+    ) {
+        let ctx = self as *const Self as *mut c_void;
+        let raw =
+            unsafe { create_flow_vc(Some(onboarding_completed_trampoline), ctx, request_local_network) };
+        if raw.is_null() {
+            // Fallback: skip straight to hosts.
+            self.start();
+            return;
+        }
+        let vc: Retained<UIViewController> =
+            unsafe { Retained::retain(raw as *mut UIViewController).unwrap() };
+        self.window.setRootViewController(Some(&vc));
+        self.window.makeKeyAndVisible();
     }
 
     // -- Hosts root ------------------------------------------------------
@@ -167,7 +190,7 @@ impl RootCoordinator {
         let vc: Retained<UIViewController> =
             unsafe { Retained::retain(raw as *mut UIViewController).unwrap() };
         vc.loadViewIfNeeded();
-        let mv = unsafe { bt_ios_vc_metal_view(raw) };
+        let mv = unsafe { metal_view_from_vc(raw) };
         if !mv.is_null() {
             unsafe {
                 crate::terminal_session::bt_terminal_session_attach_metal_view(h, mv);
@@ -307,26 +330,85 @@ impl RootCoordinator {
 }
 
 // ---------------------------------------------------------------------------
-// FFI entry points (called from Swift — keep #[no_mangle])
+// FFI entry points
 // ---------------------------------------------------------------------------
 
-/// Called from Swift's AppDelegate to boot the Rust coordinator.
-/// `window` is a +1 retained `UIWindow *`.
+/// Boot the Rust coordinator. If `request_local_network` is non-null and
+/// onboarding has not been completed, the onboarding flow is created
+/// internally. When onboarding finishes, the coordinator transitions to
+/// the hosts root automatically.
+///
+/// # Safety
+/// Main thread. `window` is a +1 retained `UIWindow *`.
 #[no_mangle]
-pub unsafe extern "C" fn bt_ios_start_root_coordinator(window: *mut c_void) {
+pub unsafe extern "C" fn bt_ios_start_root_coordinator(
+    window: *mut c_void,
+    request_local_network: Option<
+        unsafe extern "C" fn(ctx: *mut c_void, completion: unsafe extern "C" fn(*mut c_void)),
+    >,
+) {
     let mtm = unsafe { MainThreadMarker::new_unchecked() };
     let w: Retained<UIWindow> = unsafe { Retained::retain(window as *mut UIWindow).unwrap() };
     let rc = RootCoordinator::new(mtm, w);
     unsafe { COORDINATOR = Some(rc) };
-    RootCoordinator::coordinator().start();
+
+    if crate::settings_store::onboarding_completed() {
+        RootCoordinator::coordinator().start();
+    } else {
+        RootCoordinator::coordinator().start_onboarding(request_local_network);
+    }
+}
+
+/// UI-test entry point: create a terminal VC inside a
+/// `UINavigationController`, feed raw bytes, and install as the window's
+/// root. Replaces the old 3-call pattern (`bt_ios_create_vc` +
+/// `bt_ios_vc_metal_view` + `bt_ios_view_feed_bytes`).
+///
+/// # Safety
+/// Main thread. `window` is a +1 retained `UIWindow *`. `bytes` must be
+/// valid for `len` bytes for the duration of the call.
+#[no_mangle]
+pub unsafe extern "C" fn bt_ios_install_terminal_fixture(
+    window: *mut c_void,
+    bytes: *const u8,
+    len: usize,
+) {
+    let mtm = unsafe { MainThreadMarker::new_unchecked() };
+    let w: Retained<UIWindow> = unsafe { Retained::retain(window as *mut UIWindow).unwrap() };
+
+    let raw = unsafe { vc::create_vc(None, std::ptr::null_mut()) };
+    if raw.is_null() {
+        w.makeKeyAndVisible();
+        return;
+    }
+    let vc: Retained<UIViewController> =
+        unsafe { Retained::retain(raw as *mut UIViewController).unwrap() };
+    vc.loadViewIfNeeded();
+
+    let nav = UINavigationController::initWithRootViewController(
+        mtm.alloc::<UINavigationController>(),
+        &vc,
+    );
+
+    if !bytes.is_null() && len > 0 {
+        let mv = unsafe { metal_view_from_vc(raw) };
+        if !mv.is_null() {
+            let view = &*(mv as *const crate::metal_view::BtIosMetalInputView);
+            let slice = std::slice::from_raw_parts(bytes, len);
+            view.feed_bytes(slice);
+        }
+    }
+
+    w.setRootViewController(Some(&nav));
+    w.makeKeyAndVisible();
 }
 
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-/// Resolve the metal view from a VC — thin helper used by push_terminal.
-unsafe fn bt_ios_vc_metal_view(vc_ptr: *mut std::ffi::c_void) -> *mut std::ffi::c_void {
+/// Resolve the `BtIosMetalInputView *` from a VC returned by `vc::create_vc`.
+unsafe fn metal_view_from_vc(vc_ptr: *mut std::ffi::c_void) -> *mut std::ffi::c_void {
     if vc_ptr.is_null() {
         return std::ptr::null_mut();
     }
@@ -370,6 +452,14 @@ fn credential_for_terminal(
 // ---------------------------------------------------------------------------
 // Callback trampolines
 // ---------------------------------------------------------------------------
+
+unsafe extern "C" fn onboarding_completed_trampoline(ctx: *mut c_void) {
+    if ctx.is_null() {
+        return;
+    }
+    let this = &*(ctx as *const RootCoordinator);
+    this.start();
+}
 
 unsafe extern "C" fn add_trampoline(ctx: *mut c_void) {
     if ctx.is_null() {

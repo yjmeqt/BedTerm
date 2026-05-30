@@ -685,8 +685,7 @@ pub(crate) unsafe fn bt_terminal_session_attach_metal_view(
     if metal_view_ptr.is_null() {
         return;
     }
-    // Safety: bt_ios_view_feed_bytes does its own null checks and is
-    // main-thread-only, same as the caller contract above.
+    // Safety: metal_view_sink_trampoline does its own null checks.
     let sink: BtSSHOutputSink = metal_view_sink_trampoline;
     // The ctx IS the metal view pointer — no indirection.
     let ctx = metal_view_ptr;
@@ -695,11 +694,15 @@ pub(crate) unsafe fn bt_terminal_session_attach_metal_view(
     }
 }
 
-/// Trampoline from `BtSSHOutputSink` signature to `bt_ios_view_feed_bytes`.
+/// Trampoline from `BtSSHOutputSink` signature to the metal view.
 /// The `ctx` parameter is the `BtIosMetalInputView *` raw pointer.
 unsafe extern "C" fn metal_view_sink_trampoline(ctx: *mut c_void, bytes: *const u8, len: usize) {
-    // Forward to the shared FFI function which does its own null checks.
-    crate::ffi::view::bt_ios_view_feed_bytes(ctx, bytes, len);
+    if ctx.is_null() || bytes.is_null() || len == 0 {
+        return;
+    }
+    let view = &*(ctx as *const crate::metal_view::BtIosMetalInputView);
+    let slice = std::slice::from_raw_parts(bytes, len);
+    view.feed_bytes(slice);
 }
 
 /// Fully tear down the session handle and free all resources.

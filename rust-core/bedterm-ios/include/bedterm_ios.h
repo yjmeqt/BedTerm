@@ -23,76 +23,35 @@ extern "C" {
 #endif // __cplusplus
 
 /**
- * Called from Swift's AppDelegate to boot the Rust coordinator.
- * `window` is a +1 retained `UIWindow *`.
- */
-void bt_ios_start_root_coordinator(void *window);
-
-/**
- * Create the full onboarding-flow VC — a `UINavigationController`
- * subclass (`BtIosOnboardingFlowVC`) that owns the `OnboardingState`
- * state machine and pushes each step VC as the user advances.
- *
- * The returned pointer is +1 retained; release with `bt_ios_release_vc`.
- *
- * - `on_completed`: fired once when onboarding finishes.
- * - `ctx`: opaque host context threaded into `on_completed`.
- * - `request_local_network`: injected by Swift to trigger the Bonjour-based
- *   Local Network permission prompt. When NULL the permission step is
- *   skipped (harmless: the OS prompts on first actual LAN connection).
- *   Called with `(ctx, completion)` — Swift runs the probe and calls
- *   `completion(ctx)` on the main thread when the OS resolves the prompt.
+ * Boot the Rust coordinator. If `request_local_network` is non-null and
+ * onboarding has not been completed, the onboarding flow is created
+ * internally. When onboarding finishes, the coordinator transitions to
+ * the hosts root automatically.
  *
  * # Safety
- * All callbacks are stored and invoked on the main thread only.
+ * Main thread. `window` is a +1 retained `UIWindow *`.
  */
-void *bt_ios_create_onboarding_flow_vc(void (*on_completed)(void *ctx),
-                                       void *ctx,
-                                       void (*request_local_network)(void *ctx,
-                                                                     void (*completion)(void*)));
+void bt_ios_start_root_coordinator(void *window,
+                                   void (*request_local_network)(void *ctx,
+                                                                 void (*completion)(void*)));
+
+/**
+ * UI-test entry point: create a terminal VC inside a
+ * `UINavigationController`, feed raw bytes, and install as the window's
+ * root. Replaces the old 3-call pattern (`bt_ios_create_vc` +
+ * `bt_ios_vc_metal_view` + `bt_ios_view_feed_bytes`).
+ *
+ * # Safety
+ * Main thread. `window` is a +1 retained `UIWindow *`. `bytes` must be
+ * valid for `len` bytes for the duration of the call.
+ */
+void bt_ios_install_terminal_fixture(void *window, const uint8_t *bytes, uintptr_t len);
 
 /**
  * True iff the user has finished the onboarding flow. Defaults to
  * `false` on first launch.
  */
 bool bt_ios_settings_onboarding_completed(void);
-
-/**
- * Create the iOS terminal `UIViewController *` (returned as `*mut c_void` so
- * the C header can stay type-agnostic).
- *
- * - `on_back`: C callback fired when the back button is tapped (may be null).
- * - `ctx`: context pointer passed through to `on_back` (may be null).
- *
- * The returned pointer is a **+1 retained** `UIViewController` that the
- * caller owns. Release via `bt_ios_release_vc`.
- *
- * # Safety
- * `on_back` and `ctx` are stored and invoked on the main thread only.
- */
-void *bt_ios_create_vc(void (*on_back)(void *ctx), void *ctx);
-
-/**
- * Resolve the `BtIosMetalInputView *` embedded inside a VC returned by
- * `bt_ios_create_vc`. Returns NULL when the view didn't construct
- * (headless tests).
- *
- * # Safety
- * Main thread. `vc_ptr` must be a live VC pointer.
- */
-void *bt_ios_vc_metal_view(void *vc_ptr);
-
-/**
- * Feed raw terminal bytes into the `BtIosMetalInputView`'s owned grid.
- * `view_ptr` must be a +1 retained `BtIosMetalInputView *` (e.g. obtained
- * from the host VC). The call is a no-op when any argument is null / empty.
- *
- * # Safety
- * Must be called on the main thread. `view_ptr` must point to a live
- * `BtIosMetalInputView`. `bytes` must be valid for `len` bytes for the
- * duration of the call.
- */
-void bt_ios_view_feed_bytes(void *view_ptr, const uint8_t *bytes, uintptr_t len);
 
 /**
  * Called by Swift at app launch and on `NSLocale.currentLocaleDidChange`

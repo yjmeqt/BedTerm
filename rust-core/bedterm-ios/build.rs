@@ -1,5 +1,4 @@
-//! Run cbindgen across this crate + `bedterm-app` (whitelisted in
-//! `cbindgen.toml`), producing the single C header
+//! Run cbindgen across this crate + `bedterm-app`, producing
 //! `include/bedterm_ios.h` consumed by `scripts/build-rust-xcframework.sh`.
 
 use std::{env, fs, path::PathBuf};
@@ -17,10 +16,7 @@ fn main() {
     println!("cargo:rerun-if-changed=src/lib.rs");
     println!("cargo:rerun-if-changed=src/root_coordinator.rs");
     println!("cargo:rerun-if-changed=src/ffi/mod.rs");
-    println!("cargo:rerun-if-changed=src/ffi/onboarding.rs");
     println!("cargo:rerun-if-changed=src/ffi/settings.rs");
-    println!("cargo:rerun-if-changed=src/ffi/vc.rs");
-    println!("cargo:rerun-if-changed=src/ffi/view.rs");
     // bedterm-app FFI surface
     println!("cargo:rerun-if-changed=../bedterm-app/src/lib.rs");
     println!("cargo:rerun-if-changed=../bedterm-app/src/l10n.rs");

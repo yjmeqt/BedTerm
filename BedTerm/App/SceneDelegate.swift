@@ -20,23 +20,11 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             return
         }
 
-        // -- UI test shortcut or completed onboarding: skip to hosts root ---
-        if bt_ios_settings_onboarding_completed() || UITestSupport.skipOnboarding {
-            let raw = Unmanaged.passUnretained(window).toOpaque()
-            bt_ios_start_root_coordinator(raw)
+        // -- Production path: RootCoordinator handles everything -----------
+        let raw = Unmanaged.passUnretained(window).toOpaque()
+        if UITestSupport.skipOnboarding {
+            bt_ios_start_root_coordinator(raw, nil)
         } else {
-            let box = OnboardingBox { [weak self] in self?.startRustCoordinator(window) }
-            let ctx = Unmanaged.passRetained(box).toOpaque()
-            let cb: @convention(c) (UnsafeMutableRawPointer?) -> Void = { ctx in
-                guard let ctx else { return }
-                let b = Unmanaged<OnboardingBox>.fromOpaque(ctx).takeRetainedValue()
-                b.fire()
-            }
-
-            // Inject the Local Network permission probe as a callback instead
-            // of reaching through a global @_cdecl symbol. Rust calls this
-            // with (ctx, completion); we run the Bonjour probe and fire the
-            // completion when the OS resolves the prompt.
             let requestLocalNetwork:
                 @convention(c) (
                     UnsafeMutableRawPointer?,
@@ -48,60 +36,28 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
                         bridge.fire()
                     }
                 }
-
-            guard let raw = bt_ios_create_onboarding_flow_vc(cb, ctx, requestLocalNetwork) else {
-                Unmanaged<OnboardingBox>.fromOpaque(ctx).release()
-                return
-            }
-            let vc = Unmanaged<UIViewController>.fromOpaque(raw).takeRetainedValue()
-            window.rootViewController = vc as? UINavigationController ?? vc
-            window.makeKeyAndVisible()
+            bt_ios_start_root_coordinator(raw, requestLocalNetwork)
         }
-    }
-
-    private func startRustCoordinator(_ window: UIWindow) {
-        let raw = Unmanaged.passUnretained(window).toOpaque()
-        bt_ios_start_root_coordinator(raw)
     }
 
     // MARK: - UI test fixture path
 
-    /// Mount the Rust terminal VC directly, feed it a baked-in ANSI byte
-    /// fixture, and skip onboarding + Hosts + SSH entirely. Used by
-    /// `RustTerminalSmokeUITests` via `-uitest-rustTerminalDirect <fixture>`.
+    /// Creates a terminal VC via `bt_ios_install_terminal_fixture` —
+    /// a single Rust call that creates the VC, feeds baked-in ANSI bytes,
+    /// and installs it as the window root.
     private func installRustTerminalFixture(_ window: UIWindow, fixture: String) {
-        let nav = UINavigationController()
-        guard let raw = bt_ios_create_vc(nil, nil) else {
-            window.rootViewController = nav
-            window.makeKeyAndVisible()
-            return
-        }
-        let vc = Unmanaged<UIViewController>.fromOpaque(raw).takeUnretainedValue()
-        nav.setViewControllers([vc], animated: false)
-
-        // Pump fixture bytes after the VC has gone through viewDidLoad.
         let bytes = TerminalHarnessFixtures.bytes(for: fixture)
-        DispatchQueue.main.async {
-            if let mv = bt_ios_vc_metal_view(raw) {
-                bytes.withUnsafeBytes { buf in
-                    guard let base = buf.baseAddress?.assumingMemoryBound(to: UInt8.self) else {
-                        return
-                    }
-                    bt_ios_view_feed_bytes(mv, base, UInt(buf.count))
-                }
+        let raw = Unmanaged.passUnretained(window).toOpaque()
+        bytes.withUnsafeBytes { buf in
+            guard let base = buf.baseAddress?.assumingMemoryBound(to: UInt8.self) else {
+                return
             }
+            bt_ios_install_terminal_fixture(raw, base, UInt(buf.count))
         }
-        window.rootViewController = nav
-        window.makeKeyAndVisible()
     }
 }
 
 // MARK: - Private helpers
-
-private final class OnboardingBox {
-    let fire: () -> Void
-    init(fire: @escaping () -> Void) { self.fire = fire }
-}
 
 /// Sendable wrapper that pins a C function pointer + opaque ctx so the
 /// Swift 6 task-isolation checker accepts crossing them into a `Task`.
@@ -125,8 +81,6 @@ private final class LocalNetworkBridgeBox: @unchecked Sendable {
 // MARK: - Baked-in terminal fixture data
 
 /// Baked-in byte fixtures for the Rust terminal UI test harness.
-/// Kept as inline `Data` (rather than bundled files) so the test harness
-/// has zero resource-bundle ordering dependencies.
 enum TerminalHarnessFixtures {
     /// Returns the byte stream for the named fixture, or a sensible
     /// default when the name is unknown.
