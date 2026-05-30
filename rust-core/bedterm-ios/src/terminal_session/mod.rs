@@ -34,10 +34,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use crate::credential;
-use crate::ssh_bridge::{BtSSHCompletion, BtSSHOutputSink, BtSSHResultCode};
-use crate::ssh_client::russh_impl::RusshSshClient;
-use crate::ssh_client::{PtyDimensions, SshClient, SshConnectionRequest, SshError};
+use bedterm_app::credential;
+use bedterm_app::ssh_bridge::{BtSSHCompletion, BtSSHOutputSink, BtSSHResultCode};
+use bedterm_app::ssh_client::russh_impl::RusshSshClient;
+use bedterm_app::ssh_client::{PtyDimensions, SshClient, SshConnectionRequest, SshError};
 
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
@@ -530,11 +530,11 @@ pub unsafe extern "C" fn bt_terminal_session_connect(
 
         let transport_cred = match &canonical_cred {
             credential::HostCredential::Password { password } => {
-                crate::ssh_client::HostCredential::Password {
+                bedterm_app::ssh_client::HostCredential::Password {
                     password: password.clone(),
                 }
             }
-            credential::HostCredential::Agent => crate::ssh_client::HostCredential::Agent,
+            credential::HostCredential::Agent => bedterm_app::ssh_client::HostCredential::Agent,
         };
 
         // ── Build canonical connection request ────────────────────────────────

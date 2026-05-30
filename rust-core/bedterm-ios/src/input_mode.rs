@@ -38,14 +38,7 @@ use objc2::runtime::AnyObject;
 use objc2::{msg_send, sel};
 use std::cell::Cell;
 
-#[repr(u8)]
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-#[allow(dead_code)] // State1 is only constructed by iOS-gated HUD switcher path
-pub enum InputMode {
-    State1 = 1,
-    State2 = 2,
-    State3 = 3,
-}
+pub use bedterm_app::input_mode::InputMode;
 
 /// Central mode + keyboard-state holder shared by VC / coordinator / HUD /
 /// metal_view. `!Send !Sync` — main-thread only.

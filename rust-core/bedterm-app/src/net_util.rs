@@ -9,6 +9,7 @@
 //! The FFI export `bt_ios_net_is_lan_host` is the single entry point from
 //! Swift; Swift callers feed `host` as a UTF-8 C string.
 
+use std::ffi::{c_char, CStr};
 use std::net::{Ipv4Addr, Ipv6Addr};
 
 /// Returns `true` when `host` is on the local network in the sense iOS
@@ -51,6 +52,20 @@ pub fn is_lan_host(host: &str) -> bool {
     }
 
     false
+}
+
+/// C-ABI entry point: `true` when `host` (UTF-8 C string or NULL) is a LAN
+/// address. NULL returns `false`.
+///
+/// # Safety
+/// `host` must be NULL or a valid nul-terminated UTF-8 string.
+#[no_mangle]
+pub unsafe extern "C" fn bt_ios_net_is_lan_host(host: *const c_char) -> bool {
+    if host.is_null() {
+        return false;
+    }
+    let s = unsafe { CStr::from_ptr(host) }.to_str().unwrap_or("");
+    is_lan_host(s)
 }
 
 #[cfg(test)]
@@ -178,30 +193,30 @@ mod tests {
 
     #[test]
     fn ffi_null_is_false() {
-        assert!(!bt_ios_net_is_lan_host(std::ptr::null()));
+        assert!(!unsafe { bt_ios_net_is_lan_host(std::ptr::null()) });
     }
 
     #[test]
     fn ffi_private_ip() {
         let s = std::ffi::CString::new("10.0.0.5").unwrap();
-        assert!(bt_ios_net_is_lan_host(s.as_ptr()));
+        assert!(unsafe { bt_ios_net_is_lan_host(s.as_ptr()) });
     }
 
     #[test]
     fn ffi_public_ip() {
         let s = std::ffi::CString::new("8.8.8.8").unwrap();
-        assert!(!bt_ios_net_is_lan_host(s.as_ptr()));
+        assert!(!unsafe { bt_ios_net_is_lan_host(s.as_ptr()) });
     }
 
     #[test]
     fn ffi_localhost() {
         let s = std::ffi::CString::new("localhost").unwrap();
-        assert!(!bt_ios_net_is_lan_host(s.as_ptr()));
+        assert!(!unsafe { bt_ios_net_is_lan_host(s.as_ptr()) });
     }
 
     #[test]
     fn ffi_dot_local() {
         let s = std::ffi::CString::new("my-mac.local").unwrap();
-        assert!(bt_ios_net_is_lan_host(s.as_ptr()));
+        assert!(unsafe { bt_ios_net_is_lan_host(s.as_ptr()) });
     }
 }

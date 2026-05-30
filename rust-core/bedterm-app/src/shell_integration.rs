@@ -36,6 +36,30 @@ pub unsafe extern "C" fn bt_ios_shell_integration_payload(out_len: *mut usize) -
     PAYLOAD_BYTES.as_ptr()
 }
 
+/// Convenience: return the payload as a nul-terminated `&CStr`. The
+/// embedded bytes are UTF-8 and verified to contain no interior NULs at
+/// test time, so this is infallible.
+pub fn payload_cstr() -> &'static std::ffi::CStr {
+    // The payload is guaranteed to have no interior NUL (verified by
+    // `tests::no_interior_nul`), so appending a NUL byte is safe.
+    static PAYLOAD_CSTR: std::sync::LazyLock<std::ffi::CString> = std::sync::LazyLock::new(|| {
+        std::ffi::CString::new(PAYLOAD_BYTES)
+            .expect("shell integration script must not contain interior NUL")
+    });
+    PAYLOAD_CSTR.as_c_str()
+}
+
+/// Legacy C-ABI entry point returning a nul-terminated pointer to the
+/// embedded shell-integration script. Deprecated in favour of
+/// [`bt_ios_shell_integration_payload`] which avoids the implicit NUL
+/// terminator assumption.
+///
+/// The returned pointer is **static** and must not be freed.
+#[no_mangle]
+pub unsafe extern "C" fn bt_ios_shell_integration_script() -> *const std::ffi::c_char {
+    payload_cstr().as_ptr()
+}
+
 #[cfg(test)]
 mod tests {
     use super::PAYLOAD_BYTES;

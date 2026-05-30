@@ -11,7 +11,7 @@ use super::selection::{block_hit_test, copy_to_pasteboard, BlockSelectionState};
 use super::source::{BlockSnapshot, BlockSource, EmptyBlockSource};
 use super::sticky::build_sticky_descriptor;
 
-use crate::geometry::{CGFloat, CGPoint, CGRect, CGSize};
+use bedterm_app::geometry::{CGFloat, CGPoint, CGRect, CGSize};
 use objc2::rc::{Allocated, Retained};
 use objc2::runtime::AnyObject;
 use objc2::{define_class, msg_send, sel, DefinedClass, MainThreadMarker, MainThreadOnly};
@@ -353,7 +353,7 @@ impl BtIosBlockListViewController {
             self.ivars().cell_width_pt.get(),
             self.ivars().row_height_pt.get(),
             cont_w,
-            f64::from(crate::block_panel_style::CELL_LEFT_INSET_PT),
+            f64::from(bedterm_app::block_panel_style::CELL_LEFT_INSET_PT),
         );
     }
 

@@ -8,7 +8,7 @@
 // VCs wire up the rest.
 #![allow(dead_code)]
 
-use crate::geometry::CGFloat;
+use bedterm_app::geometry::CGFloat;
 use objc2::rc::Retained;
 use objc2::{msg_send, ClassType};
 use objc2_ui_kit::UIFont;

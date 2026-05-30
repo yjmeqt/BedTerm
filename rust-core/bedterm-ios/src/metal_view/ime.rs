@@ -3,8 +3,8 @@
 //! to the current cursor cell.
 
 use super::BtIosMetalInputView;
-use crate::geometry::{CGPoint, CGRect, CGSize};
 use crate::ime_preedit_overlay::ImePreeditOverlay;
+use bedterm_app::geometry::{CGPoint, CGRect, CGSize};
 use objc2::msg_send;
 use objc2::DefinedClass;
 use objc2::MainThreadMarker;

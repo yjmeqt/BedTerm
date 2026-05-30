@@ -13,8 +13,8 @@
 use crate::design_system::components::header_label::{
     card_description_label, card_title_label, header_label,
 };
-use crate::design_system::form_section_metrics::FormSectionMetrics;
 use crate::design_system::{colors, spacing};
+use bedterm_app::design_system::form_section_metrics::FormSectionMetrics;
 use objc2::msg_send;
 use objc2::rc::Retained;
 use objc2::runtime::AnyObject;

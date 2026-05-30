@@ -3,7 +3,7 @@
 //! external-term install path used by the session-owned-grid wiring.
 
 use super::{BtIosMetalInputView, Ivars};
-use crate::geometry::CGRect;
+use bedterm_app::geometry::CGRect;
 use bedterm_core::ffi::{bt_term_feed, bt_term_free, bt_term_new, BtTerm};
 use bedterm_core::renderer::Renderer;
 use objc2::msg_send;

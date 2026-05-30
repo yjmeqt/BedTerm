@@ -254,7 +254,7 @@ pub trait SshClient: Send {
 // ---------------------------------------------------------------------------
 
 /// Production SSH client backed by the `russh` crate.
-pub(crate) mod russh_impl;
+pub mod russh_impl;
 
 // ---------------------------------------------------------------------------
 // Tests

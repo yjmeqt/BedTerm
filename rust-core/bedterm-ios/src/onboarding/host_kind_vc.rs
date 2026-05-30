@@ -10,9 +10,9 @@
 
 use crate::a11y;
 use crate::design_system::{colors, spacing, typography};
-use crate::l10n::t;
 use crate::onboarding::choice_button::make_choice_button;
 use crate::onboarding::BtIosOnboardingChoiceCallback;
+use bedterm_app::l10n::t;
 use objc2::rc::{Allocated, Retained};
 use objc2::runtime::AnyObject;
 use objc2::{define_class, msg_send, sel, DefinedClass, MainThreadOnly};

@@ -9,7 +9,6 @@
 
 use crate::a11y;
 use crate::connect_form::{BtIosConnectFormCancelCallback, BtIosConnectFormDoneCallback};
-use crate::connect_form_vm;
 use crate::design_system::{
     colors,
     components::{
@@ -18,8 +17,9 @@ use crate::design_system::{
     },
     spacing, typography,
 };
-use crate::geometry::{CGFloat, CGPoint, CGRect, CGSize, UIEdgeInsets};
-use crate::l10n::t;
+use bedterm_app::connect_form_vm;
+use bedterm_app::geometry::{CGFloat, CGPoint, CGRect, CGSize, UIEdgeInsets};
+use bedterm_app::l10n::t;
 use objc2::rc::{Allocated, Retained};
 use objc2::runtime::AnyObject;
 use objc2::{define_class, msg_send, sel, DefinedClass, MainThreadMarker, MainThreadOnly};
@@ -569,7 +569,7 @@ impl BtIosConnectFormViewController {
         match vm.try_save() {
             Ok(outcome) => {
                 let id = outcome.id.clone();
-                let host = crate::hosts::model::SavedHost::from(outcome);
+                let host = bedterm_app::hosts::model::SavedHost::from(outcome);
                 drop(vm); // Release VM lock before persistence.
 
                 // Persist directly through the Rust Keychain store.

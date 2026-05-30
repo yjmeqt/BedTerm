@@ -11,7 +11,7 @@
 
 use crate::hosts::hosts_vc::{create_hosts_list_vc, release_hosts_list_vc};
 use crate::hosts_store;
-use crate::hosts_vm::{self, Action, AlertFn, CallbackCtx, ConnectFn, DisconnectFn};
+use bedterm_app::hosts_vm::{self, Action, AlertFn, CallbackCtx, ConnectFn, DisconnectFn};
 use std::ffi::{c_char, c_void, CStr, CString};
 
 // ── VC lifecycle ──────────────────────────────────────────────────────────

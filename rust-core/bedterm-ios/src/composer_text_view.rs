@@ -31,7 +31,7 @@
 #![allow(dead_code)]
 
 use crate::design_system::colors;
-use crate::geometry::{CGFloat, CGRect, UIEdgeInsets};
+use bedterm_app::geometry::{CGFloat, CGRect, UIEdgeInsets};
 use objc2::rc::Retained;
 use objc2::runtime::AnyObject;
 use objc2::{msg_send, ClassType};

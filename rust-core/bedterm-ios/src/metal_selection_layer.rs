@@ -12,7 +12,7 @@
 
 #![allow(dead_code)]
 
-use crate::geometry::{CGPoint, CGRect, CGSize};
+use bedterm_app::geometry::{CGPoint, CGRect, CGSize};
 
 // UIKit + QuartzCore bindings only exist on iOS — the pure
 // `SelectionRange` math below stays host-compilable, the
@@ -31,66 +31,8 @@ use objc2_quartz_core::CAShapeLayer;
 #[cfg(target_os = "ios")]
 use objc2_ui_kit::{UIBezierPath, UIColor};
 
-/// Inclusive row/col selection. `normalised()` orders endpoints in row-major
-/// order so `start ≤ end`.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct SelectionRange {
-    pub start_row: i32,
-    pub start_col: i32,
-    pub end_row: i32,
-    pub end_col: i32,
-}
-
-impl SelectionRange {
-    pub fn normalised(self) -> Self {
-        let starts_first = (self.start_row < self.end_row)
-            || (self.start_row == self.end_row && self.start_col <= self.end_col);
-        if starts_first {
-            self
-        } else {
-            Self {
-                start_row: self.end_row,
-                start_col: self.end_col,
-                end_row: self.start_row,
-                end_col: self.start_col,
-            }
-        }
-    }
-
-    /// One rect per row touched by the selection. Matches the Swift
-    /// implementation byte-for-byte for parity tests in
-    /// `SelectionGeometryTests`.
-    pub fn rects(self, cell_size: CGSize, cols: i32) -> Vec<CGRect> {
-        let norm = self.normalised();
-        if norm.start_row == norm.end_row && norm.start_col == norm.end_col {
-            return Vec::new();
-        }
-        let mut out = Vec::with_capacity((norm.end_row - norm.start_row + 1).max(0) as usize);
-        for row in norm.start_row..=norm.end_row {
-            let from = if row == norm.start_row {
-                norm.start_col
-            } else {
-                0
-            };
-            let to = if row == norm.end_row {
-                norm.end_col
-            } else {
-                cols
-            };
-            out.push(CGRect {
-                origin: CGPoint {
-                    x: f64::from(from) * cell_size.width,
-                    y: f64::from(row) * cell_size.height,
-                },
-                size: CGSize {
-                    width: f64::from(to - from) * cell_size.width,
-                    height: cell_size.height,
-                },
-            });
-        }
-        out
-    }
-}
+// Re-export pure SelectionRange from bedterm-app
+pub use bedterm_app::selection_range::SelectionRange;
 
 /// `CAShapeLayer` overlay rendering the union of `SelectionRange::rects()`.
 #[cfg(target_os = "ios")]

@@ -20,6 +20,7 @@ crate-type = ["staticlib", "rlib"]
 # objects; they exercise the pure-Rust code paths only.
 [dependencies]
 bedterm-core = { path = "../bedterm-core" }
+bedterm-app = { path = "../bedterm-app" }
 async-trait = "0.1"
 # SSH client (P2+): russh backs the production `SshClient` implementation.
 russh = "0.45"

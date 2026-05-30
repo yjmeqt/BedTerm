@@ -1,74 +1,52 @@
 //! iOS UI layer for BedTerm.
 //!
-//! Runtime surface: a `UIViewController` subclass that hosts two text-input
-//! surfaces (a Metal-backed `BtIosMetalInputView` and a UITextView composer),
-//! a persistent keybar, and a DEBUG-only HUD. Focus is routed through
-//! `BtIosKeyboardCoordinator`.
+//! Thin UIKit/Metal layer that depends on [`bedterm_app`] for all pure
+//! application logic (models, state machines, SSH client, design tokens,
+//! i18n). See `bedterm-app/src/lib.rs` for the pure-logic crate.
 //!
 //! **See [`ARCHITECTURE.md`](../ARCHITECTURE.md)** at the crate root for the
 //! full ownership graph, lifecycle ordering rules, threading model, and FFI
-//! surface map. Every raw-pointer ivar in the crate has a field-level
-//! SAFETY comment documenting its weak-pointer contract; the architecture
-//! doc is the index for those contracts.
-//!
-//! ## Host-testability
-//!
-//! Pure-logic modules (`color`, `input_mode`, `scroll_physics`,
-//! `block_header`, `block_panel_style`, `display_mode`, `prompt_context`,
-//! `geometry`, `metal_selection_layer::SelectionRange`, and most of
-//! `block_list/*`) are not gated, so `cargo test -p bedterm_ios` on a
-//! macOS host runs their unit tests. UIKit/Metal-coupled modules
-//! (`metal_view`, `vc`, `coordinator`, `keybar`, …) are gated on
-//! `target_os = "ios"` because they instantiate Objective-C classes that
-//! only exist on the device/simulator. The objc2 crates themselves still
-//! compile on macOS hosts (the bindings just don't link UIKit symbols),
-//! which lets the pure modules use `msg_send!` / `AnyObject` types as
-//! type-system glue without forcing a target gate on the whole crate.
+//! surface map.
 //!
 //! ## FFI layout
 //!
 //! All `bt_ios_*` C exports live under [`ffi`], split per namespace
-//! (`ffi::vc`, `ffi::view`). The SSH bridge exports stay co-located
-//! with [`ssh_bridge`]. No `#[no_mangle]` items live in this file.
+//! (`ffi::vc`, `ffi::view`). The SSH bridge exports live in
+//! `bedterm_app::ssh_bridge`. No `#[no_mangle]` items live in this file.
 
-// Pure-logic modules — compile on every host so their #[test]s run
-// without an iOS simulator.
-mod block_header;
-mod block_panel_style;
-mod color;
+// ── Split modules: pure parts in bedterm-app, iOS parts here ──
+
+// design_system: colors (pure tokens in bedterm-app, UIColor factories here)
 mod design_system;
-mod display_mode;
-mod geometry;
-mod input_mode;
-mod metal_selection_layer;
-mod net_util;
-mod prompt_context;
-mod scroll_physics;
-// Toaster overlay — pure logic (kind / action parsing / auto-dismiss
-// rule / depth metrics) is host-testable; the `BtIosToasterView` UIKit
-// class + card factory are gated internally on iOS.
-mod toaster;
-// Canonical PTY dimension type — pure data, no iOS dependency.
-// `#[allow(dead_code)]` because constructors are used by
-// iOS-gated FFI code that isn't compiled on macOS host.
-#[allow(dead_code)]
-mod pty;
-// Pure SSH client trait and types — no iOS dependency, host-testable.
-#[allow(dead_code)]
-mod ssh_client;
-// Credential / auth-method types with JSON serde support — pure logic,
-// host-testable. Mirrors the Swift-side `HostCredential` / `AuthMethod`
-// Codable types.
-#[allow(dead_code)]
-mod credential;
 
-// `block_list` is mostly pure (layout/scroll/sticky/selection state).
-// The `BtIosBlockListViewController` UIKit class inside `block_list::mod`
-// is gated internally on iOS so the pure submodules stay host-testable.
+// input_mode: ModeState (iOS-gated) stays here; InputMode enum in bedterm-app
+#[cfg(target_os = "ios")]
+mod input_mode;
+
+// metal_selection_layer: MetalSelectionLayer (CAShapeLayer) stays here;
+// SelectionRange in bedterm_app::selection_range
+#[cfg(target_os = "ios")]
+mod metal_selection_layer;
+
+// toaster: BtIosToasterView + card factory stay here; ToastKind/ToastAction
+// pure types in bedterm_app::toaster
+#[cfg(target_os = "ios")]
+mod toaster;
+
+// block_list: BtIosBlockListViewController stays here; layout/scroll/sticky/
+// selection pure math in bedterm_app::block_list
 mod block_list;
 
-// UIKit / Metal-coupled modules — instantiate ObjC classes, must run on
-// iOS. Gated so the crate still builds on host for unit tests.
+// hosts: hosts_vc stays here; model in bedterm_app::hosts::model
+mod hosts;
+
+// connect_form: connect_form_vc stays here; model in bedterm_app::connect_form::model
+mod connect_form;
+
+// onboarding: coordinator + VCs stay here; state in bedterm_app::onboarding::state
+mod onboarding;
+
+// ── UIKit / Metal-coupled modules (iOS only) ──
 #[cfg(target_os = "ios")]
 mod a11y;
 #[cfg(target_os = "ios")]
@@ -88,69 +66,27 @@ mod disconnect_banner;
 #[cfg(target_os = "ios")]
 mod dpad;
 #[cfg(target_os = "ios")]
+mod host_key_mismatch_vc;
+#[cfg(target_os = "ios")]
+mod hosts_flow_controller;
+#[cfg(target_os = "ios")]
+mod hosts_store;
+#[cfg(target_os = "ios")]
 mod ime_preedit_overlay;
 #[cfg(target_os = "ios")]
 mod keybar;
-// Compile-time-embedded i18n. Tables come from
-// `BedTerm/Localizable.xcstrings` via `build.rs`; runtime FFI is one
-// `bt_ios_set_locale` call from Swift. Pure data — compiles and unit-
-// tests on macOS host too.
-mod l10n;
 #[cfg(target_os = "ios")]
 mod metal_cursor_layer;
 #[cfg(target_os = "ios")]
 mod metal_view;
-// Compile-time-embedded shell-integration script. Bytes come from
-// `assets/bedterm-integration.sh` via `include_bytes!`; runtime FFI is
-// one `bt_ios_shell_integration_payload` call from Swift. Pure data —
-// compiles and unit-tests on macOS host too.
-mod shell_integration;
-// `hosts::model` is pure (no UIKit); the iOS-only VC + bridge live
-// behind a `target_os = "ios"` gate inside the module.
-mod hosts;
-// Phase 4: Rust-native flow controller replacing HostsConnectController.
-#[cfg(target_os = "ios")]
-mod hosts_flow_controller;
-// Phase 4: Host key mismatch review VC replacing SwiftUI sheet.
-#[cfg(target_os = "ios")]
-mod host_key_mismatch_vc;
-// Phase 4: RootCoordinator replacing Swift's RootCoordinator.swift.
-#[cfg(target_os = "ios")]
-pub mod root_coordinator;
-// `connect_form::model` is pure (no UIKit); the iOS-only VC + bridge
-// live behind a `target_os = "ios"` gate inside the module.
-mod connect_form;
-mod onboarding;
 #[cfg(target_os = "ios")]
 mod prompt_context_chips;
-// App settings persistence — owns the `NSUserDefaults` reads/writes
-// that used to live in Swift's `BedTermSettings`. iOS-gated because
-// `NSUserDefaults::standardUserDefaults` isn't useful from the macOS
-// host unit-test runner.
+#[cfg(target_os = "ios")]
+pub mod root_coordinator;
 #[cfg(target_os = "ios")]
 mod settings_store;
-// Saved-hosts persistence — owns the per-UUID Keychain blobs +
-// `NSUserDefaults` order index that used to live in Swift's `HostsStore`.
-// iOS-gated because the Keychain and `NSUserDefaults` aren't useful
-// from the host unit-test runner.
-#[cfg(target_os = "ios")]
-mod hosts_store;
-// Pure state machine that backs Swift's `HostsViewModel`. No UIKit deps,
-// runs as host unit tests via `cargo test`. The iOS-gated FFI singleton
-// lives in `ffi::hosts`.
-mod hosts_vm;
-// Pure state machine that backs Swift's `ConnectionFormViewModel`. No
-// UIKit deps; host-testable. iOS-gated FFI singleton lives in
-// `ffi::connect_form_vm`.
-mod connect_form_vm;
 #[cfg(target_os = "ios")]
 mod settings_vc;
-// `ssh_bridge` holds the shared `BtSSHResultCode` enum used by
-// `ssh_client_ffi.rs` plus the deprecated vtable bridge types.
-// The `#[allow(dead_code)]` silences warnings on the vtable types
-// that nobody calls anymore.
-#[allow(dead_code)]
-mod ssh_bridge;
 #[cfg(target_os = "ios")]
 mod terminal_palette;
 #[cfg(target_os = "ios")]
@@ -175,9 +111,6 @@ pub mod terminal_session;
 /// Defined unconditionally (no `#[cfg(target_os = "ios")]`) so cbindgen
 /// emits the typedef in the generated C header — Swift tests reference
 /// it by name (e.g. `IosTerminalFFITests.onSendCallback: BtIosOnSendCallback`).
-/// The FFI entry points themselves inline the bare-fn signature so
-/// cbindgen also gets a plain nullable C function-pointer parameter
-/// (it doesn't unwrap `Option<TypeAlias>`).
 pub type BtIosBackCallback = unsafe extern "C" fn(ctx: *mut std::ffi::c_void);
 
 /// PTY-byte sink callback installed on `BtIosMetalInputView`. Swift

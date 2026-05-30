@@ -3,7 +3,7 @@
 //! corresponding selectors in `mod.rs`.
 
 use super::BtIosMetalInputView;
-use crate::geometry::CGRect;
+use bedterm_app::geometry::CGRect;
 use bedterm_core::ffi::{bt_term_resize, BtTerm};
 use objc2::msg_send;
 use objc2::runtime::{AnyObject, NSObject};
@@ -20,7 +20,7 @@ impl BtIosMetalInputView {
             // SAFETY: caller (VC) keeps the Rc<ModeState> alive for
             // the view's lifetime; this method runs on the main thread.
             let mode = unsafe { (*ms).mode() };
-            matches!(mode, crate::input_mode::InputMode::State2)
+            matches!(mode, bedterm_app::input_mode::InputMode::State2)
         }
     }
 

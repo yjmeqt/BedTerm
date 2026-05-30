@@ -6,7 +6,7 @@
 
 #![cfg(target_os = "ios")]
 
-use crate::connect_form_vm::{self, ConnectFormVM, SaveResultFn};
+use bedterm_app::connect_form_vm::{self, ConnectFormVM, SaveResultFn};
 use std::ffi::{c_char, c_void};
 
 fn vm_lock() -> std::sync::MutexGuard<'static, ConnectFormVM> {

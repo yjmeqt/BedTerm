@@ -467,7 +467,7 @@ unsafe extern "C" fn mismatch_reject_trampoline(ctx: *mut c_void) {
 
 unsafe extern "C" fn noop_completion(
     _: *mut c_void,
-    _: crate::ssh_bridge::BtSSHResultCode,
+    _: bedterm_app::ssh_bridge::BtSSHResultCode,
     _: *const c_void,
     _: i32,
 ) {
@@ -476,11 +476,11 @@ unsafe extern "C" fn noop_completion(
 /// Map the persistence-layer auth method to the transport-layer credential
 /// shape that `bt_terminal_session_connect` expects.
 fn credential_for_terminal(
-    auth: &crate::hosts::model::AuthMethod,
-) -> crate::credential::HostCredential {
+    auth: &bedterm_app::hosts::model::AuthMethod,
+) -> bedterm_app::credential::HostCredential {
     match auth {
-        crate::hosts::model::AuthMethod::Password(pwd) => {
-            crate::credential::HostCredential::Password {
+        bedterm_app::hosts::model::AuthMethod::Password(pwd) => {
+            bedterm_app::credential::HostCredential::Password {
                 password: pwd.clone(),
             }
         }

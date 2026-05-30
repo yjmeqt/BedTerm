@@ -272,9 +272,6 @@ typedef double CGFloat;
  * Defined unconditionally (no `#[cfg(target_os = "ios")]`) so cbindgen
  * emits the typedef in the generated C header — Swift tests reference
  * it by name (e.g. `IosTerminalFFITests.onSendCallback: BtIosOnSendCallback`).
- * The FFI entry points themselves inline the bare-fn signature so
- * cbindgen also gets a plain nullable C function-pointer parameter
- * (it doesn't unwrap `Option<TypeAlias>`).
  */
 typedef void (*BtIosBackCallback)(void *ctx);
 
@@ -291,6 +288,32 @@ typedef void (*BtIosOnSendCallback)(void *ctx, const uint8_t *bytes, uintptr_t l
  * for the cbindgen-visibility rationale.
  */
 typedef void (*BtIosOnResizeCallback)(void *ctx, uint16_t cols, uint16_t rows);
+
+#define WEIGHT_REGULAR 0.0
+
+#define WEIGHT_MEDIUM 0.23
+
+#define WEIGHT_SEMIBOLD 0.3
+
+#define WEIGHT_BOLD 0.4
+
+/**
+ * Outer dpad container dimension (square). Exported so the VC can size /
+ * position it in `viewDidLayoutSubviews`.
+ */
+#define DPAD_SIZE 80.0
+
+/**
+ * Default header band height in points. Mirrors Swift's
+ * `BlockListContainerViewController.headerHeightPt`.
+ */
+#define HEADER_HEIGHT_PT 56.0
+
+/**
+ * Tolerance (in points) for snapping back to `.followsBottom` once the
+ * user scrolls within this distance of the bottom edge.
+ */
+#define PIN_TOLERANCE_PT 24.0
 
 /**
  * Corner radius applied to the card layer.
@@ -442,62 +465,11 @@ typedef void (*BtIosOnResizeCallback)(void *ctx, uint16_t cols, uint16_t rows);
  */
 #define TextFieldMetrics_LABEL_TO_FIELD_SPACING 6.0
 
-#define WEIGHT_REGULAR 0.0
-
-#define WEIGHT_MEDIUM 0.23
-
-#define WEIGHT_SEMIBOLD 0.3
-
-#define WEIGHT_BOLD 0.4
-
-/**
- * Default header band height in points. Mirrors Swift's
- * `BlockListContainerViewController.headerHeightPt`.
- */
-#define HEADER_HEIGHT_PT 56.0
-
-/**
- * Tolerance (in points) for snapping back to `.followsBottom` once the
- * user scrolls within this distance of the bottom edge.
- */
-#define PIN_TOLERANCE_PT 24.0
-
-/**
- * Outer dpad container dimension (square). Exported so the VC can size /
- * position it in `viewDidLayoutSubviews`.
- */
-#define DPAD_SIZE 80.0
-
 #ifdef __cplusplus
 extern "C" {
 #endif // __cplusplus
 
 extern double CACurrentMediaTime(void);
-
-/**
- * Called by Swift at app launch and on `NSLocale.currentLocaleDidChange`
- * notifications. UTF-8 nul-terminated locale identifier (e.g. "zh-Hans",
- * "en", "ja"). NULL is treated as "reset to default" (uses "en" fallback).
- *
- * # Safety
- * `code` must be NULL or point to a valid nul-terminated UTF-8 string.
- */
-void bt_ios_set_locale(const char *code);
-
-/**
- * Return a pointer to the embedded `bedterm-integration.sh` payload
- * and write its length through `out_len`.
- *
- * The returned pointer is **static** — it lives in the staticlib's
- * `.rodata` for the lifetime of the process. Callers must not free it
- * and must not mutate the bytes. The payload is not nul-terminated;
- * always use the returned length.
- *
- * # Safety
- * `out_len` must be a valid, writable pointer to a `usize`. Pass NULL
- * to skip the length write (only useful as a liveness check).
- */
-const uint8_t *bt_ios_shell_integration_payload(uintptr_t *out_len);
 
 /**
  * Called from Swift's AppDelegate to boot the Rust coordinator.
@@ -818,6 +790,50 @@ void bt_terminal_session_attach_metal_view(struct BtTerminalSessionHandle *handl
  * that has not already been passed to `bt_terminal_session_close`.
  */
 void bt_terminal_session_close(struct BtTerminalSessionHandle *handle);
+
+/**
+ * Called by Swift at app launch and on `NSLocale.currentLocaleDidChange`
+ * notifications. UTF-8 nul-terminated locale identifier (e.g. "zh-Hans",
+ * "en", "ja"). NULL is treated as "reset to default" (uses "en" fallback).
+ *
+ * # Safety
+ * `code` must be NULL or point to a valid nul-terminated UTF-8 string.
+ */
+void bt_ios_set_locale(const char *code);
+
+/**
+ * C-ABI entry point: `true` when `host` (UTF-8 C string or NULL) is a LAN
+ * address. NULL returns `false`.
+ *
+ * # Safety
+ * `host` must be NULL or a valid nul-terminated UTF-8 string.
+ */
+bool bt_ios_net_is_lan_host(const char *host);
+
+/**
+ * Return a pointer to the embedded `bedterm-integration.sh` payload
+ * and write its length through `out_len`.
+ *
+ * The returned pointer is **static** — it lives in the staticlib's
+ * `.rodata` for the lifetime of the process. Callers must not free it
+ * and must not mutate the bytes. The payload is not nul-terminated;
+ * always use the returned length.
+ *
+ * # Safety
+ * `out_len` must be a valid, writable pointer to a `usize`. Pass NULL
+ * to skip the length write (only useful as a liveness check).
+ */
+const uint8_t *bt_ios_shell_integration_payload(uintptr_t *out_len);
+
+/**
+ * Legacy C-ABI entry point returning a nul-terminated pointer to the
+ * embedded shell-integration script. Deprecated in favour of
+ * [`bt_ios_shell_integration_payload`] which avoids the implicit NUL
+ * terminator assumption.
+ *
+ * The returned pointer is **static** and must not be freed.
+ */
+const char *bt_ios_shell_integration_script(void);
 
 /**
  * # Safety

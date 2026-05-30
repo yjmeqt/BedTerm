@@ -16,8 +16,8 @@
 use super::{ToastAction, ToastKind};
 use crate::a11y;
 use crate::design_system::colors;
-use crate::geometry::{CGFloat, CGRect, CGSize};
-use crate::l10n::t;
+use bedterm_app::geometry::{CGFloat, CGRect, CGSize};
+use bedterm_app::l10n::t;
 use objc2::rc::Retained;
 use objc2::runtime::{AnyObject, Sel};
 use objc2::{msg_send, ClassType};

@@ -9,7 +9,7 @@
 //! directly. The navbar `+` button fires the `on_add` callback to
 //! `RootCoordinator`, which pushes the Rust connect-form VC.
 //!
-//! All user-facing strings are routed through `crate::l10n::t(...)`;
+//! All user-facing strings are routed through `bedterm_app::l10n::t(...)`;
 //! translations live in `BedTerm/Localizable.xcstrings` and are baked
 //! into the binary via `build.rs`.
 
@@ -21,11 +21,11 @@ use crate::design_system::{
     components::{make_list_row_with_accessory, primary_button, ListRowAccessory, ListRowHandle},
     spacing, typography,
 };
-use crate::geometry::{CGFloat, CGPoint, CGRect, CGSize, UIEdgeInsets};
-use crate::hosts::model::{parse_entries_json, HostListEntry};
 use crate::hosts::BtIosHostsAddCallback;
-use crate::l10n::t;
 use crate::toaster::{BtIosToasterView, ToastAction, ToastKind};
+use bedterm_app::geometry::{CGFloat, CGPoint, CGRect, CGSize, UIEdgeInsets};
+use bedterm_app::hosts::model::{parse_entries_json, HostListEntry};
+use bedterm_app::l10n::t;
 use objc2::rc::{Allocated, Retained};
 use objc2::runtime::{AnyObject, Sel};
 use objc2::{

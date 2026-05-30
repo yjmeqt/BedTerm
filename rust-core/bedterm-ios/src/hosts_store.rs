@@ -1,7 +1,7 @@
 //! Saved-hosts persistence — Rust-owned, backed by `NSUserDefaults` (order
 //! index) + iOS Keychain (per-UUID `SavedHost` JSON blob).
 //!
-//! All persistence goes through the canonical [`crate::hosts::model::SavedHost`]
+//! All persistence goes through the canonical [`bedterm_app::hosts::model::SavedHost`]
 //! type. The raw `save` / `load_blob` / `load_json` / `delete` functions
 //! still exist for the legacy FFI surface (Swift tests that write raw
 //! `SavedHost` blobs); new code should prefer [`save_host`] / [`load_host`].
@@ -13,7 +13,7 @@
 
 #![cfg(target_os = "ios")]
 
-use crate::hosts::model::SavedHost;
+use bedterm_app::hosts::model::SavedHost;
 use core_foundation::array::{CFArray, CFArrayRef};
 use core_foundation::base::{TCFType, ToVoid};
 use core_foundation::boolean::CFBoolean;

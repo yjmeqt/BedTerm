@@ -6,7 +6,7 @@ use super::card::{make_toast_card, ToastCardViews};
 use super::{
     offset_for, opacity_for, scale_for, should_autodismiss, ToastAction, ToastKind, MAX_VISIBLE,
 };
-use crate::geometry::{CGFloat, CGPoint, CGRect, CGSize};
+use bedterm_app::geometry::{CGFloat, CGPoint, CGRect, CGSize};
 use objc2::encode::{Encode, Encoding, RefEncode};
 use objc2::rc::{Allocated, Retained};
 use objc2::runtime::AnyObject;

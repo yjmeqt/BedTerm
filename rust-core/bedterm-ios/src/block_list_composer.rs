@@ -26,10 +26,10 @@
 use crate::composer_text_view::{make_composer_text_view, set_placeholder};
 use crate::coordinator::BtIosKeyboardCoordinator;
 use crate::design_system::colors;
-use crate::geometry::{CGFloat, CGRect};
 use crate::keybar::{make_keybar_with, ChipSet};
-use crate::prompt_context::PromptContext;
 use crate::prompt_context_chips::{make_prompt_context_chips, refresh_prompt_context_chips};
+use bedterm_app::geometry::{CGFloat, CGRect};
+use bedterm_app::prompt_context::PromptContext;
 use objc2::rc::Retained;
 use objc2::runtime::AnyObject;
 use objc2::{msg_send, sel, ClassType};

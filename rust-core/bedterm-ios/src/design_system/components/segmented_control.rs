@@ -3,9 +3,9 @@
 //!
 //! Visual rhythm tracks the SwiftUI `ShadcnSegmented`: 34 pt height, 8 pt
 //! corner radius, two equal segments. See
-//! [`crate::design_system::segmented_control_metrics::SegmentedControlMetrics`].
+//! [`bedterm_app::design_system::segmented_control_metrics::SegmentedControlMetrics`].
 
-use crate::design_system::segmented_control_metrics::SegmentedControlMetrics;
+use bedterm_app::design_system::segmented_control_metrics::SegmentedControlMetrics;
 use objc2::msg_send;
 use objc2::rc::Retained;
 use objc2::runtime::{AnyObject, Sel};

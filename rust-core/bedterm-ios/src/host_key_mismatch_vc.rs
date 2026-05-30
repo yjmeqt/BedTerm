@@ -2,7 +2,7 @@
 
 use crate::design_system::colors;
 use crate::design_system::components::primary_button;
-use crate::l10n::t;
+use bedterm_app::l10n::t;
 use objc2::rc::{Allocated, Retained};
 use objc2::{define_class, msg_send, sel, DefinedClass, MainThreadMarker, MainThreadOnly};
 use objc2_foundation::NSString;

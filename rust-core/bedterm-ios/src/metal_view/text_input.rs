@@ -3,8 +3,8 @@
 //! geometry placeholders, and text replacement.
 
 use super::BtIosMetalInputView;
-use crate::geometry::{CGPoint, CGRect, CGSize};
 use crate::text_input::{BtIosUITextPosition, BtIosUITextRange};
+use bedterm_app::geometry::{CGPoint, CGRect, CGSize};
 use objc2::class;
 use objc2::msg_send;
 use objc2::rc::{Allocated, Retained};
