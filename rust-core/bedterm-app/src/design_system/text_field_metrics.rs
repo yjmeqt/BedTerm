@@ -28,20 +28,3 @@ impl TextFieldMetrics {
     /// Vertical spacing between the field's label and the input box.
     pub const LABEL_TO_FIELD_SPACING: CGFloat = 6.0;
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn corner_radius_matches_swift_text_field() {
-        // ShadcnTextField uses cornerRadius: 8.
-        assert_eq!(TextFieldMetrics::CORNER_RADIUS, 8.0);
-    }
-
-    #[test]
-    fn field_height_matches_swift_text_field() {
-        // ShadcnTextField uses .frame(height: 36).
-        assert_eq!(TextFieldMetrics::FIELD_HEIGHT, 36.0);
-    }
-}

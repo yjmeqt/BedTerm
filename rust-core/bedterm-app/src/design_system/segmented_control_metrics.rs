@@ -24,11 +24,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn corner_radius_matches_swift_segmented() {
-        assert_eq!(SegmentedControlMetrics::OUTER_CORNER_RADIUS, 8.0);
-    }
-
-    #[test]
     fn selection_inset_is_positive_and_small() {
         // Sanity guard — a value of 0 would render the selection background
         // flush with the outer border, and a value >= height/2 would

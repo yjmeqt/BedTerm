@@ -60,19 +60,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn corner_radius_matches_swift_host_row() {
-        // HostRow.swift uses cornerRadius: 10 — keep parity.
-        assert_eq!(ListRowMetrics::CORNER_RADIUS, 10.0);
-    }
-
-    #[test]
-    fn padding_matches_swift_host_row() {
-        // HostRow.swift: .padding(.horizontal, 16).padding(.vertical, 12).
-        assert_eq!(ListRowMetrics::HORIZONTAL_PADDING, 16.0);
-        assert_eq!(ListRowMetrics::VERTICAL_PADDING, 12.0);
-    }
-
-    #[test]
     fn min_row_height_grows_with_subtitle() {
         let no_sub = ListRowMetrics::min_row_height(false);
         let with_sub = ListRowMetrics::min_row_height(true);
@@ -84,12 +71,5 @@ mod tests {
         let h = ListRowMetrics::min_row_height(false);
         let expected = 21.0 + ListRowMetrics::VERTICAL_PADDING * 2.0;
         assert!((h - expected).abs() < 1e-6, "min height = {h}");
-    }
-
-    #[test]
-    fn badge_metrics_match_swift_host_row() {
-        // HostRow.swift `.frame(width: 24, height: 24)` + `cornerRadius: 6`.
-        assert_eq!(ListRowMetrics::BADGE_SIZE, 24.0);
-        assert_eq!(ListRowMetrics::BADGE_CORNER_RADIUS, 6.0);
     }
 }

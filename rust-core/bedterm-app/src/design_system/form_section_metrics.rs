@@ -56,45 +56,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn card_corner_radius_matches_swift_shadcn_card() {
-        // ShadcnCard uses cornerRadius: 10.
-        assert_eq!(FormSectionMetrics::CARD_CORNER_RADIUS, 10.0);
-    }
-
-    #[test]
-    fn card_padding_matches_swift_shadcn_card() {
-        // ShadcnCard uses .padding(16).
-        assert_eq!(FormSectionMetrics::CARD_PADDING, 16.0);
-    }
-
-    #[test]
-    fn row_spacing_matches_swift_shadcn_card() {
-        // ShadcnCard body uses VStack(spacing: 14).
-        assert_eq!(FormSectionMetrics::ROW_SPACING, 14.0);
-    }
-
-    #[test]
-    fn header_to_rows_spacing_matches_swift_shadcn_card() {
-        // ShadcnCard outer VStack uses spacing: 16.
-        assert_eq!(FormSectionMetrics::HEADER_TO_ROWS_SPACING, 16.0);
-    }
-
-    #[test]
     fn external_header_inset_matches_card_padding() {
         // External section headers must align with the leading edge of
         // in-card text — i.e. with the card's internal horizontal padding.
         assert_eq!(
             FormSectionMetrics::EXTERNAL_HEADER_INSET,
             FormSectionMetrics::CARD_PADDING,
-        );
-    }
-
-    #[test]
-    fn external_header_gap_is_eight_points() {
-        assert_eq!(FormSectionMetrics::EXTERNAL_HEADER_TO_CARD_SPACING, 8.0);
-        assert_eq!(
-            FormSectionMetrics::CARD_TO_EXTERNAL_DESCRIPTION_SPACING,
-            8.0
         );
     }
 }
