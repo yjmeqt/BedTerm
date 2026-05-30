@@ -37,16 +37,17 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             // of reaching through a global @_cdecl symbol. Rust calls this
             // with (ctx, completion); we run the Bonjour probe and fire the
             // completion when the OS resolves the prompt.
-            let requestLocalNetwork: @convention(c) (
-                UnsafeMutableRawPointer?,
-                (@convention(c) (UnsafeMutableRawPointer?) -> Void)?
-            ) -> Void = { ctx, completion in
-                let bridge = LocalNetworkBridgeBox(ctx: ctx, completion: completion)
-                Task { @MainActor in
-                    _ = await LocalNetworkPrewarmer.shared.requestPermission()
-                    bridge.fire()
+            let requestLocalNetwork:
+                @convention(c) (
+                    UnsafeMutableRawPointer?,
+                    (@convention(c) (UnsafeMutableRawPointer?) -> Void)?
+                ) -> Void = { ctx, completion in
+                    let bridge = LocalNetworkBridgeBox(ctx: ctx, completion: completion)
+                    Task { @MainActor in
+                        _ = await LocalNetworkPrewarmer.shared.requestPermission()
+                        bridge.fire()
+                    }
                 }
-            }
 
             guard let raw = bt_ios_create_onboarding_flow_vc(cb, ctx, requestLocalNetwork) else {
                 Unmanaged<OnboardingBox>.fromOpaque(ctx).release()
