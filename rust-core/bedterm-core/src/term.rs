@@ -307,26 +307,7 @@ impl Terminal {
                 m |= *grid.term().mode();
             }
         }
-        let mut out: u32 = 0;
-        if m.contains(TermMode::ALT_SCREEN) {
-            out |= BT_MODE_ALT_SCREEN;
-        }
-        if m.contains(TermMode::BRACKETED_PASTE) {
-            out |= BT_MODE_BRACKETED_PASTE;
-        }
-        if m.intersects(TermMode::MOUSE_MODE) {
-            out |= BT_MODE_MOUSE_REPORT;
-        }
-        if m.contains(TermMode::APP_CURSOR) {
-            out |= BT_MODE_APP_CURSOR;
-        }
-        if m.contains(TermMode::APP_KEYPAD) {
-            out |= BT_MODE_APP_KEYPAD;
-        }
-        if m.contains(TermMode::FOCUS_IN_OUT) {
-            out |= BT_MODE_FOCUS_IN_OUT;
-        }
-        out
+        mode_to_bt_bits(m)
     }
 
     pub fn set_palette(&mut self, palette: Palette) {
@@ -765,6 +746,218 @@ pub(crate) fn default_indexed(i: u8) -> alacritty_terminal::vte::ansi::Rgb {
         r: level,
         g: level,
         b: level,
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Pure bit-mapping: alacritty TermMode -> BedTerm BT_MODE_* bits
+// ---------------------------------------------------------------------------
+
+/// Map alacritty's internal `TermMode` bitflags to the stable BedTerm
+/// `BT_MODE_*` constants that the C FFI / Swift side observe. Decoupled
+/// from alacritty's bit positions so an alacritty version bump cannot
+/// silently shift the host-visible values.
+pub(crate) fn mode_to_bt_bits(m: TermMode) -> u32 {
+    let mut out: u32 = 0;
+    if m.contains(TermMode::ALT_SCREEN) {
+        out |= BT_MODE_ALT_SCREEN;
+    }
+    if m.contains(TermMode::BRACKETED_PASTE) {
+        out |= BT_MODE_BRACKETED_PASTE;
+    }
+    if m.intersects(TermMode::MOUSE_MODE) {
+        out |= BT_MODE_MOUSE_REPORT;
+    }
+    if m.contains(TermMode::APP_CURSOR) {
+        out |= BT_MODE_APP_CURSOR;
+    }
+    if m.contains(TermMode::APP_KEYPAD) {
+        out |= BT_MODE_APP_KEYPAD;
+    }
+    if m.contains(TermMode::FOCUS_IN_OUT) {
+        out |= BT_MODE_FOCUS_IN_OUT;
+    }
+    out
+}
+
+#[cfg(test)]
+mod bitflag_tests {
+    use super::*;
+
+    /// Each individual alacritty mode maps to exactly one BT_MODE_* bit.
+    const ALL_TERM_MODES: &[(TermMode, u32, &str)] = &[
+        (TermMode::ALT_SCREEN, BT_MODE_ALT_SCREEN, "ALT_SCREEN"),
+        (
+            TermMode::BRACKETED_PASTE,
+            BT_MODE_BRACKETED_PASTE,
+            "BRACKETED_PASTE",
+        ),
+        (
+            TermMode::MOUSE_REPORT_CLICK,
+            BT_MODE_MOUSE_REPORT,
+            "MOUSE_REPORT_CLICK",
+        ),
+        (TermMode::MOUSE_MOTION, BT_MODE_MOUSE_REPORT, "MOUSE_MOTION"),
+        (TermMode::MOUSE_DRAG, BT_MODE_MOUSE_REPORT, "MOUSE_DRAG"),
+        (TermMode::APP_CURSOR, BT_MODE_APP_CURSOR, "APP_CURSOR"),
+        (TermMode::APP_KEYPAD, BT_MODE_APP_KEYPAD, "APP_KEYPAD"),
+        (TermMode::FOCUS_IN_OUT, BT_MODE_FOCUS_IN_OUT, "FOCUS_IN_OUT"),
+    ];
+
+    #[test]
+    fn each_single_flag_maps_correctly() {
+        for (mode, expected_bit, label) in ALL_TERM_MODES {
+            let result = mode_to_bt_bits(*mode);
+            assert_eq!(
+                result, *expected_bit,
+                "{label} (TermMode {:?}) mapped to {:#010x}, expected {:#010x}",
+                mode, result, expected_bit
+            );
+        }
+    }
+
+    #[test]
+    fn empty_mode_produces_zero() {
+        assert_eq!(mode_to_bt_bits(TermMode::empty()), 0);
+    }
+
+    #[test]
+    fn unrelated_flags_are_ignored() {
+        // Modes that exist in alacritty but are NOT mapped to BT_MODE_*
+        // must not pollute the output.
+        let unrelated = TermMode::SHOW_CURSOR
+            | TermMode::LINE_WRAP
+            | TermMode::INSERT
+            | TermMode::ORIGIN
+            | TermMode::ALTERNATE_SCROLL
+            | TermMode::VI;
+        assert_eq!(mode_to_bt_bits(unrelated), 0);
+    }
+
+    #[test]
+    fn all_bt_mode_constants_are_distinct() {
+        // Six defined mode bits must not overlap (each occupies a unique slot).
+        let bits = [
+            BT_MODE_ALT_SCREEN,
+            BT_MODE_BRACKETED_PASTE,
+            BT_MODE_MOUSE_REPORT,
+            BT_MODE_APP_CURSOR,
+            BT_MODE_APP_KEYPAD,
+            BT_MODE_FOCUS_IN_OUT,
+        ];
+        for (i, a) in bits.iter().enumerate() {
+            for (j, b) in bits.iter().enumerate() {
+                if i < j {
+                    assert_eq!(a & b, 0, "BT_MODE bits {:#010x} and {:#010x} overlap", a, b);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn all_bt_mode_constants_are_within_32_bits() {
+        // Each constant must fit in a u32 and occupy exactly one bit.
+        for (name, val) in &[
+            ("BT_MODE_ALT_SCREEN", BT_MODE_ALT_SCREEN),
+            ("BT_MODE_BRACKETED_PASTE", BT_MODE_BRACKETED_PASTE),
+            ("BT_MODE_MOUSE_REPORT", BT_MODE_MOUSE_REPORT),
+            ("BT_MODE_APP_CURSOR", BT_MODE_APP_CURSOR),
+            ("BT_MODE_APP_KEYPAD", BT_MODE_APP_KEYPAD),
+            ("BT_MODE_FOCUS_IN_OUT", BT_MODE_FOCUS_IN_OUT),
+        ] {
+            assert!(
+                val.count_ones() == 1,
+                "{name} is not a single bit, got {val:#010x}"
+            );
+        }
+    }
+
+    #[test]
+    fn mouse_mode_is_triple_union() {
+        // TermMode::MOUSE_MODE is a composite of three sub-modes.
+        // Any one of them must yield MOUSE_REPORT in our output.
+        let click = mode_to_bt_bits(TermMode::MOUSE_REPORT_CLICK);
+        let motion = mode_to_bt_bits(TermMode::MOUSE_MOTION);
+        let drag = mode_to_bt_bits(TermMode::MOUSE_DRAG);
+        assert_eq!(click, BT_MODE_MOUSE_REPORT, "MOUSE_REPORT_CLICK");
+        assert_eq!(motion, BT_MODE_MOUSE_REPORT, "MOUSE_MOTION");
+        assert_eq!(drag, BT_MODE_MOUSE_REPORT, "MOUSE_DRAG");
+    }
+
+    #[test]
+    fn multiple_flags_combine_correctly() {
+        let m = TermMode::ALT_SCREEN | TermMode::BRACKETED_PASTE | TermMode::APP_CURSOR;
+        let result = mode_to_bt_bits(m);
+        assert!(result & BT_MODE_ALT_SCREEN != 0, "ALT_SCREEN missing");
+        assert!(
+            result & BT_MODE_BRACKETED_PASTE != 0,
+            "BRACKETED_PASTE missing"
+        );
+        assert!(result & BT_MODE_APP_CURSOR != 0, "APP_CURSOR missing");
+        assert_eq!(
+            result & !(BT_MODE_ALT_SCREEN | BT_MODE_BRACKETED_PASTE | BT_MODE_APP_CURSOR),
+            0,
+            "unexpected extra bits set: {result:#010x}"
+        );
+    }
+
+    #[test]
+    fn all_six_flags_combined() {
+        let m = TermMode::ALT_SCREEN
+            | TermMode::BRACKETED_PASTE
+            | TermMode::MOUSE_REPORT_CLICK
+            | TermMode::APP_CURSOR
+            | TermMode::APP_KEYPAD
+            | TermMode::FOCUS_IN_OUT;
+        let result = mode_to_bt_bits(m);
+        let expected = BT_MODE_ALT_SCREEN
+            | BT_MODE_BRACKETED_PASTE
+            | BT_MODE_MOUSE_REPORT
+            | BT_MODE_APP_CURSOR
+            | BT_MODE_APP_KEYPAD
+            | BT_MODE_FOCUS_IN_OUT;
+        assert_eq!(
+            result, expected,
+            "all six flags combined: got {result:#010x}, expected {expected:#010x}"
+        );
+    }
+
+    #[test]
+    fn only_mapped_flags_in_output() {
+        // Feed every mode that has ever existed on alacritty's side;
+        // only the six mapped bits should appear in the output.
+        let m = TermMode::SHOW_CURSOR
+            | TermMode::APP_CURSOR
+            | TermMode::APP_KEYPAD
+            | TermMode::MOUSE_REPORT_CLICK
+            | TermMode::BRACKETED_PASTE
+            | TermMode::SGR_MOUSE
+            | TermMode::MOUSE_MOTION
+            | TermMode::LINE_WRAP
+            | TermMode::LINE_FEED_NEW_LINE
+            | TermMode::ORIGIN
+            | TermMode::INSERT
+            | TermMode::FOCUS_IN_OUT
+            | TermMode::ALT_SCREEN
+            | TermMode::MOUSE_DRAG
+            | TermMode::UTF8_MOUSE
+            | TermMode::ALTERNATE_SCROLL
+            | TermMode::VI
+            | TermMode::URGENCY_HINTS
+            | TermMode::DISAMBIGUATE_ESC_CODES;
+        let result = mode_to_bt_bits(m);
+        let mapped = BT_MODE_ALT_SCREEN
+            | BT_MODE_BRACKETED_PASTE
+            | BT_MODE_MOUSE_REPORT
+            | BT_MODE_APP_CURSOR
+            | BT_MODE_APP_KEYPAD
+            | BT_MODE_FOCUS_IN_OUT;
+        let extra = result & !mapped;
+        assert_eq!(
+            extra, 0,
+            "unmapped bits escaped: {:#010x} (mapped={:#010x}, result={:#010x})",
+            extra, mapped, result
+        );
     }
 }
 

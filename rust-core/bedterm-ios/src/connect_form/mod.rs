@@ -8,18 +8,10 @@
 //! `ConnectionFormViewModel` — all field state, dirty tracking, validation
 //! and secret-preservation logic runs here. The [`connect_form_vc`] calls
 //! into it directly through the singleton [`crate::connect_form_vm::VM`].
-//!
-//! [`bridge`] declares the remaining `extern "C"` symbols: the file-picker
-//! trio (`bt_swift_connect_form_pick_key`, `_take_pending_key_bytes`,
-//! `_free_key_bytes`) and the thin persistence callback
-//! (`bt_swift_hosts_store_save_json`). No state crosses the FFI for
-//! validation or prefill anymore.
 
 #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
 pub mod model;
 
-#[cfg(target_os = "ios")]
-pub mod bridge;
 #[cfg(target_os = "ios")]
 pub mod connect_form_vc;
 

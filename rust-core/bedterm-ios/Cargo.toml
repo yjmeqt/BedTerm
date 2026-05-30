@@ -22,7 +22,6 @@ crate-type = ["staticlib", "rlib"]
 bedterm-core = { path = "../bedterm-core" }
 async-trait = "0.1"
 # SSH client (P2+): russh backs the production `SshClient` implementation.
-# Also used by bedterm-mock-ssh (workspace sibling) at the same version.
 russh = "0.45"
 # Base64 decoding for OpenSSH key header inspection in `detect_key_type`.
 # Already a transitive dependency of `russh-keys` — listed explicitly here
@@ -81,7 +80,12 @@ objc2-ui-kit = { version = "0.3", features = [
     "UIResponder",
     "UIViewController",
     "UIView",
+    "UIWindowScene",
+    "UIAction",
     "UIActivityIndicatorView",
+    "UIAlertController",
+    "UIApplication",
+    "UIDocumentPickerViewController",
     "UILabel",
     "UINavigationItem",
     "UIBarItem",
@@ -100,6 +104,7 @@ objc2-ui-kit = { version = "0.3", features = [
     "UIFont",
     "UIControl",
     "UISwitch",
+    "UIScene",
     "UIScrollView",
     "UITextView",
     "UITextField",

@@ -9,13 +9,13 @@
 //! The FFI export `bt_ios_net_is_lan_host` is the single entry point from
 //! Swift; Swift callers feed `host` as a UTF-8 C string.
 
-use std::ffi::CStr;
 use std::net::{Ipv4Addr, Ipv6Addr};
 
 /// Returns `true` when `host` is on the local network in the sense iOS
 /// gates with the local-network permission prompt: RFC1918 / link-local /
 /// ULA / mDNS `.local`. Loopback (`127.x.x.x`, `::1`, `localhost`) and
 /// public addresses return `false`.
+#[allow(dead_code)]
 pub fn is_lan_host(host: &str) -> bool {
     let trimmed = host.trim();
     if trimmed.is_empty() {
@@ -51,22 +51,6 @@ pub fn is_lan_host(host: &str) -> bool {
     }
 
     false
-}
-
-/// FFI entry point — `bt_ios_net_is_lan_host(host)` returns `true` when
-/// `host` is a LAN address, matching `is_lan_host`.
-///
-/// # Safety
-/// `host` must be a valid nullable UTF-8 C string. NULL yields `false`.
-#[no_mangle]
-pub extern "C" fn bt_ios_net_is_lan_host(host: *const std::ffi::c_char) -> bool {
-    if host.is_null() {
-        return false;
-    }
-    let Ok(s) = (unsafe { CStr::from_ptr(host) }).to_str() else {
-        return false;
-    };
-    is_lan_host(s)
 }
 
 #[cfg(test)]

@@ -517,4 +517,432 @@ mod tests {
         apply_event(&mut s, &precmd(None), 0, t0);
         assert!(s.get(0).unwrap().id > first_id);
     }
+
+    // ---------------------------------------------------------------------------
+    // Direct Block construction, field access, and equality
+    // ---------------------------------------------------------------------------
+
+    #[test]
+    fn construct_running_block() {
+        let block = Block {
+            id: 1,
+            command: String::new(),
+            start_line: 0,
+            end_line: BLOCK_END_LINE_RUNNING,
+            frozen_snapshot: None,
+            exit_code: None,
+            duration_ms: None,
+            working_directory: Some("/home".into()),
+            git_branch: Some("main".into()),
+            cli_agent: None,
+            grid: None,
+            is_running: true,
+            stylized_command: vec![],
+            stylized_output: vec![],
+            stylized_command_lines: 0,
+            stylized_output_lines: 0,
+        };
+        assert_eq!(block.id, 1);
+        assert_eq!(block.end_line, BLOCK_END_LINE_RUNNING);
+        assert!(block.is_running);
+        assert!(block.frozen_snapshot.is_none());
+        assert!(block.exit_code.is_none());
+        assert!(block.duration_ms.is_none());
+        assert_eq!(block.working_directory.as_deref(), Some("/home"));
+        assert_eq!(block.git_branch.as_deref(), Some("main"));
+        assert!(block.cli_agent.is_none());
+        assert!(block.stylized_command.is_empty());
+        assert!(block.stylized_output.is_empty());
+        assert_eq!(block.stylized_command_lines, 0);
+        assert_eq!(block.stylized_output_lines, 0);
+    }
+
+    #[test]
+    fn construct_sealed_block_with_snapshot() {
+        let snapshot = RawGridSnapshot {
+            cols: 80,
+            rows: 24,
+            cursor_col: 0,
+            cursor_row: 0,
+            display_offset: 0,
+            cells: vec![],
+        };
+        let block = Block {
+            id: 2,
+            command: "make".into(),
+            start_line: 10,
+            end_line: 20,
+            frozen_snapshot: Some(snapshot),
+            exit_code: Some(0),
+            duration_ms: Some(5000),
+            working_directory: None,
+            git_branch: None,
+            cli_agent: Some(CliAgent::Claude),
+            grid: None,
+            is_running: false,
+            stylized_command: vec![],
+            stylized_output: vec![],
+            stylized_command_lines: 0,
+            stylized_output_lines: 0,
+        };
+        assert_eq!(block.id, 2);
+        assert_eq!(block.command, "make");
+        assert_eq!(block.start_line, 10);
+        assert_eq!(block.end_line, 20);
+        assert!(block.frozen_snapshot.is_some());
+        assert_eq!(block.exit_code, Some(0));
+        assert_eq!(block.duration_ms, Some(5000));
+        assert!(block.working_directory.is_none());
+        assert!(block.git_branch.is_none());
+        assert_eq!(block.cli_agent, Some(CliAgent::Claude));
+        assert!(!block.is_running);
+    }
+
+    #[test]
+    fn construct_block_with_exit_code_and_duration() {
+        // Non-zero exit code, edge-case duration values
+        let block = Block {
+            id: 3,
+            command: "false".into(),
+            start_line: 5,
+            end_line: 5,
+            frozen_snapshot: None,
+            exit_code: Some(127),
+            duration_ms: Some(0),
+            working_directory: None,
+            git_branch: None,
+            cli_agent: None,
+            grid: None,
+            is_running: false,
+            stylized_command: vec![],
+            stylized_output: vec![],
+            stylized_command_lines: 0,
+            stylized_output_lines: 0,
+        };
+        assert_eq!(block.exit_code, Some(127));
+        assert_eq!(block.duration_ms, Some(0));
+        // start_line == end_line means zero-height (collapsed) sealed block
+        assert_eq!(block.end_line - block.start_line, 0);
+    }
+
+    #[test]
+    fn construct_block_with_git_branch_and_working_directory() {
+        let block = Block {
+            id: 4,
+            command: "git status".into(),
+            start_line: 3,
+            end_line: 7,
+            frozen_snapshot: None,
+            exit_code: Some(0),
+            duration_ms: Some(100),
+            working_directory: Some("/Users/alice/project".into()),
+            git_branch: Some("feature/new-ui".into()),
+            cli_agent: None,
+            grid: None,
+            is_running: false,
+            stylized_command: vec![],
+            stylized_output: vec![],
+            stylized_command_lines: 0,
+            stylized_output_lines: 0,
+        };
+        assert_eq!(
+            block.working_directory.as_deref(),
+            Some("/Users/alice/project")
+        );
+        assert_eq!(block.git_branch.as_deref(), Some("feature/new-ui"));
+    }
+
+    #[test]
+    fn block_fields_are_accessible() {
+        // Access every public field by reading it back after construction.
+        let block = Block {
+            id: 100,
+            command: "git diff".into(),
+            start_line: 5,
+            end_line: 12,
+            frozen_snapshot: Some(RawGridSnapshot {
+                cols: 80,
+                rows: 24,
+                cursor_col: 0,
+                cursor_row: 0,
+                display_offset: 0,
+                cells: vec![],
+            }),
+            exit_code: Some(1),
+            duration_ms: Some(200),
+            working_directory: Some("/repo".into()),
+            git_branch: Some("feature".into()),
+            cli_agent: Some(CliAgent::Goose),
+            grid: None,
+            is_running: false,
+            stylized_command: b"git diff".to_vec(),
+            stylized_output: b"+new\n-removed".to_vec(),
+            stylized_command_lines: 0,
+            stylized_output_lines: 2,
+        };
+        assert_eq!(block.id, 100);
+        assert_eq!(block.command, "git diff");
+        assert_eq!(block.start_line, 5);
+        assert_eq!(block.end_line, 12);
+        assert!(block.frozen_snapshot.is_some());
+        assert_eq!(block.frozen_snapshot.as_ref().unwrap().cols, 80);
+        assert_eq!(block.frozen_snapshot.as_ref().unwrap().rows, 24);
+        assert_eq!(block.exit_code, Some(1));
+        assert_eq!(block.duration_ms, Some(200));
+        assert_eq!(block.working_directory.as_deref(), Some("/repo"));
+        assert_eq!(block.git_branch.as_deref(), Some("feature"));
+        assert_eq!(block.cli_agent, Some(CliAgent::Goose));
+        assert!(!block.is_running);
+        assert_eq!(&block.stylized_command, b"git diff");
+        assert_eq!(&block.stylized_output, b"+new\n-removed");
+        assert_eq!(block.stylized_command_lines, 0);
+        assert_eq!(block.stylized_output_lines, 2);
+    }
+
+    #[test]
+    fn block_equality_by_fields() {
+        // Two independently constructed blocks with identical field values
+        // must compare equal field-by-field. (Block cannot derive PartialEq
+        // because BlockGrid does not impl it.)
+        let snap = RawGridSnapshot {
+            cols: 80,
+            rows: 24,
+            cursor_col: 0,
+            cursor_row: 0,
+            display_offset: 0,
+            cells: vec![],
+        };
+        let raw = |is_running| Block {
+            id: 7,
+            command: "test".into(),
+            start_line: 1,
+            end_line: if is_running {
+                BLOCK_END_LINE_RUNNING
+            } else {
+                3
+            },
+            frozen_snapshot: if is_running { None } else { Some(snap.clone()) },
+            exit_code: if is_running { None } else { Some(0) },
+            duration_ms: if is_running { None } else { Some(500) },
+            working_directory: Some("/tmp".into()),
+            git_branch: Some("fix".into()),
+            cli_agent: Some(CliAgent::Codex),
+            grid: None,
+            is_running,
+            stylized_command: b"test".to_vec(),
+            stylized_output: b"ok".to_vec(),
+            stylized_command_lines: 0,
+            stylized_output_lines: 1,
+        };
+        let sealed = raw(false);
+        let sealed2 = raw(false);
+        let running = raw(true);
+        let running2 = raw(true);
+
+        // Sealed vs sealed
+        assert_eq!(sealed.id, sealed2.id);
+        assert_eq!(sealed.command, sealed2.command);
+        assert_eq!(sealed.start_line, sealed2.start_line);
+        assert_eq!(sealed.end_line, sealed2.end_line);
+        assert_eq!(sealed.exit_code, sealed2.exit_code);
+        assert_eq!(sealed.duration_ms, sealed2.duration_ms);
+        assert_eq!(sealed.working_directory, sealed2.working_directory);
+        assert_eq!(sealed.git_branch, sealed2.git_branch);
+        assert_eq!(sealed.cli_agent, sealed2.cli_agent);
+        assert!(!sealed.is_running);
+        assert!(!sealed2.is_running);
+        assert_eq!(sealed.stylized_command, sealed2.stylized_command);
+        assert_eq!(sealed.stylized_output, sealed2.stylized_output);
+
+        // Running vs running
+        assert_eq!(running.id, running2.id);
+        assert_eq!(running.end_line, BLOCK_END_LINE_RUNNING);
+        assert_eq!(running.end_line, running2.end_line);
+        assert_eq!(
+            running.frozen_snapshot.is_some(),
+            running2.frozen_snapshot.is_some()
+        );
+        assert!(running.frozen_snapshot.is_none());
+        assert_eq!(running.exit_code, running2.exit_code);
+        assert_eq!(running.cli_agent, running2.cli_agent);
+        assert!(running.is_running);
+        assert!(running2.is_running);
+
+        // Running and sealed differ in running-relevant fields
+        assert_ne!(sealed.is_running, running.is_running);
+        assert_ne!(sealed.end_line, running.end_line);
+        assert_ne!(
+            sealed.frozen_snapshot.is_some(),
+            running.frozen_snapshot.is_some()
+        );
+        assert_ne!(sealed.exit_code, running.exit_code);
+    }
+
+    #[test]
+    fn block_running_sentinel_is_i32_min() {
+        assert_eq!(BLOCK_END_LINE_RUNNING, i32::MIN);
+    }
+
+    #[test]
+    fn append_output_bytes_caps_at_max_lines() {
+        let mut block = Block {
+            id: 10,
+            command: String::new(),
+            start_line: 0,
+            end_line: BLOCK_END_LINE_RUNNING,
+            frozen_snapshot: None,
+            exit_code: None,
+            duration_ms: None,
+            working_directory: None,
+            git_branch: None,
+            cli_agent: None,
+            grid: None,
+            is_running: true,
+            stylized_command: vec![],
+            stylized_output: vec![],
+            stylized_command_lines: 0,
+            stylized_output_lines: 0,
+        };
+        // Feed more newlines than MAX_BLOCK_OUTPUT_LINES
+        let overflow = (MAX_BLOCK_OUTPUT_LINES + 50) as usize;
+        let mut many_bytes = vec![0u8; overflow];
+        for i in 0..overflow {
+            many_bytes[i] = b'\n';
+        }
+        block.append_output_bytes(&many_bytes);
+
+        assert_eq!(block.stylized_output_lines, MAX_BLOCK_OUTPUT_LINES);
+        // Every byte in the buffer should be a newline (the first
+        // MAX_BLOCK_OUTPUT_LINES were all \n)
+        assert_eq!(block.stylized_output.len(), MAX_BLOCK_OUTPUT_LINES as usize);
+        assert!(block.stylized_output.iter().all(|&b| b == b'\n'));
+    }
+
+    #[test]
+    fn append_command_bytes_works_independently() {
+        let mut block = Block {
+            id: 11,
+            command: String::new(),
+            start_line: 0,
+            end_line: BLOCK_END_LINE_RUNNING,
+            frozen_snapshot: None,
+            exit_code: None,
+            duration_ms: None,
+            working_directory: None,
+            git_branch: None,
+            cli_agent: None,
+            grid: None,
+            is_running: true,
+            stylized_command: vec![],
+            stylized_output: vec![],
+            stylized_command_lines: 0,
+            stylized_output_lines: 0,
+        };
+
+        block.append_command_bytes(b"echo hello\n");
+        block.append_output_bytes(b"hello\nworld\n");
+
+        assert_eq!(block.stylized_command, b"echo hello\n");
+        assert_eq!(block.stylized_output, b"hello\nworld\n");
+        assert_eq!(block.stylized_command_lines, 1);
+        assert_eq!(block.stylized_output_lines, 2);
+    }
+
+    #[test]
+    fn append_bytes_after_cap_are_dropped() {
+        let mut block = Block {
+            id: 12,
+            command: String::new(),
+            start_line: 0,
+            end_line: BLOCK_END_LINE_RUNNING,
+            frozen_snapshot: None,
+            exit_code: None,
+            duration_ms: None,
+            working_directory: None,
+            git_branch: None,
+            cli_agent: None,
+            grid: None,
+            is_running: true,
+            stylized_command: vec![],
+            stylized_output: vec![],
+            stylized_command_lines: 0,
+            stylized_output_lines: 0,
+        };
+
+        // Fill exactly to the cap
+        let cap_bytes = vec![b'a'; MAX_BLOCK_OUTPUT_LINES as usize];
+        block.append_output_bytes(&cap_bytes);
+        assert_eq!(block.stylized_output_lines, 0); // no newlines, so counter unchanged
+        assert_eq!(block.stylized_output.len(), MAX_BLOCK_OUTPUT_LINES as usize);
+
+        // Now push past via newlines
+        let newlines = vec![b'\n'; MAX_BLOCK_OUTPUT_LINES as usize];
+        block.append_output_bytes(&newlines);
+        assert_eq!(block.stylized_output_lines, MAX_BLOCK_OUTPUT_LINES);
+        assert_eq!(
+            block.stylized_output.len(),
+            MAX_BLOCK_OUTPUT_LINES as usize * 2
+        ); // 'a's + \n's
+
+        // Everything beyond the cap is dropped; the cap fires on the
+        // *newline* count, not on the vector length.
+        let extra = b"\nsurvivor";
+        block.append_output_bytes(extra);
+        // output_lines should stay at MAX, and 'survivor' should never
+        // appear because the first byte \n already hits the cap.
+        assert_eq!(block.stylized_output_lines, MAX_BLOCK_OUTPUT_LINES);
+        assert_eq!(
+            block.stylized_output.len(),
+            MAX_BLOCK_OUTPUT_LINES as usize * 2
+        );
+    }
+
+    #[test]
+    fn non_printable_bytes_in_stylized_buffers() {
+        // Binary data in stylized buffers — null bytes, high bytes —
+        // should be stored verbatim. The cap is per-byte regardless of value.
+        let mut block = Block {
+            id: 13,
+            command: String::new(),
+            start_line: 0,
+            end_line: BLOCK_END_LINE_RUNNING,
+            frozen_snapshot: None,
+            exit_code: None,
+            duration_ms: None,
+            working_directory: None,
+            git_branch: None,
+            cli_agent: None,
+            grid: None,
+            is_running: true,
+            stylized_command: vec![],
+            stylized_output: vec![],
+            stylized_command_lines: 0,
+            stylized_output_lines: 0,
+        };
+
+        let mixed: &[u8] = &[0x00, 0x01, 0x1b, 0x7f, 0xFF, b'\n'];
+        block.append_output_bytes(mixed);
+        assert_eq!(block.stylized_output, mixed);
+        assert_eq!(block.stylized_output_lines, 1);
+    }
+
+    #[test]
+    fn each_cli_agent_variant_ffi_tag_is_consistent() {
+        // The ffi_tag() values are stable (never renumbered). This test
+        // catches accidental reordering of the CliAgent enum variants or
+        // changes to the ffi_tag() discriminator.
+        assert_eq!(CliAgent::Claude.ffi_tag(), 1);
+        assert_eq!(CliAgent::Gemini.ffi_tag(), 2);
+        assert_eq!(CliAgent::Codex.ffi_tag(), 3);
+        assert_eq!(CliAgent::Amp.ffi_tag(), 4);
+        assert_eq!(CliAgent::Droid.ffi_tag(), 5);
+        assert_eq!(CliAgent::OpenCode.ffi_tag(), 6);
+        assert_eq!(CliAgent::Copilot.ffi_tag(), 7);
+        assert_eq!(CliAgent::Pi.ffi_tag(), 8);
+        assert_eq!(CliAgent::Auggie.ffi_tag(), 9);
+        assert_eq!(CliAgent::CursorCli.ffi_tag(), 10);
+        assert_eq!(CliAgent::Goose.ffi_tag(), 11);
+        assert_eq!(CliAgent::Hermes.ffi_tag(), 12);
+        assert_eq!(CliAgent::Vibe.ffi_tag(), 13);
+    }
 }

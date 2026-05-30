@@ -44,9 +44,23 @@ mod metal_selection_layer;
 mod net_util;
 mod prompt_context;
 mod scroll_physics;
+// Toaster overlay — pure logic (kind / action parsing / auto-dismiss
+// rule / depth metrics) is host-testable; the `BtIosToasterView` UIKit
+// class + card factory are gated internally on iOS.
+mod toaster;
+// Canonical PTY dimension type — pure data, no iOS dependency.
+// `#[allow(dead_code)]` because constructors are used by
+// iOS-gated FFI code that isn't compiled on macOS host.
+#[allow(dead_code)]
+mod pty;
 // Pure SSH client trait and types — no iOS dependency, host-testable.
 #[allow(dead_code)]
 mod ssh_client;
+// Credential / auth-method types with JSON serde support — pure logic,
+// host-testable. Mirrors the Swift-side `HostCredential` / `AuthMethod`
+// Codable types.
+#[allow(dead_code)]
+mod credential;
 
 // `block_list` is mostly pure (layout/scroll/sticky/selection state).
 // The `BtIosBlockListViewController` UIKit class inside `block_list::mod`
@@ -94,6 +108,15 @@ mod shell_integration;
 // `hosts::model` is pure (no UIKit); the iOS-only VC + bridge live
 // behind a `target_os = "ios"` gate inside the module.
 mod hosts;
+// Phase 4: Rust-native flow controller replacing HostsConnectController.
+#[cfg(target_os = "ios")]
+mod hosts_flow_controller;
+// Phase 4: Host key mismatch review VC replacing SwiftUI sheet.
+#[cfg(target_os = "ios")]
+mod host_key_mismatch_vc;
+// Phase 4: RootCoordinator replacing Swift's RootCoordinator.swift.
+#[cfg(target_os = "ios")]
+pub mod root_coordinator;
 // `connect_form::model` is pure (no UIKit); the iOS-only VC + bridge
 // live behind a `target_os = "ios"` gate inside the module.
 mod connect_form;
@@ -112,12 +135,6 @@ mod settings_store;
 // from the host unit-test runner.
 #[cfg(target_os = "ios")]
 mod hosts_store;
-// Per-host SSH host-key fingerprint persistence — Swift's `HostKeyStore`
-// is now a thin shim over `bt_ios_host_keys_*`. iOS-gated for the same
-// reason as `hosts_store`: the Keychain isn't reachable from the macOS
-// host unit-test runner.
-#[cfg(target_os = "ios")]
-mod host_key_store;
 // Pure state machine that backs Swift's `HostsViewModel`. No UIKit deps,
 // runs as host unit tests via `cargo test`. The iOS-gated FFI singleton
 // lives in `ffi::hosts`.

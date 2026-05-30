@@ -192,14 +192,6 @@ the same dimensions.
 3. Device preset (`--device iphone17`)
 4. Defaults (mac viewport, scale=2.0, bedterm-dark palette)
 
-### Block list layout changes → verify with mock SSH
-
-```sh
-cargo run -p bedterm-mock-ssh -- --script tests/fixtures/multi-block.json &
-ssh localhost -p 2222 "cmd1; cmd2; cmd3" 2>&1 | \
-  cargo run -p bedterm-core --bin bedterm-render blocks - > /tmp/out.png
-```
-
 ### Swift UIKit changes → iOS only
 
 Must run on iOS simulator or device:

@@ -1,9 +1,11 @@
 //! FFI surface — view controller lifecycle.
 //!
-//! Construction + release of the iOS terminal `UIViewController`.
+//! Construction + release of the iOS terminal `UIViewController` and
+//! the host-key mismatch review VC.
 
 #![cfg(target_os = "ios")]
 
+use crate::host_key_mismatch_vc;
 use crate::vc;
 
 /// Create the iOS terminal `UIViewController *` (returned as `*mut c_void` so
@@ -38,4 +40,20 @@ pub unsafe extern "C" fn bt_ios_create_vc(
 #[no_mangle]
 pub unsafe extern "C" fn bt_ios_release_vc(vc_ptr: *mut std::ffi::c_void) {
     vc::release_vc(vc_ptr);
+}
+
+// ── Host-key mismatch review VC ──────────────────────────────────────────
+
+#[no_mangle]
+pub unsafe extern "C" fn bt_ios_create_mismatch_vc(
+    on_trust: host_key_mismatch_vc::MismatchCallback,
+    on_reject: host_key_mismatch_vc::MismatchCallback,
+    ctx: *mut std::ffi::c_void,
+) -> *mut std::ffi::c_void {
+    unsafe { host_key_mismatch_vc::create_mismatch_vc(on_trust, on_reject, ctx) }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn bt_ios_release_mismatch_vc(vc_ptr: *mut std::ffi::c_void) {
+    unsafe { host_key_mismatch_vc::release_mismatch_vc(vc_ptr) };
 }

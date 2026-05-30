@@ -53,24 +53,6 @@ The `BedTerm` scheme has a build pre-action that runs
 `BedTermKit/BinaryFrameworks/BedTermIOS.xcframework` in sync with
 `rust-core/`. The script is idempotent — a no-op build skips the rebuild.
 
-## Mock SSH for sim testing
-
-`rust-core/bedterm-mock-ssh` is a loopback SSH server (binds only to
-`127.0.0.1:2222`, accepts any user + password) so you can test the full
-client → block-view path without a remote host. Two modes:
-
-```sh
-# Script mode — canned OSC 133 transcript, renderer/block-state fixture
-cargo run -p bedterm-mock-ssh --release --manifest-path rust-core/Cargo.toml
-
-# Shell mode — bridges to `$SHELL -l` in a real PTY (interactive zsh as you)
-cargo run -p bedterm-mock-ssh --release --manifest-path rust-core/Cargo.toml -- --shell
-```
-
-Add a host pointing at `127.0.0.1:2222` (any username + password) to
-exercise the real `CitadelSSHClient` against this server. See
-`rust-core/bedterm-mock-ssh/README.md` for the full breakdown.
-
 ## Lint
 
 ```sh

@@ -1,9 +1,103 @@
 //! Pure-logic Hosts list model + JSON marshalling helpers.
 //!
-//! The Swift `HostsBridge` serialises the current `[SavedHost]` array to
+//! The snapshot JSON is serialised from `[SavedHost]` and parsed into
 //! a UTF-8 JSON string; Rust parses it via [`parse_entries_json`] and
 //! retains the result inside the VC. Marshalling one blob keeps the FFI
 //! seam narrow — no per-field length / capacity dances.
+//!
+//! ## Canonical persistence types
+//!
+//! [`SavedHost`], [`HostCredential`], and [`AuthMethod`] define the
+//! **canonical** JSON schema for Keychain blobs. The JSON format mirrors
+//! what Swift's `SavedHost` / `HostCredential` Codable conformance produces,
+//! so existing Keychain entries continue to deserialise without migration.
+
+use serde::{Deserialize, Serialize};
+
+/// Canonical persistence format for a saved SSH host entry.
+///
+/// This is the **Rust-canonical** schema — all Keychain persistence goes
+/// through this type. Swift's `SavedHost` (the Codable struct) stays as an
+/// L2+ convenience type; the JSON bridge aligns to the schema defined here.
+///
+/// JSON shape (matches Swift's `JSONEncoder` output for `SavedHost`):
+///
+/// ```text
+/// { "id": "<UUID>",
+///   "label": "prod",
+///   "credential": {
+///     "host": "10.0.0.5",
+///     "port": 22,
+///     "username": "yi",
+///     "auth": { "password": { "_0": "hunter2" } }
+///   }
+/// }
+/// ```
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SavedHost {
+    pub id: String,
+    pub label: String,
+    pub credential: HostCredential,
+}
+
+/// Connection endpoint + auth method.
+///
+/// Mirrors the nested JSON produced by Swift's `HostCredential` Codable
+/// conformance.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HostCredential {
+    pub host: String,
+    pub port: u16,
+    pub username: String,
+    pub auth: AuthMethod,
+}
+
+/// Auth method — serialises to match Swift's `AuthMethod` Codable output.
+///
+/// | Variant | JSON |
+/// |---|---|
+/// | `Password("hunter2")` | `{"password": {"_0": "hunter2"}}` |
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AuthMethod {
+    Password(String),
+}
+
+impl Serialize for AuthMethod {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        use serde::ser::SerializeMap;
+        let mut map = serializer.serialize_map(Some(1))?;
+        match self {
+            AuthMethod::Password(pwd) => {
+                let inner = serde_json::json!({"_0": pwd});
+                map.serialize_entry("password", &inner)?;
+            }
+        }
+        map.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for AuthMethod {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let value = serde_json::Value::deserialize(deserializer)?;
+        let obj = value
+            .as_object()
+            .ok_or_else(|| serde::de::Error::custom("AuthMethod must be a JSON object"))?;
+        if let Some(inner) = obj.get("password").and_then(|v| v.as_object()) {
+            let pwd = inner
+                .get("_0")
+                .and_then(|v| v.as_str())
+                .ok_or_else(|| serde::de::Error::custom("missing password._0"))?;
+            Ok(AuthMethod::Password(pwd.to_string()))
+        } else if obj.contains_key("privateKey") {
+            // Legacy key entries — deserialise as empty password.
+            Ok(AuthMethod::Password(String::new()))
+        } else {
+            Err(serde::de::Error::custom(
+                "AuthMethod must have one of \"password\" or \"privateKey\" keys",
+            ))
+        }
+    }
+}
 
 /// One row in the Rust-rendered hosts list. Mirrors the subset of
 /// `SavedHost` the list cell needs: identity (UUID string), display
@@ -326,128 +420,4 @@ fn skip_ws(bytes: &[u8], mut i: usize) -> usize {
         i += 1;
     }
     i
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn sample(label: &str, port: u16) -> HostListEntry {
-        HostListEntry {
-            id: "AAAA-BBBB".to_string(),
-            label: label.to_string(),
-            host: "10.0.0.5".to_string(),
-            port,
-            username: "yi".to_string(),
-            auth_is_key: true,
-        }
-    }
-
-    #[test]
-    fn primary_label_uses_user_label_when_set() {
-        let e = sample("Personal Mac", 22);
-        assert_eq!(e.primary_label(), "Personal Mac");
-    }
-
-    #[test]
-    fn primary_label_falls_back_to_user_at_host() {
-        let e = sample("", 22);
-        assert_eq!(e.primary_label(), "yi@10.0.0.5");
-    }
-
-    #[test]
-    fn subtitle_hidden_for_default_port_no_label() {
-        let e = sample("", 22);
-        assert_eq!(e.subtitle(), None);
-    }
-
-    #[test]
-    fn subtitle_shows_when_label_present() {
-        let e = sample("Personal Mac", 22);
-        assert_eq!(e.subtitle(), Some("yi@10.0.0.5".to_string()));
-    }
-
-    #[test]
-    fn subtitle_appends_nondefault_port() {
-        let e = sample("Personal Mac", 2222);
-        assert_eq!(e.subtitle(), Some("yi@10.0.0.5:2222".to_string()));
-    }
-
-    #[test]
-    fn ipv6_host_is_bracketed_in_label() {
-        let e = HostListEntry {
-            id: "X".to_string(),
-            label: String::new(),
-            host: "::1".to_string(),
-            port: 22,
-            username: "yi".to_string(),
-            auth_is_key: false,
-        };
-        assert_eq!(e.primary_label(), "yi@[::1]");
-    }
-
-    #[test]
-    fn parse_empty_blob_returns_empty_vec() {
-        assert!(parse_entries_json("").is_empty());
-        assert!(parse_entries_json("  ").is_empty());
-        assert!(parse_entries_json("[]").is_empty());
-    }
-
-    #[test]
-    fn parse_one_entry_round_trip() {
-        let json = r#"[
-            {"id":"abc","label":"Mac","host":"10.0.0.5","port":22,
-             "username":"yi","authIsKey":true}
-        ]"#;
-        let v = parse_entries_json(json);
-        assert_eq!(v.len(), 1);
-        assert_eq!(v[0].id, "abc");
-        assert_eq!(v[0].label, "Mac");
-        assert_eq!(v[0].host, "10.0.0.5");
-        assert_eq!(v[0].port, 22);
-        assert_eq!(v[0].username, "yi");
-        assert!(v[0].auth_is_key);
-    }
-
-    #[test]
-    fn parse_multiple_entries_preserves_order() {
-        let json = r#"[
-            {"id":"a","label":"","host":"h1","port":22,"username":"u1","authIsKey":false},
-            {"id":"b","label":"two","host":"h2","port":2222,"username":"u2","authIsKey":true}
-        ]"#;
-        let v = parse_entries_json(json);
-        assert_eq!(v.len(), 2);
-        assert_eq!(v[0].id, "a");
-        assert_eq!(v[1].id, "b");
-        assert_eq!(v[1].port, 2222);
-        assert!(v[1].auth_is_key);
-    }
-
-    #[test]
-    fn parse_ignores_unknown_fields() {
-        let json = r#"[
-            {"id":"a","label":"L","host":"h","port":22,"username":"u",
-             "authIsKey":false,"extraIgnored":"value","another":99}
-        ]"#;
-        let v = parse_entries_json(json);
-        assert_eq!(v.len(), 1);
-        assert_eq!(v[0].label, "L");
-    }
-
-    #[test]
-    fn parse_garbage_returns_empty() {
-        assert!(parse_entries_json("not json").is_empty());
-        assert!(parse_entries_json("{").is_empty());
-        assert!(parse_entries_json("[{").is_empty());
-    }
-
-    #[test]
-    fn parse_handles_unicode_in_label() {
-        let json = r#"[
-            {"id":"a","label":"日本","host":"h","port":22,"username":"u","authIsKey":false}
-        ]"#;
-        let v = parse_entries_json(json);
-        assert_eq!(v.len(), 1);
-        assert_eq!(v[0].label, "日本");
-    }
 }

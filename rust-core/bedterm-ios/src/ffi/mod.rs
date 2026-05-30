@@ -16,10 +16,9 @@
 
 pub mod connect_form;
 pub mod connect_form_vm;
-pub mod host_keys;
 pub mod hosts;
 pub mod onboarding;
 pub mod settings;
-pub mod ssh_client_ffi;
+pub mod toaster;
 pub mod vc;
 pub mod view;
