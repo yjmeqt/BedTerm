@@ -9,7 +9,7 @@
 #![allow(dead_code)]
 
 use crate::design_system::colors;
-use crate::geometry::{CGFloat, CGPoint, CGRect, CGSize};
+use bedterm_app::geometry::{CGFloat, CGPoint, CGRect, CGSize};
 use objc2::msg_send;
 use objc2::rc::{Allocated, Retained};
 use objc2::runtime::AnyObject;

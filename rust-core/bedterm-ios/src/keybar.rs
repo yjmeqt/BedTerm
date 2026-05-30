@@ -37,7 +37,7 @@
 //! `block_list_composer.rs::TODO(post-block-list-composer)`.
 
 use crate::coordinator::BtIosKeyboardCoordinator;
-use crate::geometry::{CGFloat, CGPoint, CGRect, CGSize};
+use bedterm_app::geometry::{CGFloat, CGPoint, CGRect, CGSize};
 use objc2::rc::Retained;
 use objc2::runtime::{AnyObject, Sel};
 use objc2::{msg_send, sel, ClassType};

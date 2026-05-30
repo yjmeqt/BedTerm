@@ -2,9 +2,9 @@
 //! inertia state machine driven by a `CADisplayLink`.
 
 use super::BtIosMetalInputView;
-use crate::geometry::CGPoint;
-use crate::metal_selection_layer::SelectionRange;
-use crate::scroll_physics::ScrollPhysics;
+use bedterm_app::geometry::CGPoint;
+use bedterm_app::scroll_physics::ScrollPhysics;
+use bedterm_app::selection_range::SelectionRange;
 use objc2::msg_send;
 use objc2::rc::Retained;
 use objc2::DefinedClass;

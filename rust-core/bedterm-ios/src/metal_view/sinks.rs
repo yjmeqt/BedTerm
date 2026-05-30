@@ -3,10 +3,10 @@
 //! (cursor / selection layers), Ctrl-latch state, and replay path.
 
 use super::BtIosMetalInputView;
-use crate::color::hash_to_rgba;
-use crate::geometry::CGSize;
 use crate::metal_cursor_layer::MetalCursorLayer;
 use crate::metal_selection_layer::{MetalSelectionLayer, SelectionRange};
+use bedterm_app::color::hash_to_rgba;
+use bedterm_app::geometry::CGSize;
 use objc2::msg_send;
 use objc2::rc::Retained;
 use objc2::runtime::AnyObject;

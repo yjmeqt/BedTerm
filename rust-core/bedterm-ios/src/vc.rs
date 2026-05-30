@@ -8,10 +8,10 @@
 
 use crate::action_chip::make_action_chip;
 use crate::coordinator::BtIosKeyboardCoordinator;
-use crate::geometry::{CGFloat, CGPoint, CGRect, CGSize, UIEdgeInsets};
 use crate::input_mode::{InputMode, ModeState};
 use crate::metal_view::BtIosMetalInputView;
 use crate::BtIosBackCallback;
+use bedterm_app::geometry::{CGFloat, CGPoint, CGRect, CGSize, UIEdgeInsets};
 use objc2::rc::{Allocated, Retained};
 use objc2::runtime::{AnyObject, ProtocolObject};
 use objc2::{

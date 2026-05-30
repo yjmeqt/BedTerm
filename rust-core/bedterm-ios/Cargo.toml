@@ -9,17 +9,19 @@ license.workspace = true
 name = "bedterm_ios"
 crate-type = ["staticlib", "rlib"]
 
-# UIKit/Metal-coupled modules are gated per-module on `target_os = "ios"`
-# (see `lib.rs`). Pure-logic modules (scroll physics, block-list layout,
-# input-mode state machine, etc.) compile and test on every host so the
-# arithmetic stays unit-testable without an iOS simulator.
-#
-# objc2 et al. compile cleanly on macOS hosts (the bindings exist, they
-# just resolve to no-op-at-runtime stubs because UIKit isn't linkable
-# off-iOS). That's fine — host tests never actually instantiate UIKit
-# objects; they exercise the pure-Rust code paths only.
+# The entire crate is gated on iOS via `#![cfg(target_os = "ios")]` in
+# lib.rs. All pure application logic lives in `bedterm-app`. Use
+# `cargo check -p bedterm-app` for host-side iteration.
 [dependencies]
 bedterm-core = { path = "../bedterm-core" }
+bedterm-app = { path = "../bedterm-app" }
+async-trait = "0.1"
+# SSH client (P2+): russh backs the production `SshClient` implementation.
+russh = "0.45"
+# Base64 decoding for OpenSSH key header inspection in `detect_key_type`.
+# Already a transitive dependency of `russh-keys` — listed explicitly here
+# so `russh_impl.rs` can import it without depending on an internal re-export.
+data-encoding = "2"
 # `disable-encoding-assertions` is the upstream-blessed escape hatch for
 # `UITextInputTraits` protocol-property setters that the runtime sees as
 # missing during debug-time `class_getInstanceMethod` verification (see
@@ -31,6 +33,11 @@ bedterm-core = { path = "../bedterm-core" }
 # logic modules that need `Encode` impls + `msg_send!` macro type
 # plumbing.
 objc2 = { version = "0.6", features = ["disable-encoding-assertions"] }
+# Tokio runtime used by `russh` for async SSH. Features are pulled in
+# transitively from `russh` (net, process, rt, sync, macros, etc.).  We
+# declare an explicit dep here so code in `russh_impl` can import tokio
+# types directly without re-exporting from `russh`.
+tokio = "1"
 # `block2` is needed (iOS-only target dep below pulls it in for objc2-ui-kit's
 # block-taking selectors, e.g. `colorWithDynamicProvider:`). Pulled here as
 # the explicit version pin matching what objc2 0.6 transitively requires.
@@ -45,9 +52,7 @@ objc2-foundation = { version = "0.3", features = [
     "NSBundle",
     "NSUserDefaults",
 ] }
-# Used host-side by `hosts_vm` (pure state machine — runs as `cargo test`
-# without an iOS simulator) and on iOS by `hosts_store` / `ffi::hosts`
-# for snapshot JSON. Unconditional so the host unit tests link.
+# Serde for hosts_store persistence (Keychain blobs, snapshot JSON).
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
@@ -68,7 +73,12 @@ objc2-ui-kit = { version = "0.3", features = [
     "UIResponder",
     "UIViewController",
     "UIView",
+    "UIWindowScene",
+    "UIAction",
     "UIActivityIndicatorView",
+    "UIAlertController",
+    "UIApplication",
+    "UIDocumentPickerViewController",
     "UILabel",
     "UINavigationItem",
     "UIBarItem",
@@ -87,6 +97,7 @@ objc2-ui-kit = { version = "0.3", features = [
     "UIFont",
     "UIControl",
     "UISwitch",
+    "UIScene",
     "UIScrollView",
     "UITextView",
     "UITextField",
@@ -129,13 +140,9 @@ objc2-quartz-core = { version = "0.3", features = [
     "CAMediaTiming",
 ] }
 
-# build.rs (`build.rs` at the crate root) parses
-# `BedTerm/Localizable.xcstrings` and emits a static lookup table the
-# runtime `l10n::t()` scans — no JSON parsing or FFI at runtime.
+# Locale table generation moved to bedterm-app/build.rs.
+# cbindgen produces `include/bedterm_ios.h` from this crate + bedterm-app.
 [build-dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-# Generates `include/bedterm_ios.h` from this crate plus the
-# whitelisted `bedterm-core` path-dep. See `cbindgen.toml` and
-# `build.rs` for the configuration.
 cbindgen = "0.27"

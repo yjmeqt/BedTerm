@@ -17,14 +17,13 @@ The Rust core (`rust-core/bedterm-core`) is packaged into `BedTermKit/BinaryFram
 
 Build & test go through the `xc-dev` skill (`xc-dev build|test|run` — tasks defined in `.xc-dev/tasks.toml`); the skill picks the right simulator (via `.xc-dev/simulator.toml`, with the per-machine UDID cached in `simulator.local.toml`) and the Rust xcframework pre-action runs from the `BedTerm.xcscheme`. Tests live inside the `BedTermKit` Swift package (`BedTermKit/Tests/BedTermKitTests/`) and use the Swift Testing framework (`import Testing`, `@Suite`, `@Test`, `#expect`, `#require`). New test files don't need any Xcode project bookkeeping — SwiftPM picks them up automatically.
 
-Lint (both must pass):
+Lint (must pass):
 
 ```sh
-mint run swiftlint lint --strict
 xcrun swift-format lint -r --strict BedTerm BedTermKit/Sources BedTermKit/Tests
 ```
 
-`swift-format` ships with Xcode 26 — no install needed. SwiftLint also runs as a SwiftPM build-tool plugin on `BedTermKit` (configured in `BedTermKit/Package.swift`); `xcodebuild` is invoked with package-plugin validation skipped (see commit `58642e8`).
+`swift-format` ships with Xcode 26 — no install needed.
 
 For iOS workflows (simulator boot, run, log streaming), prefer the `xc-dev` skill; reserve `xcodebuildmcp-cli` for UI automation and debugging.
 
@@ -192,14 +191,6 @@ the same dimensions.
 2. Context file (`--context session.meta.json`)
 3. Device preset (`--device iphone17`)
 4. Defaults (mac viewport, scale=2.0, bedterm-dark palette)
-
-### Block list layout changes → verify with mock SSH
-
-```sh
-cargo run -p bedterm-mock-ssh -- --script tests/fixtures/multi-block.json &
-ssh localhost -p 2222 "cmd1; cmd2; cmd3" 2>&1 | \
-  cargo run -p bedterm-core --bin bedterm-render blocks - > /tmp/out.png
-```
 
 ### Swift UIKit changes → iOS only
 

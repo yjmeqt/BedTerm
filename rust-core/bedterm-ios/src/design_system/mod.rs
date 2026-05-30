@@ -1,23 +1,16 @@
 //! BedTerm Rust UIKit design system.
 //!
-//! Centralises colour tokens (replacing the `Tokens.xcassets` Shadcn*
-//! asset-catalog round-trip), typography helpers, spacing constants, and
-//! reusable component factories. The colour layer is iOS-only at the
-//! `Retained<UIColor>` accessor surface, but the `Rgba` / `TOKEN_TABLE`
-//! data lives outside the cfg gate so the parity unit tests run on the
-//! macOS host.
-//!
-//! See `colors::TOKEN_TABLE` for the source-of-truth light/dark RGBA
-//! pairs ported from `BedTermKit/Sources/BedTermKit/Resources/Tokens.xcassets`.
+//! Pure tokens and metrics are re-exported from `bedterm_app`.
+//! iOS-specific component factories and typography live here.
 
 pub mod colors;
-pub mod form_section_metrics;
-pub mod list_row_metrics;
-pub mod segmented_control_metrics;
-pub mod spacing;
-pub mod text_field_metrics;
 
-#[cfg(target_os = "ios")]
+// Re-export pure metrics from bedterm-app
+pub use bedterm_app::design_system::form_section_metrics;
+pub use bedterm_app::design_system::list_row_metrics;
+pub use bedterm_app::design_system::segmented_control_metrics;
+pub use bedterm_app::design_system::spacing;
+pub use bedterm_app::design_system::text_field_metrics;
+
 pub mod components;
-#[cfg(target_os = "ios")]
 pub mod typography;

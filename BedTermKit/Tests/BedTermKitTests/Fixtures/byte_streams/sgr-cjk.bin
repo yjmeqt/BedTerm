@@ -1,8 +1,0 @@
-[0mregular[0m   你好世界 こんにちは 안녕하세요
-[1mbold[0m      你好世界 こんにちは 안녕하세요
-[3mitalic[0m    你好世界 こんにちは 안녕하세요
-[4munderline[0m 你好世界 こんにちは 안녕하세요
-[7minverse[0m   你好世界 こんにちは 안녕하세요
-
-mixed ascii + cjk in one row:
-cd [1m/Users/[3myi.jiang[23m/项目/bedterm[0m && ls

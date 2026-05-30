@@ -8,12 +8,12 @@
 //! Visual rhythm tracks the SwiftUI `ShadcnTextField`: 8 pt corner radius,
 //! 1 pt `ShadcnBorder`/`ShadcnInput` border, 12 pt horizontal inner
 //! padding, 36 pt intrinsic height. See
-//! [`crate::design_system::text_field_metrics::TextFieldMetrics`] for the
+//! [`bedterm_app::design_system::text_field_metrics::TextFieldMetrics`] for the
 //! authoritative constants.
 
 use crate::design_system::components::header_label::field_label;
-use crate::design_system::text_field_metrics::TextFieldMetrics;
 use crate::design_system::{colors, typography};
+use bedterm_app::design_system::text_field_metrics::TextFieldMetrics;
 use objc2::rc::Retained;
 use objc2::runtime::AnyObject;
 use objc2::{msg_send, ClassType};

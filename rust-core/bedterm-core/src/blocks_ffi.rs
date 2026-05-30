@@ -8,7 +8,9 @@
 //!   terminal OR the next `bt_term_block_at` call (the scratch is
 //!   reused). Swift must copy out strings inside the same call.
 use crate::blocks::BLOCK_END_LINE_RUNNING;
+use crate::cli_agent::CliAgent;
 use crate::ffi::BtTerm;
+use std::os::raw::c_char;
 use std::os::raw::c_int;
 
 #[repr(C)]
@@ -73,7 +75,6 @@ pub const BT_CLI_AGENT_VIBE: u8 = 13;
 
 /// # Safety
 /// `h` must be a valid `BtTerm *` returned by `bt_term_new`.
-#[no_mangle]
 pub unsafe extern "C" fn bt_term_block_count(h: *const BtTerm) -> usize {
     if h.is_null() {
         return 0;
@@ -85,7 +86,6 @@ pub unsafe extern "C" fn bt_term_block_count(h: *const BtTerm) -> usize {
 /// `h` must be a valid `BtTerm *`; `out` must point to a writable
 /// `BtBlockView`. String pointers in `*out` are invalidated by the next
 /// call as described in the module-level docs.
-#[no_mangle]
 pub unsafe extern "C" fn bt_term_block_at(
     h: *mut BtTerm,
     idx: usize,
@@ -213,4 +213,49 @@ pub unsafe extern "C" fn bt_term_block_at(
         body_rows,
     };
     0
+}
+
+/// Return the human-readable display name for a CLI agent identified by
+/// its `BT_CLI_AGENT_*` tag. Returns a static C string, or NULL when the
+/// tag is `BT_CLI_AGENT_NONE` (0) or unknown (forward-compat).
+///
+/// The returned pointer lives in the binary's `.rodata` and must NOT be
+/// freed by the caller.
+pub extern "C" fn bt_cli_agent_display_name(tag: u8) -> *const c_char {
+    match tag {
+        BT_CLI_AGENT_NONE => std::ptr::null(),
+        BT_CLI_AGENT_CLAUDE => CliAgent::Claude.display_name().as_ptr().cast(),
+        BT_CLI_AGENT_GEMINI => CliAgent::Gemini.display_name().as_ptr().cast(),
+        BT_CLI_AGENT_CODEX => CliAgent::Codex.display_name().as_ptr().cast(),
+        BT_CLI_AGENT_AMP => CliAgent::Amp.display_name().as_ptr().cast(),
+        BT_CLI_AGENT_DROID => CliAgent::Droid.display_name().as_ptr().cast(),
+        BT_CLI_AGENT_OPENCODE => CliAgent::OpenCode.display_name().as_ptr().cast(),
+        BT_CLI_AGENT_COPILOT => CliAgent::Copilot.display_name().as_ptr().cast(),
+        BT_CLI_AGENT_PI => CliAgent::Pi.display_name().as_ptr().cast(),
+        BT_CLI_AGENT_AUGGIE => CliAgent::Auggie.display_name().as_ptr().cast(),
+        BT_CLI_AGENT_CURSOR_CLI => CliAgent::CursorCli.display_name().as_ptr().cast(),
+        BT_CLI_AGENT_GOOSE => CliAgent::Goose.display_name().as_ptr().cast(),
+        BT_CLI_AGENT_HERMES => CliAgent::Hermes.display_name().as_ptr().cast(),
+        BT_CLI_AGENT_VIBE => CliAgent::Vibe.display_name().as_ptr().cast(),
+        _ => std::ptr::null(),
+    }
+}
+
+/// Return the asset-catalog icon name for a CLI agent identified by its
+/// `BT_CLI_AGENT_*` tag. Returns a static C string, or NULL when the agent
+/// has no dedicated icon (caller should fall back to a generic glyph),
+/// the tag is `BT_CLI_AGENT_NONE` (0), or unknown.
+///
+/// The returned pointer lives in the binary's `.rodata` and must NOT be
+/// freed by the caller.
+pub extern "C" fn bt_cli_agent_icon_name(tag: u8) -> *const c_char {
+    match tag {
+        BT_CLI_AGENT_CLAUDE => CliAgent::Claude
+            .icon_name()
+            .map_or(std::ptr::null(), |s| s.as_ptr().cast()),
+        BT_CLI_AGENT_CODEX => CliAgent::Codex
+            .icon_name()
+            .map_or(std::ptr::null(), |s| s.as_ptr().cast()),
+        _ => std::ptr::null(),
+    }
 }

@@ -26,8 +26,8 @@
 #![allow(dead_code)]
 
 use crate::design_system::colors;
-use crate::geometry::{CGFloat, CGRect};
-use crate::prompt_context::PromptContext;
+use bedterm_app::geometry::{CGFloat, CGRect};
+use bedterm_app::prompt_context::PromptContext;
 use objc2::rc::Retained;
 use objc2::runtime::AnyObject;
 use objc2::{msg_send, ClassType};

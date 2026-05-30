@@ -14,20 +14,8 @@ jobs:
           XCODE=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
           if [ -z "$XCODE" ]; then XCODE=$(ls -d /Applications/Xcode_*.app | sort -V | tail -1); fi
           sudo xcode-select -s "$XCODE"
-      - name: Install Mint
-        run: brew install mint
-      - name: Cache Mint
-        uses: actions/cache@v5
-        with:
-          path: ~/.mint
-          key: mint-${{ runner.os }}-${{ hashFiles('Mintfile') }}
-          restore-keys: mint-${{ runner.os }}-
-      - name: Bootstrap tools
-        run: mint bootstrap
       - name: swift-format lint
         run: xcrun swift-format lint -r --strict BedTerm BedTermKit/Sources BedTermKit/Tests
-      - name: SwiftLint
-        run: mint run swiftlint lint --strict
 
   build-test:
     runs-on: macos-latest

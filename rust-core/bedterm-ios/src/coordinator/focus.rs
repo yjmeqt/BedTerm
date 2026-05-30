@@ -8,7 +8,7 @@
 //! mode has just flipped to State2.
 
 use super::{BtIosKeyboardCoordinator, FocusTarget};
-use crate::input_mode::InputMode;
+use bedterm_app::input_mode::InputMode;
 use objc2::msg_send;
 use objc2::DefinedClass;
 

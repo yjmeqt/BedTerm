@@ -2,14 +2,13 @@ import BedTermKit
 import Foundation
 
 /// Parses `-uitest-*` launch arguments and wires the corresponding
-/// production overrides (`SSHClientFactoryOverride`, `HostsStoreInjection`)
-/// before any view mounts. Also exposes accessors the `RootCoordinator`
-/// reads when deciding which root VC to install.
-///
-/// See `BedTermUITests/RustTerminalSmokeUITests.swift` and
-/// `BedTermUITests/RustTerminalEndToEndSSHUITests.swift` for the
-/// consumers.
+/// production overrides before any view mounts.
 enum UITestSupport {
+    // -- MARK: Test injection
+    @MainActor
+    public enum HostsStoreInjection {
+        public static var current: [UITestSupport.EntryRef] = []
+    }
     /// True when `-uitest-skipOnboarding` is passed — the coordinator
     /// will bypass the onboarding screen even if it hasn't been
     /// completed yet.
@@ -18,9 +17,9 @@ enum UITestSupport {
     }
 
     /// DEBUG-only direct-mount of the Rust terminal harness for UI tests.
-    /// Pass `-uitest-rustTerminalDirect <fixture>` (e.g. `hello`,
-    /// `ansiColors`, `blank`) to skip onboarding + Hosts + SSH and land
-    /// straight on the Rust VC fed by an in-process byte fixture.
+    /// Pass `-uitest-rustTerminalDirect <fixture>` (e.g. `hello`)
+    /// to skip onboarding + Hosts + SSH and land straight on the Rust VC
+    /// fed by an in-process byte fixture.
     static var rustTerminalDirectFixture: String? {
         let args = ProcessInfo.processInfo.arguments
         guard let idx = args.firstIndex(of: "-uitest-rustTerminalDirect") else {
@@ -29,53 +28,27 @@ enum UITestSupport {
         let next = idx + 1
         guard next < args.count else { return "hello" }
         let value = args[next]
-        // Defensive: ignore the next token if it looks like another flag
-        // — `XCUIApplication.launchArguments` flattens the array, so a
-        // bare `-uitest-rustTerminalDirect` would otherwise greedily
-        // consume an unrelated arg.
         if value.hasPrefix("-") { return "hello" }
         return value
     }
 
-    /// Installs the `-uitest-stubSSH` and `-uitest-injectStubHost`
-    /// overrides. Called from `AppDelegate.application(_:didFinishLaunching:)`
-    /// so they're in place before any view mounts. Production launches
-    /// don't pass these args so this is a no-op outside the UI-test target.
+    /// Installs the `-uitest-injectStubHost` override. Called from
+    /// `AppDelegate.application(_:didFinishLaunching:)` so it's in place
+    /// before any view mounts. Production launches don't pass these args
+    /// so this is a no-op outside the UI-test target.
     @MainActor
     static func installOverridesIfNeeded() {
-        let args = ProcessInfo.processInfo.arguments
-        if let stubIdx = args.firstIndex(of: "-uitest-stubSSH") {
-            let next = stubIdx + 1
-            let script = (next < args.count && !args[next].hasPrefix("-")) ? args[next] : "hello"
-            SSHClientFactoryOverride.current = { makeStubClient(script: script) }
-        }
         if args.contains("-uitest-injectStubHost") {
             HostsStoreInjection.current = [stubHost()]
         }
     }
 
-    @MainActor
-    private static func makeStubClient(script: String) -> any SSHClient {
-        let client = MockSSHClient()
-        switch script {
-        case "ansiColors":
-            let bytes: [UInt8] = Array(
-                "\u{1B}[31mred\u{1B}[0m \u{1B}[32mgreen\u{1B}[0m \u{1B}[34mblue\u{1B}[0m\r\n".utf8
-            )
-            client.script(output: [Data(bytes)])
-        case "prompt":
-            client.script(output: [Data("bedterm$ ".utf8)])
-        case "echo":
-            client.script(output: [Data("bedterm$ ".utf8)])
-            client.scriptEchoOnWrite()
-        default:
-            // Default fixture (also used for explicit "hello").
-            client.script(output: [Data("Hello, world!\r\n".utf8)])
-        }
-        return client
+    /// The launch arguments parsed by `UITestSupport`.
+    private static var args: [String] {
+        ProcessInfo.processInfo.arguments
     }
 
-    private static func stubHost() -> SavedHost {
+    private static func stubHost() -> UITestSupport.EntryRef {
         // Stable UUID so the same fake row appears every launch.
         let id = UUID(uuidString: "00000000-0000-0000-0000-00000000B0B0") ?? UUID()
         // NOTE: host must be neither RFC1918 / link-local nor a `.local`
@@ -83,12 +56,28 @@ enum UITestSupport {
         // the connect path skips the (real, blocking) NWBrowser prewarm
         // prompt. `example.com` is a non-LAN sentinel — the mock SSH
         // client ignores the host string anyway.
-        let credential = HostCredential(
+        return EntryRef(
+            id: id,
+            label: "stub",
             host: "example.com",
             port: 22,
-            username: "test",
-            auth: .password("test")
+            username: "test"
         )
-        return SavedHost(id: id, label: "stub", credential: credential)
+    }
+}
+
+// Inlined from EntryRef.swift (no other callers remain).
+extension UITestSupport {
+    public struct EntryRef: Identifiable, Sendable {
+        public let id: UUID
+        public let label: String
+        public let host: String
+        public let port: Int
+        public let username: String
+        public init(id: UUID, label: String, host: String, port: Int, username: String) {
+            self.id = id; self.label = label; self.host = host
+            self.port = port; self.username = username
+        }
+        public var displayName: String { label.isEmpty ? "\(username)@\(host)" : label }
     }
 }

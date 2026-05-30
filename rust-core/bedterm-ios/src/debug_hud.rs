@@ -6,8 +6,8 @@
 //! sampled by a `CADisplayLink` over a 1 s sliding window; hardware-keyboard
 //! state is re-polled on the same cadence via `GCKeyboard.coalescedKeyboard`.
 
-use crate::geometry::{CGFloat, CGPoint, CGRect, CGSize};
 use crate::input_mode::{InputMode, ModeState};
+use bedterm_app::geometry::{CGFloat, CGPoint, CGRect, CGSize};
 use objc2::rc::{Allocated, Retained};
 use objc2::runtime::{AnyClass, AnyObject};
 use objc2::{

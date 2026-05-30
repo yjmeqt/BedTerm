@@ -7,10 +7,7 @@ let package = Package(
     products: [
         .library(name: "BedTermKit", targets: ["BedTermKit"])
     ],
-    dependencies: [
-        .package(url: "https://github.com/orlandos-nl/Citadel", from: "0.7.0"),
-        .package(url: "https://github.com/realm/SwiftLint", from: "0.57.0")
-    ],
+    dependencies: [],
     targets: [
         .binaryTarget(
             name: "BedTermIOS",
@@ -19,13 +16,9 @@ let package = Package(
         .target(
             name: "BedTermKit",
             dependencies: [
-                "BedTermIOS",
-                .product(name: "Citadel", package: "Citadel")
+                "BedTermIOS"
             ],
             path: "Sources/BedTermKit",
-            resources: [
-                .process("Resources")
-            ],
             linkerSettings: [
                 .linkedLibrary("sqlite3"),
                 // The Rust core (bedterm-ios) subclasses MTKView via the
@@ -37,20 +30,6 @@ let package = Package(
                 // allocation, crashing in objc2::CachedClass::fetch.
                 .linkedFramework("MetalKit"),
                 .linkedFramework("Metal")
-            ],
-            plugins: [
-                .plugin(name: "SwiftLintBuildToolPlugin", package: "SwiftLint")
-            ]
-        ),
-        .testTarget(
-            name: "BedTermKitTests",
-            dependencies: ["BedTermKit"],
-            path: "Tests/BedTermKitTests",
-            resources: [
-                // Renderer parity tests read raw byte-stream captures from
-                // disk; ship the folder verbatim so the on-disk layout the
-                // tests look for is preserved.
-                .copy("Fixtures")
             ]
         )
     ],

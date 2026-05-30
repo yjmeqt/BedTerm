@@ -7,7 +7,7 @@
 //! Non-tinted variant uses `secondaryLabel` over a transparent ground.
 
 use crate::design_system::colors;
-use crate::geometry::CGFloat;
+use bedterm_app::geometry::CGFloat;
 use objc2::rc::Retained;
 use objc2::runtime::{AnyObject, Sel};
 use objc2::{msg_send, ClassType};

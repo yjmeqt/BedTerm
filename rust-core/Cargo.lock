@@ -192,6 +192,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "bedterm-app"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "data-encoding",
+ "objc2",
+ "russh",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "bedterm-core"
 version = "0.1.0"
 dependencies = [
@@ -210,35 +223,25 @@ dependencies = [
 name = "bedterm-ios"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
+ "bedterm-app",
  "bedterm-core",
  "block2",
  "cbindgen",
  "core-foundation",
  "core-foundation-sys",
+ "data-encoding",
  "objc2",
  "objc2-foundation",
  "objc2-metal",
  "objc2-metal-kit",
  "objc2-quartz-core",
  "objc2-ui-kit",
+ "russh",
  "security-framework",
  "security-framework-sys",
  "serde",
  "serde_json",
-]
-
-[[package]]
-name = "bedterm-mock-ssh"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "bedterm-core",
- "clap",
- "portable-pty",
- "rand",
- "russh",
- "russh-keys",
  "tokio",
 ]
 
@@ -410,7 +413,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1ddb117e43bbf7dacf0a4190fef4d345b9bad68dfc649cb349e7d17d28428e51"
 dependencies = [
  "clap_builder",
- "clap_derive",
 ]
 
 [[package]]
@@ -423,18 +425,6 @@ dependencies = [
  "anstyle",
  "clap_lex",
  "strsim",
-]
-
-[[package]]
-name = "clap_derive"
-version = "4.6.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f2ce8604710f6733aa641a2b3731eaa1e8b3d9973d5e3565da11800813f997a9"
-dependencies = [
- "heck 0.5.0",
- "proc-macro2",
- "quote",
- "syn",
 ]
 
 [[package]]
@@ -2688,7 +2678,6 @@ dependencies = [
  "bytes",
  "libc",
  "mio",
- "parking_lot",
  "pin-project-lite",
  "signal-hook-registry",
  "socket2",

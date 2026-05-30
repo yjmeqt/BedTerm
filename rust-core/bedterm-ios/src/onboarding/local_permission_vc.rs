@@ -7,16 +7,14 @@
 //! the "Local Network Access" / sameWifi prose by default; if the host is
 //! remote the Swift coordinator can swap a different VC instance.
 
-#![cfg(target_os = "ios")]
-
 use crate::a11y;
 use crate::design_system::colors;
 use crate::design_system::components::primary_button;
 use crate::design_system::{spacing, typography};
-use crate::geometry::CGFloat;
-use crate::l10n::t;
 use crate::onboarding::host_kind_vc::pin_to_safe_area;
 use crate::onboarding::BtIosOnboardingContinueCallback;
+use bedterm_app::geometry::CGFloat;
+use bedterm_app::l10n::t;
 use objc2::rc::{Allocated, Retained};
 use objc2::runtime::AnyObject;
 use objc2::{define_class, msg_send, sel, DefinedClass, MainThreadOnly};

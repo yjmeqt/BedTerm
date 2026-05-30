@@ -6,11 +6,11 @@
 //! stack, so this is just a card-like `UIView` factory plus a tiny
 //! [`ListRowHandle`] for installing per-row callbacks after construction.
 //!
-//! Layout constants live in [`crate::design_system::list_row_metrics::ListRowMetrics`]
+//! Layout constants live in [`bedterm_app::design_system::list_row_metrics::ListRowMetrics`]
 //! (pure-Rust, host-testable).
 
-use crate::design_system::list_row_metrics::ListRowMetrics;
 use crate::design_system::{colors, typography};
+use bedterm_app::design_system::list_row_metrics::ListRowMetrics;
 use objc2::rc::Retained;
 use objc2::runtime::{AnyObject, Sel};
 use objc2::{msg_send, ClassType};

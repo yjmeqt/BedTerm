@@ -13,11 +13,11 @@
 //! lives in the file matching its concern (text input, IME, gestures, …).
 //! Ivars + the class declaration stay in this file.
 
-use crate::geometry::{CGRect, CGSize};
 use crate::ime_preedit_overlay::ImePreeditOverlay;
 use crate::metal_cursor_layer::MetalCursorLayer;
 use crate::metal_selection_layer::{MetalSelectionLayer, SelectionRange};
-use crate::scroll_physics::ScrollPhysics;
+use bedterm_app::geometry::{CGRect, CGSize};
+use bedterm_app::scroll_physics::ScrollPhysics;
 use bedterm_core::ffi::{bt_term_free, BtTerm};
 use bedterm_core::renderer::Renderer;
 use objc2::rc::{Allocated, Retained};
@@ -445,7 +445,7 @@ define_class!(
         #[unsafe(method_id(closestPositionToPoint:))]
         fn closest_position_to_point(
             &self,
-            point: crate::geometry::CGPoint,
+            point: bedterm_app::geometry::CGPoint,
         ) -> Option<Retained<UITextPosition>> {
             self.do_closest_position_to_point(point)
         }
@@ -453,14 +453,14 @@ define_class!(
         #[unsafe(method_id(closestPositionToPoint:withinRange:))]
         fn closest_position_to_point_within(
             &self,
-            point: crate::geometry::CGPoint,
+            point: bedterm_app::geometry::CGPoint,
             range: &UITextRange,
         ) -> Option<Retained<UITextPosition>> {
             self.do_closest_position_to_point_within(point, range)
         }
 
         #[unsafe(method_id(characterRangeAtPoint:))]
-        fn character_range_at_point(&self, point: crate::geometry::CGPoint) -> Option<Retained<UITextRange>> {
+        fn character_range_at_point(&self, point: bedterm_app::geometry::CGPoint) -> Option<Retained<UITextRange>> {
             self.do_character_range_at_point(point)
         }
 

@@ -5,7 +5,6 @@
 //! Designed so the upcoming Settings + Onboarding VCs can compose them
 //! without re-deriving padding / typography / colour choices.
 
-#![cfg(target_os = "ios")]
 // Components are introduced for the upcoming Settings (W23b) +
 // Onboarding (W23c) Rust VCs; no caller exists yet in the terminal VC,
 // so dead-code warnings are allowed at module scope until then.

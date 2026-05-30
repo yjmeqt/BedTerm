@@ -49,6 +49,38 @@ impl CliAgent {
         }
     }
 
+    /// Human-readable product name. Matches Warp's labelling and the
+    /// Swift `CLIAgent.displayName` mapping.
+    pub fn display_name(self) -> &'static str {
+        match self {
+            Self::Claude => "Claude Code",
+            Self::Gemini => "Gemini CLI",
+            Self::Codex => "Codex",
+            Self::Amp => "Amp",
+            Self::Droid => "Droid",
+            Self::OpenCode => "OpenCode",
+            Self::Copilot => "GitHub Copilot",
+            Self::Pi => "Pi",
+            Self::Auggie => "Auggie",
+            Self::CursorCli => "Cursor",
+            Self::Goose => "Goose",
+            Self::Hermes => "Hermes",
+            Self::Vibe => "Mistral Vibe",
+        }
+    }
+
+    /// Asset-catalog name for the brand icon. Only populated for
+    /// agents whose SVG we've bundled. Returns `None` for agents
+    /// without a dedicated icon, letting the call site fall back to
+    /// a generic glyph. Mirrors the Swift `CLIAgent.iconName` mapping.
+    pub fn icon_name(self) -> Option<&'static str> {
+        match self {
+            Self::Claude => Some("ClaudeLogo"),
+            Self::Codex => Some("OpenAILogo"),
+            _ => None,
+        }
+    }
+
     /// Stable u8 tag for FFI. Matches `BT_CLI_AGENT_*` constants. New
     /// values append; never renumber.
     pub fn ffi_tag(self) -> u8 {
@@ -66,6 +98,28 @@ impl CliAgent {
             Self::Goose => 11,
             Self::Hermes => 12,
             Self::Vibe => 13,
+        }
+    }
+
+    /// Decode a u8 FFI tag into a `CliAgent`. Returns `None` for
+    /// `BT_CLI_AGENT_NONE` (0) or any unknown tag value (forward-compat
+    /// with future agents added to the Rust side before Swift is updated).
+    pub fn from_ffi_tag(tag: u8) -> Option<Self> {
+        match tag {
+            1 => Some(Self::Claude),
+            2 => Some(Self::Gemini),
+            3 => Some(Self::Codex),
+            4 => Some(Self::Amp),
+            5 => Some(Self::Droid),
+            6 => Some(Self::OpenCode),
+            7 => Some(Self::Copilot),
+            8 => Some(Self::Pi),
+            9 => Some(Self::Auggie),
+            10 => Some(Self::CursorCli),
+            11 => Some(Self::Goose),
+            12 => Some(Self::Hermes),
+            13 => Some(Self::Vibe),
+            _ => None,
         }
     }
 
@@ -145,6 +199,27 @@ impl CliAgent {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Standalone tag-to-string helpers (used by the C FFI / Swift bridge layer)
+// ---------------------------------------------------------------------------
+
+/// Map an FFI CLI-agent tag (1–13) to a human-readable display name.
+/// Returns an empty string for `BT_CLI_AGENT_NONE` (0) or any unknown tag.
+/// Mirrors the Swift `CLIAgent.displayName` getter.
+pub fn cli_agent_display_name(tag: u8) -> &'static str {
+    CliAgent::from_ffi_tag(tag)
+        .map(CliAgent::display_name)
+        .unwrap_or("")
+}
+
+/// Map an FFI CLI-agent tag to a brand icon name for the asset catalogue,
+/// or `None` when the agent has no dedicated icon. Only Claude and Codex
+/// ship branded icons; unknown tags and `BT_CLI_AGENT_NONE` also return
+/// `None`. Mirrors the Swift `CLIAgent.iconName` getter.
+pub fn cli_agent_icon_name(tag: u8) -> Option<&'static str> {
+    CliAgent::from_ffi_tag(tag).and_then(CliAgent::icon_name)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -197,5 +272,214 @@ mod tests {
         // POSIX style (we require uppercase). Treated as the command
         // name `foo=bar`; no agent matches.
         assert_eq!(CliAgent::detect("foo=bar claude"), None);
+    }
+
+    #[test]
+    fn display_name_all_variants() {
+        let cases = [
+            (CliAgent::Claude, "Claude Code"),
+            (CliAgent::Gemini, "Gemini CLI"),
+            (CliAgent::Codex, "Codex"),
+            (CliAgent::Amp, "Amp"),
+            (CliAgent::Droid, "Droid"),
+            (CliAgent::OpenCode, "OpenCode"),
+            (CliAgent::Copilot, "GitHub Copilot"),
+            (CliAgent::Pi, "Pi"),
+            (CliAgent::Auggie, "Auggie"),
+            (CliAgent::CursorCli, "Cursor"),
+            (CliAgent::Goose, "Goose"),
+            (CliAgent::Hermes, "Hermes"),
+            (CliAgent::Vibe, "Mistral Vibe"),
+        ];
+        for (agent, expected) in &cases {
+            assert_eq!(agent.display_name(), *expected, "mismatch for {agent:?}");
+        }
+    }
+
+    #[test]
+    fn icon_name_existing_and_none() {
+        assert_eq!(CliAgent::Claude.icon_name(), Some("ClaudeLogo"));
+        assert_eq!(CliAgent::Codex.icon_name(), Some("OpenAILogo"));
+        // All other variants return None.
+        let without_icon = [
+            CliAgent::Gemini,
+            CliAgent::Amp,
+            CliAgent::Droid,
+            CliAgent::OpenCode,
+            CliAgent::Copilot,
+            CliAgent::Pi,
+            CliAgent::Auggie,
+            CliAgent::CursorCli,
+            CliAgent::Goose,
+            CliAgent::Hermes,
+            CliAgent::Vibe,
+        ];
+        for agent in &without_icon {
+            assert_eq!(agent.icon_name(), None, "expected no icon for {agent:?}");
+        }
+    }
+
+    #[test]
+    fn ffi_tag_roundtrip_for_all() {
+        for agent in CliAgent::all() {
+            let tag = agent.ffi_tag();
+            // Reconstruct from tag via exhaustive match (same order as ffi_tag).
+            let reconstructed = match tag {
+                1 => CliAgent::Claude,
+                2 => CliAgent::Gemini,
+                3 => CliAgent::Codex,
+                4 => CliAgent::Amp,
+                5 => CliAgent::Droid,
+                6 => CliAgent::OpenCode,
+                7 => CliAgent::Copilot,
+                8 => CliAgent::Pi,
+                9 => CliAgent::Auggie,
+                10 => CliAgent::CursorCli,
+                11 => CliAgent::Goose,
+                12 => CliAgent::Hermes,
+                13 => CliAgent::Vibe,
+                _ => unreachable!("unknown tag {tag}"),
+            };
+            assert_eq!(reconstructed, agent, "tag{tag} -> {agent:?} roundtrip");
+        }
+    }
+
+    #[test]
+    fn display_name_matches_swift_switch() {
+        // Regression: every agent's display_name must return Some string.
+        for agent in CliAgent::all() {
+            let name = agent.display_name();
+            assert!(!name.is_empty(), "empty display_name for {agent:?}");
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // from_ffi_tag tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn from_ffi_tag_all_known() {
+        let cases = [
+            (1, CliAgent::Claude),
+            (2, CliAgent::Gemini),
+            (3, CliAgent::Codex),
+            (4, CliAgent::Amp),
+            (5, CliAgent::Droid),
+            (6, CliAgent::OpenCode),
+            (7, CliAgent::Copilot),
+            (8, CliAgent::Pi),
+            (9, CliAgent::Auggie),
+            (10, CliAgent::CursorCli),
+            (11, CliAgent::Goose),
+            (12, CliAgent::Hermes),
+            (13, CliAgent::Vibe),
+        ];
+        for (tag, expected) in &cases {
+            assert_eq!(
+                CliAgent::from_ffi_tag(*tag),
+                Some(*expected),
+                "tag {tag} -> {expected:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn from_ffi_tag_zero_and_unknown_return_none() {
+        assert_eq!(CliAgent::from_ffi_tag(0), None, "BT_CLI_AGENT_NONE");
+        assert_eq!(CliAgent::from_ffi_tag(255), None, "max u8 sentinel");
+        assert_eq!(CliAgent::from_ffi_tag(14), None, "future tag #1");
+        assert_eq!(CliAgent::from_ffi_tag(100), None, "future tag #2");
+    }
+
+    #[test]
+    fn from_ffi_tag_is_inverse_of_ffi_tag() {
+        for agent in CliAgent::all() {
+            let tag = agent.ffi_tag();
+            assert_eq!(
+                CliAgent::from_ffi_tag(tag),
+                Some(agent),
+                "ffi_tag() -> from_ffi_tag() roundtrip failed for {agent:?}"
+            );
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // cli_agent_display_name (standalone, tag-based) tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn cli_agent_display_name_all_tags() {
+        let cases = [
+            (1, "Claude Code"),
+            (2, "Gemini CLI"),
+            (3, "Codex"),
+            (4, "Amp"),
+            (5, "Droid"),
+            (6, "OpenCode"),
+            (7, "GitHub Copilot"),
+            (8, "Pi"),
+            (9, "Auggie"),
+            (10, "Cursor"),
+            (11, "Goose"),
+            (12, "Hermes"),
+            (13, "Mistral Vibe"),
+        ];
+        for (tag, expected) in &cases {
+            assert_eq!(
+                cli_agent_display_name(*tag),
+                *expected,
+                "tag {tag} display_name mismatch"
+            );
+        }
+    }
+
+    #[test]
+    fn cli_agent_display_name_unknown_tags() {
+        // 0 is BT_CLI_AGENT_NONE; 255 is a wild out-of-range value.
+        assert_eq!(cli_agent_display_name(0), "", "BT_CLI_AGENT_NONE");
+        assert_eq!(cli_agent_display_name(255), "", "max u8 sentinel");
+        assert_eq!(cli_agent_display_name(14), "", "first future tag");
+        assert_eq!(cli_agent_display_name(99), "", "distant future tag");
+    }
+
+    #[test]
+    fn cli_agent_display_name_unknown_tags_are_empty_not_null() {
+        // Regression: must NOT return a C NULL or crash — Rust returns "", never None.
+        for tag in [0u8, 14, 100, 200, 255] {
+            let name = cli_agent_display_name(tag);
+            assert_eq!(
+                name, "",
+                "tag {tag} should produce empty string, got {name:?}"
+            );
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // cli_agent_icon_name (standalone, tag-based) tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn cli_agent_icon_name_claude_and_codex() {
+        assert_eq!(cli_agent_icon_name(1), Some("ClaudeLogo"));
+        assert_eq!(cli_agent_icon_name(3), Some("OpenAILogo"));
+    }
+
+    #[test]
+    fn cli_agent_icon_name_other_agents() {
+        for tag in [2u8, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13] {
+            assert_eq!(
+                cli_agent_icon_name(tag),
+                None,
+                "expected no icon for tag {tag}"
+            );
+        }
+    }
+
+    #[test]
+    fn cli_agent_icon_name_unknown_tags() {
+        // 0 is BT_CLI_AGENT_NONE, 255 is out of range.
+        assert_eq!(cli_agent_icon_name(0), None, "BT_CLI_AGENT_NONE");
+        assert_eq!(cli_agent_icon_name(255), None, "max u8 sentinel");
+        assert_eq!(cli_agent_icon_name(14), None, "first future tag");
     }
 }

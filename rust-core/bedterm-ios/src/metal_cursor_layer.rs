@@ -7,8 +7,8 @@
 
 #![allow(dead_code)]
 
-use crate::geometry::{CGPoint, CGRect, CGSize};
 use crate::terminal_palette;
+use bedterm_app::geometry::{CGPoint, CGRect, CGSize};
 use objc2::msg_send;
 use objc2::rc::Retained;
 use objc2::runtime::AnyObject;

@@ -1,0 +1,33 @@
+[package]
+name = "bedterm-app"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[lib]
+name = "bedterm_app"
+crate-type = ["staticlib", "rlib"]
+
+# Pure application logic — no UIKit, no Metal, no CoreFoundation.
+# objc2 base crate is included for Encode/Encoding trait impls on geometry
+# types (compiles everywhere, not iOS-specific).
+[dependencies]
+# SSH client
+async-trait = "0.1"
+russh = "0.45"
+data-encoding = "2"
+tokio = "1"
+
+# Serde for model types
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# ObjC type encoding for geometry structs (Encode/Encoding traits).
+# Compiles on all platforms with an ObjC runtime. Not UIKit-specific.
+objc2 = { version = "0.6", features = ["disable-encoding-assertions"] }
+
+# Build.rs parses Localizable.xcstrings to emit locale tables.
+[build-dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

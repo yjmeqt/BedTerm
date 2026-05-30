@@ -1,40 +1,38 @@
 //! `BtIosHostsListViewController` — Rust saved-hosts list.
 //!
 //! Owns a `UIScrollView` + vertical `UIStackView` of `make_list_row`
-//! cells, one per `HostListEntry`. Rows dispatch tap → connect through
-//! Swift's `HostsViewModel` via `HostsBridge` `@_cdecl` shims;
-//! left-swipe reads the id from the row's card view and calls
-//! `crate::hosts_store::delete(&id)` directly (formerly crossed the FFI
-//! barrier through `bt_swift_hosts_delete`). The snapshot is also read
-//! from `crate::hosts_store::list_snapshot_json()` directly, eliminating
-//! the Rust->Swift->Rust round trip.
-//! The navbar `+` button calls back into Swift, which pushes the
-//! Rust connect-form VC for the new-host flow.
+//! cells, one per `HostListEntry`. Row tap calls
+//! `bt_ios_hosts_vm_request_connect` on the Rust hosts VM, which fires
+//! `RootCoordinator.run_connect` for the full connect→push flow.
+//! Left-swipe calls `crate::hosts_store::delete(&id)` directly.
+//! The snapshot is read from `crate::hosts_store::list_snapshot_json()`
+//! directly. The navbar `+` button fires the `on_add` callback to
+//! `RootCoordinator`, which pushes the Rust connect-form VC.
 //!
-//! All user-facing strings are routed through `crate::l10n::t(...)`;
+//! All user-facing strings are routed through `bedterm_app::l10n::t(...)`;
 //! translations live in `BedTerm/Localizable.xcstrings` and are baked
 //! into the binary via `build.rs`.
-
-#![cfg(target_os = "ios")]
 
 use crate::a11y;
 use crate::design_system::{
     colors,
-    components::{make_list_row_with_accessory, ListRowAccessory, ListRowHandle},
+    components::{make_list_row_with_accessory, primary_button, ListRowAccessory, ListRowHandle},
     spacing, typography,
 };
-use crate::geometry::{CGFloat, CGPoint, CGRect, CGSize, UIEdgeInsets};
-use crate::hosts::bridge::bt_swift_hosts_connect;
-use crate::hosts::model::{parse_entries_json, HostListEntry};
 use crate::hosts::BtIosHostsAddCallback;
-use crate::l10n::t;
+use crate::toaster::{BtIosToasterView, ToastAction, ToastKind};
+use bedterm_app::geometry::{CGFloat, CGPoint, CGRect, CGSize, UIEdgeInsets};
+use bedterm_app::hosts::model::{parse_entries_json, HostListEntry};
+use bedterm_app::l10n::t;
 use objc2::rc::{Allocated, Retained};
 use objc2::runtime::{AnyObject, Sel};
-use objc2::{define_class, msg_send, sel, DefinedClass, MainThreadMarker, MainThreadOnly};
+use objc2::{
+    define_class, msg_send, sel, ClassType, DefinedClass, MainThreadMarker, MainThreadOnly,
+};
 use objc2_foundation::NSString;
 use objc2_ui_kit::{
-    UIBarButtonItem, UIBarButtonItemStyle, UILabel, UILayoutConstraintAxis, UINavigationItem,
-    UIScrollView, UIStackView, UIStackViewAlignment, UIStackViewDistribution,
+    UIBarButtonItem, UIBarButtonItemStyle, UIButton, UILabel, UILayoutConstraintAxis,
+    UINavigationItem, UIScrollView, UIStackView, UIStackViewAlignment, UIStackViewDistribution,
     UISwipeGestureRecognizer, UIView, UIViewController,
 };
 use std::cell::{Cell, RefCell};
@@ -57,6 +55,9 @@ pub struct Ivars {
     content: RefCell<Option<Retained<UIStackView>>>,
     /// Empty-state label (hidden when `rows` is non-empty).
     empty_label: RefCell<Option<Retained<UILabel>>>,
+    /// Bottom-pinned debug button that triggers a sample toast — handy
+    /// for manual checks and as a stable UI-test seam (`hosts.debug.toast`).
+    debug_button: RefCell<Option<Retained<UIButton>>>,
     /// Live rows in display order; indices double as button "tag" values
     /// so the tap / swipe selectors can look the entry id back up.
     rows: RefCell<Vec<RowState>>,
@@ -144,9 +145,21 @@ define_class!(
             }
             empty_label.setHidden(true);
 
+            // Debug-only affordance: a bottom-pinned button that triggers a
+            // sample toast. Developer string (not localised). Positioned in
+            // `viewDidLayoutSubviews` so it survives row reloads (it lives
+            // on the VC's view, not inside the cleared content stack).
+            let debug_button =
+                primary_button(mtm, "ladybug", "Test toast", self.as_ref(), sel!(debugToastTapped));
+            a11y::set_a11y_id(&*debug_button as &AnyObject, "hosts.debug.toast");
+            if let Some(view) = self.view() {
+                let _: () = unsafe { msg_send![&*view, addSubview: &*debug_button] };
+            }
+
             *self.ivars().scroll.borrow_mut() = Some(scroll);
             *self.ivars().content.borrow_mut() = Some(content);
             *self.ivars().empty_label.borrow_mut() = Some(empty_label);
+            *self.ivars().debug_button.borrow_mut() = Some(debug_button);
         }
 
         #[unsafe(method(viewWillAppear:))]
@@ -226,6 +239,23 @@ define_class!(
             let _: () = unsafe {
                 msg_send![&**empty as &UILabel, setFrame: empty_frame]
             };
+
+            // Bottom-pinned debug button, centred above the safe-area inset.
+            if let Some(debug_button) = self.ivars().debug_button.borrow().as_ref() {
+                let btn_w: CGFloat = 180.0;
+                let btn_h: CGFloat = 40.0;
+                let btn_frame = CGRect {
+                    origin: CGPoint {
+                        x: (bounds.size.width - btn_w) / 2.0,
+                        y: bounds.size.height - insets.bottom - btn_h - spacing::MD,
+                    },
+                    size: CGSize {
+                        width: btn_w,
+                        height: btn_h,
+                    },
+                };
+                let _: () = unsafe { msg_send![&**debug_button, setFrame: btn_frame] };
+            }
         }
 
         // ---- Selector handlers -------------------------------------------
@@ -235,6 +265,44 @@ define_class!(
             if let Some(cb) = self.ivars().on_add.get() {
                 let ctx = self.ivars().ctx.get();
                 unsafe { cb(ctx) };
+            }
+        }
+
+        /// Debug button: resolve the window-level toaster view and show a
+        /// sample success toast. No-op if no toaster is mounted (e.g.
+        /// headless tests). Exercises the full Rust toaster path.
+        #[unsafe(method(debugToastTapped))]
+        fn debug_toast_tapped(&self) {
+            let Some(view) = self.view() else { return };
+            let window: *mut UIView = unsafe { msg_send![&*view, window] };
+            if window.is_null() {
+                return;
+            }
+            let subviews: *mut AnyObject = unsafe { msg_send![window, subviews] };
+            if subviews.is_null() {
+                return;
+            }
+            let count: usize = unsafe { msg_send![subviews, count] };
+            let toaster_class = BtIosToasterView::class();
+            for i in 0..count {
+                let obj: *mut AnyObject = unsafe { msg_send![subviews, objectAtIndex: i] };
+                let is_toaster: bool =
+                    unsafe { msg_send![obj, isKindOfClass: toaster_class] };
+                if is_toaster {
+                    let toaster = unsafe { &*(obj as *const BtIosToasterView) };
+                    let actions = [ToastAction {
+                        title: "Retry".to_string(),
+                        destructive: false,
+                    }];
+                    toaster.show(
+                        ToastKind::Success,
+                        "Test toast",
+                        Some("Triggered from the hosts debug button."),
+                        false,
+                        &actions,
+                    );
+                    return;
+                }
             }
         }
 
@@ -250,8 +318,17 @@ define_class!(
                 rows.get(idx).map(|r| r.entry.id.clone())
             };
             if let Some(id) = id_string {
-                if let Ok(cstr) = CString::new(id) {
-                    unsafe { bt_swift_hosts_connect(cstr.as_ptr()) };
+                let mut vm = bedterm_app::hosts_vm::VM.lock().unwrap_or_else(|e| e.into_inner());
+                let action = vm.request_connect(&id);
+                let connect_cb = vm.connect_cb;
+                let connect_ctx = vm.connect_ctx;
+                drop(vm);
+                if let bedterm_app::hosts_vm::Action::Connect(ref cid) = action {
+                    if let Some(cb) = connect_cb {
+                        if let Ok(cstr) = CString::new(cid.as_str()) {
+                            unsafe { cb(connect_ctx.0, cstr.as_ptr()) };
+                        }
+                    }
                 }
             }
         }
@@ -291,6 +368,11 @@ impl BtIosHostsListViewController {
         self.ivars().on_add.set(on_add);
         self.ivars().ctx.set(ctx);
     }
+
+    // TODO(Phase 4): present_alert via objc2 UIAlertController.
+    // Blocked on msg_send! comma-syntax migration and block2 handler ABI
+    // verification on device. The Swift HostsConnectController still owns
+    // alert presentation; this method will replace it once tested.
 
     /// Pull a fresh snapshot from the Rust-owned hosts store and re-render
     /// the rows. Idempotent.

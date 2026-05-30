@@ -6,14 +6,12 @@
 //! ordering is preserved). A bottom-aligned primary "Continue" button fires
 //! the single `on_continue` callback.
 
-#![cfg(target_os = "ios")]
-
 use crate::a11y;
 use crate::design_system::colors;
 use crate::design_system::components::primary_button;
 use crate::design_system::{spacing, typography};
-use crate::l10n::t;
 use crate::onboarding::BtIosOnboardingContinueCallback;
+use bedterm_app::l10n::t;
 use objc2::rc::{Allocated, Retained};
 use objc2::runtime::AnyObject;
 use objc2::{define_class, msg_send, sel, DefinedClass, MainThreadOnly};
