@@ -1,20 +1,16 @@
-//! iOS-specific dynamic UIColors that wrap the pure `Rgba` / `TOKEN_TABLE`
-//! data from `bedterm_app::design_system::colors`.
-//!
-//! Re-exports the pure types so callers can still do
-//! `use crate::design_system::colors::Rgba`.
+//! iOS-specific dynamic UIColors built from `bedterm_app` named colour
+//! constants. Each accessor returns a `Retained<UIColor>` backed by
+//! `+[UIColor colorWithDynamicProvider:]`.
 
-pub use bedterm_app::design_system::colors::{rgba_pair, Rgba, TOKEN_TABLE};
-
-// ---- iOS-only: dynamic-color construction ----------------------------------
-
-#[cfg(target_os = "ios")]
-pub use ios::*;
+pub use bedterm_app::design_system::colors::{Rgba, TokenPair};
 
 #[cfg(target_os = "ios")]
 mod ios {
-    use bedterm_app::design_system::colors::Rgba;
-    use block2::{RcBlock, StackBlock};
+    use bedterm_app::design_system::colors::{
+        self as token, Rgba, TokenPair, BACKGROUND, BORDER, CARD, DESTRUCTIVE, INPUT,
+        MUTED_FOREGROUND, PRIMARY, PRIMARY_FOREGROUND,
+    };
+    use block2::StackBlock;
     use objc2::rc::Retained;
     use objc2_ui_kit::{UIColor, UITraitCollection, UIUserInterfaceStyle};
     use std::cell::OnceCell;
@@ -24,11 +20,11 @@ mod ios {
         UIColor::colorWithRed_green_blue_alpha(rgba.r, rgba.g, rgba.b, rgba.a)
     }
 
-    fn make_dynamic(light: Rgba, dark: Rgba) -> Retained<UIColor> {
-        let light_color = solid(light);
-        let dark_color = solid(dark);
-        let light_keep = light_color.clone();
-        let dark_keep = dark_color.clone();
+    fn make_dynamic(pair: TokenPair) -> Retained<UIColor> {
+        let light = solid(pair.light);
+        let dark = solid(pair.dark);
+        let light_keep = light.clone();
+        let dark_keep = dark.clone();
         let block = StackBlock::new(
             move |traits: NonNull<UITraitCollection>| -> NonNull<UIColor> {
                 let style: UIUserInterfaceStyle = unsafe { traits.as_ref().userInterfaceStyle() };
@@ -40,35 +36,31 @@ mod ios {
                 NonNull::from(chosen)
             },
         );
-        let block: RcBlock<dyn Fn(NonNull<UITraitCollection>) -> NonNull<UIColor>> = block.copy();
+        let block: block2::RcBlock<dyn Fn(NonNull<UITraitCollection>) -> NonNull<UIColor>> =
+            block.copy();
         unsafe { UIColor::colorWithDynamicProvider(&block) }
     }
 
-    macro_rules! token_fn {
-        ($fn_name:ident, $name:literal) => {
-            #[allow(dead_code)]
+    macro_rules! cached {
+        ($fn_name:ident, $token:path) => {
             pub fn $fn_name() -> Retained<UIColor> {
                 thread_local! {
                     static CACHE: OnceCell<Retained<UIColor>> = const { OnceCell::new() };
                 }
-                CACHE.with(|cell| {
-                    cell.get_or_init(|| {
-                        let (light, dark) =
-                            super::rgba_pair($name).expect("token must exist in TOKEN_TABLE");
-                        make_dynamic(light, dark)
-                    })
-                    .clone()
-                })
+                CACHE.with(|cell| cell.get_or_init(|| make_dynamic($token)).clone())
             }
         };
     }
 
-    token_fn!(shadcn_primary, "ShadcnPrimary");
-    token_fn!(shadcn_primary_foreground, "ShadcnPrimaryForeground");
-    token_fn!(shadcn_background, "ShadcnBackground");
-    token_fn!(shadcn_border, "ShadcnBorder");
-    token_fn!(shadcn_input, "ShadcnInput");
-    token_fn!(shadcn_muted_foreground, "ShadcnMutedForeground");
-    token_fn!(shadcn_destructive, "ShadcnDestructive");
-    token_fn!(shadcn_card, "ShadcnCard");
+    cached!(shadcn_primary, PRIMARY);
+    cached!(shadcn_primary_foreground, PRIMARY_FOREGROUND);
+    cached!(shadcn_background, BACKGROUND);
+    cached!(shadcn_border, BORDER);
+    cached!(shadcn_input, INPUT);
+    cached!(shadcn_muted_foreground, MUTED_FOREGROUND);
+    cached!(shadcn_destructive, DESTRUCTIVE);
+    cached!(shadcn_card, CARD);
 }
+
+#[cfg(target_os = "ios")]
+pub use ios::*;

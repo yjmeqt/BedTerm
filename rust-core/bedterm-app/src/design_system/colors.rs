@@ -1,27 +1,7 @@
-//! Code-defined dynamic UIColors that replace the `Tokens.xcassets`
-//! `Shadcn*` asset-catalog lookups previously done by `tokens::token_color`.
+//! Design-system colour tokens — light + dark `Rgba` pairs.
 //!
-//! Each token is described by a light + dark `Rgba` pair (sRGB, 0..=1).
-//! On iOS, the runtime resolves the appropriate variant through
-//! `+[UIColor colorWithDynamicProvider:]`: the block we hand UIKit inspects
-//! the trait collection's `userInterfaceStyle` at draw time and returns the
-//! matching solid `UIColor`.
-//!
-//! The `Rgba` struct + the `TOKEN_TABLE` data live outside the iOS cfg gate
-//! so the data-parity unit tests run on the macOS host (no UIKit symbols
-//! exercised). The `Retained<UIColor>`-returning accessors are iOS-only.
-//!
-//! Threading: every accessor returns a `Retained<UIColor>` clone of a
-//! thread-local `OnceCell`-cached dynamic color (each thread that asks
-//! pays the build cost once; in practice only the main UI thread asks).
-//! UIKit's contract is main-thread only, same as before.
-
-// The `Rgba` type and `TOKEN_TABLE` data are reachable only from
-// `#[cfg(test)]` modules on macOS hosts and from the iOS-only `ios`
-// submodule below — both of which the dead-code lint can't see when
-// compiling for host without `--tests`. Allow the warning at module
-// scope.
-#![allow(dead_code)]
+//! Each token is a named `const` pair. The iOS UI layer imports these and
+//! wraps them in `+[UIColor colorWithDynamicProvider:]` at first use.
 
 /// Linear sRGB component triple plus alpha. All channels are in 0..=1.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -37,129 +17,138 @@ impl Rgba {
     pub const fn new(r: f64, g: f64, b: f64, a: f64) -> Self {
         Self { r, g, b, a }
     }
+
+    pub const fn light_dark(light: Self, dark: Self) -> TokenPair {
+        TokenPair { light, dark }
+    }
 }
 
-/// Token identity for cross-language verification + unit tests.
-///
-/// Names mirror the `Tokens.xcassets` color sets they replaced. Values are
-/// the exact light/dark pairs from each `.colorset/Contents.json` (sRGB,
-/// alpha last).
-pub const TOKEN_TABLE: &[(&str, Rgba, Rgba)] = &[
-    (
-        "ShadcnPrimary",
-        Rgba::new(0.043, 0.043, 0.043, 1.0),
-        Rgba::new(0.961, 0.961, 0.961, 1.0),
-    ),
-    (
-        "ShadcnPrimaryForeground",
-        Rgba::new(0.961, 0.961, 0.961, 1.0),
-        Rgba::new(0.043, 0.043, 0.043, 1.0),
-    ),
-    (
-        "ShadcnBackground",
-        Rgba::new(0.961, 0.961, 0.961, 1.0),
-        Rgba::new(0.043, 0.043, 0.043, 1.0),
-    ),
-    (
-        "ShadcnBorder",
-        Rgba::new(0.898, 0.898, 0.898, 1.0),
-        Rgba::new(1.0, 1.0, 1.0, 0.10),
-    ),
-    (
-        "ShadcnInput",
-        Rgba::new(0.898, 0.898, 0.898, 1.0),
-        Rgba::new(1.0, 1.0, 1.0, 0.15),
-    ),
-    (
-        "ShadcnMutedForeground",
-        Rgba::new(0.451, 0.451, 0.451, 1.0),
-        Rgba::new(0.631, 0.631, 0.631, 1.0),
-    ),
-    (
-        "ShadcnDestructive",
-        Rgba::new(0.875, 0.133, 0.145, 1.0),
-        Rgba::new(1.0, 0.396, 0.408, 1.0),
-    ),
-    (
-        "ShadcnCard",
-        Rgba::new(1.0, 1.0, 1.0, 1.0),
-        Rgba::new(0.086, 0.086, 0.086, 1.0),
-    ),
+/// A light + dark colour pair for one design token.
+pub struct TokenPair {
+    pub light: Rgba,
+    pub dark: Rgba,
+}
+
+// ── Tokens ──────────────────────────────────────────────────────────────
+
+pub const PRIMARY: TokenPair = TokenPair {
+    light: Rgba::new(0.043, 0.043, 0.043, 1.0),
+    dark: Rgba::new(0.961, 0.961, 0.961, 1.0),
+};
+
+pub const PRIMARY_FOREGROUND: TokenPair = TokenPair {
+    light: Rgba::new(0.961, 0.961, 0.961, 1.0),
+    dark: Rgba::new(0.043, 0.043, 0.043, 1.0),
+};
+
+pub const BACKGROUND: TokenPair = TokenPair {
+    light: Rgba::new(0.961, 0.961, 0.961, 1.0),
+    dark: Rgba::new(0.043, 0.043, 0.043, 1.0),
+};
+
+pub const BORDER: TokenPair = TokenPair {
+    light: Rgba::new(0.898, 0.898, 0.898, 1.0),
+    dark: Rgba::new(1.0, 1.0, 1.0, 0.10),
+};
+
+pub const INPUT: TokenPair = TokenPair {
+    light: Rgba::new(0.898, 0.898, 0.898, 1.0),
+    dark: Rgba::new(1.0, 1.0, 1.0, 0.15),
+};
+
+pub const MUTED_FOREGROUND: TokenPair = TokenPair {
+    light: Rgba::new(0.451, 0.451, 0.451, 1.0),
+    dark: Rgba::new(0.631, 0.631, 0.631, 1.0),
+};
+
+pub const DESTRUCTIVE: TokenPair = TokenPair {
+    light: Rgba::new(0.875, 0.133, 0.145, 1.0),
+    dark: Rgba::new(1.0, 0.396, 0.408, 1.0),
+};
+
+pub const CARD: TokenPair = TokenPair {
+    light: Rgba::new(1.0, 1.0, 1.0, 1.0),
+    dark: Rgba::new(0.086, 0.086, 0.086, 1.0),
+};
+
+/// All tokens in declaration order — used for exhaustiveness tests.
+pub const ALL_TOKENS: &[(&str, TokenPair)] = &[
+    ("Primary", PRIMARY),
+    ("PrimaryForeground", PRIMARY_FOREGROUND),
+    ("Background", BACKGROUND),
+    ("Border", BORDER),
+    ("Input", INPUT),
+    ("MutedForeground", MUTED_FOREGROUND),
+    ("Destructive", DESTRUCTIVE),
+    ("Card", CARD),
 ];
-
-/// Look up a token by name in the static table. Returns `(light, dark)`.
-/// Pure-data helper; host-testable.
-pub fn rgba_pair(name: &str) -> Option<(Rgba, Rgba)> {
-    TOKEN_TABLE
-        .iter()
-        .find(|(n, _, _)| *n == name)
-        .map(|(_, l, d)| (*l, *d))
-}
-
-// ---- iOS-only: dynamic-color construction ----------------------------------
-// The `ios` submodule with `shadcn_*()` UIColor factories lives in
-// `bedterm-ios/src/design_system/colors.rs` and imports `Rgba` / `rgba_pair`
-// from this crate.
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    /// The Rgba table must exactly match every `Shadcn*.colorset` we ported,
-    /// independent of whether iOS bindings link or not.
     #[test]
-    fn token_table_has_expected_entries() {
-        let names: Vec<&str> = TOKEN_TABLE.iter().map(|(n, _, _)| *n).collect();
-        for expected in [
-            "ShadcnPrimary",
-            "ShadcnPrimaryForeground",
-            "ShadcnBackground",
-            "ShadcnBorder",
-            "ShadcnInput",
-            "ShadcnMutedForeground",
-            "ShadcnDestructive",
-            "ShadcnCard",
-        ] {
-            assert!(names.contains(&expected), "missing token: {expected}");
+    fn primary_light_is_near_black() {
+        assert!((PRIMARY.light.r - 0.043).abs() < 1e-6);
+        assert!((PRIMARY.light.g - 0.043).abs() < 1e-6);
+        assert!((PRIMARY.light.b - 0.043).abs() < 1e-6);
+    }
+
+    #[test]
+    fn primary_dark_is_near_white() {
+        assert!((PRIMARY.dark.r - 0.961).abs() < 1e-6);
+    }
+
+    #[test]
+    fn primary_and_foreground_are_swapped() {
+        assert_eq!(PRIMARY.light, PRIMARY_FOREGROUND.dark);
+        assert_eq!(PRIMARY.dark, PRIMARY_FOREGROUND.light);
+    }
+
+    #[test]
+    fn background_is_primary_inverted() {
+        // Primary and Background are swapped: light background = dark primary,
+        // dark background = light primary.
+        assert_eq!(BACKGROUND.light, PRIMARY.dark);
+        assert_eq!(BACKGROUND.dark, PRIMARY.light);
+    }
+
+    #[test]
+    fn border_dark_is_translucent() {
+        assert!((BORDER.dark.a - 0.10).abs() < 1e-6);
+    }
+
+    #[test]
+    fn input_dark_is_translucent() {
+        assert!((INPUT.dark.a - 0.15).abs() < 1e-6);
+    }
+
+    #[test]
+    fn destructive_pair() {
+        assert_eq!(DESTRUCTIVE.light, Rgba::new(0.875, 0.133, 0.145, 1.0));
+        assert_eq!(DESTRUCTIVE.dark, Rgba::new(1.0, 0.396, 0.408, 1.0));
+    }
+
+    #[test]
+    fn all_tokens_has_eight_entries() {
+        assert_eq!(ALL_TOKENS.len(), 8);
+    }
+
+    #[test]
+    fn all_tokens_names_are_unique() {
+        let mut seen = std::collections::BTreeSet::new();
+        for (name, _) in ALL_TOKENS {
+            assert!(seen.insert(name), "duplicate token name: {name}");
         }
     }
 
     #[test]
-    fn shadcn_primary_rgba_round_trip() {
-        let (light, dark) = rgba_pair("ShadcnPrimary").unwrap();
-        assert_eq!(light, Rgba::new(0.043, 0.043, 0.043, 1.0));
-        assert_eq!(dark, Rgba::new(0.961, 0.961, 0.961, 1.0));
-    }
-
-    #[test]
-    fn shadcn_border_dark_is_translucent() {
-        let (_, dark) = rgba_pair("ShadcnBorder").unwrap();
-        assert!(
-            (dark.a - 0.10).abs() < 1e-6,
-            "border dark alpha = {} (expected 0.10)",
-            dark.a
-        );
-    }
-
-    #[test]
-    fn shadcn_input_dark_is_translucent() {
-        let (_, dark) = rgba_pair("ShadcnInput").unwrap();
-        assert!(
-            (dark.a - 0.15).abs() < 1e-6,
-            "input dark alpha = {} (expected 0.15)",
-            dark.a
-        );
-    }
-
-    #[test]
-    fn shadcn_destructive_pair() {
-        let (light, dark) = rgba_pair("ShadcnDestructive").unwrap();
-        assert_eq!(light, Rgba::new(0.875, 0.133, 0.145, 1.0));
-        assert_eq!(dark, Rgba::new(1.0, 0.396, 0.408, 1.0));
-    }
-
-    #[test]
-    fn unknown_token_returns_none() {
-        assert!(rgba_pair("ShadcnNotARealToken").is_none());
+    fn all_tokens_light_dark_differ() {
+        for (name, pair) in ALL_TOKENS {
+            assert!(
+                pair.light != pair.dark,
+                "token {name} has identical light/dark values"
+            );
+        }
     }
 }
